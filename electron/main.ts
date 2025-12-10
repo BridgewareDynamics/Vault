@@ -470,23 +470,40 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     // Sort PDFs alphabetically first
     pdfFiles.sort((a, b) => a.name.localeCompare(b.name));
     
-    // Create a map: PDF name -> array of folders that belong to it
+    // Create a map: PDF name (case-insensitive) -> actual PDF name -> array of folders that belong to it
+    // This allows case-insensitive matching while preserving the actual PDF name for display
     const pdfToFoldersMap = new Map<string, typeof folders>();
+    const pdfNameLowerToActual = new Map<string, string>(); // lowercase -> actual name
     
-    // Initialize map with all PDFs
+    // Initialize map with all PDFs (using actual names, but also create lowercase lookup)
     pdfFiles.forEach(pdf => {
       pdfToFoldersMap.set(pdf.name, []);
+      pdfNameLowerToActual.set(pdf.name.toLowerCase(), pdf.name);
     });
     
     // Assign folders to their parent PDFs
     folders.forEach(folder => {
       const parentPdfName = (folder as any).parentPdfName;
+      let matched = false;
       
-      if (parentPdfName && pdfToFoldersMap.has(parentPdfName)) {
-        // Folder has metadata pointing to a PDF - assign it
-        pdfToFoldersMap.get(parentPdfName)!.push(folder);
-      } else {
-        // Fallback: try to match by name and time for folders without metadata
+      if (parentPdfName) {
+        // Try exact match first (case-sensitive)
+        if (pdfToFoldersMap.has(parentPdfName)) {
+          pdfToFoldersMap.get(parentPdfName)!.push(folder);
+          matched = true;
+        } else {
+          // Try case-insensitive match
+          const parentPdfNameLower = parentPdfName.toLowerCase();
+          const actualPdfName = pdfNameLowerToActual.get(parentPdfNameLower);
+          if (actualPdfName) {
+            pdfToFoldersMap.get(actualPdfName)!.push(folder);
+            matched = true;
+          }
+        }
+      }
+      
+      // If not matched by metadata, try fallback matching by name and time
+      if (!matched) {
         const folderNameLower = folder.name.toLowerCase();
         const folderModified = folder.modified;
         
@@ -503,8 +520,9 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
           if (folderNameLower.includes(pdfBaseName) || pdfBaseName.includes(folderNameLower)) {
             score += 10; // Name match
           }
+          // Time match: folder created after or near the time PDF was added
           if (folderModified >= pdfModified && (folderModified - pdfModified) < 3600000) {
-            score += 5; // Time match
+            score += 5; // Time match (within 1 hour)
           }
           
           if (score > bestMatchScore) {
@@ -524,17 +542,33 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
       folderList.sort((a, b) => a.name.localeCompare(b.name));
     });
     
+    // Track which folders have been assigned to PDFs
+    const assignedFolders = new Set<string>();
+    pdfToFoldersMap.forEach((folderList) => {
+      folderList.forEach(folder => {
+        assignedFolders.add(folder.path);
+      });
+    });
+    
+    // Find orphaned folders (folders without a matching PDF)
+    const orphanedFolders = folders.filter(folder => !assignedFolders.has(folder.path));
+    orphanedFolders.sort((a, b) => a.name.localeCompare(b.name));
+    
     // Build the final sorted list: folders above their PDFs, PDFs in alphabetical order
     const groupedItems: Array<typeof files[0] | typeof folders[0]> = [];
     
     // Add folders and their PDFs in alphabetical PDF order
+    // This ensures folders always appear above their associated PDFs
     for (const pdf of pdfFiles) {
       const relatedFolders = pdfToFoldersMap.get(pdf.name) || [];
-      // Add folders above the PDF
+      // Add folders above the PDF (folders are already sorted alphabetically)
       groupedItems.push(...relatedFolders);
       // Add the PDF
       groupedItems.push(pdf);
     }
+    
+    // Add orphaned folders (folders without a matching PDF) after all PDFs
+    groupedItems.push(...orphanedFolders);
     
     // Add other non-PDF files at the end, sorted alphabetically
     otherFiles.sort((a, b) => a.name.localeCompare(b.name));

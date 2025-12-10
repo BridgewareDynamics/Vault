@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ArchiveCase, ArchiveFile, ArchiveConfig } from '../types';
 import { useToast } from '../components/Toast/ToastContext';
 
@@ -617,9 +617,61 @@ export function useArchive() {
     caseItem.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredFiles = files.filter(file =>
-    file.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter files while preserving folder-PDF relationships
+  // If a PDF matches, include its associated folders (and vice versa)
+  const filteredFiles = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return files; // No search query, return all files in backend order
+    }
+
+    const queryLower = searchQuery.toLowerCase();
+    const matchingPaths = new Set<string>();
+    const pdfToFolders = new Map<string, string[]>(); // PDF path -> folder paths
+    const folderToPdf = new Map<string, string>(); // Folder path -> PDF path
+
+    // Build relationships between folders and PDFs
+    files.forEach(file => {
+      if (file.isFolder && file.parentPdfName) {
+        // Find the PDF this folder is associated with
+        const associatedPdf = files.find(f => 
+          !f.isFolder && 
+          f.type === 'pdf' && 
+          f.name === file.parentPdfName
+        );
+        if (associatedPdf) {
+          if (!pdfToFolders.has(associatedPdf.path)) {
+            pdfToFolders.set(associatedPdf.path, []);
+          }
+          pdfToFolders.get(associatedPdf.path)!.push(file.path);
+          folderToPdf.set(file.path, associatedPdf.path);
+        }
+      }
+    });
+
+    // Find all matching items
+    files.forEach(file => {
+      if (file.name.toLowerCase().includes(queryLower)) {
+        matchingPaths.add(file.path);
+        
+        // If it's a PDF, also include its folders
+        if (!file.isFolder && file.type === 'pdf') {
+          const folders = pdfToFolders.get(file.path) || [];
+          folders.forEach(folderPath => matchingPaths.add(folderPath));
+        }
+        
+        // If it's a folder, also include its associated PDF
+        if (file.isFolder) {
+          const pdfPath = folderToPdf.get(file.path);
+          if (pdfPath) {
+            matchingPaths.add(pdfPath);
+          }
+        }
+      }
+    });
+
+    // Return files in original order, but only those that match (or are related to matches)
+    return files.filter(file => matchingPaths.has(file.path));
+  }, [files, searchQuery]);
 
   const openFolder = useCallback((folderPath: string) => {
     if (!currentCase) return;

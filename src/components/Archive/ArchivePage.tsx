@@ -424,58 +424,269 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             </div>
           ) : currentCase ? (
             <>
-              {/* Folders Section */}
-              {(() => {
-                const folders = files.filter(f => f.isFolder);
-                console.log('Rendering folders section, folders count:', folders.length, 'all files:', files.length);
-                if (folders.length > 0) {
-                  return (
-                    <div className="mb-6">
-                      <h2 className="text-xl font-semibold text-white mb-4">Folders</h2>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                        <AnimatePresence>
-                          {folders.map((folder) => (
+              {/* Unified Grid: Folders and Files in Backend Order */}
+              {/* Group folders with their PDFs so folders appear above PDFs in the same column */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                <AnimatePresence>
+                  {(() => {
+                    // Check if we're inside a folder
+                    // When inside an extraction folder, PDFs should not show extraction options and no spacers needed
+                    const isInsideFolder = !!currentFolderPath;
+                    
+                    // Group folders with their associated PDFs so they appear stacked vertically
+                    // This ensures folders stay above their PDFs in the same column when new files are added
+                    // Skip grouping when inside a folder (folders don't appear inside folders)
+                    if (isInsideFolder) {
+                      // Inside a folder: render files normally without grouping or spacers
+                      return files.map((item) => {
+                        if (item.isFolder) {
+                          return (
                             <ExtractionFolder
-                              key={folder.path}
-                              folder={folder}
-                              isExtracting={isExtracting && extractingFolderPath === folder.path}
-                              onClick={() => openFolder(folder.path)}
+                              key={item.path}
+                              folder={item}
+                              isExtracting={isExtracting && extractingFolderPath === item.path}
+                              onClick={() => openFolder(item.path)}
                               onDelete={() => {
-                                setFolderToDelete(folder);
+                                setFolderToDelete(item);
                                 setShowDeleteFolderDialog(true);
                               }}
                               onRename={() => {
-                                setFileToRename(folder);
+                                setFileToRename(item);
                                 setShowRenameDialog(true);
                               }}
                             />
-                          ))}
-                        </AnimatePresence>
-                      </div>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-
-              {/* Files Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                <AnimatePresence>
-                  {files
-                    .filter(file => !file.isFolder)
-                    .map((file) => (
-                      <ArchiveFileItem
-                        key={file.path}
-                        file={file}
-                        onClick={() => handleFileClick(file)}
-                        onDelete={() => deleteFile(file.path)}
-                        onExtract={file.type === 'pdf' ? () => handleExtractPDF(file) : undefined}
-                        onRename={() => {
-                          setFileToRename(file);
-                          setShowRenameDialog(true);
-                        }}
-                      />
-                    ))}
+                          );
+                        } else {
+                          // Inside folder: don't show extraction for PDFs (they're already extracted)
+                          return (
+                            <ArchiveFileItem
+                              key={item.path}
+                              file={item}
+                              onClick={() => handleFileClick(item)}
+                              onDelete={() => deleteFile(item.path)}
+                              onExtract={undefined} // No extraction inside folders
+                              onRename={() => {
+                                setFileToRename(item);
+                                setShowRenameDialog(true);
+                              }}
+                            />
+                          );
+                        }
+                      });
+                    }
+                    
+                    const groupedItems: Array<{ type: 'group' | 'single'; items: ArchiveFile[] }> = [];
+                    const processedPaths = new Set<string>();
+                    
+                    // Build a map of PDF paths to their folders (for quick lookup)
+                    const pdfToFoldersMap = new Map<string, ArchiveFile[]>();
+                    const pdfFiles = files.filter(f => !f.isFolder && f.type === 'pdf');
+                    
+                    files.forEach((item) => {
+                      if (item.isFolder && item.parentPdfName) {
+                        // Find the PDF this folder belongs to (case-insensitive match)
+                        const associatedPdf = pdfFiles.find(pdf => 
+                          pdf.name.toLowerCase() === item.parentPdfName!.toLowerCase()
+                        );
+                        
+                        if (associatedPdf) {
+                          const pdfKey = associatedPdf.path;
+                          if (!pdfToFoldersMap.has(pdfKey)) {
+                            pdfToFoldersMap.set(pdfKey, []);
+                          }
+                          pdfToFoldersMap.get(pdfKey)!.push(item);
+                        }
+                      }
+                    });
+                    
+                    // Process items in backend order to maintain sorting
+                    files.forEach((item) => {
+                      if (processedPaths.has(item.path)) return;
+                      
+                      if (item.isFolder && item.parentPdfName) {
+                        // Find the PDF this folder belongs to
+                        const associatedPdf = pdfFiles.find(pdf => 
+                          pdf.name.toLowerCase() === item.parentPdfName!.toLowerCase() &&
+                          !processedPaths.has(pdf.path)
+                        );
+                        
+                        if (associatedPdf) {
+                          // Get all folders for this PDF (maintain order from backend)
+                          const allFoldersForPdf = pdfToFoldersMap.get(associatedPdf.path) || [];
+                          // Sort folders by their position in the original array to maintain backend order
+                          const sortedFolders = allFoldersForPdf.sort((a, b) => {
+                            const indexA = files.findIndex(f => f.path === a.path);
+                            const indexB = files.findIndex(f => f.path === b.path);
+                            return indexA - indexB;
+                          });
+                          
+                          // Group all folders with their PDF (folders first, then PDF)
+                          groupedItems.push({
+                            type: 'group',
+                            items: [...sortedFolders, associatedPdf]
+                          });
+                          
+                          // Mark all as processed
+                          sortedFolders.forEach(folder => processedPaths.add(folder.path));
+                          processedPaths.add(associatedPdf.path);
+                        } else {
+                          // Folder without associated PDF found - render as single
+                          groupedItems.push({
+                            type: 'single',
+                            items: [item]
+                          });
+                          processedPaths.add(item.path);
+                        }
+                      } else if (item.type === 'pdf' && !processedPaths.has(item.path)) {
+                        // Check if this PDF has unprocessed folders
+                        const foldersForPdf = (pdfToFoldersMap.get(item.path) || []).filter(
+                          folder => !processedPaths.has(folder.path)
+                        );
+                        
+                        if (foldersForPdf.length > 0) {
+                          // Sort folders by their position in the original array
+                          const sortedFolders = foldersForPdf.sort((a, b) => {
+                            const indexA = files.findIndex(f => f.path === a.path);
+                            const indexB = files.findIndex(f => f.path === b.path);
+                            return indexA - indexB;
+                          });
+                          
+                          // Group folders with this PDF
+                          groupedItems.push({
+                            type: 'group',
+                            items: [...sortedFolders, item]
+                          });
+                          sortedFolders.forEach(folder => processedPaths.add(folder.path));
+                          processedPaths.add(item.path);
+                        } else {
+                          // Standalone PDF
+                          groupedItems.push({
+                            type: 'single',
+                            items: [item]
+                          });
+                          processedPaths.add(item.path);
+                        }
+                      } else if (!item.isFolder && item.type !== 'pdf') {
+                        // Non-PDF file
+                        groupedItems.push({
+                          type: 'single',
+                          items: [item]
+                        });
+                        processedPaths.add(item.path);
+                      } else if (item.isFolder && !item.parentPdfName) {
+                        // Folder without parentPdfName metadata
+                        groupedItems.push({
+                          type: 'single',
+                          items: [item]
+                        });
+                        processedPaths.add(item.path);
+                      }
+                    });
+                    
+                    return groupedItems.map((group, groupIndex) => {
+                      if (group.type === 'group') {
+                        // Render folder and PDF stacked vertically
+                        return (
+                          <div key={`group-${groupIndex}`} className="flex flex-col gap-4">
+                            {group.items.map((item) => {
+                              if (item.isFolder) {
+                                return (
+                                  <ExtractionFolder
+                                    key={item.path}
+                                    folder={item}
+                                    isExtracting={isExtracting && extractingFolderPath === item.path}
+                                    onClick={() => openFolder(item.path)}
+                                    onDelete={() => {
+                                      setFolderToDelete(item);
+                                      setShowDeleteFolderDialog(true);
+                                    }}
+                                    onRename={() => {
+                                      setFileToRename(item);
+                                      setShowRenameDialog(true);
+                                    }}
+                                  />
+                                );
+                              } else {
+                                return (
+                                  <ArchiveFileItem
+                                    key={item.path}
+                                    file={item}
+                                    onClick={() => handleFileClick(item)}
+                                    onDelete={() => deleteFile(item.path)}
+                                    onExtract={item.type === 'pdf' ? () => handleExtractPDF(item) : undefined}
+                                    onRename={() => {
+                                      setFileToRename(item);
+                                      setShowRenameDialog(true);
+                                    }}
+                                  />
+                                );
+                              }
+                            })}
+                          </div>
+                        );
+                      } else {
+                        // Single item
+                        const item = group.items[0];
+                        if (item.isFolder) {
+                          return (
+                            <ExtractionFolder
+                              key={item.path}
+                              folder={item}
+                              isExtracting={isExtracting && extractingFolderPath === item.path}
+                              onClick={() => openFolder(item.path)}
+                              onDelete={() => {
+                                setFolderToDelete(item);
+                                setShowDeleteFolderDialog(true);
+                              }}
+                              onRename={() => {
+                                setFileToRename(item);
+                                setShowRenameDialog(true);
+                              }}
+                            />
+                          );
+                        } else if (item.type === 'pdf') {
+                          // Standalone PDF: Add spacer above to align with PDFs in groups
+                          // The spacer matches the height of a folder (p-6 + icon + text) + gap-4
+                          return (
+                            <div key={item.path} className="flex flex-col gap-4">
+                              {/* Invisible spacer matching folder height to align PDFs */}
+                              <div className="invisible rounded-lg border-2 border-transparent p-6">
+                                <div className="flex flex-col items-center gap-3">
+                                  <div className="w-16 h-16" />
+                                  <div className="h-5 w-full" />
+                                </div>
+                              </div>
+                              <ArchiveFileItem
+                                file={item}
+                                onClick={() => handleFileClick(item)}
+                                onDelete={() => deleteFile(item.path)}
+                                onExtract={() => handleExtractPDF(item)}
+                                onRename={() => {
+                                  setFileToRename(item);
+                                  setShowRenameDialog(true);
+                                }}
+                              />
+                            </div>
+                          );
+                        } else {
+                          // Non-PDF file - no spacer needed
+                          return (
+                            <ArchiveFileItem
+                              key={item.path}
+                              file={item}
+                              onClick={() => handleFileClick(item)}
+                              onDelete={() => deleteFile(item.path)}
+                              onExtract={item.type === 'pdf' ? () => handleExtractPDF(item) : undefined}
+                              onRename={() => {
+                                setFileToRename(item);
+                                setShowRenameDialog(true);
+                              }}
+                            />
+                          );
+                        }
+                      }
+                    });
+                  })()}
                 </AnimatePresence>
               </div>
             </>
