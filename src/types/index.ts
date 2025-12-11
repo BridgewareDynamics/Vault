@@ -31,6 +31,14 @@ export interface ArchiveConfig {
   archiveDrive: string | null;
 }
 
+export interface ArchiveMarker {
+  version: string;
+  createdAt: number;
+  lastModified: number;
+  caseCount?: number;
+  archiveId: string;
+}
+
 export interface ArchiveCase {
   name: string;
   path: string;

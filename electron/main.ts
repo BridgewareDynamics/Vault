@@ -6,6 +6,7 @@ import * as path from 'path';
 import JSZip from 'jszip';
 import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive } from './utils/archiveConfig';
 import { generateFileThumbnail } from './utils/thumbnailGenerator';
+import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMarker } from './utils/archiveMarker';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -309,15 +310,80 @@ ipcMain.handle('select-archive-drive', async () => {
     throw new Error('Invalid directory selected');
   }
 
+  // Check if this directory already has a marker file
+  const hasMarker = await isValidArchive(dirPath);
+  let autoDetected = false;
+
+  if (hasMarker) {
+    // Archive marker exists - validate it
+    const marker = await readArchiveMarker(dirPath);
+    if (marker) {
+      autoDetected = true;
+      // Archive is valid, just update lastModified
+      await updateArchiveMarker(dirPath, { lastModified: Date.now() });
+    }
+  } else {
+    // No marker file - create a new one
+    await createArchiveMarker(dirPath);
+  }
+
   // Save to config
   await setArchiveDrive(dirPath);
-  return dirPath;
+  
+  return {
+    path: dirPath,
+    autoDetected,
+  };
 });
 
 // Get archive config
 ipcMain.handle('get-archive-config', async () => {
   const config = await loadArchiveConfig();
+  
+  // Validate the stored archive drive path
+  if (config.archiveDrive) {
+    try {
+      // Check if path exists and has valid marker
+      const isValid = await isValidArchive(config.archiveDrive);
+      if (!isValid) {
+        // Path is invalid, clear it
+        config.archiveDrive = null;
+        await saveArchiveConfig(config);
+      }
+    } catch (error) {
+      // Path doesn't exist or is invalid, clear it
+      config.archiveDrive = null;
+      await saveArchiveConfig(config);
+    }
+  }
+  
   return config;
+});
+
+// Validate archive directory
+ipcMain.handle('validate-archive-directory', async (event, dirPath: string) => {
+  if (!isSafePath(dirPath)) {
+    return { isValid: false };
+  }
+
+  try {
+    if (!(await isValidDirectory(dirPath))) {
+      return { isValid: false };
+    }
+
+    const isValid = await isValidArchive(dirPath);
+    if (isValid) {
+      const marker = await readArchiveMarker(dirPath);
+      return {
+        isValid: true,
+        marker: marker || undefined,
+      };
+    }
+
+    return { isValid: false };
+  } catch (error) {
+    return { isValid: false };
+  }
 });
 
 // Create case folder
@@ -346,6 +412,20 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
       if (description.trim()) {
         const descriptionPath = path.join(casePath, '.case-description');
         await fs.writeFile(descriptionPath, description.trim(), 'utf8');
+      }
+      
+      // Update archive marker metadata
+      try {
+        const marker = await readArchiveMarker(archiveDrive);
+        if (marker) {
+          // Count existing cases to update caseCount
+          const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
+          const caseCount = entries.filter(entry => entry.isDirectory()).length;
+          await updateArchiveMarker(archiveDrive, { caseCount, lastModified: Date.now() });
+        }
+      } catch (error) {
+        // If marker update fails, don't fail the case creation
+        console.error('Failed to update archive marker:', error);
       }
       
       return casePath;
@@ -501,6 +581,12 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
           // Exclude .case-description metadata file
           if (fileName === '.case-description') {
             console.log('[Main] Filtering out case description metadata file:', entry.name);
+            return false;
+          }
+          
+          // Exclude .vault-archive.json marker file
+          if (fileName === '.vault-archive.json') {
+            console.log('[Main] Filtering out vault archive marker file:', entry.name);
             return false;
           }
           

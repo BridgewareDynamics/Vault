@@ -71,11 +71,16 @@ export function useArchive() {
         return false;
       }
 
-      const drivePath = await window.electronAPI.selectArchiveDrive();
-      if (drivePath) {
+      const result = await window.electronAPI.selectArchiveDrive();
+      if (result) {
         const config = await window.electronAPI.getArchiveConfig();
         setArchiveConfig(config);
-        toast.success('Vault drive selected');
+        
+        if (result.autoDetected) {
+          toast.success('Vault archive detected and loaded');
+        } else {
+          toast.success('Vault drive selected');
+        }
         return true;
       }
       return false;
@@ -304,6 +309,10 @@ export function useArchive() {
           }
           // Exclude .case-description metadata file
           if (fileName === '.case-description') {
+            return false;
+          }
+          // Exclude .vault-archive.json marker file
+          if (fileName === '.vault-archive.json') {
             return false;
           }
           // Exclude .case-background-image.* files

@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Archive APIs
   selectArchiveDrive: () => ipcRenderer.invoke('select-archive-drive'),
   getArchiveConfig: () => ipcRenderer.invoke('get-archive-config'),
+  validateArchiveDirectory: (dirPath: string) => ipcRenderer.invoke('validate-archive-directory', dirPath),
   createCaseFolder: (caseName: string, description?: string) => ipcRenderer.invoke('create-case-folder', caseName, description),
   createExtractionFolder: (casePath: string, folderName: string, parentPdfPath?: string) => ipcRenderer.invoke('create-extraction-folder', casePath, folderName, parentPdfPath),
   listArchiveCases: () => ipcRenderer.invoke('list-archive-cases'),
@@ -59,8 +60,9 @@ declare global {
       validatePath: (filePath: string) => Promise<{ isValid: boolean; isPDF: boolean }>;
       readPDFFile: (filePath: string) => Promise<number[]>;
       // Archive APIs
-      selectArchiveDrive: () => Promise<string | null>;
+      selectArchiveDrive: () => Promise<{ path: string; autoDetected: boolean } | null>;
       getArchiveConfig: () => Promise<{ archiveDrive: string | null }>;
+      validateArchiveDirectory: (dirPath: string) => Promise<{ isValid: boolean; marker?: { version: string; createdAt: number; lastModified: number; caseCount?: number; archiveId: string } }>;
       createCaseFolder: (caseName: string, description?: string) => Promise<string>;
       createExtractionFolder: (casePath: string, folderName: string, parentPdfPath?: string) => Promise<string>;
       listArchiveCases: () => Promise<Array<{ name: string; path: string; backgroundImage?: string; description?: string }>>;
