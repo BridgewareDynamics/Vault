@@ -86,7 +86,7 @@ export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogPro
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onKeyDown={handleTextareaKeyPress}
-            placeholder="Description (text explaining the case's purpose/contents)..."
+            placeholder="Description..."
             rows={4}
             className="w-full px-4 py-3 bg-gray-700/50 border-2 border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyber-purple-500 mb-4 resize-none transition-colors"
           />
