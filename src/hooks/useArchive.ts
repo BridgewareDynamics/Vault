@@ -101,19 +101,46 @@ export function useArchive() {
     }
   }, [archiveConfig?.archiveDrive, toast]);
 
-  const createCase = useCallback(async (caseName: string): Promise<boolean> => {
+  const createCase = useCallback(async (caseName: string, description: string = ''): Promise<boolean> => {
     try {
       if (!window.electronAPI) {
         toast.error('Electron API not available');
         return false;
       }
 
-      await window.electronAPI.createCaseFolder(caseName);
+      await window.electronAPI.createCaseFolder(caseName, description);
       toast.success(`Case "${caseName}" created`);
       await loadCases(); // Reload cases (will auto-alphabetize)
       return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create case');
+      return false;
+    }
+  }, [toast, loadCases]);
+
+  const updateCaseBackgroundImage = useCallback(async (casePath: string): Promise<boolean> => {
+    try {
+      if (!window.electronAPI) {
+        toast.error('Electron API not available');
+        return false;
+      }
+
+      // Open file picker to select image
+      const imagePath = await window.electronAPI.selectImageFile();
+      if (!imagePath) {
+        return false; // User cancelled
+      }
+
+      // Set the background image
+      const savedPath = await window.electronAPI.setCaseBackgroundImage(casePath, imagePath);
+      
+      // Reload cases to update the UI
+      await loadCases();
+      
+      toast.success('Background image updated');
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update background image');
       return false;
     }
   }, [toast, loadCases]);
@@ -269,6 +296,18 @@ export function useArchive() {
         if (!item.isFolder) {
           const fileName = item.name.toLowerCase();
           if (fileName === '.parent-pdf' || fileName.startsWith('.parent-pdf')) {
+            return false;
+          }
+          // Exclude .case-background metadata file
+          if (fileName === '.case-background') {
+            return false;
+          }
+          // Exclude .case-description metadata file
+          if (fileName === '.case-description') {
+            return false;
+          }
+          // Exclude .case-background-image.* files
+          if (fileName.startsWith('.case-background-image.')) {
             return false;
           }
         }
@@ -750,6 +789,7 @@ export function useArchive() {
     goBackToParentFolder,
     navigateToFolder,
     getCurrentPath,
+    updateCaseBackgroundImage,
     refreshCases: loadCases,
     refreshFiles: () => {
       const path = currentFolderPath || currentCase?.path;

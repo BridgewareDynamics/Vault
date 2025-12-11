@@ -45,6 +45,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     goBackToCase,
     goBackToParentFolder,
     navigateToFolder,
+    updateCaseBackgroundImage,
     refreshFiles,
   } = useArchive();
 
@@ -122,8 +123,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     }
   };
 
-  const handleCreateCase = async (caseName: string) => {
-    const success = await createCase(caseName);
+  const handleCreateCase = async (caseName: string, description: string) => {
+    const success = await createCase(caseName, description);
     if (success) {
       setShowCaseDialog(false);
     }
@@ -424,6 +425,27 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             </div>
           ) : currentCase ? (
             <>
+              {/* Case Description */}
+              {currentCase.description && !currentFolderPath && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                  className="mb-6 p-4 bg-gray-800/50 border border-cyber-purple-500/30 rounded-lg backdrop-blur-sm"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-cyber-purple-400"></div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-gray-300 text-sm leading-relaxed">
+                        {currentCase.description}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+              
               {/* Unified Grid: Folders and Files in Backend Order */}
               {/* Group folders with their PDFs so folders appear above PDFs in the same column */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -701,6 +723,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                     isExtracting={isExtracting && extractingCasePath === caseItem.path}
                     onClick={() => setCurrentCase(caseItem)}
                     onDelete={() => deleteCase(caseItem.path)}
+                    onEditBackground={() => updateCaseBackgroundImage(caseItem.path)}
                   />
                 ))}
               </AnimatePresence>

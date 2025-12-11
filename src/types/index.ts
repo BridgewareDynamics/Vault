@@ -34,6 +34,8 @@ export interface ArchiveConfig {
 export interface ArchiveCase {
   name: string;
   path: string;
+  backgroundImage?: string; // URL or path to background image
+  description?: string; // Text explaining the case's purpose/contents
 }
 
 export interface ArchiveFile {

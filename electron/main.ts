@@ -126,6 +126,39 @@ ipcMain.handle('select-pdf-file', async () => {
   }
 });
 
+// Select image file
+ipcMain.handle('select-image-file', async () => {
+  if (!mainWindow) return null;
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Background Image',
+    filters: [
+      { name: 'Image Files', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+    properties: ['openFile'],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  const filePath = result.filePaths[0];
+
+  // Validate path
+  if (!isSafePath(filePath)) {
+    throw new Error('Invalid file path');
+  }
+
+  // Check if file exists
+  try {
+    await fs.access(filePath);
+    return filePath;
+  } catch {
+    throw new Error('Image file does not exist');
+  }
+});
+
 // Select save directory
 ipcMain.handle('select-save-directory', async () => {
   if (!mainWindow) return null;
@@ -288,7 +321,7 @@ ipcMain.handle('get-archive-config', async () => {
 });
 
 // Create case folder
-ipcMain.handle('create-case-folder', async (event, caseName: string) => {
+ipcMain.handle('create-case-folder', async (event, caseName: string, description: string = '') => {
   if (!caseName || !isValidFolderName(caseName)) {
     throw new Error('Invalid case name');
   }
@@ -308,6 +341,13 @@ ipcMain.handle('create-case-folder', async (event, caseName: string) => {
     if (error.code === 'ENOENT') {
       // Folder doesn't exist, create it
       await fs.mkdir(casePath, { recursive: true });
+      
+      // Save description if provided
+      if (description.trim()) {
+        const descriptionPath = path.join(casePath, '.case-description');
+        await fs.writeFile(descriptionPath, description.trim(), 'utf8');
+      }
+      
       return casePath;
     }
     throw error;
@@ -371,14 +411,55 @@ ipcMain.handle('list-archive-cases', async () => {
 
   try {
     const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
-    const cases = entries
-      .filter(entry => entry.isDirectory())
-      .map(entry => ({
-        name: entry.name,
-        path: path.join(archiveDrive, entry.name),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name)); // Alphabetize
-
+    const cases = await Promise.all(
+      entries
+        .filter(entry => entry.isDirectory())
+        .map(async (entry) => {
+          const casePath = path.join(archiveDrive, entry.name);
+          
+          // Try to read background image metadata
+          let backgroundImage: string | undefined = undefined;
+          try {
+            const metadataPath = path.join(casePath, '.case-background');
+            const backgroundFileName = await fs.readFile(metadataPath, 'utf8');
+            const backgroundFileNameTrimmed = backgroundFileName.trim();
+            if (backgroundFileNameTrimmed) {
+              const backgroundImagePath = path.join(casePath, backgroundFileNameTrimmed);
+              // Verify the file exists
+              try {
+                await fs.access(backgroundImagePath);
+                backgroundImage = backgroundImagePath;
+              } catch {
+                // File doesn't exist, ignore
+              }
+            }
+          } catch (metadataError) {
+            // Metadata file doesn't exist or can't be read - that's okay
+          }
+          
+          // Try to read description metadata
+          let description: string | undefined = undefined;
+          try {
+            const descriptionPath = path.join(casePath, '.case-description');
+            const descriptionContent = await fs.readFile(descriptionPath, 'utf8');
+            const descriptionTrimmed = descriptionContent.trim();
+            if (descriptionTrimmed) {
+              description = descriptionTrimmed;
+            }
+          } catch (descriptionError) {
+            // Description file doesn't exist or can't be read - that's okay
+          }
+          
+          return {
+            name: entry.name,
+            path: casePath,
+            backgroundImage,
+            description,
+          };
+        })
+    );
+    
+    cases.sort((a, b) => a.name.localeCompare(b.name)); // Alphabetize
     return cases;
   } catch (error) {
     throw new Error(`Failed to list archive cases: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -395,7 +476,7 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     const entries = await fs.readdir(casePath, { withFileTypes: true });
     console.log('[Main] list-case-files: Found entries:', entries.length, entries.map(e => ({ name: e.name, isFile: e.isFile(), isDirectory: e.isDirectory() })));
     
-    // Process files (exclude hidden metadata files like .parent-pdf)
+    // Process files (exclude hidden metadata files like .parent-pdf, .case-background, etc.)
     const files = await Promise.all(
       entries
         .filter(entry => {
@@ -403,17 +484,32 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
           if (!entry.isFile()) {
             return false;
           }
-          // Exclude .parent-pdf metadata files (case-insensitive check)
-          const fileName = entry.name;
-          if (fileName === '.parent-pdf' || fileName.toLowerCase() === '.parent-pdf') {
-            console.log('[Main] Filtering out metadata file:', fileName);
+          const fileName = entry.name.toLowerCase();
+          
+          // Exclude .parent-pdf metadata files
+          if (fileName === '.parent-pdf' || fileName.startsWith('.parent-pdf')) {
+            console.log('[Main] Filtering out metadata file:', entry.name);
             return false;
           }
-          // Also exclude any file starting with .parent-pdf (for safety)
-          if (fileName.toLowerCase().startsWith('.parent-pdf')) {
-            console.log('[Main] Filtering out metadata file (starts with):', fileName);
+          
+          // Exclude .case-background metadata file
+          if (fileName === '.case-background') {
+            console.log('[Main] Filtering out case background metadata file:', entry.name);
             return false;
           }
+          
+          // Exclude .case-description metadata file
+          if (fileName === '.case-description') {
+            console.log('[Main] Filtering out case description metadata file:', entry.name);
+            return false;
+          }
+          
+          // Exclude .case-background-image.* files
+          if (fileName.startsWith('.case-background-image.')) {
+            console.log('[Main] Filtering out case background image file:', entry.name);
+            return false;
+          }
+          
           return true;
         })
         .map(async (entry) => {
@@ -652,6 +748,57 @@ ipcMain.handle('delete-case', async (event, casePath: string) => {
     return true;
   } catch (error) {
     throw new Error(`Failed to delete case: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Set case background image
+ipcMain.handle('set-case-background-image', async (event, casePath: string, imagePath: string) => {
+  if (!isSafePath(casePath) || !isSafePath(imagePath)) {
+    throw new Error('Invalid path');
+  }
+
+  try {
+    // Check if case path exists and is a directory
+    const caseStats = await fs.stat(casePath);
+    if (!caseStats.isDirectory()) {
+      throw new Error('Case path is not a directory');
+    }
+
+    // Check if image file exists
+    await fs.access(imagePath);
+
+    // Copy image to case folder with a standard name
+    const imageExt = path.extname(imagePath);
+    const backgroundImageName = `.case-background-image${imageExt}`;
+    const destPath = path.join(casePath, backgroundImageName);
+
+    // Delete old background image if it exists
+    try {
+      const oldMetadataPath = path.join(casePath, '.case-background');
+      const oldMetadata = await fs.readFile(oldMetadataPath, 'utf8');
+      const oldImageName = oldMetadata.trim();
+      if (oldImageName && oldImageName !== backgroundImageName) {
+        const oldImagePath = path.join(casePath, oldImageName);
+        try {
+          await fs.unlink(oldImagePath);
+        } catch {
+          // Old image doesn't exist, ignore
+        }
+      }
+    } catch {
+      // No old metadata, ignore
+    }
+
+    // Copy the new image
+    await fs.copyFile(imagePath, destPath);
+
+    // Store the filename in metadata file
+    const metadataPath = path.join(casePath, '.case-background');
+    await fs.writeFile(metadataPath, backgroundImageName, 'utf8');
+
+    return destPath;
+  } catch (error) {
+    throw new Error(`Failed to set case background image: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 

@@ -5,27 +5,40 @@ import { FolderPlus } from 'lucide-react';
 interface CaseNameDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (caseName: string) => void;
+  onConfirm: (caseName: string, description: string) => void;
 }
 
 export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogProps) {
   const [caseName, setCaseName] = useState('');
+  const [description, setDescription] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setCaseName('');
+      setDescription('');
     }
   }, [isOpen]);
 
   const handleConfirm = () => {
     if (caseName.trim()) {
-      onConfirm(caseName.trim());
+      onConfirm(caseName.trim(), description.trim());
       setCaseName('');
+      setDescription('');
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
+      handleConfirm();
+    } else if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
+  const handleTextareaKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      // Ctrl/Cmd + Enter to submit
+      e.preventDefault();
       handleConfirm();
     } else if (e.key === 'Escape') {
       onClose();
@@ -66,7 +79,16 @@ export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogPro
             onKeyDown={handleKeyPress}
             placeholder="Enter case name..."
             autoFocus
-            className="w-full px-4 py-3 bg-gray-700/50 border-2 border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyber-purple-500 mb-4"
+            className="w-full px-4 py-3 bg-gray-700/50 border-2 border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyber-purple-500 mb-4 transition-colors"
+          />
+
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onKeyDown={handleTextareaKeyPress}
+            placeholder="Description (text explaining the case's purpose/contents)..."
+            rows={4}
+            className="w-full px-4 py-3 bg-gray-700/50 border-2 border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyber-purple-500 mb-4 resize-none transition-colors"
           />
 
           <div className="flex gap-3">
