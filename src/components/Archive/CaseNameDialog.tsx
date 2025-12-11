@@ -53,13 +53,19 @@ export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogPro
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
+        onMouseDown={(e) => {
+          // Only close if clicking directly on the backdrop (not on dialog or its children)
+          if (e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
         className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
+          onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
           className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg border-2 border-cyber-purple-500/60 shadow-2xl p-6 max-w-md w-full"
         >
@@ -77,6 +83,8 @@ export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogPro
             value={caseName}
             onChange={(e) => setCaseName(e.target.value)}
             onKeyDown={handleKeyPress}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             placeholder="Enter case name..."
             autoFocus
             className="w-full px-4 py-3 bg-gray-700/50 border-2 border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyber-purple-500 mb-4 transition-colors"
@@ -86,6 +94,8 @@ export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogPro
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onKeyDown={handleTextareaKeyPress}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             placeholder="Description..."
             rows={4}
             className="w-full px-4 py-3 bg-gray-700/50 border-2 border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyber-purple-500 mb-4 resize-none transition-colors"

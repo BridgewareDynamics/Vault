@@ -58,7 +58,7 @@ declare global {
         extractedPages: Array<{ pageNumber: number; imageData: string }>;
       }) => Promise<{ success: boolean; messages: string[] }>;
       validatePath: (filePath: string) => Promise<{ isValid: boolean; isPDF: boolean }>;
-      readPDFFile: (filePath: string) => Promise<number[]>;
+      readPDFFile: (filePath: string) => Promise<string | number[]>; // Returns base64 string (or array for backward compatibility)
       // Archive APIs
       selectArchiveDrive: () => Promise<{ path: string; autoDetected: boolean } | null>;
       getArchiveConfig: () => Promise<{ archiveDrive: string | null }>;

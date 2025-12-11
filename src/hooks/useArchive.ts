@@ -158,7 +158,30 @@ export function useArchive() {
       }
 
       const fileData = await window.electronAPI.readPDFFile(filePath);
-      const arrayBuffer = new Uint8Array(fileData).buffer;
+      
+      // Handle both base64 string (new) and array (old) for backward compatibility
+      let arrayBuffer: ArrayBuffer;
+      
+      if (typeof fileData === 'string') {
+        // New format: base64 string
+        try {
+          // Remove any whitespace that might have been added
+          const cleanBase64 = fileData.trim().replace(/\s/g, '');
+          const binaryString = atob(cleanBase64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          arrayBuffer = bytes.buffer;
+        } catch (error) {
+          throw new Error(`Failed to decode base64 PDF data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      } else if (Array.isArray(fileData)) {
+        // Old format: array of numbers (for backward compatibility)
+        arrayBuffer = new Uint8Array(fileData).buffer;
+      } else {
+        throw new Error('Unexpected PDF file data format');
+      }
       
       // Import pdfjs-dist
       const pdfjsLib = await import('pdfjs-dist');
@@ -208,7 +231,9 @@ export function useArchive() {
         <rect width="100%" height="100%" fill="#1a1a2e"/>
         <text x="50%" y="50%" font-size="64" text-anchor="middle" dominant-baseline="middle" fill="#8b5cf6">📄</text>
       </svg>`;
-      return 'data:image/svg+xml;base64,' + btoa(svg);
+      // Properly encode SVG for base64 (handles Unicode characters like emojis)
+      // Use unescape(encodeURIComponent()) to convert Unicode to Latin1 before btoa
+      return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
     }
   }, []);
 

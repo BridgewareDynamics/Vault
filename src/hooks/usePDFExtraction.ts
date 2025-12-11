@@ -47,7 +47,29 @@ export function usePDFExtraction() {
       }
 
       const fileData = await window.electronAPI.readPDFFile(pdfPath);
-      const arrayBuffer = new Uint8Array(fileData).buffer;
+      
+      // Handle both base64 string (new) and array (old) for backward compatibility
+      let arrayBuffer: ArrayBuffer;
+      
+      if (typeof fileData === 'string') {
+        // New format: base64 string
+        try {
+          const cleanBase64 = fileData.trim().replace(/\s/g, '');
+          const binaryString = atob(cleanBase64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          arrayBuffer = bytes.buffer;
+        } catch (error) {
+          throw new Error(`Failed to decode base64 PDF data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      } else if (Array.isArray(fileData)) {
+        // Old format: array of numbers
+        arrayBuffer = new Uint8Array(fileData).buffer;
+      } else {
+        throw new Error('Unexpected PDF file data format');
+      }
 
       // Load PDF document
       setStatusMessage('Loading PDF document...');

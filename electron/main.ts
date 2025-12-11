@@ -282,7 +282,10 @@ ipcMain.handle('read-pdf-file', async (event, filePath: string) => {
 
   try {
     const data = await fs.readFile(filePath);
-    return Array.from(data); // Convert Buffer to array for IPC
+    // Use base64 encoding instead of Array.from to avoid "Invalid array length" error for large files
+    // This is more efficient for IPC and doesn't have array size limitations
+    const base64 = data.toString('base64');
+    return base64;
   } catch (error) {
     throw new Error(`Failed to read PDF file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
