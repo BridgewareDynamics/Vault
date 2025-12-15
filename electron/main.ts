@@ -49,24 +49,28 @@ function createWindow() {
   });
 
   if (isDev) {
-    // Wait for Vite to be ready, then load
-    const loadDevServer = () => {
-      mainWindow?.loadURL('http://localhost:5173').catch((err) => {
-        console.error('Failed to load Vite dev server, retrying...', err);
-        // Retry after 1 second
-        setTimeout(loadDevServer, 1000);
+    // Skip dev server loading during tests
+    if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+      // Wait for Vite to be ready, then load
+      const loadDevServer = () => {
+        if (!mainWindow) return; // Window was closed
+        mainWindow.loadURL('http://localhost:5173').catch((err) => {
+          console.error('Failed to load Vite dev server, retrying...', err);
+          // Retry after 1 second
+          setTimeout(loadDevServer, 1000);
+        });
+      };
+      
+      // Wait a bit for Vite to start
+      setTimeout(loadDevServer, 500);
+      
+      mainWindow.webContents.once('did-finish-load', () => {
+        // Open DevTools after page loads
+        setTimeout(() => {
+          mainWindow?.webContents.openDevTools();
+        }, 100);
       });
-    };
-    
-    // Wait a bit for Vite to start
-    setTimeout(loadDevServer, 500);
-    
-    mainWindow.webContents.once('did-finish-load', () => {
-      // Open DevTools after page loads
-      setTimeout(() => {
-        mainWindow?.webContents.openDevTools();
-      }, 100);
-    });
+    }
   } else {
     mainWindow.loadFile(join(__dirname, '../dist/index.html'));
   }
@@ -998,7 +1002,8 @@ ipcMain.handle('rename-file', async (event, filePath: string, newName: string) =
     } catch (error) {
       // If error is not ENOENT (file doesn't exist), re-throw it
       const errorCode = (error as any)?.code;
-      if (errorCode && errorCode !== 'ENOENT') {
+      // Re-throw if it's not ENOENT, or if it's our manually thrown error (no code property)
+      if (!errorCode || errorCode !== 'ENOENT') {
         throw error;
       }
       // If it's ENOENT, the file doesn't exist, which is what we want - continue

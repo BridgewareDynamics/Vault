@@ -26,12 +26,15 @@ function getConfigPath(): string {
  * Load archive configuration from disk
  */
 export async function loadArchiveConfig(): Promise<ArchiveConfig> {
+  // Check app readiness first (before cache check)
+  // This ensures we throw an error if app is not ready
+  const configPath = getConfigPath();
+  
   if (cachedConfig) {
     return cachedConfig;
   }
 
   try {
-    const configPath = getConfigPath();
     const data = await fs.readFile(configPath, 'utf-8');
     cachedConfig = JSON.parse(data) as ArchiveConfig;
     return cachedConfig;
@@ -70,5 +73,12 @@ export async function setArchiveDrive(drivePath: string | null): Promise<void> {
   const config = await loadArchiveConfig();
   config.archiveDrive = drivePath;
   await saveArchiveConfig(config);
+}
+
+/**
+ * Clear the cached config (useful for testing)
+ */
+export function clearCache(): void {
+  cachedConfig = null;
 }
 

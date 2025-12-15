@@ -68,6 +68,14 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Auto-show vault directory dialog on first open if no vault directory is set
+  useEffect(() => {
+    // Only show dialog if archiveConfig has been loaded and no vault directory is set
+    if (archiveConfig !== null && archiveConfig !== undefined && !archiveConfig.archiveDrive) {
+      setShowDriveDialog(true);
+    }
+  }, [archiveConfig]);
+
   // Handle drag and drop
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {

@@ -71,8 +71,16 @@ export async function updateArchiveMarker(
   const existingMarker = await readArchiveMarker(archivePath);
   
   if (!existingMarker) {
-    // If marker doesn't exist, create a new one
-    return await createArchiveMarker(archivePath);
+    // If marker doesn't exist, create a new one with the updates applied
+    const newMarker = await createArchiveMarker(archivePath);
+    const updatedMarker: ArchiveMarker = {
+      ...newMarker,
+      ...updates,
+      lastModified: Date.now(),
+    };
+    const markerPath = getMarkerPath(archivePath);
+    await fs.writeFile(markerPath, JSON.stringify(updatedMarker, null, 2), 'utf-8');
+    return updatedMarker;
   }
 
   const updatedMarker: ArchiveMarker = {
@@ -97,4 +105,12 @@ export async function isValidArchive(archivePath: string): Promise<boolean> {
     return false;
   }
 }
+
+
+
+
+
+
+
+
 

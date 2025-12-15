@@ -24,14 +24,44 @@ export function isSafePath(filePath: string): boolean {
     return false;
   }
 
-  // Check for path traversal patterns
-  const normalizedPath = path.normalize(filePath);
-  const dangerousPatterns = ['..', '~', '//'];
+  // Check for path traversal patterns in the original path
+  // We check the original path first, then normalize to catch resolved paths
+  const dangerousPatterns = ['..', '~'];
   
+  // Check original path for dangerous patterns
   for (const pattern of dangerousPatterns) {
-    if (normalizedPath.includes(pattern)) {
+    if (filePath.includes(pattern)) {
       return false;
     }
+  }
+
+  // Check for double slashes (but allow Windows drive letters like C:\\)
+  if (filePath.includes('//')) {
+    // Allow C:\\ at the start (Windows drive)
+    if (!filePath.match(/^[A-Za-z]:\\/)) {
+      return false;
+    }
+  }
+
+  // Check for double backslashes (but allow Windows drive letters like C:\\)
+  // Look for \\ that's not at the start after a drive letter
+  if (filePath.includes('\\\\')) {
+    // Allow C:\\ at the start (Windows drive letter)
+    if (!filePath.match(/^[A-Za-z]:\\\\/)) {
+      return false;
+    }
+    // Also check if there are more double backslashes after the drive
+    const afterDrive = filePath.replace(/^[A-Za-z]:\\\\?/, '');
+    if (afterDrive.includes('\\\\')) {
+      return false;
+    }
+  }
+
+  // Normalize and check if the normalized path differs significantly
+  // (indicating path traversal was resolved)
+  const normalizedPath = path.normalize(filePath);
+  if (normalizedPath !== filePath && filePath.includes('..')) {
+    return false;
   }
 
   return true;
@@ -62,6 +92,11 @@ export async function isValidDirectory(dirPath: string): Promise<boolean> {
  */
 export function isValidFolderName(folderName: string): boolean {
   if (!folderName || typeof folderName !== 'string') {
+    return false;
+  }
+
+  // Check for whitespace-only strings
+  if (folderName.trim().length === 0) {
     return false;
   }
 
