@@ -348,7 +348,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
           {/* Close button */}
           <button
             onClick={onClose}
-            className={`absolute ${file?.type === 'pdf' ? 'top-2 right-2' : '-top-12 right-0'} text-white hover:text-cyber-purple-400 transition-colors z-30 bg-black/60 rounded-full p-2`}
+            className={`absolute ${file?.type === 'pdf' ? 'top-14 right-2' : '-top-12 right-0'} text-white hover:text-cyber-purple-400 transition-colors z-30 bg-black/60 rounded-full p-2`}
             aria-label="Close"
           >
             <X size={24} />

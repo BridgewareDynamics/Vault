@@ -115,10 +115,19 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProp
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.3 }}
-          className="text-6xl font-bold bg-gradient-purple bg-clip-text text-transparent mb-8"
+          className="text-6xl font-bold bg-gradient-purple bg-clip-text text-transparent mb-4"
         >
           Welcome to the Vault
         </motion.h1>
+
+        <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.5 }}
+          className="text-xl text-gray-400 mb-8"
+        >
+          A Research Organization System
+        </motion.p>
 
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
           <motion.div
