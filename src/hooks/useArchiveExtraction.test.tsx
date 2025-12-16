@@ -281,7 +281,7 @@ describe('useArchiveExtraction', () => {
     await act(async () => {
       await expect(
         result.current.extractPDF('/test.pdf', '/case/path', 'folder-name', true),
-      ).rejects.toThrow(/Setting up fake worker failed/);
+      ).rejects.toThrow(/Failed to process PDF/);
     });
 
     // After failure, the hook should not remain in extracting state

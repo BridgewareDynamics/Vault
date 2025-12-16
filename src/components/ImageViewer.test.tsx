@@ -36,7 +36,7 @@ describe('ImageViewer', () => {
 
   it('should render close button', () => {
     render(<ImageViewer page={mockPage} onClose={mockOnClose} />);
-    const closeButton = screen.getByLabelText('Close');
+    const closeButton = screen.getByLabelText('Close image viewer');
     expect(closeButton).toBeInTheDocument();
   });
 
@@ -44,7 +44,7 @@ describe('ImageViewer', () => {
     const user = userEvent.setup();
     render(<ImageViewer page={mockPage} onClose={mockOnClose} />);
     
-    const closeButton = screen.getByLabelText('Close');
+    const closeButton = screen.getByLabelText('Close image viewer');
     await user.click(closeButton);
     
     expect(mockOnClose).toHaveBeenCalledTimes(1);
@@ -112,6 +112,7 @@ describe('ImageViewer', () => {
     expect(screen.getByAltText('Page 2')).toBeInTheDocument();
   });
 });
+
 
 
 

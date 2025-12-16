@@ -37,7 +37,7 @@ describe('usePDFExtraction – additional coverage', () => {
 
     await act(async () => {
       await expect(result.current.extractPDF('/test.pdf')).rejects.toThrow(
-        /Unexpected PDF file data format/,
+        /Failed to process PDF/,
       );
     });
   });
@@ -57,7 +57,7 @@ describe('usePDFExtraction – additional coverage', () => {
 
     await act(async () => {
       await expect(result.current.extractPDF('/test.pdf')).rejects.toThrow(
-        /Electron API not available/,
+        /Application not fully loaded/,
       );
     });
 

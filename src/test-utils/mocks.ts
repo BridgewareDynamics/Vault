@@ -8,6 +8,8 @@ export const mockElectronAPI = {
   saveFiles: vi.fn(),
   validatePath: vi.fn(),
   readPDFFile: vi.fn(),
+  getPDFFileSize: vi.fn(),
+  readPDFFileChunk: vi.fn(),
   // Archive APIs
   selectArchiveDrive: vi.fn(),
   getArchiveConfig: vi.fn(),
@@ -32,6 +34,7 @@ declare global {
     electronAPI: typeof mockElectronAPI;
   }
 }
+
 
 
 

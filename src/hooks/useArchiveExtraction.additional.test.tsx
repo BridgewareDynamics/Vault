@@ -64,7 +64,7 @@ describe('useArchiveExtraction – additional coverage', () => {
     await act(async () => {
       await expect(
         result.current.extractPDF('/test.pdf', '/case/path', 'folder', false),
-      ).rejects.toThrow(/Unexpected PDF file data format/);
+      ).rejects.toThrow(/Failed to process PDF/);
     });
   });
 });

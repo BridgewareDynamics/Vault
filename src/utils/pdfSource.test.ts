@@ -1,20 +1,52 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createChunkedPDFSource } from './pdfSource';
 import { mockElectronAPI } from '../test-utils/mocks';
 
-// Mock pdfjs-dist
+// Mock URL.createObjectURL and URL.revokeObjectURL for jsdom
+const mockCreateObjectURL = vi.fn((blob: Blob) => `blob:${blob.type}-${Date.now()}`);
+const mockRevokeObjectURL = vi.fn();
+
+// Mock pdfjs-dist completely to avoid initialization issues
 const mockGetDocument = vi.fn();
-vi.mock('pdfjs-dist', () => ({
-  default: {
+vi.mock('pdfjs-dist', () => {
+  const mockPdf = {
+    numPages: 1,
+    getPage: vi.fn(),
+  };
+  
+  const mockLoadingTask = {
+    promise: Promise.resolve(mockPdf),
+  };
+  
+  // Initialize with default return value
+  mockGetDocument.mockReturnValue(mockLoadingTask);
+  
+  // Return both default export and named export
+  const mockModule = {
+    GlobalWorkerOptions: {
+      workerSrc: '',
+    },
     getDocument: mockGetDocument,
-  },
-}));
+  };
+  
+  return {
+    default: mockModule,
+    ...mockModule, // Also export at top level for compatibility
+  };
+});
 
 describe('pdfSource', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Mock URL methods
+    global.URL.createObjectURL = mockCreateObjectURL;
+    global.URL.revokeObjectURL = mockRevokeObjectURL;
     mockElectronAPI.getPDFFileSize.mockResolvedValue(1000);
     mockElectronAPI.readPDFFileChunk.mockResolvedValue('dGVzdA=='); // base64 for "test"
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('should create chunked PDF source for large files', async () => {
@@ -35,7 +67,7 @@ describe('pdfSource', () => {
 
     expect(mockElectronAPI.getPDFFileSize).toHaveBeenCalledWith('/path/to/large.pdf');
     expect(mockElectronAPI.readPDFFileChunk).toHaveBeenCalled();
-    expect(result).toBe(mockPdf);
+    expect(result).toEqual(mockPdf);
   });
 
   it('should read file in chunks', async () => {
@@ -52,8 +84,8 @@ describe('pdfSource', () => {
     const fileSize = 4 * 1024 * 1024; // 4MB (2 chunks of 2MB each)
     mockElectronAPI.getPDFFileSize.mockResolvedValue(fileSize);
     mockElectronAPI.readPDFFileChunk
-      .mockResolvedValueOnce('chunk1==')
-      .mockResolvedValueOnce('chunk2==');
+      .mockResolvedValueOnce('Y2h1bmsx') // base64 for "chunk1"
+      .mockResolvedValueOnce('Y2h1bmsy'); // base64 for "chunk2"
 
     await createChunkedPDFSource('/path/to/file.pdf', pdfjsLib);
 
@@ -65,10 +97,10 @@ describe('pdfSource', () => {
 
   it('should handle errors and cleanup blob URL', async () => {
     const pdfjsLib = await import('pdfjs-dist');
-    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL');
 
-    mockGetDocument.mockReturnValue({
-      promise: Promise.reject(new Error('PDF load failed')),
+    const error = new Error('PDF load failed');
+    mockGetDocument.mockReturnValueOnce({
+      promise: Promise.reject(error),
     });
 
     mockElectronAPI.getPDFFileSize.mockResolvedValue(1000);
@@ -79,9 +111,7 @@ describe('pdfSource', () => {
     ).rejects.toThrow('PDF load failed');
 
     // Blob URL should be cleaned up on error
-    expect(revokeSpy).toHaveBeenCalled();
-
-    revokeSpy.mockRestore();
+    expect(mockRevokeObjectURL).toHaveBeenCalled();
   });
 
   it('should throw error when Electron API is not available', async () => {

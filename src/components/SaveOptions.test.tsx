@@ -48,7 +48,7 @@ describe('SaveOptions', () => {
     const user = userEvent.setup();
     render(<SaveOptions isOpen={true} onClose={mockOnClose} onConfirm={mockOnConfirm} />);
     
-    const closeButton = screen.getByLabelText('Close');
+    const closeButton = screen.getByLabelText('Close dialog');
     await user.click(closeButton);
     
     expect(mockOnClose).toHaveBeenCalledTimes(1);
@@ -159,6 +159,7 @@ describe('SaveOptions', () => {
     expect(input).toHaveFocus();
   });
 });
+
 
 
 

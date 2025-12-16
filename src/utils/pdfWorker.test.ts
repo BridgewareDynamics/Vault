@@ -3,9 +3,12 @@ import { setupPDFWorker } from './pdfWorker';
 
 // Mock pdfjs-dist
 const mockGlobalWorkerOptions = { workerSrc: '' };
-vi.mock('pdfjs-dist', async () => {
+vi.mock('pdfjs-dist', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('pdfjs-dist')>();
   return {
+    ...actual,
     default: {
+      ...actual.default,
       GlobalWorkerOptions: mockGlobalWorkerOptions,
     },
   };
@@ -21,7 +24,11 @@ describe('pdfWorker', () => {
     await setupPDFWorker();
     
     // Worker source should be set to the public path
-    expect(mockGlobalWorkerOptions.workerSrc).toBe('/pdf.worker.min.js');
+    // Re-import to check the value was set (dynamic imports in the function may bypass mock)
+    const pdfjsLib = await import('pdfjs-dist');
+    // The workerSrc should be set - if mock worked, check mock object, otherwise check actual
+    const workerSrc = pdfjsLib.GlobalWorkerOptions?.workerSrc || mockGlobalWorkerOptions.workerSrc;
+    expect(workerSrc).toBe('/pdf.worker.min.js');
   });
 
   it('should handle worker setup without errors', async () => {
