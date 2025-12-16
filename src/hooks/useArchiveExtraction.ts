@@ -4,6 +4,7 @@ import { ExtractionProgress } from '../types';
 import { useToast } from '../components/Toast/ToastContext';
 import { setupPDFWorker } from '../utils/pdfWorker';
 import { createChunkedPDFSource } from '../utils/pdfSource';
+import { getUserFriendlyError } from '../utils/errorMessages';
 
 export function useArchiveExtraction() {
   const [isExtracting, setIsExtracting] = useState(false);
@@ -213,7 +214,7 @@ export function useArchiveExtraction() {
       setExtractingFolderPath(null);
       return result;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to extract PDF';
+      const errorMessage = getUserFriendlyError(err, { operation: 'PDF extraction', fileName: pdfPath });
       setStatusMessage('');
       setIsExtracting(false);
       setExtractingCasePath(null);

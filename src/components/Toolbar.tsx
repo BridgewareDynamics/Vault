@@ -51,8 +51,9 @@ export function Toolbar({
           <button
             onClick={onSelectSaveDirectory}
             className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-full font-medium transition-colors text-sm whitespace-nowrap"
+            aria-label={saveDirectory ? 'Change save directory' : 'Select save directory'}
           >
-            <FolderOpen size={18} />
+            <FolderOpen size={18} aria-hidden="true" />
             {saveDirectory ? 'Change Directory' : 'Select Save Directory'}
           </button>
 
@@ -67,8 +68,10 @@ export function Toolbar({
                   color: saveParentFile ? '#c084fc' : '#9ca3af',
                   border: `2px solid ${saveParentFile ? '#a855f7' : '#4b5563'}`,
                 }}
+                aria-label={saveParentFile ? 'Save parent file enabled' : 'Save parent file disabled'}
+                aria-pressed={saveParentFile}
               >
-                <Circle size={16} fill={saveParentFile ? 'currentColor' : 'none'} />
+                <Circle size={16} fill={saveParentFile ? 'currentColor' : 'none'} aria-hidden="true" />
                 Save Parent File
               </button>
 
@@ -81,8 +84,10 @@ export function Toolbar({
                   color: saveToZip ? '#c084fc' : '#9ca3af',
                   border: `2px solid ${saveToZip ? '#a855f7' : '#4b5563'}`,
                 }}
+                aria-label={saveToZip ? 'Save to ZIP folder enabled' : 'Save to ZIP folder disabled'}
+                aria-pressed={saveToZip}
               >
-                <Circle size={16} fill={saveToZip ? 'currentColor' : 'none'} />
+                <Circle size={16} fill={saveToZip ? 'currentColor' : 'none'} aria-hidden="true" />
                 Save into Zip Folder
               </button>
 
@@ -91,8 +96,10 @@ export function Toolbar({
                 onClick={handleSave}
                 disabled={!canSave || (!saveParentFile && !saveToZip)}
                 className="flex items-center gap-2 px-6 py-2 bg-gradient-purple hover:opacity-90 text-white rounded-full font-semibold transition-opacity disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                aria-label="Save extracted pages"
+                aria-disabled={!canSave || (!saveParentFile && !saveToZip)}
               >
-                <Save size={18} />
+                <Save size={18} aria-hidden="true" />
                 Save
               </button>
             </>

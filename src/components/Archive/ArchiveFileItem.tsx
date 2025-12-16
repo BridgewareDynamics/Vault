@@ -41,13 +41,13 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename }
   const getFileIcon = () => {
     switch (file.type) {
       case 'image':
-        return <Image className="w-8 h-8 text-cyber-purple-400" />;
+        return <Image className="w-8 h-8 text-cyber-purple-400" aria-hidden="true" />;
       case 'pdf':
-        return <FileText className="w-8 h-8 text-red-400" />;
+        return <FileText className="w-8 h-8 text-red-400" aria-hidden="true" />;
       case 'video':
-        return <Video className="w-8 h-8 text-blue-400" />;
+        return <Video className="w-8 h-8 text-blue-400" aria-hidden="true" />;
       default:
-        return <File className="w-8 h-8 text-gray-400" />;
+        return <File className="w-8 h-8 text-gray-400" aria-hidden="true" />;
     }
   };
 
@@ -99,7 +99,7 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename }
                 aria-label="Extract PDF"
                 title="Start frame extraction"
               >
-                <Play className="w-5 h-5 text-white" />
+                <Play className="w-5 h-5 text-white" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -119,7 +119,7 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename }
                 aria-label="Rename file"
                 title="Rename file"
               >
-                <Pencil className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" />
+                <Pencil className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" aria-hidden="true" />
               </button>
             )}
             {file.type === 'pdf' && onExtract && (
@@ -132,8 +132,9 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename }
                 className="flex-shrink-0 p-1 hover:bg-gray-700 rounded transition-colors"
                 aria-label="PDF options"
                 title="PDF options"
+                aria-expanded={showDropdown}
               >
-                <ChevronDown className="w-3 h-3 text-gray-400" />
+                <ChevronDown className="w-3 h-3 text-gray-400" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -149,7 +150,7 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename }
             className="absolute top-2 right-2 p-2 bg-red-600/80 hover:bg-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
             aria-label="Delete file"
           >
-            <Trash2 className="w-4 h-4 text-white" />
+            <Trash2 className="w-4 h-4 text-white" aria-hidden="true" />
           </button>
         )}
       </div>

@@ -26,6 +26,9 @@ export function ImageViewer({ page, onClose }: ImageViewerProps) {
           }
         }}
         className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="image-viewer-title"
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
@@ -38,9 +41,9 @@ export function ImageViewer({ page, onClose }: ImageViewerProps) {
           <button
             onClick={onClose}
             className="absolute -top-12 right-0 text-white hover:text-cyber-purple-400 transition-colors z-10"
-            aria-label="Close"
+            aria-label="Close image viewer"
           >
-            <X size={32} />
+            <X size={32} aria-hidden="true" />
           </button>
 
           {/* Zoom button */}
@@ -49,11 +52,11 @@ export function ImageViewer({ page, onClose }: ImageViewerProps) {
             className="absolute -top-12 left-0 text-white hover:text-cyber-purple-400 transition-colors z-10"
             aria-label={isZoomed ? 'Zoom out' : 'Zoom in'}
           >
-            {isZoomed ? <ZoomOut size={32} /> : <ZoomIn size={32} />}
+            {isZoomed ? <ZoomOut size={32} aria-hidden="true" /> : <ZoomIn size={32} aria-hidden="true" />}
           </button>
 
           {/* Page number */}
-          <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gradient-purple text-white font-bold px-4 py-2 rounded-full text-sm shadow-lg border border-cyber-cyan-400/50">
+          <div id="image-viewer-title" className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gradient-purple text-white font-bold px-4 py-2 rounded-full text-sm shadow-lg border border-cyber-cyan-400/50">
             Page #{page.pageNumber}
           </div>
 

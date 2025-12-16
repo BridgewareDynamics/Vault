@@ -15,12 +15,17 @@ export function ArchiveSearchBar({ value, onChange, placeholder = 'Search...' }:
       className="relative"
     >
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+        <label htmlFor="archive-search-input" className="sr-only">
+          Search
+        </label>
         <input
+          id="archive-search-input"
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
+          aria-label={placeholder}
           className="w-full pl-10 pr-10 py-2 bg-gray-800/50 border-2 border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyber-purple-500 transition-colors"
         />
         {value && (
@@ -29,7 +34,7 @@ export function ArchiveSearchBar({ value, onChange, placeholder = 'Search...' }:
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
             aria-label="Clear search"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         )}
       </div>

@@ -23,7 +23,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProp
         >
           <div className="relative">
             <div className="absolute inset-0 bg-gradient-purple blur-2xl opacity-50 rounded-full"></div>
-            <Lock className="w-24 h-24 text-cyber-purple-400 relative z-10" />
+            <Lock className="w-24 h-24 text-cyber-purple-400 relative z-10" aria-hidden="true" />
           </div>
         </motion.div>
 
@@ -58,9 +58,10 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProp
                 relative overflow-hidden
                 group
               "
+              aria-label="Select PDF file to extract"
             >
               <span className="relative z-10 flex items-center gap-2">
-                <FileText className="w-5 h-5" />
+                <FileText className="w-5 h-5" aria-hidden="true" />
                 Select file
               </span>
               <motion.div
@@ -91,9 +92,10 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProp
               relative overflow-hidden
               group
             "
+            aria-label="Open The Vault archive"
           >
             <span className="relative z-10 flex items-center gap-2">
-              <Archive className="w-5 h-5" />
+              <Archive className="w-5 h-5" aria-hidden="true" />
               The Vault
             </span>
             <motion.div

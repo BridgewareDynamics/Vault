@@ -297,16 +297,18 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               <button
                 onClick={onBack}
                 className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
+                aria-label="Return to home screen"
               >
-                <Home size={18} />
+                <Home size={18} aria-hidden="true" />
                 <span className="text-sm font-medium">Home</span>
               </button>
               {currentCase && (
                 <button
                   onClick={() => setCurrentCase(null)}
                   className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
+                  aria-label="Go back to cases list"
                 >
-                  <ArrowLeft size={18} />
+                  <ArrowLeft size={18} aria-hidden="true" />
                   <span className="text-sm font-medium">Back</span>
                 </button>
               )}
@@ -319,6 +321,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                 <button
                   onClick={() => navigateToFolder(currentCase.path)}
                   className={`text-sm ${currentFolderPath ? 'text-cyber-purple-400 hover:text-cyber-purple-300 underline' : 'text-white font-medium'}`}
+                  aria-label={`Navigate to case ${currentCase.name}`}
                 >
                   {currentCase.name}
                 </button>
@@ -333,6 +336,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                             <button
                               onClick={() => navigateToFolder(path)}
                               className="text-cyber-purple-400 hover:text-cyber-purple-300 text-sm underline"
+                              aria-label={`Navigate to folder ${folderName}`}
                             >
                               {folderName}
                             </button>
@@ -352,8 +356,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               <button
                 onClick={goBackToParentFolder}
                 className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors mt-2"
+                aria-label={`Go back to ${folderNavigationStack.length > 0 ? 'parent folder' : 'case'}`}
               >
-                <ArrowLeft size={18} />
+                <ArrowLeft size={18} aria-hidden="true" />
                 <span className="text-sm font-medium">Back to {folderNavigationStack.length > 0 ? 'Parent' : 'Case'}</span>
               </button>
             )}
@@ -373,8 +378,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             <button
               onClick={() => setShowCaseDialog(true)}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
+              aria-label="Create new case file"
             >
-              <FolderPlus size={20} />
+              <FolderPlus size={20} aria-hidden="true" />
               Start Case File
             </button>
           )}
@@ -384,8 +390,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               <button
                 onClick={handleAddFiles}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
+                aria-label="Add files to case"
               >
-                <Upload size={20} />
+                <Upload size={20} aria-hidden="true" />
                 Add Files
               </button>
             </>
@@ -402,8 +409,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
           <button
             onClick={() => setShowDriveDialog(true)}
             className="flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-lg border border-cyber-purple-500/60 transition-colors font-medium"
+            aria-label="Switch vault directory"
           >
-            <FolderOpen size={18} />
+            <FolderOpen size={18} aria-hidden="true" />
             Switch Vault Directory
           </button>
         </div>
@@ -736,6 +744,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   <button
                     onClick={() => setShowCaseDialog(true)}
                     className="px-6 py-3 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
+                    aria-label="Create your first case"
                   >
                     Create Your First Case
                   </button>
@@ -747,6 +756,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   <button
                     onClick={handleAddFiles}
                     className="px-6 py-3 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
+                    aria-label="Add files to this case"
                   >
                     Add Files
                   </button>

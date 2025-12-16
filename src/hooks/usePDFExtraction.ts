@@ -3,6 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { ExtractedPage, ExtractionProgress } from '../types';
 import { setupPDFWorker } from '../utils/pdfWorker';
 import { createChunkedPDFSource } from '../utils/pdfSource';
+import { getUserFriendlyError } from '../utils/errorMessages';
 
 export function usePDFExtraction() {
   const [isExtracting, setIsExtracting] = useState(false);
@@ -164,7 +165,7 @@ export function usePDFExtraction() {
       setIsExtracting(false);
       return pages;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to extract PDF';
+      const errorMessage = getUserFriendlyError(err, { operation: 'PDF extraction', fileName: pdfPath });
       setError(errorMessage);
       setIsExtracting(false);
       throw new Error(errorMessage);

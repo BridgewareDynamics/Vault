@@ -11,6 +11,7 @@ import { usePDFExtraction } from './hooks/usePDFExtraction';
 import { ExtractedPage, ExtractionProgress } from './types';
 import { Home } from 'lucide-react';
 import { logger } from './utils/logger';
+import { getUserFriendlyError } from './utils/errorMessages';
 import './App.css';
 
 function AppContent() {
@@ -51,11 +52,11 @@ function AppContent() {
         }).then((pages) => {
           toast.success(`Successfully extracted ${pages.length} page${pages.length !== 1 ? 's' : ''}`);
         }).catch((err) => {
-          toast.error(err instanceof Error ? err.message : 'Failed to extract PDF');
+          toast.error(getUserFriendlyError(err, { operation: 'PDF extraction', fileName: filePath }));
         });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to select file');
+      toast.error(getUserFriendlyError(err, { operation: 'file selection' }));
     }
   };
 
@@ -73,7 +74,7 @@ function AppContent() {
         toast.success('Save directory selected');
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to select directory');
+      toast.error(getUserFriendlyError(err, { operation: 'directory selection' }));
     }
   };
 
@@ -113,7 +114,7 @@ function AppContent() {
         result.messages.forEach((msg) => toast.info(msg));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save files');
+      toast.error(getUserFriendlyError(err, { operation: 'saving files', path: saveDirectory }));
     }
   };
 
@@ -189,8 +190,9 @@ function AppContent() {
                 toast.info('Returned home');
               }}
               className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
+              aria-label="Return to home screen"
             >
-              <Home size={18} />
+              <Home size={18} aria-hidden="true" />
               <span className="text-sm font-medium">Home</span>
             </button>
           )}

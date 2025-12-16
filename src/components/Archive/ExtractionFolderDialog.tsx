@@ -60,6 +60,10 @@ export function ExtractionFolderDialog({ isOpen, onClose, onConfirm }: Extractio
           }
         }}
         className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="extraction-folder-dialog-title"
+        aria-describedby="extraction-folder-dialog-description"
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
@@ -69,15 +73,15 @@ export function ExtractionFolderDialog({ isOpen, onClose, onConfirm }: Extractio
           className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg border-2 border-cyber-purple-500/60 shadow-2xl p-6 max-w-md w-full"
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-gradient-purple rounded-lg">
+            <div className="p-2 bg-gradient-purple rounded-lg" aria-hidden="true">
               <FolderPlus className="w-6 h-6 text-white" />
             </div>
-            <h2 className="text-2xl font-bold bg-gradient-purple bg-clip-text text-transparent">
+            <h2 id="extraction-folder-dialog-title" className="text-2xl font-bold bg-gradient-purple bg-clip-text text-transparent">
               Name Folder
             </h2>
           </div>
 
-          <p className="text-gray-300 mb-4">
+          <p id="extraction-folder-dialog-description" className="text-gray-300 mb-4">
             Enter a name for the extraction folder that will be created in the vault.
           </p>
 
@@ -87,13 +91,19 @@ export function ExtractionFolderDialog({ isOpen, onClose, onConfirm }: Extractio
               await handleConfirm();
             }}
           >
+            <label htmlFor="folder-name-input" className="sr-only">
+              Folder name
+            </label>
             <input
+              id="folder-name-input"
               type="text"
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder="Enter folder name..."
               autoFocus
+              aria-label="Folder name"
+              aria-required="true"
               className="w-full px-4 py-3 bg-gray-700/50 border-2 border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyber-purple-500 mb-4"
             />
           </form>
@@ -102,6 +112,7 @@ export function ExtractionFolderDialog({ isOpen, onClose, onConfirm }: Extractio
             <button
               onClick={onClose}
               className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+              aria-label="Cancel creating folder"
             >
               Cancel
             </button>
@@ -110,6 +121,8 @@ export function ExtractionFolderDialog({ isOpen, onClose, onConfirm }: Extractio
               onClick={handleConfirm}
               disabled={!folderName.trim() || isSubmitting}
               className="flex-1 px-4 py-2 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label={isSubmitting ? 'Creating folder' : 'Create folder'}
+              aria-disabled={!folderName.trim() || isSubmitting}
             >
               {isSubmitting ? 'Creating...' : 'OK'}
             </button>

@@ -3,6 +3,7 @@ import { ArchiveCase, ArchiveFile, ArchiveConfig } from '../types';
 import { useToast } from '../components/Toast/ToastContext';
 import { logger } from '../utils/logger';
 import { setupPDFWorker } from '../utils/pdfWorker';
+import { getUserFriendlyError } from '../utils/errorMessages';
 
 // Global thumbnail cache that persists across navigation
 const globalThumbnailCache = new Map<string, string>();
@@ -87,7 +88,7 @@ export function useArchive() {
       }
       return false;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to select vault drive');
+      toast.error(getUserFriendlyError(error, { operation: 'select vault drive' }));
       return false;
     }
   }, [toast]);
@@ -102,7 +103,7 @@ export function useArchive() {
       const casesList = await window.electronAPI.listArchiveCases();
       setCases(casesList);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to load cases');
+      toast.error(getUserFriendlyError(error, { operation: 'load cases' }));
     } finally {
       setLoading(false);
     }
@@ -120,7 +121,7 @@ export function useArchive() {
       await loadCases(); // Reload cases (will auto-alphabetize)
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create case');
+      toast.error(getUserFriendlyError(error, { operation: 'create case', fileName: caseName }));
       return false;
     }
   }, [toast, loadCases]);
@@ -147,7 +148,7 @@ export function useArchive() {
       toast.success('Background image updated');
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update background image');
+      toast.error(getUserFriendlyError(error, { operation: 'update background image', path: imagePath }));
       return false;
     }
   }, [toast, loadCases]);
@@ -447,7 +448,7 @@ export function useArchive() {
       }
     } catch (error) {
       logger.error('Error loading files:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to load files');
+      toast.error(getUserFriendlyError(error, { operation: 'load files', path: path }));
     } finally {
       setLoading(false);
     }
@@ -477,7 +478,7 @@ export function useArchive() {
       }
       return false;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to add files');
+      toast.error(getUserFriendlyError(error, { operation: 'add files' }));
       return false;
     }
   }, [toast, currentCase, loadFiles]);
@@ -500,7 +501,7 @@ export function useArchive() {
       await loadCases();
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to delete case');
+      toast.error(getUserFriendlyError(error, { operation: 'delete case', path: casePath }));
       return false;
     }
   }, [toast, currentCase, loadCases]);
@@ -550,7 +551,7 @@ export function useArchive() {
       }
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Failed to delete ${isFolder ? 'folder' : 'file'}`);
+      toast.error(getUserFriendlyError(error, { operation: `delete ${isFolder ? 'folder' : 'file'}`, path: filePath }));
       return false;
     }
   }, [toast, currentCase, currentFolderPath, folderNavigationStack]);
@@ -717,7 +718,7 @@ export function useArchive() {
         );
       }
       
-      toast.error(error instanceof Error ? error.message : 'Failed to rename file');
+      toast.error(getUserFriendlyError(error, { operation: 'rename file', fileName: filePath }));
       return false;
     }
   }, [toast, currentFolderPath]);
