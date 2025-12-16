@@ -36,7 +36,7 @@ describe('useArchive', () => {
     });
 
     it('should load archive config on mount', async () => {
-      const { result } = renderHook(() => useArchive(), { wrapper });
+      renderHook(() => useArchive(), { wrapper });
 
       await waitFor(() => {
         expect(mockElectronAPI.getArchiveConfig).toHaveBeenCalled();
@@ -97,7 +97,7 @@ describe('useArchive', () => {
         { name: 'Case 2', path: '/path/to/case2' },
       ]);
 
-      const { result } = renderHook(() => useArchive(), { wrapper });
+      renderHook(() => useArchive(), { wrapper });
 
       await waitFor(() => {
         expect(mockElectronAPI.listArchiveCases).toHaveBeenCalled();

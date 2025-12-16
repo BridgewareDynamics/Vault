@@ -367,7 +367,7 @@ describe('App', () => {
     // The Gallery component will be rendered by App
     await waitFor(() => {
       // Gallery renders pages, so we check for page-related content
-      expect(screen.getByText(/PDFtract/i)).toBeInTheDocument();
+      expect(screen.getByText(/Vault/i)).toBeInTheDocument();
     });
   });
 
@@ -390,7 +390,7 @@ describe('App', () => {
     
     // Toolbar should be rendered when there are extracted pages
     await waitFor(() => {
-      expect(screen.getByText(/PDFtract/i)).toBeInTheDocument();
+      expect(screen.getByText(/Vault/i)).toBeInTheDocument();
     });
   });
 });

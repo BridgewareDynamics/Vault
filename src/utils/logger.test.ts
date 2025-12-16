@@ -50,8 +50,9 @@ describe('logger (renderer)', () => {
     // and would be called in production mode
     
     // Actually test: if we manually call logToMain, it should work
-    if (window.electronAPI?.logToMain) {
-      await window.electronAPI.logToMain('log', 'test message');
+    const electronAPI = window.electronAPI as typeof window.electronAPI & { logToMain?: (level: string, ...args: any[]) => Promise<void> };
+    if (electronAPI?.logToMain) {
+      await electronAPI.logToMain('log', 'test message');
       expect(mockLogToMain).toHaveBeenCalledWith('log', 'test message');
     }
     

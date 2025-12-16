@@ -4,7 +4,6 @@ import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ArchiveFile } from '../../types';
 import { logger } from '../../utils/logger';
 import { setupPDFWorker } from '../../utils/pdfWorker';
-import { createChunkedPDFSource } from '../../utils/pdfSource';
 
 interface ArchiveFileViewerProps {
   file: ArchiveFile | null;
@@ -70,7 +69,10 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       setPdfLoadingProgress(0);
       
       // Import PDF.js and setup worker
-      const pdfjsLib = await import('pdfjs-dist');
+      const [pdfjsLib, { createChunkedPDFSource }] = await Promise.all([
+        import('pdfjs-dist'),
+        import('../../utils/pdfSource'),
+      ]);
       await setupPDFWorker();
       
       setPdfLoadingProgress(10);
@@ -520,7 +522,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                 />
               ) : file.type === 'video' ? (
                 <video
-                  src={fileData.data}
+                  src={file.path.startsWith('http') ? file.path : `vault-video://${encodeURIComponent(file.path)}`}
                   controls
                   className="max-w-full max-h-[90vh] rounded-lg shadow-2xl border-2 border-cyber-purple-500/50"
                 />

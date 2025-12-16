@@ -1,5 +1,4 @@
 import { vi } from 'vitest';
-import * as fs from 'fs/promises';
 import * as path from 'path';
 
 // Mock Electron app

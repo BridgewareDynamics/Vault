@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { render, screen } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import React from 'react';
 import { ToastProvider, useToast } from './ToastContext';
 import { TOAST_DURATION } from '../../utils/constants';
@@ -201,9 +200,8 @@ describe('ToastContext', () => {
 
     const { result } = renderHook(() => useToast(), { wrapper });
 
-    let toastId: string;
     act(() => {
-      toastId = result.current.showToast('Test message', 'info', 1000);
+      result.current.showToast('Test message', 'info', 1000);
     });
 
     expect(result.current.toasts).toHaveLength(1);
@@ -248,7 +246,7 @@ describe('ToastContext', () => {
 
     const { result } = renderHook(() => useToast(), { wrapper });
 
-    let id1: string, id2: string, id3: string;
+    let id1!: string, id2!: string, id3!: string;
     act(() => {
       id1 = result.current.showToast('Message 1', 'info');
       id2 = result.current.showToast('Message 2', 'info');
@@ -260,6 +258,7 @@ describe('ToastContext', () => {
     expect(id1).not.toBe(id3);
   });
 });
+
 
 
 

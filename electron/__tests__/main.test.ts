@@ -153,9 +153,18 @@ describe('IPC Handlers', () => {
     vi.restoreAllMocks();
   });
 
+  // Helper function to get handler with type assertion
+  const getHandler = (channel: string): ((...args: any[]) => Promise<any>) => {
+    const handler = ipcHandlers.get(channel);
+    if (!handler) {
+      throw new Error(`Handler for channel ${channel} not found`);
+    }
+    return handler as (...args: any[]) => Promise<any>;
+  };
+
   describe('select-pdf-file', () => {
     it('should return selected file path', async () => {
-      const handler = ipcHandlers.get('select-pdf-file');
+      const handler = getHandler('select-pdf-file');
       expect(handler).toBeDefined();
       expect(typeof handler).toBe('function');
 
@@ -175,7 +184,7 @@ describe('IPC Handlers', () => {
     });
 
     it('should return null when dialog is canceled', async () => {
-      const handler = ipcHandlers.get('select-pdf-file');
+      const handler = getHandler('select-pdf-file');
       expect(handler).toBeDefined();
       expect(typeof handler).toBe('function');
 
@@ -191,7 +200,7 @@ describe('IPC Handlers', () => {
     });
 
     it('should throw error for invalid PDF file', async () => {
-      const handler = ipcHandlers.get('select-pdf-file');
+      const handler = getHandler('select-pdf-file');
       expect(handler).toBeDefined();
       expect(typeof handler).toBe('function');
 
@@ -208,7 +217,7 @@ describe('IPC Handlers', () => {
   describe('select-save-directory', () => {
     it('should return selected directory path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('select-save-directory');
+      const handler = getHandler('select-save-directory');
 
       (dialog.showOpenDialog as any).mockResolvedValue({
         canceled: false,
@@ -224,7 +233,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid directory', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('select-save-directory');
+      const handler = getHandler('select-save-directory');
 
       (dialog.showOpenDialog as any).mockResolvedValue({
         canceled: false,
@@ -239,7 +248,7 @@ describe('IPC Handlers', () => {
   describe('save-files', () => {
     it('should save files successfully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('save-files');
+      const handler = getHandler('save-files');
 
       const options = {
         saveDirectory: '/save/dir',
@@ -270,7 +279,7 @@ describe('IPC Handlers', () => {
 
     it('should save parent PDF file when requested', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('save-files');
+      const handler = getHandler('save-files');
 
       const options = {
         saveDirectory: '/save/dir',
@@ -292,7 +301,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid save directory', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('save-files');
+      const handler = getHandler('save-files');
 
       const options = {
         saveDirectory: '/invalid/dir',
@@ -310,7 +319,7 @@ describe('IPC Handlers', () => {
   describe('validate-pdf-for-extraction', () => {
     it('should validate PDF file successfully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('validate-pdf-for-extraction');
+      const handler = getHandler('validate-pdf-for-extraction');
 
       (isValidPDFFile as any).mockReturnValue(true);
       (isSafePath as any).mockReturnValue(true);
@@ -324,7 +333,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid PDF path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('validate-pdf-for-extraction');
+      const handler = getHandler('validate-pdf-for-extraction');
 
       (isValidPDFFile as any).mockReturnValue(false);
 
@@ -335,7 +344,7 @@ describe('IPC Handlers', () => {
   describe('read-pdf-file', () => {
     it('should read and return PDF file as base64 for small files', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-pdf-file');
+      const handler = getHandler('read-pdf-file');
 
       const mockData = Buffer.from('PDF content');
       (fs.readFile as any).mockResolvedValue(mockData);
@@ -353,7 +362,7 @@ describe('IPC Handlers', () => {
 
     it('should return file-path for large files (>350MB)', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-pdf-file');
+      const handler = getHandler('read-pdf-file');
 
       const largeFileSize = 400 * 1024 * 1024; // 400MB
       (fs.stat as any).mockResolvedValue({ size: largeFileSize });
@@ -370,7 +379,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when file does not exist', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-pdf-file');
+      const handler = getHandler('read-pdf-file');
 
       (fs.stat as any).mockRejectedValue(new Error('File not found'));
       (isValidPDFFile as any).mockReturnValue(true);
@@ -383,7 +392,7 @@ describe('IPC Handlers', () => {
   describe('select-archive-drive', () => {
     it('should select and configure archive drive', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('select-archive-drive');
+      const handler = getHandler('select-archive-drive');
 
       (dialog.showOpenDialog as any).mockResolvedValue({
         canceled: false,
@@ -408,7 +417,7 @@ describe('IPC Handlers', () => {
 
     it('should auto-detect existing archive', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('select-archive-drive');
+      const handler = getHandler('select-archive-drive');
 
       (dialog.showOpenDialog as any).mockResolvedValue({
         canceled: false,
@@ -435,7 +444,7 @@ describe('IPC Handlers', () => {
   describe('create-case-folder', () => {
     it('should create case folder successfully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('create-case-folder');
+      const handler = getHandler('create-case-folder');
 
       (isValidFolderName as any).mockReturnValue(true);
       (getArchiveDrive as any).mockResolvedValue('/archive/drive');
@@ -457,7 +466,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when case folder already exists', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('create-case-folder');
+      const handler = getHandler('create-case-folder');
 
       (isValidFolderName as any).mockReturnValue(true);
       (getArchiveDrive as any).mockResolvedValue('/archive/drive');
@@ -470,7 +479,7 @@ describe('IPC Handlers', () => {
   describe('list-archive-cases', () => {
     it('should return list of cases', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('list-archive-cases');
+      const handler = getHandler('list-archive-cases');
 
       (getArchiveDrive as any).mockResolvedValue('/archive/drive');
       (fs.readdir as any).mockResolvedValue([
@@ -487,7 +496,7 @@ describe('IPC Handlers', () => {
 
     it('should return empty array when no archive drive is set', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('list-archive-cases');
+      const handler = getHandler('list-archive-cases');
 
       (getArchiveDrive as any).mockResolvedValue(null);
 
@@ -500,7 +509,7 @@ describe('IPC Handlers', () => {
   describe('delete-file', () => {
     it('should delete file successfully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('delete-file');
+      const handler = getHandler('delete-file');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => false });
@@ -514,7 +523,7 @@ describe('IPC Handlers', () => {
 
     it('should delete folder recursively', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('delete-file');
+      const handler = getHandler('delete-file');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => true });
@@ -530,7 +539,7 @@ describe('IPC Handlers', () => {
   describe('rename-file', () => {
     it('should rename file successfully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('rename-file');
+      const handler = getHandler('rename-file');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => false });
@@ -549,7 +558,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when new name already exists', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('rename-file');
+      const handler = getHandler('rename-file');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => false });
@@ -565,7 +574,7 @@ describe('IPC Handlers', () => {
   describe('get-file-thumbnail', () => {
     it('should generate thumbnail for file', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('get-file-thumbnail');
+      const handler = getHandler('get-file-thumbnail');
 
       (isSafePath as any).mockReturnValue(true);
       (generateFileThumbnail as any).mockResolvedValue('data:image/png;base64,thumbnail');
@@ -580,7 +589,7 @@ describe('IPC Handlers', () => {
   describe('select-image-file', () => {
     it('should return selected image file path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('select-image-file');
+      const handler = getHandler('select-image-file');
 
       (dialog.showOpenDialog as any).mockResolvedValue({
         canceled: false,
@@ -597,7 +606,7 @@ describe('IPC Handlers', () => {
 
     it('should return null when dialog is canceled', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('select-image-file');
+      const handler = getHandler('select-image-file');
 
       (dialog.showOpenDialog as any).mockResolvedValue({
         canceled: true,
@@ -611,7 +620,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid file path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('select-image-file');
+      const handler = getHandler('select-image-file');
 
       (dialog.showOpenDialog as any).mockResolvedValue({
         canceled: false,
@@ -624,7 +633,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when file does not exist', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('select-image-file');
+      const handler = getHandler('select-image-file');
 
       (dialog.showOpenDialog as any).mockResolvedValue({
         canceled: false,
@@ -640,7 +649,7 @@ describe('IPC Handlers', () => {
   describe('validate-path', () => {
     it('should validate valid PDF path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('validate-path');
+      const handler = getHandler('validate-path');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidPDFFile as any).mockReturnValue(true);
@@ -653,7 +662,7 @@ describe('IPC Handlers', () => {
 
     it('should validate valid non-PDF path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('validate-path');
+      const handler = getHandler('validate-path');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidPDFFile as any).mockReturnValue(false);
@@ -666,7 +675,7 @@ describe('IPC Handlers', () => {
 
     it('should return invalid for unsafe path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('validate-path');
+      const handler = getHandler('validate-path');
 
       (isSafePath as any).mockReturnValue(false);
       (isValidPDFFile as any).mockReturnValue(false);
@@ -681,7 +690,7 @@ describe('IPC Handlers', () => {
   describe('get-archive-config', () => {
     it('should return config with archive drive', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('get-archive-config');
+      const handler = getHandler('get-archive-config');
 
       (loadArchiveConfig as any).mockResolvedValue({ archiveDrive: '/archive/drive' });
       (isValidArchive as any).mockResolvedValue(true);
@@ -693,7 +702,7 @@ describe('IPC Handlers', () => {
 
     it('should return config with no drive set', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('get-archive-config');
+      const handler = getHandler('get-archive-config');
 
       (loadArchiveConfig as any).mockResolvedValue({ archiveDrive: null });
 
@@ -704,7 +713,7 @@ describe('IPC Handlers', () => {
 
     it('should clear invalid archive drive', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('get-archive-config');
+      const handler = getHandler('get-archive-config');
 
       (loadArchiveConfig as any).mockResolvedValue({ archiveDrive: '/invalid/drive' });
       (isValidArchive as any).mockResolvedValue(false);
@@ -718,7 +727,7 @@ describe('IPC Handlers', () => {
 
     it('should clear archive drive when path does not exist', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('get-archive-config');
+      const handler = getHandler('get-archive-config');
 
       (loadArchiveConfig as any).mockResolvedValue({ archiveDrive: '/nonexistent/drive' });
       (isValidArchive as any).mockRejectedValue(new Error('Path does not exist'));
@@ -734,7 +743,7 @@ describe('IPC Handlers', () => {
   describe('validate-archive-directory', () => {
     it('should validate valid archive with marker', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('validate-archive-directory');
+      const handler = getHandler('validate-archive-directory');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidDirectory as any).mockResolvedValue(true);
@@ -755,7 +764,7 @@ describe('IPC Handlers', () => {
 
     it('should return invalid for unsafe path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('validate-archive-directory');
+      const handler = getHandler('validate-archive-directory');
 
       (isSafePath as any).mockReturnValue(false);
 
@@ -766,7 +775,7 @@ describe('IPC Handlers', () => {
 
     it('should return invalid for non-directory', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('validate-archive-directory');
+      const handler = getHandler('validate-archive-directory');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidDirectory as any).mockResolvedValue(false);
@@ -778,7 +787,7 @@ describe('IPC Handlers', () => {
 
     it('should return invalid for directory without marker', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('validate-archive-directory');
+      const handler = getHandler('validate-archive-directory');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidDirectory as any).mockResolvedValue(true);
@@ -791,7 +800,7 @@ describe('IPC Handlers', () => {
 
     it('should handle errors gracefully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('validate-archive-directory');
+      const handler = getHandler('validate-archive-directory');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidDirectory as any).mockRejectedValue(new Error('Permission denied'));
@@ -805,7 +814,7 @@ describe('IPC Handlers', () => {
   describe('create-extraction-folder', () => {
     it('should create extraction folder successfully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('create-extraction-folder');
+      const handler = getHandler('create-extraction-folder');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidFolderName as any).mockReturnValue(true);
@@ -820,7 +829,7 @@ describe('IPC Handlers', () => {
 
     it('should create extraction folder with parent PDF metadata', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('create-extraction-folder');
+      const handler = getHandler('create-extraction-folder');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidFolderName as any).mockReturnValue(true);
@@ -836,7 +845,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid case path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('create-extraction-folder');
+      const handler = getHandler('create-extraction-folder');
 
       (isSafePath as any).mockReturnValue(false);
 
@@ -845,7 +854,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid folder name', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('create-extraction-folder');
+      const handler = getHandler('create-extraction-folder');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidFolderName as any).mockReturnValue(false);
@@ -855,7 +864,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when folder creation fails', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('create-extraction-folder');
+      const handler = getHandler('create-extraction-folder');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidFolderName as any).mockReturnValue(true);
@@ -868,7 +877,7 @@ describe('IPC Handlers', () => {
   describe('list-case-files', () => {
     it('should return list of files and folders', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('list-case-files');
+      const handler = getHandler('list-case-files');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.readdir as any).mockResolvedValue([
@@ -891,7 +900,7 @@ describe('IPC Handlers', () => {
 
     it('should return empty array for empty case', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('list-case-files');
+      const handler = getHandler('list-case-files');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.readdir as any).mockResolvedValue([]);
@@ -904,7 +913,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid case path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('list-case-files');
+      const handler = getHandler('list-case-files');
 
       (isSafePath as any).mockReturnValue(false);
 
@@ -913,7 +922,7 @@ describe('IPC Handlers', () => {
 
     it('should read parent PDF metadata from folders', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('list-case-files');
+      const handler = getHandler('list-case-files');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.readdir as any).mockResolvedValue([
@@ -937,7 +946,7 @@ describe('IPC Handlers', () => {
 
     it('should filter out metadata files', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('list-case-files');
+      const handler = getHandler('list-case-files');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.readdir as any).mockResolvedValue([
@@ -965,7 +974,7 @@ describe('IPC Handlers', () => {
   describe('add-files-to-case', () => {
     it('should add files with provided paths', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('add-files-to-case');
+      const handler = getHandler('add-files-to-case');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.copyFile as any).mockResolvedValue(undefined);
@@ -979,7 +988,7 @@ describe('IPC Handlers', () => {
 
     it('should show dialog when no file paths provided', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('add-files-to-case');
+      const handler = getHandler('add-files-to-case');
 
       (isSafePath as any).mockReturnValue(true);
       (dialog.showOpenDialog as any).mockResolvedValue({
@@ -996,7 +1005,7 @@ describe('IPC Handlers', () => {
 
     it('should return empty array when dialog is canceled', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('add-files-to-case');
+      const handler = getHandler('add-files-to-case');
 
       (isSafePath as any).mockReturnValue(true);
       (dialog.showOpenDialog as any).mockResolvedValue({
@@ -1011,7 +1020,7 @@ describe('IPC Handlers', () => {
 
     it('should skip invalid paths', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('add-files-to-case');
+      const handler = getHandler('add-files-to-case');
 
       (isSafePath as any).mockImplementation((path: string) => path !== '/unsafe/path');
       (fs.copyFile as any).mockResolvedValue(undefined);
@@ -1024,7 +1033,7 @@ describe('IPC Handlers', () => {
 
     it('should handle file copy failures gracefully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('add-files-to-case');
+      const handler = getHandler('add-files-to-case');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.copyFile as any).mockRejectedValueOnce(new Error('Permission denied'));
@@ -1037,7 +1046,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid case path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('add-files-to-case');
+      const handler = getHandler('add-files-to-case');
 
       (isSafePath as any).mockReturnValue(false);
 
@@ -1048,7 +1057,7 @@ describe('IPC Handlers', () => {
   describe('delete-case', () => {
     it('should delete case successfully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('delete-case');
+      const handler = getHandler('delete-case');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.rm as any).mockResolvedValue(undefined);
@@ -1061,7 +1070,7 @@ describe('IPC Handlers', () => {
 
     it('should delete case with files', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('delete-case');
+      const handler = getHandler('delete-case');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.rm as any).mockResolvedValue(undefined);
@@ -1074,7 +1083,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid case path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('delete-case');
+      const handler = getHandler('delete-case');
 
       (isSafePath as any).mockReturnValue(false);
 
@@ -1083,7 +1092,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when deletion fails', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('delete-case');
+      const handler = getHandler('delete-case');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.rm as any).mockRejectedValue(new Error('Permission denied'));
@@ -1095,7 +1104,7 @@ describe('IPC Handlers', () => {
   describe('set-case-background-image', () => {
     it('should set case background image successfully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('set-case-background-image');
+      const handler = getHandler('set-case-background-image');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => true });
@@ -1113,7 +1122,7 @@ describe('IPC Handlers', () => {
 
     it('should delete old background image when setting new one', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('set-case-background-image');
+      const handler = getHandler('set-case-background-image');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => true });
@@ -1131,7 +1140,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid case path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('set-case-background-image');
+      const handler = getHandler('set-case-background-image');
 
       (isSafePath as any).mockReturnValue(false);
 
@@ -1140,7 +1149,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when case path is not a directory', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('set-case-background-image');
+      const handler = getHandler('set-case-background-image');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => false });
@@ -1150,7 +1159,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when image file does not exist', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('set-case-background-image');
+      const handler = getHandler('set-case-background-image');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => true });
@@ -1163,7 +1172,7 @@ describe('IPC Handlers', () => {
   describe('read-file-data', () => {
     it('should read image file data', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-file-data');
+      const handler = getHandler('read-file-data');
 
       (isSafePath as any).mockReturnValue(true);
       const mockData = Buffer.from('image data');
@@ -1178,7 +1187,7 @@ describe('IPC Handlers', () => {
 
     it('should read PDF file data', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-file-data');
+      const handler = getHandler('read-file-data');
 
       (isSafePath as any).mockReturnValue(true);
       const mockData = Buffer.from('PDF content');
@@ -1192,7 +1201,7 @@ describe('IPC Handlers', () => {
 
     it('should read PNG file data', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-file-data');
+      const handler = getHandler('read-file-data');
 
       (isSafePath as any).mockReturnValue(true);
       const mockData = Buffer.from('PNG data');
@@ -1205,7 +1214,7 @@ describe('IPC Handlers', () => {
 
     it('should use default MIME type for unknown file types', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-file-data');
+      const handler = getHandler('read-file-data');
 
       (isSafePath as any).mockReturnValue(true);
       const mockData = Buffer.from('unknown data');
@@ -1218,7 +1227,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid file path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-file-data');
+      const handler = getHandler('read-file-data');
 
       (isSafePath as any).mockReturnValue(false);
 
@@ -1227,7 +1236,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when file does not exist', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-file-data');
+      const handler = getHandler('read-file-data');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.readFile as any).mockRejectedValue(new Error('File not found'));
@@ -1239,7 +1248,7 @@ describe('IPC Handlers', () => {
   describe('extract-pdf-from-archive', () => {
     it('should extract PDF successfully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('extract-pdf-from-archive');
+      const handler = getHandler('extract-pdf-from-archive');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidFolderName as any).mockReturnValue(true);
@@ -1265,7 +1274,7 @@ describe('IPC Handlers', () => {
 
     it('should extract PDF with parent file saving', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('extract-pdf-from-archive');
+      const handler = getHandler('extract-pdf-from-archive');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidFolderName as any).mockReturnValue(true);
@@ -1291,7 +1300,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid PDF path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('extract-pdf-from-archive');
+      const handler = getHandler('extract-pdf-from-archive');
 
       (isSafePath as any).mockReturnValue(false);
 
@@ -1308,7 +1317,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid folder name', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('extract-pdf-from-archive');
+      const handler = getHandler('extract-pdf-from-archive');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidFolderName as any).mockReturnValue(false);
@@ -1326,7 +1335,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when extraction fails', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('extract-pdf-from-archive');
+      const handler = getHandler('extract-pdf-from-archive');
 
       (isSafePath as any).mockReturnValue(true);
       (isValidFolderName as any).mockReturnValue(true);
@@ -1348,7 +1357,7 @@ describe('IPC Handlers', () => {
   describe('save-files edge cases', () => {
     it('should handle ZIP creation failure', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('save-files');
+      const handler = getHandler('save-files');
 
       const mockZip = {
         folder: vi.fn(() => null), // Return null to simulate failure
@@ -1371,7 +1380,7 @@ describe('IPC Handlers', () => {
 
     it('should handle partial file save failures', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('save-files');
+      const handler = getHandler('save-files');
 
       (isValidDirectory as any).mockResolvedValue(true);
       (isValidPDFFile as any).mockReturnValue(true);
@@ -1393,7 +1402,7 @@ describe('IPC Handlers', () => {
   describe('create-case-folder edge cases', () => {
     it('should handle special characters in case name validation', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('create-case-folder');
+      const handler = getHandler('create-case-folder');
 
       (isValidFolderName as any).mockReturnValue(false);
 
@@ -1402,7 +1411,7 @@ describe('IPC Handlers', () => {
 
     it('should handle very long case names', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('create-case-folder');
+      const handler = getHandler('create-case-folder');
 
       const longName = 'a'.repeat(201);
       (isValidFolderName as any).mockReturnValue(false);
@@ -1414,7 +1423,7 @@ describe('IPC Handlers', () => {
   describe('rename-file edge cases', () => {
     it('should throw error when renaming to same name', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('rename-file');
+      const handler = getHandler('rename-file');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => false });
@@ -1428,7 +1437,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid characters in new name', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('rename-file');
+      const handler = getHandler('rename-file');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => true });
@@ -1439,7 +1448,7 @@ describe('IPC Handlers', () => {
 
     it('should handle empty new name', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('rename-file');
+      const handler = getHandler('rename-file');
 
       (isSafePath as any).mockReturnValue(true);
 
@@ -1448,7 +1457,7 @@ describe('IPC Handlers', () => {
 
     it('should handle whitespace-only new name', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('rename-file');
+      const handler = getHandler('rename-file');
 
       (isSafePath as any).mockReturnValue(true);
 
@@ -1459,7 +1468,7 @@ describe('IPC Handlers', () => {
   describe('delete-file edge cases', () => {
     it('should handle permission errors that are not directory errors', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('delete-file');
+      const handler = getHandler('delete-file');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => false });
@@ -1471,7 +1480,7 @@ describe('IPC Handlers', () => {
 
     it('should handle file in use errors', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('delete-file');
+      const handler = getHandler('delete-file');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => false });
@@ -1482,7 +1491,7 @@ describe('IPC Handlers', () => {
 
     it('should handle directory error when deleting file', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('delete-file');
+      const handler = getHandler('delete-file');
 
       (isSafePath as any).mockReturnValue(true);
       (fs.stat as any).mockResolvedValue({ isDirectory: () => false });
@@ -1499,7 +1508,7 @@ describe('IPC Handlers', () => {
   describe('list-archive-cases edge cases', () => {
     it('should handle corrupted metadata files', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('list-archive-cases');
+      const handler = getHandler('list-archive-cases');
 
       (getArchiveDrive as any).mockResolvedValue('/archive/drive');
       (fs.readdir as any).mockResolvedValue([
@@ -1516,7 +1525,7 @@ describe('IPC Handlers', () => {
 
     it('should handle missing description files', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('list-archive-cases');
+      const handler = getHandler('list-archive-cases');
 
       (getArchiveDrive as any).mockResolvedValue('/archive/drive');
       (fs.readdir as any).mockResolvedValue([
@@ -1534,7 +1543,7 @@ describe('IPC Handlers', () => {
 
     it('should handle cases with background images', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('list-archive-cases');
+      const handler = getHandler('list-archive-cases');
 
       (getArchiveDrive as any).mockResolvedValue('/archive/drive');
       (fs.readdir as any).mockResolvedValue([
@@ -1555,7 +1564,7 @@ describe('IPC Handlers', () => {
   describe('log-renderer', () => {
     it('should log messages from renderer process', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('log-renderer');
+      const handler = getHandler('log-renderer');
       expect(handler).toBeDefined();
 
       const { logger } = await import('../utils/logger');
@@ -1580,12 +1589,12 @@ describe('IPC Handlers', () => {
   describe('read-pdf-file-chunk', () => {
     it('should read PDF file chunk successfully', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-pdf-file-chunk');
+      const handler = getHandler('read-pdf-file-chunk');
       expect(handler).toBeDefined();
 
       const mockBuffer = Buffer.from('chunk data');
       const mockFileHandle = {
-        read: vi.fn((buffer, offset, length, position) => {
+        read: vi.fn((buffer, offset, length) => {
           mockBuffer.copy(buffer, offset, 0, length);
           return Promise.resolve({ bytesRead: length });
         }),
@@ -1606,7 +1615,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid PDF file path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-pdf-file-chunk');
+      const handler = getHandler('read-pdf-file-chunk');
 
       (isValidPDFFile as any).mockReturnValue(false);
       (isSafePath as any).mockReturnValue(true);
@@ -1616,7 +1625,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for unsafe path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-pdf-file-chunk');
+      const handler = getHandler('read-pdf-file-chunk');
 
       (isValidPDFFile as any).mockReturnValue(true);
       (isSafePath as any).mockReturnValue(false);
@@ -1626,7 +1635,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when file read fails', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('read-pdf-file-chunk');
+      const handler = getHandler('read-pdf-file-chunk');
 
       (fs.open as any).mockRejectedValue(new Error('File not found'));
       (isValidPDFFile as any).mockReturnValue(true);
@@ -1639,7 +1648,7 @@ describe('IPC Handlers', () => {
   describe('get-pdf-file-size', () => {
     it('should return PDF file size', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('get-pdf-file-size');
+      const handler = getHandler('get-pdf-file-size');
       expect(handler).toBeDefined();
 
       const mockSize = 1024 * 1024; // 1MB
@@ -1655,7 +1664,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for invalid PDF file path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('get-pdf-file-size');
+      const handler = getHandler('get-pdf-file-size');
 
       (isValidPDFFile as any).mockReturnValue(false);
       (isSafePath as any).mockReturnValue(true);
@@ -1665,7 +1674,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error for unsafe path', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('get-pdf-file-size');
+      const handler = getHandler('get-pdf-file-size');
 
       (isValidPDFFile as any).mockReturnValue(true);
       (isSafePath as any).mockReturnValue(false);
@@ -1675,7 +1684,7 @@ describe('IPC Handlers', () => {
 
     it('should throw error when file stat fails', async () => {
       await import('../main');
-      const handler = ipcHandlers.get('get-pdf-file-size');
+      const handler = getHandler('get-pdf-file-size');
 
       (fs.stat as any).mockRejectedValue(new Error('File not found'));
       (isValidPDFFile as any).mockReturnValue(true);

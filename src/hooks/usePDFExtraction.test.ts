@@ -272,7 +272,6 @@ describe('usePDFExtraction', () => {
   });
 
   it('should handle large files with file-path type', async () => {
-    const pdfjsLib = await import('pdfjs-dist');
     const mockPdf = {
       numPages: 1,
       getPage: vi.fn().mockResolvedValue({

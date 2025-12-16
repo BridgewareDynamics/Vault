@@ -1,8 +1,9 @@
-import { app, BrowserWindow, ipcMain, dialog, crashReporter } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol } from 'electron';
 import { join } from 'path';
 import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath } from './utils/pathValidator';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { existsSync } from 'fs';
 import JSZip from 'jszip';
 import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive } from './utils/archiveConfig';
 import { generateFileThumbnail } from './utils/thumbnailGenerator';
@@ -14,8 +15,8 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 // Initialize crash reporter before app ready
 if (!isDev) {
   crashReporter.start({
-    productName: 'PDFtract',
-    companyName: 'PDFtract',
+    productName: 'Vault',
+    companyName: 'Vault',
     submitURL: '', // Empty for now - can be configured later for crash reporting service
     uploadToServer: false, // Set to true when crash reporting service is configured
     compress: true,
@@ -38,10 +39,46 @@ process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
 
 let mainWindow: BrowserWindow | null = null;
 
+// Register custom protocol for video files (more efficient than data URLs)
+function registerVideoProtocol() {
+  protocol.registerFileProtocol('vault-video', (request, callback) => {
+    try {
+      // Extract file path from URL (vault-video://path/to/file.mp4)
+      const url = request.url.replace('vault-video://', '');
+      const filePath = decodeURIComponent(url);
+
+      // Validate path
+      if (!isSafePath(filePath)) {
+        callback({ error: -2 }); // FAILED
+        return;
+      }
+
+      if (!existsSync(filePath)) {
+        callback({ error: -6 }); // FILE_NOT_FOUND
+        return;
+      }
+
+      callback({ path: filePath });
+    } catch (error) {
+      logger.error('Video protocol error:', error);
+      callback({ error: -2 }); // FAILED
+    }
+  });
+}
+
 function createWindow() {
-  const preloadPath = isDev
-    ? join(__dirname, 'preload.cjs')
-    : join(process.resourcesPath, 'dist-electron/preload.cjs');
+  // Determine preload path based on environment
+  // In production: files are in app.asar/dist-electron/electron/
+  // In development: files are in dist-electron/electron/
+  let preloadPath: string;
+  if (isDev) {
+    preloadPath = join(__dirname, 'preload.cjs');
+  } else {
+    // In production, use app.getAppPath() which points to app.asar
+    // Then navigate to dist-electron/electron/preload.cjs
+    const appPath = app.getAppPath();
+    preloadPath = join(appPath, 'dist-electron', 'electron', 'preload.cjs');
+  }
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -134,7 +171,10 @@ function createWindow() {
       });
     }
   } else {
-    mainWindow.loadFile(join(__dirname, '../dist/index.html'));
+    // In production, use app.getAppPath() which points to app.asar
+    // Then navigate to dist/index.html
+    const appPath = app.getAppPath();
+    mainWindow.loadFile(join(appPath, 'dist', 'index.html'));
   }
 
   mainWindow.on('closed', () => {
@@ -143,6 +183,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Set App User Model ID for Windows icon association
+  // This helps Windows properly associate the icon with the application
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.vault.app');
+  }
+  
+  // Register custom protocols before creating window
+  registerVideoProtocol();
+  
   createWindow();
 
   app.on('activate', () => {

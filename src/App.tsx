@@ -8,7 +8,7 @@ import { ImageViewer } from './components/ImageViewer';
 import { Toolbar } from './components/Toolbar';
 import { ArchivePage } from './components/Archive/ArchivePage';
 import { usePDFExtraction } from './hooks/usePDFExtraction';
-import { ExtractedPage, ExtractionProgress } from './types';
+import { ExtractedPage } from './types';
 import { Home } from 'lucide-react';
 import { logger } from './utils/logger';
 import { getUserFriendlyError } from './utils/errorMessages';
@@ -20,7 +20,7 @@ function AppContent() {
   const [saveDirectory, setSaveDirectory] = useState<string | null>(null);
   const [saveParentFile, setSaveParentFile] = useState(false);
   const [saveToZip, setSaveToZip] = useState(false);
-  const [folderName, setFolderName] = useState<string | undefined>(undefined);
+  const [, setFolderName] = useState<string | undefined>(undefined);
   const [showArchive, setShowArchive] = useState(false);
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
@@ -47,7 +47,7 @@ function AppContent() {
         toast.info('PDF file selected, starting extraction...');
         
         // Start extraction immediately - progress will be shown
-        extractPDF(filePath, (progress: ExtractionProgress) => {
+        extractPDF(filePath, () => {
           // Progress updates are handled by the hook
         }).then((pages) => {
           toast.success(`Successfully extracted ${pages.length} page${pages.length !== 1 ? 's' : ''}`);
@@ -111,7 +111,7 @@ function AppContent() {
 
       if (result.success) {
         toast.success('Files saved successfully!');
-        result.messages.forEach((msg) => toast.info(msg));
+        result.messages.forEach((msg: string) => toast.info(msg));
       }
     } catch (err) {
       toast.error(getUserFriendlyError(err, { operation: 'saving files', path: saveDirectory }));
@@ -169,7 +169,7 @@ function AppContent() {
         <div className="mb-6 relative flex items-start">
           <div className="flex-1">
             <h1 className="text-4xl font-bold bg-gradient-purple bg-clip-text text-transparent mb-2">
-              PDFtract
+              Vault
             </h1>
             {selectedPdfPath && (
               <p className="text-gray-400 text-sm truncate max-w-2xl">

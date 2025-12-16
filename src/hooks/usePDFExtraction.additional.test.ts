@@ -47,7 +47,7 @@ describe('usePDFExtraction – additional coverage', () => {
 
     // First validate call succeeds but then removes electronAPI so the
     // second availability check inside extractPDF fails.
-    mockElectronAPI.validatePDFForExtraction.mockImplementationOnce(async (...args: any[]) => {
+    mockElectronAPI.validatePDFForExtraction.mockImplementationOnce(async () => {
       const result = { valid: true, path: '/test.pdf' };
       (window as any).electronAPI = undefined;
       return result as any;

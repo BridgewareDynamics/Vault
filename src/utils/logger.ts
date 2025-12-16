@@ -12,8 +12,8 @@ export const logger = {
   log: (...args: any[]) => {
     if (isDev) {
       console.log(...args);
-    } else if (window.electronAPI?.logToMain) {
-      window.electronAPI.logToMain('log', ...args).catch(() => {
+    } else if ((window.electronAPI as any)?.logToMain) {
+      (window.electronAPI as any).logToMain('log', ...args).catch(() => {
         // Fallback to console if IPC fails
         console.log(...args);
       });
@@ -26,8 +26,8 @@ export const logger = {
   info: (...args: any[]) => {
     if (isDev) {
       console.info(...args);
-    } else if (window.electronAPI?.logToMain) {
-      window.electronAPI.logToMain('info', ...args).catch(() => {
+    } else if ((window.electronAPI as any)?.logToMain) {
+      (window.electronAPI as any).logToMain('info', ...args).catch(() => {
         console.info(...args);
       });
     } else {
@@ -38,8 +38,8 @@ export const logger = {
   warn: (...args: any[]) => {
     if (isDev) {
       console.warn(...args);
-    } else if (window.electronAPI?.logToMain) {
-      window.electronAPI.logToMain('warn', ...args).catch(() => {
+    } else if ((window.electronAPI as any)?.logToMain) {
+      (window.electronAPI as any).logToMain('warn', ...args).catch(() => {
         console.warn(...args);
       });
     } else {
@@ -52,8 +52,8 @@ export const logger = {
     console.error(...args);
     
     // Also route to main process if available
-    if (!isDev && window.electronAPI?.logToMain) {
-      window.electronAPI.logToMain('error', ...args).catch(() => {
+    if (!isDev && (window.electronAPI as any)?.logToMain) {
+      (window.electronAPI as any).logToMain('error', ...args).catch(() => {
         // Already logged to console above
       });
     }
@@ -62,8 +62,8 @@ export const logger = {
   debug: (...args: any[]) => {
     if (isDev) {
       console.debug(...args);
-    } else if (window.electronAPI?.logToMain) {
-      window.electronAPI.logToMain('debug', ...args).catch(() => {
+    } else if ((window.electronAPI as any)?.logToMain) {
+      (window.electronAPI as any).logToMain('debug', ...args).catch(() => {
         // Silent in production if IPC fails
       });
     }

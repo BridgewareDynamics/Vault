@@ -230,7 +230,7 @@ describe('ExtractionFolderDialog', () => {
       />
     );
     
-    const input = screen.getByPlaceholderText('Enter folder name...') as HTMLInputElement;
+    screen.getByPlaceholderText('Enter folder name...') as HTMLInputElement;
     
     // Close dialog
     rerender(
@@ -313,6 +313,7 @@ describe('ExtractionFolderDialog', () => {
     }
   });
 });
+
 
 
 

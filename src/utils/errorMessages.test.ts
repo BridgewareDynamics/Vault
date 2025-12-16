@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getUserFriendlyError, getErrorGuidance, type ErrorContext } from './errorMessages';
+import { getUserFriendlyError, getErrorGuidance } from './errorMessages';
 
 describe('errorMessages', () => {
   describe('getUserFriendlyError', () => {

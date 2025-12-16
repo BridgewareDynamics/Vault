@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
-import * as path from 'path';
 import {
   createArchiveMarker,
   readArchiveMarker,
@@ -56,7 +55,7 @@ describe('archiveMarker', () => {
     // Reset randomUUID mock - access it through the mocked module
     const mockRandomUUID = vi.mocked(crypto.randomUUID);
     if (mockRandomUUID) {
-      mockRandomUUID.mockReturnValue('test-uuid-1234');
+      mockRandomUUID.mockReturnValue('12345678-1234-1234-1234-123456789012' as `${string}-${string}-${string}-${string}-${string}`);
     }
   });
 

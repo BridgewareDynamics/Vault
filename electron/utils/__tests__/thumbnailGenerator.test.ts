@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as path from 'path';
 import sharp from 'sharp';
 import { generateFileThumbnail } from '../thumbnailGenerator';
 

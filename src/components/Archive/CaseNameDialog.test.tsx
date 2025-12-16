@@ -255,8 +255,8 @@ describe('CaseNameDialog', () => {
       />
     );
     
-    const nameInput = screen.getByPlaceholderText('Enter case name...') as HTMLInputElement;
-    const descTextarea = screen.getByPlaceholderText('Description...') as HTMLTextAreaElement;
+    screen.getByPlaceholderText('Enter case name...') as HTMLInputElement;
+    screen.getByPlaceholderText('Description...') as HTMLTextAreaElement;
     
     // Close dialog
     rerender(
@@ -317,6 +317,7 @@ describe('CaseNameDialog', () => {
     }
   });
 });
+
 
 
 

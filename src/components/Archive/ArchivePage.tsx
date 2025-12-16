@@ -43,7 +43,6 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     deleteFile,
     renameFile,
     openFolder,
-    goBackToCase,
     goBackToParentFolder,
     navigateToFolder,
     updateCaseBackgroundImage,
@@ -329,7 +328,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   <>
                     <span className="text-gray-500">/</span>
                     <div className="flex items-center gap-2">
-                      {folderNavigationStack.map((path, index) => {
+                      {folderNavigationStack.map((path) => {
                         const folderName = path.split(/[/\\]/).pop() || path;
                         return (
                           <span key={path} className="flex items-center gap-2">
@@ -703,7 +702,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                               file={item}
                               onClick={() => handleFileClick(item)}
                               onDelete={() => deleteFile(item.path)}
-                              onExtract={item.type === 'pdf' ? () => handleExtractPDF(item) : undefined}
+                              onExtract={undefined}
                               onRename={() => {
                                 setFileToRename(item);
                                 setShowRenameDialog(true);

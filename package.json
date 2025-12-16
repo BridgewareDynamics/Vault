@@ -1,7 +1,8 @@
 {
-  "name": "pdftract",
+  "name": "vault",
   "version": "1.0.0",
   "description": "Extract PDF pages into PNG images with a modern cyberpunk-themed UI",
+  "author": "Vault",
   "main": "dist-electron/electron/main.cjs",
   "type": "module",
   "scripts": {
@@ -11,31 +12,33 @@
     "build:all": "npm run build && npm run build:electron",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run build:electron\" \"vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "npm run build:all && electron-builder",
+    "electron:build:clean": "node scripts/clean-release.js",
+    "electron:build": "npm run electron:build:clean && npm run build:all && node scripts/electron-build.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test": "vitest run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "test:coverage:ci": "CI=true vitest --coverage",
-    "test:watch": "vitest --watch"
+    "test:watch": "vitest --watch",
+    "generate:icon": "node scripts/generate-icon.js"
   },
   "dependencies": {
     "electron-log": "^5.0.1",
+    "framer-motion": "^10.16.16",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.303.0",
+    "pdfjs-dist": "^3.11.174",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "framer-motion": "^10.16.16",
-    "pdfjs-dist": "^3.11.174",
-    "jszip": "^3.10.1",
-    "sharp": "^0.33.2",
-    "lucide-react": "^0.303.0"
+    "sharp": "^0.33.2"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.1",
+    "@types/node": "^20.10.6",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
-    "@types/node": "^20.10.6",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "@vitejs/plugin-react": "^4.2.1",
@@ -43,6 +46,7 @@
     "@vitest/ui": "^1.1.0",
     "autoprefixer": "^10.4.16",
     "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
     "electron": "^28.1.0",
     "electron-builder": "^24.9.1",
     "eslint": "^8.56.0",
@@ -50,49 +54,12 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "jsdom": "^23.0.1",
     "postcss": "^8.4.32",
+    "rcedit": "^5.0.2",
     "tailwindcss": "^3.4.0",
+    "to-ico": "^1.1.5",
     "typescript": "^5.3.3",
     "vite": "^5.0.8",
     "vitest": "^1.1.0",
     "wait-on": "^7.2.0"
-  },
-  "build": {
-    "appId": "com.pdftract.app",
-    "productName": "PDFtract",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "dist-electron/**/*",
-      "package.json"
-    ],
-    "win": {
-      "target": "nsis",
-      "icon": "build/icon.ico",
-      "signingHashAlgorithms": ["sha256"],
-      "sign": "build/win-sign.js",
-      "signDlls": true
-    },
-    "mac": {
-      "target": "dmg",
-      "icon": "build/icon.icns",
-      "category": "public.app-category.utilities",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "build/icon.png",
-      "category": "Utility"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
   }
 }

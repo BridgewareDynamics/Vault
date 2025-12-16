@@ -124,7 +124,22 @@ describe('pathValidator', () => {
       
       const mockStats = {
         isDirectory: vi.fn(() => true),
-      };
+        isFile: vi.fn(() => false),
+        size: 0,
+        mode: 0,
+        mtime: new Date(),
+        ctime: new Date(),
+        birthtime: new Date(),
+        atime: new Date(),
+        dev: 0,
+        ino: 0,
+        nlink: 0,
+        uid: 0,
+        gid: 0,
+        rdev: 0,
+        blksize: 0,
+        blocks: 0,
+      } as any;
       mockStat.mockResolvedValue(mockStats);
 
       const isValid = await isValidDirectory(testPath);
@@ -139,7 +154,22 @@ describe('pathValidator', () => {
       const mockStat = vi.mocked(fs.promises.stat);
       mockStat.mockResolvedValue({
         isDirectory: () => false,
-      });
+        isFile: () => true,
+        size: 0,
+        mode: 0,
+        mtime: new Date(),
+        ctime: new Date(),
+        birthtime: new Date(),
+        atime: new Date(),
+        dev: 0,
+        ino: 0,
+        nlink: 0,
+        uid: 0,
+        gid: 0,
+        rdev: 0,
+        blksize: 0,
+        blocks: 0,
+      } as any);
 
       const isValid = await isValidDirectory('/path/to/file.pdf');
 

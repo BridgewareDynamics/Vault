@@ -7,10 +7,7 @@ vi.mock('pdfjs-dist', async (importOriginal) => {
   const actual = await importOriginal<typeof import('pdfjs-dist')>();
   return {
     ...actual,
-    default: {
-      ...actual.default,
-      GlobalWorkerOptions: mockGlobalWorkerOptions,
-    },
+    GlobalWorkerOptions: mockGlobalWorkerOptions,
   };
 });
 

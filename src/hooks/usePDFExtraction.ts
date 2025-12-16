@@ -1,8 +1,6 @@
 import { useState, useCallback } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
 import { ExtractedPage, ExtractionProgress } from '../types';
 import { setupPDFWorker } from '../utils/pdfWorker';
-import { createChunkedPDFSource } from '../utils/pdfSource';
 import { getUserFriendlyError } from '../utils/errorMessages';
 
 export function usePDFExtraction() {
@@ -48,6 +46,12 @@ export function usePDFExtraction() {
 
       // Setup PDF.js worker
       await setupPDFWorker();
+      
+      // Dynamically import pdfjs-dist and pdfSource for code splitting
+      const [pdfjsLib, { createChunkedPDFSource }] = await Promise.all([
+        import('pdfjs-dist'),
+        import('../utils/pdfSource'),
+      ]);
       
       const fileData = await window.electronAPI.readPDFFile(pdfPath);
       

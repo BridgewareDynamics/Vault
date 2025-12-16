@@ -1,0 +1,55 @@
+{
+  "appId": "com.vault.app",
+  "productName": "Vault",
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*",
+    "package.json",
+    "build/icon.ico",
+    "build/icon.png"
+  ],
+  "win": {
+    "target": "nsis",
+    "icon": "build/icon.ico",
+    "requestedExecutionLevel": "asInvoker",
+    "artifactName": "${productName} Setup ${version}.${ext}",
+    "publisherName": "Vault",
+    "sign": null,
+    "signingHashAlgorithms": null,
+    "verifyUpdateCodeSignature": false,
+    "signDlls": false,
+    "signAndEditExecutable": false,
+    "certificateFile": null,
+    "certificatePassword": null
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "installerHeaderIcon": "build/icon.ico"
+  },
+  "mac": {
+    "target": "dmg",
+    "icon": "build/icon.png",
+    "category": "public.app-category.utilities",
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false,
+    "identity": null,
+    "entitlements": null,
+    "entitlementsInherit": null
+  },
+  "linux": {
+    "target": "AppImage",
+    "icon": "build/icon.png",
+    "category": "Utility"
+  },
+  "afterPack": "scripts/embed-icon-after-pack.cjs"
+}
+

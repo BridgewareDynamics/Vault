@@ -12,7 +12,7 @@ export interface ErrorContext {
 /**
  * Maps technical error messages to user-friendly ones
  */
-export function getUserFriendlyError(error: unknown, context?: ErrorContext): string {
+export function getUserFriendlyError(error: unknown, _context?: ErrorContext): string {
   const errorMessage = error instanceof Error ? error.message : String(error);
   const lowerMessage = errorMessage.toLowerCase();
 
@@ -108,7 +108,7 @@ export function getUserFriendlyError(error: unknown, context?: ErrorContext): st
 /**
  * Gets actionable guidance for specific error types
  */
-export function getErrorGuidance(error: unknown, context?: ErrorContext): string | null {
+export function getErrorGuidance(error: unknown, _context?: ErrorContext): string | null {
   const errorMessage = error instanceof Error ? error.message : String(error);
   const lowerMessage = errorMessage.toLowerCase();
 

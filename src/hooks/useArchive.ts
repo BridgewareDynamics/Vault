@@ -127,6 +127,7 @@ export function useArchive() {
   }, [toast, loadCases]);
 
   const updateCaseBackgroundImage = useCallback(async (casePath: string): Promise<boolean> => {
+    let imagePath: string | null = null;
     try {
       if (!window.electronAPI) {
         toast.error('Electron API not available');
@@ -134,13 +135,13 @@ export function useArchive() {
       }
 
       // Open file picker to select image
-      const imagePath = await window.electronAPI.selectImageFile();
+      imagePath = await window.electronAPI.selectImageFile();
       if (!imagePath) {
         return false; // User cancelled
       }
 
       // Set the background image
-      const savedPath = await window.electronAPI.setCaseBackgroundImage(casePath, imagePath);
+      await window.electronAPI.setCaseBackgroundImage(casePath, imagePath);
       
       // Reload cases to update the UI
       await loadCases();
@@ -148,7 +149,7 @@ export function useArchive() {
       toast.success('Background image updated');
       return true;
     } catch (error) {
-      toast.error(getUserFriendlyError(error, { operation: 'update background image', path: imagePath }));
+      toast.error(getUserFriendlyError(error, { operation: 'update background image', path: imagePath || 'unknown' }));
       return false;
     }
   }, [toast, loadCases]);
@@ -346,7 +347,7 @@ export function useArchive() {
       // Always check global cache first for thumbnails
       const thumbnailCache = new Map<string, string>();
       // Use global cache for all files
-      itemsList.forEach(item => {
+      itemsList.forEach((item: any) => {
         if (!item.isFolder && globalThumbnailCache.has(item.path)) {
           thumbnailCache.set(item.path, globalThumbnailCache.get(item.path)!);
         }
@@ -365,7 +366,7 @@ export function useArchive() {
       
       // Process items (files and folders)
       // Filter out hidden metadata files as a safety measure (backend should already filter, but double-check)
-      const filteredItems = itemsList.filter(item => {
+      const filteredItems = itemsList.filter((item: any) => {
         // Exclude .parent-pdf metadata files
         if (!item.isFolder) {
           const fileName = item.name.toLowerCase();
@@ -392,7 +393,7 @@ export function useArchive() {
         return true;
       });
       
-      const itemsWithTypes: ArchiveFile[] = filteredItems.map(item => {
+      const itemsWithTypes: ArchiveFile[] = filteredItems.map((item: any) => {
         // If it's a folder, return it as-is with folder properties
         if (item.isFolder) {
           return {
@@ -567,7 +568,6 @@ export function useArchive() {
       const oldPath = filePath;
       const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
       const dir = lastSlash >= 0 ? filePath.substring(0, lastSlash + 1) : '';
-      const separator = filePath.includes('/') ? '/' : '\\';
       const optimisticNewPath = dir + newName;
       
       // Optimistically update the UI immediately for better perceived performance
