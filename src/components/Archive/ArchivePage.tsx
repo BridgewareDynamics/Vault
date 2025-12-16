@@ -183,8 +183,6 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   } | null>(null);
 
   const handleFolderSelection = () => {
-    // TODO: Implement folder selection from existing folders
-    // For now, just show the folder name dialog
     if (!selectedFileForExtraction || !currentCase) {
       logger.error('handleFolderSelection: Missing required data', { 
         selectedFileForExtraction, 
