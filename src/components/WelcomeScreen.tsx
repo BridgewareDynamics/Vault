@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { FileText, Archive, Lock } from 'lucide-react';
+import { FileText, Archive } from 'lucide-react';
 
 interface WelcomeScreenProps {
   onSelectFile: () => void;
@@ -16,14 +16,98 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProp
         className="text-center space-y-8"
       >
         <motion.div
-          initial={{ scale: 0.9 }}
-          animate={{ scale: 1 }}
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.2 }}
           className="flex justify-center mb-4"
         >
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-purple blur-2xl opacity-50 rounded-full"></div>
-            <Lock className="w-24 h-24 text-cyber-purple-400 relative z-10" aria-hidden="true" />
+          <div className="relative w-48 h-48 flex items-center justify-center">
+            {/* Rotating outer ring */}
+            <motion.div
+              className="absolute inset-0 border-4 border-cyber-purple-400/30 rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            />
+            
+            {/* Rotating inner ring */}
+            <motion.div
+              className="absolute inset-4 border-2 border-cyber-cyan-400/40 rounded-full"
+              animate={{ rotate: -360 }}
+              transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+            />
+            
+            {/* Pulsing glow effect */}
+            <motion.div
+              className="absolute inset-0 bg-gradient-purple blur-3xl opacity-60 rounded-full"
+              animate={{
+                scale: [1, 1.2, 1],
+                opacity: [0.6, 0.8, 0.6],
+              }}
+              transition={{
+                duration: 3,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            />
+            
+            {/* Secondary pulsing glow */}
+            <motion.div
+              className="absolute inset-0 bg-cyber-cyan-400/30 blur-2xl rounded-full"
+              animate={{
+                scale: [1.1, 1.3, 1.1],
+                opacity: [0.3, 0.5, 0.3],
+              }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 0.5,
+              }}
+            />
+            
+            {/* Floating vault icon */}
+            <motion.img
+              src="/vault-icon.png"
+              alt="The Vault"
+              className="w-40 h-40 relative z-10 drop-shadow-2xl"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                y: [0, -10, 0],
+              }}
+              transition={{
+                opacity: { duration: 0.5, delay: 0.3 },
+                scale: { duration: 0.5, delay: 0.3 },
+                y: {
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                },
+              }}
+            />
+            
+            {/* Sparkle particles */}
+            {[...Array(6)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-2 h-2 bg-cyber-cyan-400 rounded-full"
+                style={{
+                  top: `${20 + (i * 15)}%`,
+                  left: `${20 + (i * 15)}%`,
+                }}
+                animate={{
+                  scale: [0, 1, 0],
+                  opacity: [0, 1, 0],
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  delay: i * 0.3,
+                  ease: "easeInOut",
+                }}
+              />
+            ))}
           </div>
         </motion.div>
 

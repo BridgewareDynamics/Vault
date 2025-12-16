@@ -157,3 +157,4 @@ If you need to enable code signing in the future:
 - VidCap build documentation: `context/VidCap/VidCap/docs/BUILD-FIX.md`
 - Electron Builder documentation: https://www.electron.build/
 
+

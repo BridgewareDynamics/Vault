@@ -20,3 +20,4 @@ if (existsSync(releaseDir)) {
   console.log('Release directory does not exist, skipping clean');
 }
 
+

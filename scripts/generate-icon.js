@@ -70,3 +70,4 @@ async function generateIcon() {
 
 generateIcon();
 
+
