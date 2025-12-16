@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, crashReporter } from 'electron';
 import { join } from 'path';
 import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath } from './utils/pathValidator';
 import * as fs from 'fs/promises';
@@ -7,8 +7,34 @@ import JSZip from 'jszip';
 import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive } from './utils/archiveConfig';
 import { generateFileThumbnail } from './utils/thumbnailGenerator';
 import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMarker } from './utils/archiveMarker';
+import { logger } from './utils/logger';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+// Initialize crash reporter before app ready
+if (!isDev) {
+  crashReporter.start({
+    productName: 'PDFtract',
+    companyName: 'PDFtract',
+    submitURL: '', // Empty for now - can be configured later for crash reporting service
+    uploadToServer: false, // Set to true when crash reporting service is configured
+    compress: true,
+  });
+  logger.info('Crash reporter initialized');
+}
+
+// Handle uncaught exceptions in main process
+process.on('uncaughtException', (error: Error) => {
+  logger.error('Uncaught Exception in main process:', error);
+  // Don't exit immediately - log and continue if possible
+  // In production, you might want to show an error dialog to the user
+});
+
+// Handle unhandled promise rejections in main process
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+  logger.error('Unhandled Rejection in main process:', reason, promise);
+  // Log the rejection but don't crash the app
+});
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -27,6 +53,7 @@ function createWindow() {
       preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: true, // Explicitly enable web security
     },
     titleBarStyle: 'hiddenInset',
     frame: true,
@@ -37,14 +64,47 @@ function createWindow() {
     mainWindow?.show();
   });
 
+  // Handle renderer process crashes
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    logger.error('Renderer process crashed:', details);
+    // Optionally show error dialog to user
+    if (!isDev) {
+      dialog.showErrorBox(
+        'Application Error',
+        'The application has encountered an error and needs to restart.'
+      );
+    }
+  });
+
+  // Handle unresponsive renderer
+  mainWindow.webContents.on('unresponsive', () => {
+    logger.warn('Renderer process became unresponsive');
+  });
+
+  mainWindow.webContents.on('responsive', () => {
+    logger.info('Renderer process became responsive again');
+  });
+
   // Handle page load errors (but ignore DevTools internal errors)
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
     // Ignore DevTools internal errors
     if (validatedURL && validatedURL.includes('devtools://')) {
       return;
     }
+    logger.error('Failed to load:', validatedURL, errorDescription);
+  });
+
+  // Handle console messages from renderer (for debugging)
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     if (isDev) {
-      console.error('Failed to load:', validatedURL, errorDescription);
+      // In development, log renderer console messages
+      const levelMap: Record<number, 'log' | 'warn' | 'error'> = {
+        0: 'log',
+        1: 'warn',
+        2: 'error',
+      };
+      const logLevel = levelMap[level] || 'log';
+      logger[logLevel](`[Renderer] ${message}`, { line, sourceId });
     }
   });
 
@@ -55,7 +115,7 @@ function createWindow() {
       const loadDevServer = () => {
         if (!mainWindow) return; // Window was closed
         mainWindow.loadURL('http://localhost:5173').catch((err) => {
-          console.error('Failed to load Vite dev server, retrying...', err);
+          logger.error('Failed to load Vite dev server, retrying...', err);
           // Retry after 1 second
           setTimeout(loadDevServer, 1000);
         });
@@ -65,10 +125,12 @@ function createWindow() {
       setTimeout(loadDevServer, 500);
       
       mainWindow.webContents.once('did-finish-load', () => {
-        // Open DevTools after page loads
-        setTimeout(() => {
-          mainWindow?.webContents.openDevTools();
-        }, 100);
+        // Open DevTools after page loads (only in development)
+        if (isDev) {
+          setTimeout(() => {
+            mainWindow?.webContents.openDevTools();
+          }, 100);
+        }
       });
     }
   } else {
@@ -97,6 +159,12 @@ app.on('window-all-closed', () => {
 });
 
 // IPC Handlers
+
+// Renderer logging handler
+ipcMain.handle('log-renderer', async (event, level: 'log' | 'info' | 'warn' | 'error' | 'debug', ...args: any[]) => {
+  // Use the logger utility to log messages from renderer process
+  logger[level](`[Renderer]`, ...args);
+});
 
 // Select PDF file
 ipcMain.handle('select-pdf-file', async () => {
@@ -279,19 +347,66 @@ ipcMain.handle('validate-path', async (event, filePath: string) => {
 });
 
 // Read PDF file data
+// For large files, returns file path instead of data to avoid string length limits
 ipcMain.handle('read-pdf-file', async (event, filePath: string) => {
   if (!isValidPDFFile(filePath) || !isSafePath(filePath)) {
     throw new Error('Invalid PDF file path');
   }
 
   try {
+    // Check file size - if larger than ~350MB, return path instead of data
+    // JavaScript strings have a max length of ~512MB (0x1fffffe8 characters = ~536MB)
+    // Base64 encoding increases size by ~33%, so limit to ~350MB raw file size for safety
+    // This leaves ~50MB buffer to account for any overhead
+    const MAX_FILE_SIZE_FOR_BASE64 = 350 * 1024 * 1024; // 350MB
+    
+    const stats = await fs.stat(filePath);
+    
+    if (stats.size > MAX_FILE_SIZE_FOR_BASE64) {
+      // For large files, return a special marker indicating we should use file path
+      // The renderer will need to use a custom PDF.js source
+      return { type: 'file-path', path: filePath };
+    }
+    
     const data = await fs.readFile(filePath);
-    // Use base64 encoding instead of Array.from to avoid "Invalid array length" error for large files
-    // This is more efficient for IPC and doesn't have array size limitations
+    // Use base64 encoding for smaller files
     const base64 = data.toString('base64');
-    return base64;
+    return { type: 'base64', data: base64 };
   } catch (error) {
     throw new Error(`Failed to read PDF file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Read PDF file chunk for large files
+ipcMain.handle('read-pdf-file-chunk', async (event, filePath: string, start: number, length: number) => {
+  if (!isValidPDFFile(filePath) || !isSafePath(filePath)) {
+    throw new Error('Invalid PDF file path');
+  }
+
+  try {
+    const fileHandle = await fs.open(filePath, 'r');
+    const buffer = Buffer.alloc(length);
+    await fileHandle.read(buffer, 0, length, start);
+    await fileHandle.close();
+    
+    // Return as base64 for IPC
+    return buffer.toString('base64');
+  } catch (error) {
+    throw new Error(`Failed to read PDF file chunk: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Get PDF file size
+ipcMain.handle('get-pdf-file-size', async (event, filePath: string) => {
+  if (!isValidPDFFile(filePath) || !isSafePath(filePath)) {
+    throw new Error('Invalid PDF file path');
+  }
+
+  try {
+    const stats = await fs.stat(filePath);
+    return stats.size;
+  } catch (error) {
+    throw new Error(`Failed to get PDF file size: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 
@@ -432,7 +547,7 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
         }
       } catch (error) {
         // If marker update fails, don't fail the case creation
-        console.error('Failed to update archive marker:', error);
+        logger.error('Failed to update archive marker:', error);
       }
       
       return casePath;
@@ -443,21 +558,21 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
 
 // Create extraction folder
 ipcMain.handle('create-extraction-folder', async (event, casePath: string, folderName: string, parentPdfPath?: string) => {
-  console.log('[Main] create-extraction-folder called:', { casePath, folderName, parentPdfPath });
+  logger.log('[Main] create-extraction-folder called:', { casePath, folderName, parentPdfPath });
   
   if (!isSafePath(casePath)) {
-    console.error('[Main] Invalid case path:', casePath);
+    logger.error('[Main] Invalid case path:', casePath);
     throw new Error('Invalid case path');
   }
 
   if (!folderName || !isValidFolderName(folderName)) {
-    console.error('[Main] Invalid folder name:', folderName);
+    logger.error('[Main] Invalid folder name:', folderName);
     throw new Error('Invalid folder name');
   }
 
   try {
     const extractionFolder = path.join(casePath, folderName);
-    console.log('[Main] Creating folder at:', extractionFolder);
+    logger.log('[Main] Creating folder at:', extractionFolder);
     await fs.mkdir(extractionFolder, { recursive: true });
     
     // Store parent PDF path in a metadata file if provided
@@ -466,7 +581,7 @@ ipcMain.handle('create-extraction-folder', async (event, casePath: string, folde
       // Store just the filename of the parent PDF for easier matching
       const parentPdfName = path.basename(parentPdfPath);
       await fs.writeFile(metadataPath, parentPdfName, 'utf8');
-      console.log('[Main] Stored parent PDF metadata:', parentPdfName);
+      logger.log('[Main] Stored parent PDF metadata:', parentPdfName);
     }
     
     // Verify folder was created by checking if it exists
@@ -475,16 +590,16 @@ ipcMain.handle('create-extraction-folder', async (event, casePath: string, folde
       if (!stats.isDirectory()) {
         throw new Error('Created path is not a directory');
       }
-      console.log('[Main] Folder verified, isDirectory:', stats.isDirectory());
+      logger.log('[Main] Folder verified, isDirectory:', stats.isDirectory());
     } catch (statError) {
-      console.error('[Main] Failed to verify folder:', statError);
+      logger.error('[Main] Failed to verify folder:', statError);
       throw new Error(`Failed to verify folder creation: ${statError instanceof Error ? statError.message : 'Unknown error'}`);
     }
     
-    console.log('[Main] Folder created successfully:', extractionFolder);
+    logger.log('[Main] Folder created successfully:', extractionFolder);
     return extractionFolder;
   } catch (error) {
-    console.error('[Main] Error creating folder:', error);
+    logger.error('[Main] Error creating folder:', error);
     throw new Error(`Failed to create extraction folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
@@ -561,7 +676,7 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
 
   try {
     const entries = await fs.readdir(casePath, { withFileTypes: true });
-    console.log('[Main] list-case-files: Found entries:', entries.length, entries.map(e => ({ name: e.name, isFile: e.isFile(), isDirectory: e.isDirectory() })));
+    logger.log('[Main] list-case-files: Found entries:', entries.length, entries.map(e => ({ name: e.name, isFile: e.isFile(), isDirectory: e.isDirectory() })));
     
     // Process files (exclude hidden metadata files like .parent-pdf, .case-background, etc.)
     const files = await Promise.all(
@@ -575,31 +690,31 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
           
           // Exclude .parent-pdf metadata files
           if (fileName === '.parent-pdf' || fileName.startsWith('.parent-pdf')) {
-            console.log('[Main] Filtering out metadata file:', entry.name);
+            logger.log('[Main] Filtering out metadata file:', entry.name);
             return false;
           }
           
           // Exclude .case-background metadata file
           if (fileName === '.case-background') {
-            console.log('[Main] Filtering out case background metadata file:', entry.name);
+            logger.log('[Main] Filtering out case background metadata file:', entry.name);
             return false;
           }
           
           // Exclude .case-description metadata file
           if (fileName === '.case-description') {
-            console.log('[Main] Filtering out case description metadata file:', entry.name);
+            logger.log('[Main] Filtering out case description metadata file:', entry.name);
             return false;
           }
           
           // Exclude .vault-archive.json marker file
           if (fileName === '.vault-archive.json') {
-            console.log('[Main] Filtering out vault archive marker file:', entry.name);
+            logger.log('[Main] Filtering out vault archive marker file:', entry.name);
             return false;
           }
           
           // Exclude .case-background-image.* files
           if (fileName.startsWith('.case-background-image.')) {
-            console.log('[Main] Filtering out case background image file:', entry.name);
+            logger.log('[Main] Filtering out case background image file:', entry.name);
             return false;
           }
           
@@ -649,7 +764,7 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
         })
     );
 
-    console.log('[Main] list-case-files: Processed - Files:', files.length, 'Folders:', folders.length);
+    logger.log('[Main] list-case-files: Processed - Files:', files.length, 'Folders:', folders.length);
     
     // Group folders with their parent PDFs and sort
     // Strategy: Create a map of PDFs to their folders, then build sorted list with folders above each PDF
@@ -763,11 +878,11 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     otherFiles.sort((a, b) => a.name.localeCompare(b.name));
     groupedItems.push(...otherFiles);
     
-    console.log('[Main] list-case-files: Grouped items - PDFs:', pdfFiles.length, 'Total folders:', folders.length);
-    console.log('[Main] list-case-files: Returning total items:', groupedItems.length);
+    logger.log('[Main] list-case-files: Grouped items - PDFs:', pdfFiles.length, 'Total folders:', folders.length);
+    logger.log('[Main] list-case-files: Returning total items:', groupedItems.length);
     return groupedItems;
   } catch (error) {
-    console.error('[Main] list-case-files: Error:', error);
+    logger.error('[Main] list-case-files: Error:', error);
     throw new Error(`Failed to list case files: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
@@ -793,7 +908,7 @@ ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: 
         results.push(destPath);
       } catch (error) {
         // Skip files that fail to copy
-        console.error(`Failed to copy file ${filePath}:`, error);
+        logger.error(`Failed to copy file ${filePath}:`, error);
       }
     }
     return results;
@@ -823,7 +938,7 @@ ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: 
       await fs.copyFile(filePath, destPath);
       copiedFiles.push(destPath);
     } catch (error) {
-      console.error(`Failed to copy file ${filePath}:`, error);
+      logger.error(`Failed to copy file ${filePath}:`, error);
     }
   }
 
@@ -901,7 +1016,7 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
     throw new Error('Invalid file path');
   }
 
-  console.log('[Main] delete-file called:', { filePath, isFolder });
+  logger.log('[Main] delete-file called:', { filePath, isFolder });
 
   // ALWAYS check if it's a directory first using fs.stat
   // This is the most reliable way to determine if we need recursive delete
@@ -909,35 +1024,35 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
   try {
     const stats = await fs.stat(filePath);
     isDirectory = stats.isDirectory();
-    console.log('[Main] Path is directory:', isDirectory);
+    logger.log('[Main] Path is directory:', isDirectory);
   } catch (statError) {
-    console.log('[Main] Stat failed:', statError);
+    logger.log('[Main] Stat failed:', statError);
     // If stat fails but isFolder parameter is true, treat as directory
     if (isFolder) {
       isDirectory = true;
-      console.log('[Main] Treating as directory based on isFolder parameter');
+      logger.log('[Main] Treating as directory based on isFolder parameter');
     }
   }
 
   // If it's a directory (detected OR explicitly marked as folder), ALWAYS use recursive delete
   if (isDirectory || isFolder) {
-    console.log('[Main] Using recursive delete for folder');
+    logger.log('[Main] Using recursive delete for folder');
     try {
       await fs.rm(filePath, { recursive: true, force: true });
-      console.log('[Main] Folder deleted successfully');
+      logger.log('[Main] Folder deleted successfully');
       return true;
     } catch (error) {
-      console.error('[Main] Failed to delete folder:', error);
+      logger.error('[Main] Failed to delete folder:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to delete folder: ${errorMessage}`);
     }
   }
 
   // Only try unlink if we're CERTAIN it's a file (not a directory)
-  console.log('[Main] Deleting as file');
+  logger.log('[Main] Deleting as file');
   try {
     await fs.unlink(filePath);
-    console.log('[Main] File deleted successfully');
+    logger.log('[Main] File deleted successfully');
     return true;
   } catch (unlinkError) {
     // If unlink fails with EPERM, EISDIR, or ENOTEMPTY, it's definitely a directory
@@ -945,7 +1060,7 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
     const errorMessage = unlinkError instanceof Error ? unlinkError.message : String(unlinkError);
     const errorCode = (unlinkError as any)?.code;
     
-    console.log('[Main] Unlink failed:', { errorMessage, errorCode });
+    logger.log('[Main] Unlink failed:', { errorMessage, errorCode });
     
     // Check if error indicates it's a directory
     const isDirectoryError = 
@@ -957,20 +1072,20 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
       errorCode === 'ENOTEMPTY';
     
     if (isDirectoryError) {
-      console.log('[Main] Detected directory error, trying recursive delete as fallback');
+      logger.log('[Main] Detected directory error, trying recursive delete as fallback');
       try {
         await fs.rm(filePath, { recursive: true, force: true });
-        console.log('[Main] Folder deleted successfully (fallback)');
+        logger.log('[Main] Folder deleted successfully (fallback)');
         return true;
       } catch (rmError) {
-        console.error('[Main] Recursive delete also failed:', rmError);
+        logger.error('[Main] Recursive delete also failed:', rmError);
         const rmErrorMessage = rmError instanceof Error ? rmError.message : 'Unknown error';
         throw new Error(`Failed to delete folder: ${rmErrorMessage}`);
       }
     }
     
     // Re-throw original error if it's not a directory error
-    console.error('[Main] File deletion failed:', unlinkError);
+    logger.error('[Main] File deletion failed:', unlinkError);
     throw new Error(`Failed to delete file: ${errorMessage}`);
   }
 });

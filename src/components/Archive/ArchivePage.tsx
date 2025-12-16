@@ -18,6 +18,7 @@ import { RenameFileDialog } from './RenameFileDialog';
 import { ExtractionFolder } from './ExtractionFolder';
 import { ArchiveFile } from '../../types';
 import { ProgressBar } from '../ProgressBar';
+import { logger } from '../../utils/logger';
 
 interface ArchivePageProps {
   onBack: () => void;
@@ -185,26 +186,24 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     // TODO: Implement folder selection from existing folders
     // For now, just show the folder name dialog
     if (!selectedFileForExtraction || !currentCase) {
-      console.error('handleFolderSelection: Missing required data', { 
+      logger.error('handleFolderSelection: Missing required data', { 
         selectedFileForExtraction, 
         currentCase 
       });
       return;
     }
-    console.log('handleFolderSelection: Proceeding with file:', selectedFileForExtraction.name);
     setShowFolderSelectionDialog(false);
     setShowExtractionDialog(true);
   };
 
   const handleMakeNewFolder = () => {
     if (!selectedFileForExtraction || !currentCase) {
-      console.error('handleMakeNewFolder: Missing required data', { 
+      logger.error('handleMakeNewFolder: Missing required data', { 
         selectedFileForExtraction, 
         currentCase 
       });
       return;
     }
-    console.log('handleMakeNewFolder: Proceeding with file:', selectedFileForExtraction.name);
     setShowFolderSelectionDialog(false);
     setShowExtractionDialog(true);
   };
@@ -214,10 +213,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     const fileToExtract = selectedFileForExtraction;
     const caseToUse = currentCase;
     
-    console.log('handleExtractionConfirm called with:', { folderName, hasSelectedFile: !!fileToExtract, hasCurrentCase: !!caseToUse });
-    
     if (!fileToExtract || !caseToUse) {
-      console.error('Missing required data:', { selectedFileForExtraction: fileToExtract, currentCase: caseToUse });
+      logger.error('Missing required data:', { selectedFileForExtraction: fileToExtract, currentCase: caseToUse });
       setShowExtractionDialog(false);
       setSelectedFileForExtraction(null);
       return;
@@ -231,20 +228,15 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         return;
       }
 
-      console.log('Creating extraction folder:', { casePath: caseToUse.path, folderName, parentPdf: fileToExtract.path });
       const folderPath = await window.electronAPI.createExtractionFolder(caseToUse.path, folderName, fileToExtract.path);
-      console.log('Folder created successfully at:', folderPath);
       
       // Clear search query to ensure folder is visible
       setSearchQuery('');
       
       // Refresh files to show the new folder - use a small delay to ensure folder is fully created
-      console.log('Waiting before refresh...');
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      console.log('Refreshing files...');
       await refreshFiles();
-      console.log('Files refreshed');
       
       setPendingExtraction({
         folderName,
@@ -255,9 +247,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       
       setShowExtractionDialog(false);
       setShowSaveParentDialog(true);
-      console.log('Dialog closed, SaveParentDialog should open');
     } catch (error) {
-      console.error('Failed to create extraction folder:', error);
+      logger.error('Failed to create extraction folder:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create extraction folder';
       toast.error(errorMessage);
       setShowExtractionDialog(false);
@@ -291,7 +282,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         await refreshFiles();
       }
     } catch (error) {
-      console.error('Extraction failed:', error);
+      logger.error('Extraction failed:', error);
     }
     
     setSelectedFileForExtraction(null);
@@ -844,7 +835,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             setFileToRename(null);
             // Perform rename asynchronously
             renameFile(filePath, newName).catch((error) => {
-              console.error('Rename failed:', error);
+              logger.error('Rename failed:', error);
             });
           }
         }}

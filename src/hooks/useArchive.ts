@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ArchiveCase, ArchiveFile, ArchiveConfig } from '../types';
 import { useToast } from '../components/Toast/ToastContext';
+import { logger } from '../utils/logger';
+import { setupPDFWorker } from '../utils/pdfWorker';
 
 // Global thumbnail cache that persists across navigation
 const globalThumbnailCache = new Map<string, string>();
@@ -60,7 +62,7 @@ export function useArchive() {
       const config = await window.electronAPI.getArchiveConfig();
       setArchiveConfig(config);
     } catch (error) {
-      console.error('Failed to load archive config:', error);
+      logger.error('Failed to load archive config:', error);
     }
   }, []);
 
@@ -159,33 +161,74 @@ export function useArchive() {
 
       const fileData = await window.electronAPI.readPDFFile(filePath);
       
-      // Handle both base64 string (new) and array (old) for backward compatibility
+      // Import pdfjs-dist and setup worker
+      const pdfjsLib = await import('pdfjs-dist');
+      await setupPDFWorker();
+      
+      // Handle new format with type field
       let arrayBuffer: ArrayBuffer;
       
-      if (typeof fileData === 'string') {
-        // New format: base64 string
-        try {
-          // Remove any whitespace that might have been added
-          const cleanBase64 = fileData.trim().replace(/\s/g, '');
+      if (fileData && typeof fileData === 'object' && 'type' in fileData) {
+        if (fileData.type === 'base64') {
+          const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
           const binaryString = atob(cleanBase64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
           arrayBuffer = bytes.buffer;
-        } catch (error) {
-          throw new Error(`Failed to decode base64 PDF data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } else if (fileData.type === 'file-path') {
+          // For thumbnails, we still need the full file, so use chunked source
+          const { createChunkedPDFSource } = await import('../utils/pdfSource');
+          const pdf = await createChunkedPDFSource(fileData.path, pdfjsLib);
+          const page = await pdf.getPage(1);
+          const viewport = page.getViewport({ scale: 1.0 });
+          
+          // Calculate thumbnail size
+          const THUMBNAIL_SIZE = 200;
+          const aspectRatio = viewport.width / viewport.height;
+          let width = THUMBNAIL_SIZE;
+          let height = THUMBNAIL_SIZE;
+          
+          if (aspectRatio > 1) {
+            height = THUMBNAIL_SIZE / aspectRatio;
+          } else {
+            width = THUMBNAIL_SIZE * aspectRatio;
+          }
+          
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext('2d');
+          if (!context) {
+            throw new Error('Failed to get canvas context');
+          }
+          
+          const renderViewport = page.getViewport({ scale: width / viewport.width });
+          await page.render({
+            canvasContext: context,
+            viewport: renderViewport,
+          }).promise;
+          
+          return canvas.toDataURL('image/png');
+        } else {
+          throw new Error('Unexpected PDF file data format');
         }
+      } else if (typeof fileData === 'string') {
+        // Legacy format: base64 string
+        const cleanBase64 = fileData.trim().replace(/\s/g, '');
+        const binaryString = atob(cleanBase64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        arrayBuffer = bytes.buffer;
       } else if (Array.isArray(fileData)) {
-        // Old format: array of numbers (for backward compatibility)
+        // Legacy format: array of numbers
         arrayBuffer = new Uint8Array(fileData).buffer;
       } else {
         throw new Error('Unexpected PDF file data format');
       }
-      
-      // Import pdfjs-dist
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
       
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const page = await pdf.getPage(1);
@@ -225,7 +268,7 @@ export function useArchive() {
       
       return canvas.toDataURL('image/png');
     } catch (error) {
-      console.error('Failed to generate PDF thumbnail:', error);
+      logger.error('Failed to generate PDF thumbnail:', error);
       // Return placeholder on error
       const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
         <rect width="100%" height="100%" fill="#1a1a2e"/>
@@ -280,7 +323,7 @@ export function useArchive() {
         return updated;
       });
     } catch (error) {
-      console.error(`Failed to load thumbnail for ${filePath}:`, error);
+      logger.error(`Failed to load thumbnail for ${filePath}:`, error);
     } finally {
       setLoadingThumbnails(prev => {
         const next = new Set(prev);
@@ -383,12 +426,6 @@ export function useArchive() {
         };
       });
 
-      const folderCount = itemsWithTypes.filter(i => i.isFolder).length;
-      const fileCount = itemsWithTypes.filter(i => !i.isFolder).length;
-      console.log('Loaded items - Total:', itemsWithTypes.length, 'Folders:', folderCount, 'Files:', fileCount);
-      if (folderCount > 0) {
-        console.log('Folder names:', itemsWithTypes.filter(i => i.isFolder).map(f => f.name));
-      }
       setFiles(itemsWithTypes);
       filesRef.current = itemsWithTypes; // Update ref for thumbnail preservation
 
@@ -409,7 +446,7 @@ export function useArchive() {
         }
       }
     } catch (error) {
-      console.error('Error loading files:', error);
+      logger.error('Error loading files:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to load files');
     } finally {
       setLoading(false);

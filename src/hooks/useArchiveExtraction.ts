@@ -2,9 +2,8 @@ import { useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { ExtractionProgress } from '../types';
 import { useToast } from '../components/Toast/ToastContext';
-
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import { setupPDFWorker } from '../utils/pdfWorker';
+import { createChunkedPDFSource } from '../utils/pdfSource';
 
 export function useArchiveExtraction() {
   const [isExtracting, setIsExtracting] = useState(false);
@@ -55,31 +54,11 @@ export function useArchiveExtraction() {
         percentage: 5,
       });
 
+      // Setup PDF.js worker
+      await setupPDFWorker();
+      
       const fileData = await window.electronAPI.readPDFFile(pdfPath);
       
-      // Handle both base64 string (new) and array (old) for backward compatibility
-      let arrayBuffer: ArrayBuffer;
-      
-      if (typeof fileData === 'string') {
-        // New format: base64 string
-        try {
-          const cleanBase64 = fileData.trim().replace(/\s/g, '');
-          const binaryString = atob(cleanBase64);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          arrayBuffer = bytes.buffer;
-        } catch (error) {
-          throw new Error(`Failed to decode base64 PDF data: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-      } else if (Array.isArray(fileData)) {
-        // Old format: array of numbers
-        arrayBuffer = new Uint8Array(fileData).buffer;
-      } else {
-        throw new Error('Unexpected PDF file data format');
-      }
-
       // Load PDF document
       setStatusMessage('Loading PDF document...');
       setProgress({
@@ -88,7 +67,43 @@ export function useArchiveExtraction() {
         percentage: 10,
       });
 
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let pdf: any;
+      
+      // Handle new format with type field
+      if (fileData && typeof fileData === 'object' && 'type' in fileData) {
+        if (fileData.type === 'file-path') {
+          // Large file - use chunked reading
+          pdf = await createChunkedPDFSource(fileData.path, pdfjsLib);
+        } else if (fileData.type === 'base64') {
+          // Small file - decode base64
+          const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
+          const binaryString = atob(cleanBase64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const arrayBuffer = bytes.buffer;
+          pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        } else {
+          throw new Error('Unexpected PDF file data format');
+        }
+      } else if (typeof fileData === 'string') {
+        // Legacy format: base64 string
+        const cleanBase64 = fileData.trim().replace(/\s/g, '');
+        const binaryString = atob(cleanBase64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const arrayBuffer = bytes.buffer;
+        pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      } else if (Array.isArray(fileData)) {
+        // Legacy format: array of numbers
+        const arrayBuffer = new Uint8Array(fileData).buffer;
+        pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      } else {
+        throw new Error('Unexpected PDF file data format');
+      }
       const totalPages = pdf.numPages;
 
       setStatusMessage(`Found ${totalPages} page${totalPages !== 1 ? 's' : ''}. Starting extraction...`);

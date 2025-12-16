@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('save-files', options),
   validatePath: (filePath: string) => ipcRenderer.invoke('validate-path', filePath),
   readPDFFile: (filePath: string) => ipcRenderer.invoke('read-pdf-file', filePath),
+  readPDFFileChunk: (filePath: string, start: number, length: number) => ipcRenderer.invoke('read-pdf-file-chunk', filePath, start, length),
+  getPDFFileSize: (filePath: string) => ipcRenderer.invoke('get-pdf-file-size', filePath),
   // Archive APIs
   selectArchiveDrive: () => ipcRenderer.invoke('select-archive-drive'),
   getArchiveConfig: () => ipcRenderer.invoke('get-archive-config'),
@@ -39,6 +41,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveParentFile: boolean;
     extractedPages: Array<{ pageNumber: number; imageData: string }>;
   }) => ipcRenderer.invoke('extract-pdf-from-archive', options),
+  // Logging API
+  logToMain: (level: 'log' | 'info' | 'warn' | 'error' | 'debug', ...args: any[]) => ipcRenderer.invoke('log-renderer', level, ...args),
 });
 
 // Type declaration for TypeScript
@@ -58,7 +62,9 @@ declare global {
         extractedPages: Array<{ pageNumber: number; imageData: string }>;
       }) => Promise<{ success: boolean; messages: string[] }>;
       validatePath: (filePath: string) => Promise<{ isValid: boolean; isPDF: boolean }>;
-      readPDFFile: (filePath: string) => Promise<string | number[]>; // Returns base64 string (or array for backward compatibility)
+      readPDFFile: (filePath: string) => Promise<{ type: 'base64'; data: string } | { type: 'file-path'; path: string } | string | number[]>; // Returns base64 string, file path object, or array for backward compatibility
+      readPDFFileChunk: (filePath: string, start: number, length: number) => Promise<string>; // Returns base64 chunk
+      getPDFFileSize: (filePath: string) => Promise<number>;
       // Archive APIs
       selectArchiveDrive: () => Promise<{ path: string; autoDetected: boolean } | null>;
       getArchiveConfig: () => Promise<{ archiveDrive: string | null }>;
@@ -81,6 +87,7 @@ declare global {
         saveParentFile: boolean;
         extractedPages: Array<{ pageNumber: number; imageData: string }>;
       }) => Promise<{ success: boolean; messages: string[]; extractionFolder: string }>;
+      logToMain: (level: 'log' | 'info' | 'warn' | 'error' | 'debug', ...args: any[]) => Promise<void>;
     };
   }
 }

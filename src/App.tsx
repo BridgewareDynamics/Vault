@@ -10,6 +10,7 @@ import { ArchivePage } from './components/Archive/ArchivePage';
 import { usePDFExtraction } from './hooks/usePDFExtraction';
 import { ExtractedPage, ExtractionProgress } from './types';
 import { Home } from 'lucide-react';
+import { logger } from './utils/logger';
 import './App.css';
 
 function AppContent() {
@@ -27,7 +28,7 @@ function AppContent() {
   // Check if Electron API is available
   useEffect(() => {
     if (!window.electronAPI) {
-      console.warn('Electron API not available - running in browser mode');
+      logger.warn('Electron API not available - running in browser mode');
     }
   }, []);
 

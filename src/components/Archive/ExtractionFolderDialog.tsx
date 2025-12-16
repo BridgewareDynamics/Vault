@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { FolderPlus } from 'lucide-react';
+import { logger } from '../../utils/logger';
 
 interface ExtractionFolderDialogProps {
   isOpen: boolean;
@@ -24,12 +25,10 @@ export function ExtractionFolderDialog({ isOpen, onClose, onConfirm }: Extractio
       setIsSubmitting(true);
       try {
         const name = folderName.trim();
-        console.log('ExtractionFolderDialog: handleConfirm called with name:', name);
         setFolderName('');
         await onConfirm(name);
-        console.log('ExtractionFolderDialog: onConfirm completed');
       } catch (error) {
-        console.error('Error in handleConfirm:', error);
+        logger.error('Error in handleConfirm:', error);
         setIsSubmitting(false);
         throw error; // Re-throw to let parent handle it
       }

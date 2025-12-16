@@ -20,6 +20,7 @@
     "test:watch": "vitest --watch"
   },
   "dependencies": {
+    "electron-log": "^5.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "framer-motion": "^10.16.16",
@@ -68,15 +69,30 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "signingHashAlgorithms": ["sha256"],
+      "sign": "build/win-sign.js",
+      "signDlls": true
     },
     "mac": {
       "target": "dmg",
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   }
 }

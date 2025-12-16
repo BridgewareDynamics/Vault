@@ -1,0 +1,123 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build for'
+        required: true
+        type: choice
+        options:
+          - all
+          - win
+          - mac
+          - linux
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            platform: win
+            artifact-name: PDFtract-Setup
+          - os: macos-latest
+            platform: mac
+            artifact-name: PDFtract
+          - os: ubuntu-latest
+            platform: linux
+            artifact-name: PDFtract
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build:all
+        env:
+          NODE_ENV: production
+
+      - name: Build installer (Windows)
+        if: matrix.platform == 'win'
+        run: npm run electron:build -- --win
+        env:
+          WIN_CERTIFICATE_FILE: ${{ secrets.WIN_CERTIFICATE_FILE }}
+          WIN_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
+          CSC_LINK: ${{ secrets.WIN_CERTIFICATE_FILE }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
+
+      - name: Build installer (macOS)
+        if: matrix.platform == 'mac'
+        run: npm run electron:build -- --mac
+        env:
+          APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Build installer (Linux)
+        if: matrix.platform == 'linux'
+        run: npm run electron:build -- --linux
+
+      - name: Upload Windows artifacts
+        if: matrix.platform == 'win'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}-Windows
+          path: release/*.exe
+          retention-days: 30
+
+      - name: Upload macOS artifacts
+        if: matrix.platform == 'mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}-macOS
+          path: release/*.dmg
+          retention-days: 30
+
+      - name: Upload Linux artifacts
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}-Linux
+          path: release/*.AppImage
+          retention-days: 30
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+

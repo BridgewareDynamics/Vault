@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Folder, Loader2, Trash2, Pencil } from 'lucide-react';
 import { ArchiveCase } from '../../types';
 import { useState, useEffect } from 'react';
+import { logger } from '../../utils/logger';
 
 interface CaseFolderProps {
   caseItem: ArchiveCase;
@@ -27,7 +28,7 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
         const dataUrl = `data:${fileData.mimeType};base64,${fileData.data}`;
         setBackgroundImageUrl(dataUrl);
       } catch (error) {
-        console.error('Failed to load background image:', error);
+        logger.error('Failed to load background image:', error);
         setBackgroundImageUrl(undefined);
       }
     };

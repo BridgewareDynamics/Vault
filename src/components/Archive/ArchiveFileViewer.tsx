@@ -2,6 +2,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ArchiveFile } from '../../types';
+import { logger } from '../../utils/logger';
+import { setupPDFWorker } from '../../utils/pdfWorker';
+import { createChunkedPDFSource } from '../../utils/pdfSource';
 
 interface ArchiveFileViewerProps {
   file: ArchiveFile | null;
@@ -53,7 +56,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
         mimeType: data.mimeType,
       });
     } catch (error) {
-      console.error('Failed to load file data:', error);
+      logger.error('Failed to load file data:', error);
     } finally {
       setLoading(false);
     }
@@ -66,59 +69,79 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       setPdfLoading(true);
       setPdfLoadingProgress(0);
       
-      // Import PDF.js first
+      // Import PDF.js and setup worker
       const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      await setupPDFWorker();
       
-      // Use readPDFFile - now returns base64 to avoid array length limits
       setPdfLoadingProgress(10);
       const fileData = await window.electronAPI.readPDFFile(file.path);
       
-      // Handle both base64 string (new) and array (old) for backward compatibility
-      let arrayBuffer: ArrayBuffer;
+      let pdf: any;
       
-      if (typeof fileData === 'string') {
-        // New format: base64 string
-        try {
-          const cleanBase64 = fileData.trim().replace(/\s/g, '');
+      // Handle new format with type field
+      if (fileData && typeof fileData === 'object' && 'type' in fileData) {
+        if (fileData.type === 'file-path') {
+          // Large file - use chunked reading
+          setPdfLoadingProgress(20);
+          pdf = await createChunkedPDFSource(fileData.path, pdfjsLib);
+        } else if (fileData.type === 'base64') {
+          // Small file - decode base64
+          setPdfLoadingProgress(20);
+          const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
           const binaryString = atob(cleanBase64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
-          arrayBuffer = bytes.buffer;
-        } catch (error) {
-          throw new Error(`Failed to decode base64 PDF data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          const arrayBuffer = bytes.buffer;
+          
+          setPdfLoadingProgress(30);
+          const loadingTask = pdfjsLib.getDocument({
+            data: arrayBuffer,
+            disableAutoFetch: false,
+            disableStream: false,
+            verbosity: 0,
+          });
+          pdf = await loadingTask.promise;
+        } else {
+          throw new Error('Unexpected PDF file data format');
         }
+      } else if (typeof fileData === 'string') {
+        // Legacy format: base64 string
+        setPdfLoadingProgress(20);
+        const cleanBase64 = fileData.trim().replace(/\s/g, '');
+        const binaryString = atob(cleanBase64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const arrayBuffer = bytes.buffer;
+        
+        setPdfLoadingProgress(30);
+        const loadingTask = pdfjsLib.getDocument({
+          data: arrayBuffer,
+          disableAutoFetch: false,
+          disableStream: false,
+          verbosity: 0,
+        });
+        pdf = await loadingTask.promise;
       } else if (Array.isArray(fileData)) {
-        // Old format: array of numbers
-        arrayBuffer = new Uint8Array(fileData).buffer;
+        // Legacy format: array of numbers
+        setPdfLoadingProgress(20);
+        const arrayBuffer = new Uint8Array(fileData).buffer;
+        
+        setPdfLoadingProgress(30);
+        const loadingTask = pdfjsLib.getDocument({
+          data: arrayBuffer,
+          disableAutoFetch: false,
+          disableStream: false,
+          verbosity: 0,
+        });
+        pdf = await loadingTask.promise;
       } else {
         throw new Error('Unexpected PDF file data format');
       }
       
-      setPdfLoadingProgress(30);
-      
-      // Optimize PDF.js loading with streaming enabled
-      // disableAutoFetch: false allows streaming
-      // disableStream: false enables streaming for faster initial load
-      const loadingTask = pdfjsLib.getDocument({
-        data: arrayBuffer,
-        disableAutoFetch: false,
-        disableStream: false,
-        // Use lower verbosity for better performance
-        verbosity: 0,
-      });
-      
-      // Track loading progress
-      loadingTask.onProgress = (progress: { loaded: number; total: number }) => {
-        if (progress.total > 0) {
-          const percent = Math.min(30 + (progress.loaded / progress.total) * 60, 90);
-          setPdfLoadingProgress(Math.round(percent));
-        }
-      };
-      
-      const pdf = await loadingTask.promise;
       setPdfLoadingProgress(95);
       
       setPdfDoc(pdf);
@@ -136,7 +159,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
         setPdfLoadingProgress(0);
       }, 300);
     } catch (error) {
-      console.error('Failed to load PDF:', error);
+      logger.error('Failed to load PDF:', error);
       setPdfLoading(false);
       setPdfLoadingProgress(0);
     }
@@ -167,7 +190,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
     }
     
     if (!canvas) {
-      console.warn('Canvas not available for rendering after retries');
+      logger.warn('Canvas not available for rendering after retries');
       return;
     }
 
@@ -180,7 +203,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       const context = canvas.getContext('2d');
       
       if (!context) {
-        console.warn('Failed to get canvas context');
+        logger.warn('Failed to get canvas context');
         setPageRendering(false);
         return;
       }
@@ -215,7 +238,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       if (error?.name === 'RenderingCancelledException' || error?.message?.includes('cancelled')) {
         return;
       }
-      console.error('Failed to render PDF page:', error);
+      logger.error('Failed to render PDF page:', error);
       setPageRendering(false);
       renderTaskRef.current = null;
     }
