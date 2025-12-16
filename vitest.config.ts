@@ -9,6 +9,12 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test-utils/setup.ts'],
     css: true,
+    exclude: [
+      'node_modules/**',
+      'dist/**',
+      'dist-electron/**',
+      '**/*.d.ts',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],

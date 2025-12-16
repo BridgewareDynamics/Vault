@@ -67,6 +67,15 @@ vi.mock('../utils/pathValidator');
 vi.mock('../utils/archiveConfig');
 vi.mock('../utils/archiveMarker');
 vi.mock('../utils/thumbnailGenerator');
+vi.mock('../utils/logger', () => ({
+  logger: {
+    log: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
 
 describe('IPC Handlers', () => {
   let mockMainWindow: any;
@@ -134,6 +143,10 @@ describe('IPC Handlers', () => {
     (fs.unlink as any).mockResolvedValue(undefined);
     (fs.rm as any).mockResolvedValue(undefined);
     (fs.rename as any).mockResolvedValue(undefined);
+    (fs.open as any).mockResolvedValue({
+      read: vi.fn(() => Promise.resolve({ bytesRead: 0 })),
+      close: vi.fn(() => Promise.resolve()),
+    });
   });
 
   afterEach(() => {
@@ -320,26 +333,46 @@ describe('IPC Handlers', () => {
   });
 
   describe('read-pdf-file', () => {
-    it('should read and return PDF file as base64', async () => {
+    it('should read and return PDF file as base64 for small files', async () => {
       await import('../main');
       const handler = ipcHandlers.get('read-pdf-file');
 
       const mockData = Buffer.from('PDF content');
       (fs.readFile as any).mockResolvedValue(mockData);
+      (fs.stat as any).mockResolvedValue({ size: 100 }); // Small file
       (isValidPDFFile as any).mockReturnValue(true);
       (isSafePath as any).mockReturnValue(true);
 
       const result = await handler(null, '/path/to/file.pdf');
 
-      expect(typeof result).toBe('string');
-      expect(result).toBe(mockData.toString('base64'));
+      expect(result).toEqual({
+        type: 'base64',
+        data: mockData.toString('base64'),
+      });
+    });
+
+    it('should return file-path for large files (>350MB)', async () => {
+      await import('../main');
+      const handler = ipcHandlers.get('read-pdf-file');
+
+      const largeFileSize = 400 * 1024 * 1024; // 400MB
+      (fs.stat as any).mockResolvedValue({ size: largeFileSize });
+      (isValidPDFFile as any).mockReturnValue(true);
+      (isSafePath as any).mockReturnValue(true);
+
+      const result = await handler(null, '/path/to/large-file.pdf');
+
+      expect(result).toEqual({
+        type: 'file-path',
+        path: '/path/to/large-file.pdf',
+      });
     });
 
     it('should throw error when file does not exist', async () => {
       await import('../main');
       const handler = ipcHandlers.get('read-pdf-file');
 
-      (fs.readFile as any).mockRejectedValue(new Error('File not found'));
+      (fs.stat as any).mockRejectedValue(new Error('File not found'));
       (isValidPDFFile as any).mockReturnValue(true);
       (isSafePath as any).mockReturnValue(true);
 
@@ -1516,6 +1549,139 @@ describe('IPC Handlers', () => {
 
       expect(Array.isArray(result)).toBe(true);
       expect(result[0].backgroundImage).toBeDefined();
+    });
+  });
+
+  describe('log-renderer', () => {
+    it('should log messages from renderer process', async () => {
+      await import('../main');
+      const handler = ipcHandlers.get('log-renderer');
+      expect(handler).toBeDefined();
+
+      const { logger } = await import('../utils/logger');
+
+      await handler(null, 'log', 'test message');
+      expect(logger.log).toHaveBeenCalledWith('[Renderer]', 'test message');
+
+      await handler(null, 'info', 'info message');
+      expect(logger.info).toHaveBeenCalledWith('[Renderer]', 'info message');
+
+      await handler(null, 'warn', 'warn message');
+      expect(logger.warn).toHaveBeenCalledWith('[Renderer]', 'warn message');
+
+      await handler(null, 'error', 'error message');
+      expect(logger.error).toHaveBeenCalledWith('[Renderer]', 'error message');
+
+      await handler(null, 'debug', 'debug message');
+      expect(logger.debug).toHaveBeenCalledWith('[Renderer]', 'debug message');
+    });
+  });
+
+  describe('read-pdf-file-chunk', () => {
+    it('should read PDF file chunk successfully', async () => {
+      await import('../main');
+      const handler = ipcHandlers.get('read-pdf-file-chunk');
+      expect(handler).toBeDefined();
+
+      const mockBuffer = Buffer.from('chunk data');
+      const mockFileHandle = {
+        read: vi.fn((buffer, offset, length, position) => {
+          mockBuffer.copy(buffer, offset, 0, length);
+          return Promise.resolve({ bytesRead: length });
+        }),
+        close: vi.fn(() => Promise.resolve()),
+      };
+
+      (fs.open as any).mockResolvedValue(mockFileHandle);
+      (isValidPDFFile as any).mockReturnValue(true);
+      (isSafePath as any).mockReturnValue(true);
+
+      const result = await handler(null, '/path/to/file.pdf', 0, 10);
+
+      expect(fs.open).toHaveBeenCalledWith('/path/to/file.pdf', 'r');
+      expect(mockFileHandle.read).toHaveBeenCalled();
+      expect(mockFileHandle.close).toHaveBeenCalled();
+      expect(result).toBe(mockBuffer.toString('base64'));
+    });
+
+    it('should throw error for invalid PDF file path', async () => {
+      await import('../main');
+      const handler = ipcHandlers.get('read-pdf-file-chunk');
+
+      (isValidPDFFile as any).mockReturnValue(false);
+      (isSafePath as any).mockReturnValue(true);
+
+      await expect(handler(null, '/invalid/path.txt', 0, 10)).rejects.toThrow('Invalid PDF file path');
+    });
+
+    it('should throw error for unsafe path', async () => {
+      await import('../main');
+      const handler = ipcHandlers.get('read-pdf-file-chunk');
+
+      (isValidPDFFile as any).mockReturnValue(true);
+      (isSafePath as any).mockReturnValue(false);
+
+      await expect(handler(null, '/unsafe/path.pdf', 0, 10)).rejects.toThrow('Invalid PDF file path');
+    });
+
+    it('should throw error when file read fails', async () => {
+      await import('../main');
+      const handler = ipcHandlers.get('read-pdf-file-chunk');
+
+      (fs.open as any).mockRejectedValue(new Error('File not found'));
+      (isValidPDFFile as any).mockReturnValue(true);
+      (isSafePath as any).mockReturnValue(true);
+
+      await expect(handler(null, '/nonexistent/file.pdf', 0, 10)).rejects.toThrow('Failed to read PDF file chunk');
+    });
+  });
+
+  describe('get-pdf-file-size', () => {
+    it('should return PDF file size', async () => {
+      await import('../main');
+      const handler = ipcHandlers.get('get-pdf-file-size');
+      expect(handler).toBeDefined();
+
+      const mockSize = 1024 * 1024; // 1MB
+      (fs.stat as any).mockResolvedValue({ size: mockSize });
+      (isValidPDFFile as any).mockReturnValue(true);
+      (isSafePath as any).mockReturnValue(true);
+
+      const result = await handler(null, '/path/to/file.pdf');
+
+      expect(fs.stat).toHaveBeenCalledWith('/path/to/file.pdf');
+      expect(result).toBe(mockSize);
+    });
+
+    it('should throw error for invalid PDF file path', async () => {
+      await import('../main');
+      const handler = ipcHandlers.get('get-pdf-file-size');
+
+      (isValidPDFFile as any).mockReturnValue(false);
+      (isSafePath as any).mockReturnValue(true);
+
+      await expect(handler(null, '/invalid/path.txt')).rejects.toThrow('Invalid PDF file path');
+    });
+
+    it('should throw error for unsafe path', async () => {
+      await import('../main');
+      const handler = ipcHandlers.get('get-pdf-file-size');
+
+      (isValidPDFFile as any).mockReturnValue(true);
+      (isSafePath as any).mockReturnValue(false);
+
+      await expect(handler(null, '/unsafe/path.pdf')).rejects.toThrow('Invalid PDF file path');
+    });
+
+    it('should throw error when file stat fails', async () => {
+      await import('../main');
+      const handler = ipcHandlers.get('get-pdf-file-size');
+
+      (fs.stat as any).mockRejectedValue(new Error('File not found'));
+      (isValidPDFFile as any).mockReturnValue(true);
+      (isSafePath as any).mockReturnValue(true);
+
+      await expect(handler(null, '/nonexistent/file.pdf')).rejects.toThrow('Failed to get PDF file size');
     });
   });
 });

@@ -499,6 +499,162 @@ The build process consists of two stages:
 - Maintain consistent naming conventions
 - Add comments for complex logic
 
+## Known Limitations
+
+### Production Requirements
+
+Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for important setup requirements:
+
+- **Code Signing Certificates**: Required for Windows and macOS installers to avoid security warnings
+  - Windows: Requires a code signing certificate from a trusted CA
+  - macOS: Requires Apple Developer account ($99/year)
+  - See PRODUCTION_READINESS.md for detailed setup instructions
+
+- **Application Icons**: Platform-specific icons need to be generated
+  - Windows: `build/icon.ico` (multi-resolution ICO)
+  - macOS: `build/icon.icns` (ICNS format)
+  - Linux: `build/icon.png` (512x512 or larger)
+  - See `build/ICONS_README.md` for instructions
+
+### Functional Limitations
+
+- **PDF Compatibility**: Some complex PDFs with advanced features may not extract perfectly
+  - Encrypted PDFs require password input (not currently supported)
+  - PDFs with embedded multimedia may not render correctly
+  - Very large PDFs (>100MB) may take significant time to process
+
+- **File System**: 
+  - Vault directory must be on a local drive (network drives may have performance issues)
+  - Very large files (>500MB) may cause performance degradation
+  - File operations are synchronous and may block UI for large operations
+
+- **Platform-Specific**:
+  - macOS: Gatekeeper may require manual approval for unsigned builds
+  - Windows: Windows Defender may flag unsigned executables
+  - Linux: AppImage requires FUSE to be installed
+
+- **Performance**:
+  - Thumbnail generation for large image files may be slow
+  - PDF extraction of very large documents (>1000 pages) may take several minutes
+  - Search functionality is case-sensitive
+
+- **Features Not Yet Implemented**:
+  - Batch PDF extraction (multiple PDFs at once)
+  - PDF password support
+  - Custom thumbnail sizes
+  - Export vault to different formats
+  - Cloud storage integration
+  - Multi-user support
+
+## Troubleshooting
+
+### Build Issues
+
+**Problem**: `npm install` fails with dependency errors
+- **Solution**: 
+  - Delete `node_modules` and `package-lock.json`
+  - Run `npm install` again
+  - Ensure Node.js version is 20.x or higher
+
+**Problem**: TypeScript compilation errors
+- **Solution**:
+  - Run `npm run lint` to see specific errors
+  - Ensure all imports use correct path aliases (`@/` or `@electron/`)
+  - Check that all types are properly defined
+
+**Problem**: Electron app doesn't launch
+- **Solution**:
+  - Ensure both frontend and Electron main process are built: `npm run build:all`
+  - Check that `dist-electron/` directory exists
+  - Verify `package.json` main field points to correct path
+
+### Runtime Issues
+
+**Problem**: PDF extraction fails or produces blank images
+- **Solution**:
+  - Verify PDF file is not corrupted
+  - Check that PDF.js worker file exists in `public/pdf.worker.min.js`
+  - Ensure PDF file is not password-protected
+  - Try with a simpler PDF file to isolate the issue
+
+**Problem**: Vault directory selection fails
+- **Solution**:
+  - Ensure you have write permissions to the selected directory
+  - Avoid selecting system directories or protected folders
+  - On Windows, avoid Program Files or Windows directories
+  - Try selecting a directory in your user folder
+
+**Problem**: Files not appearing in vault
+- **Solution**:
+  - Refresh the vault view (navigate away and back)
+  - Check that files were actually copied (verify in file explorer)
+  - Ensure files are not hidden or system files
+  - Check application logs (see Logging section below)
+
+**Problem**: Thumbnails not generating
+- **Solution**:
+  - Ensure Sharp library is properly installed: `npm install sharp`
+  - Check file permissions for the vault directory
+  - Verify file types are supported (images, PDFs, videos)
+  - Large files may take time - wait a few moments
+
+**Problem**: Application crashes on startup
+- **Solution**:
+  - Check Node.js version: `node --version` (must be 20.x+)
+  - Clear application data (location varies by OS)
+  - Check for conflicting Electron processes: close all Electron windows
+  - Review error logs (see Logging section)
+
+### Development Issues
+
+**Problem**: Hot reload not working
+- **Solution**:
+  - Restart the dev server: `npm run electron:dev`
+  - Clear Vite cache: delete `.vite` directory
+  - Ensure no port conflicts (default is 5173)
+
+**Problem**: Tests failing
+- **Solution**:
+  - Run `npm install` to ensure all dependencies are installed
+  - Clear test cache: delete `node_modules/.vite`
+  - Ensure test environment is set up: `npm run test` should work
+  - Check that mocks are properly configured in `src/test-utils/`
+
+**Problem**: Linting errors
+- **Solution**:
+  - Run `npm run lint` to see all errors
+  - Auto-fix what you can: `npm run lint -- --fix`
+  - Review ESLint configuration in `package.json`
+  - Ensure TypeScript strict mode compliance
+
+### Logging
+
+The application uses `electron-log` for logging:
+
+- **Development**: Logs appear in the console
+- **Production**: Logs are written to platform-specific directories:
+  - **Windows**: `%USERPROFILE%\AppData\Roaming\pdftract\logs\`
+  - **macOS**: `~/Library/Logs/pdftract/`
+  - **Linux**: `~/.config/pdftract/logs/`
+
+To access logs:
+1. Navigate to the log directory for your platform
+2. Open the most recent log file
+3. Search for error messages or timestamps
+
+### Getting Help
+
+If you continue to experience issues:
+
+1. **Check existing issues**: Search GitHub issues for similar problems
+2. **Review documentation**: Check README.md and PRODUCTION_READINESS.md
+3. **Create an issue**: Include:
+   - Operating system and version
+   - Node.js version
+   - Steps to reproduce
+   - Error messages or logs
+   - Screenshots (if applicable)
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

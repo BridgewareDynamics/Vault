@@ -214,6 +214,231 @@ describe('useArchive – additional coverage', () => {
 
     expect(result.current.currentFolderPath).toBe('/vault/case/direct-folder');
   });
+
+  it('handles PDF thumbnail generation errors gracefully', async () => {
+    const mockCase = { name: 'Case', path: '/vault/case' };
+    
+    mockElectronAPI.listCaseFiles.mockResolvedValue([
+      {
+        name: 'test.pdf',
+        path: '/vault/case/test.pdf',
+        size: 100,
+        modified: Date.now(),
+        isFolder: false,
+      },
+    ]);
+
+    // Mock PDF read to fail
+    mockElectronAPI.readPDFFile.mockRejectedValue(new Error('PDF read failed'));
+
+    const { result } = renderHook(() => useArchive(), { wrapper });
+
+    act(() => {
+      result.current.setCurrentCase(mockCase);
+    });
+
+    await waitFor(
+      () => {
+        expect(result.current.files.length).toBeGreaterThan(0);
+      },
+      { timeout: 2000 },
+    );
+
+    // File should still exist even if thumbnail generation failed
+    const pdfFile = result.current.files.find(f => f.name === 'test.pdf');
+    expect(pdfFile).toBeDefined();
+    // Thumbnail should be a placeholder SVG on error
+    expect(pdfFile?.thumbnail).toBeDefined();
+    expect(pdfFile?.thumbnail).toContain('data:image/svg+xml');
+  });
+
+  it('uses global thumbnail cache across navigation', async () => {
+    const mockCase = { name: 'Case', path: '/vault/case' };
+    const thumbnailData = 'thumbnail-data-url';
+    
+    mockElectronAPI.listCaseFiles.mockResolvedValue([
+      {
+        name: 'image.jpg',
+        path: '/vault/case/image.jpg',
+        size: 100,
+        modified: Date.now(),
+        isFolder: false,
+      },
+    ]);
+    mockElectronAPI.getFileThumbnail.mockResolvedValue(thumbnailData);
+
+    const { result } = renderHook(() => useArchive(), { wrapper });
+
+    act(() => {
+      result.current.setCurrentCase(mockCase);
+    });
+
+    // Wait for thumbnail to load
+    await waitFor(
+      () => {
+        const file = result.current.files.find(f => f.name === 'image.jpg');
+        return file?.thumbnail === thumbnailData;
+      },
+      { timeout: 3000 },
+    );
+
+    const firstThumbnail = result.current.files.find(f => f.name === 'image.jpg')?.thumbnail;
+    expect(firstThumbnail).toBe(thumbnailData);
+
+    // Navigate to folder and back
+    act(() => {
+      result.current.openFolder('/vault/case/subfolder');
+    });
+
+    mockElectronAPI.listCaseFiles.mockResolvedValue([
+      {
+        name: 'other.jpg',
+        path: '/vault/case/subfolder/other.jpg',
+        size: 100,
+        modified: Date.now(),
+        isFolder: false,
+      },
+    ]);
+
+    await waitFor(
+      () => {
+        expect(result.current.files.length).toBeGreaterThan(0);
+      },
+      { timeout: 2000 },
+    );
+
+    // Go back to case root
+    act(() => {
+      result.current.goBackToCase();
+    });
+
+    // Reload files with preserveThumbnails - don't call getFileThumbnail again
+    mockElectronAPI.getFileThumbnail.mockClear();
+    
+    await act(async () => {
+      await result.current.refreshFiles();
+    });
+
+    // Thumbnail should still be cached (getFileThumbnail should not be called again)
+    const fileAfterRefresh = result.current.files.find(f => f.name === 'image.jpg');
+    expect(fileAfterRefresh?.thumbnail).toBe(firstThumbnail);
+    // Verify thumbnail wasn't requested again
+    expect(mockElectronAPI.getFileThumbnail).not.toHaveBeenCalled();
+  });
+
+  it('handles optimistic rename updates and rollback on failure', async () => {
+    const mockCase = { name: 'Case', path: '/vault/case' };
+    
+    mockElectronAPI.listCaseFiles.mockResolvedValue([
+      {
+        name: 'oldname.pdf',
+        path: '/vault/case/oldname.pdf',
+        size: 100,
+        modified: Date.now(),
+        isFolder: false,
+      },
+    ]);
+    mockElectronAPI.renameFile.mockResolvedValue({ success: true, newPath: '/vault/case/newname.pdf' });
+
+    const { result } = renderHook(() => useArchive(), { wrapper });
+
+    act(() => {
+      result.current.setCurrentCase(mockCase);
+    });
+
+    await waitFor(
+      () => {
+        expect(result.current.files.length).toBeGreaterThan(0);
+      },
+      { timeout: 2000 },
+    );
+
+    // Rename file
+    await act(async () => {
+      const success = await result.current.renameFile('/vault/case/oldname.pdf', 'newname.pdf');
+      expect(success).toBe(true);
+    });
+
+    // File should be renamed
+    expect(result.current.files.find(f => f.name === 'newname.pdf')).toBeDefined();
+    expect(result.current.files.find(f => f.name === 'oldname.pdf')).toBeUndefined();
+
+    // Test rollback on failure
+    mockElectronAPI.renameFile.mockRejectedValue(new Error('Rename failed'));
+
+    await act(async () => {
+      const success = await result.current.renameFile('/vault/case/newname.pdf', 'anothername.pdf');
+      expect(success).toBe(false);
+    });
+
+    // File should still be 'newname.pdf' (rollback should restore)
+    expect(result.current.files.find(f => f.name === 'newname.pdf')).toBeDefined();
+  });
+
+  it('handles thumbnail loading errors gracefully', async () => {
+    const mockCase = { name: 'Case', path: '/vault/case' };
+    
+    mockElectronAPI.listCaseFiles.mockResolvedValue([
+      {
+        name: 'image.jpg',
+        path: '/vault/case/image.jpg',
+        size: 100,
+        modified: Date.now(),
+        isFolder: false,
+      },
+    ]);
+    
+    // First call succeeds, then fail on subsequent calls
+    mockElectronAPI.getFileThumbnail
+      .mockRejectedValueOnce(new Error('Thumbnail generation failed'));
+
+    const { result } = renderHook(() => useArchive(), { wrapper });
+
+    act(() => {
+      result.current.setCurrentCase(mockCase);
+    });
+
+    await waitFor(
+      () => {
+        expect(result.current.files.length).toBeGreaterThan(0);
+      },
+      { timeout: 2000 },
+    );
+
+    // Wait a bit for thumbnail loading to complete/fail
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // File should still exist even if thumbnail failed
+    const file = result.current.files.find(f => f.name === 'image.jpg');
+    expect(file).toBeDefined();
+    // Thumbnail should be undefined on error (error is caught and logged, but thumbnail not set)
+    expect(file?.thumbnail).toBeUndefined();
+  });
+
+  it('handles case with description and background image', async () => {
+    mockElectronAPI.getArchiveConfig.mockResolvedValue({ archiveDrive: '/vault' });
+    mockElectronAPI.listArchiveCases.mockResolvedValue([
+      {
+        name: 'Case1',
+        path: '/vault/Case1',
+        description: 'Test description',
+        backgroundImage: '/vault/Case1/.case-background-image.jpg',
+      },
+    ]);
+
+    const { result } = renderHook(() => useArchive(), { wrapper });
+
+    await waitFor(
+      () => {
+        expect(result.current.cases.length).toBeGreaterThan(0);
+      },
+      { timeout: 2000 },
+    );
+
+    const case1 = result.current.cases.find(c => c.name === 'Case1');
+    expect(case1?.description).toBe('Test description');
+    expect(case1?.backgroundImage).toBe('/vault/Case1/.case-background-image.jpg');
+  });
 });
 
 
