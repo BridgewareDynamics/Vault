@@ -41,7 +41,7 @@ describe('ArchiveDriveDialog', () => {
         onConfirm={mockOnConfirm}
       />
     );
-    expect(screen.getByText(/Welcome to The Vault!/)).toBeInTheDocument();
+    expect(screen.getByText(/Welcome to Vault!/)).toBeInTheDocument();
     expect(screen.getByText(/Please choose the directory where your vault will be stored/)).toBeInTheDocument();
   });
 
@@ -124,6 +124,9 @@ describe('ArchiveDriveDialog', () => {
     expect(mockOnClose).not.toHaveBeenCalled();
   });
 });
+
+
+
 
 
 

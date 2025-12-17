@@ -40,7 +40,7 @@ export function ArchiveDriveDialog({ isOpen, onClose, onConfirm }: ArchiveDriveD
           </div>
 
           <p id="archive-drive-dialog-description" className="text-gray-300 mb-6">
-            Welcome to The Vault! Please choose the directory where your vault will be stored. This location will be remembered for future sessions.
+            Welcome to Vault! Please choose the directory where your vault will be stored. This location will be remembered for future sessions.
           </p>
 
           <div className="flex gap-3">

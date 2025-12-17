@@ -33,7 +33,7 @@ describe('App', () => {
 
   it('renders WelcomeScreen when no PDF selected', () => {
     render(<App />);
-    expect(screen.getByText(/Welcome to the Vault/i)).toBeInTheDocument();
+    expect(screen.getByText(/Welcome to Vault/i)).toBeInTheDocument();
     expect(screen.getByText(/Select file/i)).toBeInTheDocument();
   });
 

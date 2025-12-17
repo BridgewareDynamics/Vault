@@ -13,7 +13,7 @@ describe('WelcomeScreen', () => {
 
   it('should render welcome title', () => {
     render(<WelcomeScreen onSelectFile={mockOnSelectFile} onOpenArchive={mockOnOpenArchive} />);
-    expect(screen.getByText('Welcome to the Vault')).toBeInTheDocument();
+    expect(screen.getByText('Welcome to Vault')).toBeInTheDocument();
   });
 
   it('should render Select file button', () => {
@@ -58,6 +58,9 @@ describe('WelcomeScreen', () => {
     expect(lockIcon).toBeInTheDocument();
   });
 });
+
+
+
 
 
 

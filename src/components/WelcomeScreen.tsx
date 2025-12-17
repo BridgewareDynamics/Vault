@@ -1,12 +1,29 @@
 import { motion } from 'framer-motion';
-import { FileText, Archive } from 'lucide-react';
+import { useMemo } from 'react';
 
 interface WelcomeScreenProps {
   onSelectFile: () => void;
   onOpenArchive: () => void;
 }
 
+// Generate stable star positions
+const generateStars = (count: number) => {
+  return Array.from({ length: count }, (_, i) => {
+    const seed = i * 0.618; // Golden ratio for better distribution
+    return {
+      id: i,
+      size: (Math.sin(seed * 100) * 0.5 + 1.5).toFixed(1),
+      left: (Math.sin(seed * 50) * 0.5 + 0.5) * 100,
+      top: (Math.cos(seed * 50) * 0.5 + 0.5) * 100,
+      duration: (Math.sin(seed * 30) * 0.5 + 2).toFixed(1),
+      delay: (Math.sin(seed * 20) * 0.5 + 0.5) * 2,
+    };
+  });
+};
+
 export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProps) {
+  const selectFileStars = useMemo(() => generateStars(12), []);
+  const vaultStars = useMemo(() => generateStars(12), []);
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-8">
       <motion.div
@@ -117,7 +134,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProp
           transition={{ duration: 0.6, delay: 0.3 }}
           className="text-6xl font-bold bg-gradient-purple bg-clip-text text-transparent mb-4"
         >
-          Welcome to the Vault
+          Welcome to Vault
         </motion.h1>
 
         <motion.p
@@ -142,27 +159,83 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProp
               onClick={onSelectFile}
               className="
                 px-8 py-4 rounded-full
-                bg-gradient-purple
                 text-white font-semibold text-lg
-                border-2 border-cyber-cyan-400
-                shadow-lg shadow-cyber-purple-500/50
-                hover:shadow-xl hover:shadow-cyber-purple-500/70
-                transition-all duration-300
                 relative overflow-hidden
                 group
+                border-2 border-cyber-purple-400/40
+                backdrop-blur-sm
+                transition-all duration-500 ease-out
               "
               aria-label="Select PDF file to extract"
             >
+              {/* Dark galaxy base */}
+              <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-purple-900/80 to-gray-900" />
+              
+              {/* Rotating nebula gradient - refined */}
+              <motion.div
+                className="absolute inset-0 opacity-15 blur-sm"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+                style={{
+                  background: 'conic-gradient(from 0deg, transparent 0%, transparent 20%, rgba(139, 92, 246, 0.3) 30%, rgba(34, 211, 238, 0.2) 50%, rgba(139, 92, 246, 0.3) 70%, transparent 80%, transparent 100%)',
+                }}
+              />
+              
+              {/* Secondary subtle rotating layer */}
+              <motion.div
+                className="absolute inset-0 opacity-10 blur-[2px]"
+                animate={{ rotate: -360 }}
+                transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+                style={{
+                  background: 'conic-gradient(from 180deg, transparent 0%, rgba(168, 85, 247, 0.2) 25%, transparent 50%, rgba(34, 211, 238, 0.15) 75%, transparent 100%)',
+                }}
+              />
+              
+              {/* Animated starfield */}
+              {selectFileStars.map((star) => (
+                <motion.div
+                  key={star.id}
+                  className="absolute rounded-full bg-white"
+                  style={{
+                    width: `${star.size}px`,
+                    height: `${star.size}px`,
+                    left: `${star.left}%`,
+                    top: `${star.top}%`,
+                  }}
+                  animate={{
+                    opacity: [0.2, 1, 0.2],
+                    scale: [0.8, 1.2, 0.8],
+                  }}
+                  transition={{
+                    duration: parseFloat(star.duration),
+                    repeat: Infinity,
+                    delay: star.delay,
+                    ease: "easeInOut",
+                  }}
+                />
+              ))}
+              
+              {/* Subtle pulsing glow */}
+              <motion.div
+                className="absolute inset-0 bg-gradient-to-r from-cyber-purple-500/20 via-cyber-cyan-400/20 to-cyber-purple-500/20"
+                animate={{
+                  opacity: [0.3, 0.5, 0.3],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+              />
+              
+              {/* Glowing border on hover */}
+              <div className="absolute inset-0 rounded-full border-2 border-cyber-cyan-400/0 pointer-events-none transition-all duration-500 ease-out group-hover:border-cyber-cyan-400/70 group-hover:shadow-[0_0_20px_rgba(34,211,238,0.5),0_0_40px_rgba(168,85,247,0.4)]" />
+              
+              {/* Content */}
               <span className="relative z-10 flex items-center gap-2">
-                <FileText className="w-5 h-5" aria-hidden="true" />
+                <img src="/Select File Button.png" alt="" className="w-16 h-16 drop-shadow-lg" aria-hidden="true" />
                 Select file
               </span>
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-cyber-cyan-400/20 to-cyber-purple-500/20"
-                initial={{ x: '-100%' }}
-                whileHover={{ x: '100%' }}
-                transition={{ duration: 0.5 }}
-              />
             </motion.button>
             <p className="text-gray-400 text-sm text-center absolute left-1/2 transform -translate-x-1/2 top-full mt-2 w-full pointer-events-none whitespace-nowrap">PDF to PNG</p>
           </motion.div>
@@ -176,27 +249,84 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProp
             onClick={onOpenArchive}
             className="
               px-8 py-4 rounded-full
-              bg-gradient-to-r from-purple-600 to-purple-500
               text-white font-semibold text-lg
-              border-2 border-cyber-cyan-400
-              shadow-lg shadow-purple-500/50
-              hover:shadow-xl hover:shadow-purple-500/70
-              transition-all duration-300
               relative overflow-hidden
               group
+              border-2 border-cyber-purple-400/40
+              backdrop-blur-sm
+              transition-all duration-500 ease-out
             "
             aria-label="Open The Vault archive"
           >
+            {/* Dark galaxy base */}
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-purple-900/80 to-gray-900" />
+            
+            {/* Rotating nebula gradient - refined */}
+            <motion.div
+              className="absolute inset-0 opacity-15 blur-sm"
+              animate={{ rotate: -360 }}
+              transition={{ duration: 35, repeat: Infinity, ease: "linear" }}
+              style={{
+                background: 'conic-gradient(from 0deg, transparent 0%, transparent 20%, rgba(168, 85, 247, 0.3) 30%, rgba(34, 211, 238, 0.2) 50%, rgba(192, 132, 252, 0.3) 70%, transparent 80%, transparent 100%)',
+              }}
+            />
+            
+            {/* Secondary subtle rotating layer */}
+            <motion.div
+              className="absolute inset-0 opacity-10 blur-[2px]"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 45, repeat: Infinity, ease: "linear" }}
+              style={{
+                background: 'conic-gradient(from 180deg, transparent 0%, rgba(139, 92, 246, 0.2) 25%, transparent 50%, rgba(34, 211, 238, 0.15) 75%, transparent 100%)',
+              }}
+            />
+            
+            {/* Animated starfield */}
+            {vaultStars.map((star) => (
+              <motion.div
+                key={star.id}
+                className="absolute rounded-full bg-white"
+                style={{
+                  width: `${star.size}px`,
+                  height: `${star.size}px`,
+                  left: `${star.left}%`,
+                  top: `${star.top}%`,
+                }}
+                animate={{
+                  opacity: [0.2, 1, 0.2],
+                  scale: [0.8, 1.2, 0.8],
+                }}
+                transition={{
+                  duration: parseFloat(star.duration),
+                  repeat: Infinity,
+                  delay: star.delay,
+                  ease: "easeInOut",
+                }}
+              />
+            ))}
+            
+            {/* Subtle pulsing glow */}
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-cyber-purple-500/20 via-cyber-cyan-400/20 to-cyber-purple-500/20"
+              animate={{
+                opacity: [0.3, 0.5, 0.3],
+              }}
+              transition={{
+                duration: 3.5,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 0.5,
+              }}
+            />
+            
+            {/* Glowing border on hover */}
+            <div className="absolute inset-0 rounded-full border-2 border-cyber-cyan-400/0 pointer-events-none transition-all duration-500 ease-out group-hover:border-cyber-cyan-400/70 group-hover:shadow-[0_0_20px_rgba(34,211,238,0.5),0_0_40px_rgba(168,85,247,0.4)]" />
+            
+            {/* Content */}
             <span className="relative z-10 flex items-center gap-2">
-              <Archive className="w-5 h-5" aria-hidden="true" />
+              <img src="/The Vault Button.png" alt="" className="w-16 h-16 drop-shadow-lg" aria-hidden="true" />
               The Vault
             </span>
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-r from-cyber-cyan-400/20 to-purple-500/20"
-              initial={{ x: '-100%' }}
-              whileHover={{ x: '100%' }}
-              transition={{ duration: 0.5 }}
-            />
           </motion.button>
         </div>
       </motion.div>
