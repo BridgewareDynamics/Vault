@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, nativeImage, Menu } from 'electron';
 import { join } from 'path';
 import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath } from './utils/pathValidator';
 import * as fs from 'fs/promises';
@@ -80,22 +80,152 @@ function createWindow() {
     preloadPath = join(appPath, 'dist-electron', 'electron', 'preload.cjs');
   }
 
+  // Determine icon path based on environment and platform
+  let iconPath: string | undefined;
+  const iconExtension = process.platform === 'win32' ? 'ico' : 'png';
+  const iconFileName = `icon.${iconExtension}`;
+  
+  if (isDev) {
+    // In development, try multiple methods to find the project root
+    const possibleRoots: string[] = [];
+    
+    // Method 1: Use process.cwd() (most reliable in dev)
+    possibleRoots.push(process.cwd());
+    
+    // Method 2: Use app.getAppPath() if available
+    try {
+      const appPath = app.getAppPath();
+      possibleRoots.push(appPath);
+      // If it's in dist-electron, go up
+      if (appPath.includes('dist-electron')) {
+        possibleRoots.push(join(appPath, '..', '..'));
+      }
+    } catch {
+      // app.getAppPath() not available, skip
+    }
+    
+    // Method 3: Use __dirname-based resolution
+    // __dirname in dev points to dist-electron/electron/, so go up 2 levels
+    possibleRoots.push(join(__dirname, '..', '..'));
+    
+    // Find the first root that contains build/icon file
+    for (const root of possibleRoots) {
+      const testPath = join(root, 'build', iconFileName);
+      if (existsSync(testPath)) {
+        iconPath = path.resolve(testPath); // Use absolute path
+        logger.info(`[Dev] Found icon at: ${iconPath}`);
+        break;
+      }
+    }
+    
+    // If not found, log all attempted paths for debugging
+    if (!iconPath) {
+      logger.warn(`[Dev] Icon not found. Attempted paths:`);
+      possibleRoots.forEach(root => {
+        const testPath = join(root, 'build', iconFileName);
+        logger.warn(`  - ${testPath} (exists: ${existsSync(testPath)})`);
+      });
+    }
+  } else {
+    // In production, try multiple possible locations
+    // electron-builder may place icons in different locations depending on platform
+    const possiblePaths: string[] = [];
+    
+    // Try resources path (common for packaged apps)
+    if (process.resourcesPath) {
+      possiblePaths.push(join(process.resourcesPath, 'build', iconFileName));
+      possiblePaths.push(join(process.resourcesPath, '..', 'build', iconFileName));
+    }
+    
+    // Try app path (app.asar location)
+    const appPath = app.getAppPath();
+    possiblePaths.push(join(appPath, 'build', iconFileName));
+    possiblePaths.push(join(appPath, '..', 'build', iconFileName));
+    possiblePaths.push(join(appPath, '..', '..', 'build', iconFileName));
+    
+    // Try executable directory (Windows unpacked apps)
+    if (process.platform === 'win32' && process.execPath) {
+      const execDir = path.dirname(process.execPath);
+      possiblePaths.push(join(execDir, 'build', iconFileName));
+      possiblePaths.push(join(execDir, 'resources', 'build', iconFileName));
+    }
+    
+    // Find the first existing path
+    for (const testPath of possiblePaths) {
+      if (existsSync(testPath)) {
+        iconPath = testPath;
+        break;
+      }
+    }
+  }
+
+  // Convert icon path to nativeImage for better compatibility
+  let windowIcon: Electron.NativeImage | undefined;
+  if (iconPath && existsSync(iconPath)) {
+    try {
+      windowIcon = nativeImage.createFromPath(iconPath);
+      // Verify the image was loaded successfully
+      if (windowIcon.isEmpty()) {
+        logger.warn(`Icon file at ${iconPath} is empty or invalid`);
+        windowIcon = undefined;
+      } else {
+        logger.info(`Using window icon: ${iconPath}`);
+      }
+    } catch (error) {
+      logger.warn(`Failed to load icon from ${iconPath}:`, error);
+      windowIcon = undefined;
+    }
+  } else if (iconPath) {
+    logger.warn(`Icon file not found at ${iconPath}, using default Electron icon`);
+  }
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1000,
     minHeight: 700,
     backgroundColor: '#0f0f1e',
+    icon: windowIcon, // Set window icon using nativeImage
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true, // Explicitly enable web security
+      devTools: isDev, // Only enable DevTools in development
     },
     titleBarStyle: 'hiddenInset',
     frame: true,
     show: false, // Don't show until ready
   });
+
+  // Remove menu bar in production for a clean app experience
+  if (!isDev) {
+    Menu.setApplicationMenu(null);
+  }
+
+  // Prevent DevTools from opening in production via keyboard shortcuts
+  if (!isDev) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      // Block common DevTools keyboard shortcuts
+      const isDevToolsShortcut = 
+        (input.key === 'F12') ||
+        (input.key === 'I' && input.control && input.shift) ||
+        (input.key === 'J' && input.control && input.shift) ||
+        (input.key === 'C' && input.control && input.shift) ||
+        (input.key === 'K' && input.control && input.shift);
+      
+      if (isDevToolsShortcut) {
+        event.preventDefault();
+        logger.warn('DevTools shortcut blocked in production');
+      }
+    });
+
+    // Additional safeguard: prevent DevTools from opening programmatically
+    mainWindow.webContents.on('devtools-opened', () => {
+      logger.warn('DevTools attempted to open in production - closing');
+      mainWindow?.webContents.closeDevTools();
+    });
+  }
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
