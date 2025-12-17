@@ -119,9 +119,9 @@ This document tracks the implementation of all critical blockers for v1.0 releas
 
 ## 🚀 Release Process
 
-1. Update version in `package.json`
-2. Create a git tag: `git tag v1.0.0`
-3. Push tag: `git push origin v1.0.0`
+1. Update version in `package.json` (e.g., `1.0.0-prerelease.1` for prerelease)
+2. Create a git tag: `git tag v1.0.0-prerelease.1` (or `v1.0.0` for stable release)
+3. Push tag: `git push origin v1.0.0-prerelease.1`
 4. GitHub Actions will automatically:
    - Build installers for all platforms
    - Sign installers (if certificates configured)

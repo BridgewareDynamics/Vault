@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0] - 2024-12-19
+## [1.0.0-prerelease.1] - 2025-01-XX
+
+**Note:** This is a prerelease version. Features and APIs may change before the stable 1.0.0 release.
 
 ### Added
 
@@ -116,8 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed** for any bug fixes
 - **Security** for vulnerability fixes
 
-[Unreleased]: https://github.com/yourusername/the-vault/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/yourusername/the-vault/releases/tag/v1.0.0
+[Unreleased]: https://github.com/yourusername/the-vault/compare/v1.0.0-prerelease.1...HEAD
+[1.0.0-prerelease.1]: https://github.com/yourusername/the-vault/releases/tag/v1.0.0-prerelease.1
 
 
 
