@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ArchiveFile } from '../../types';
@@ -26,8 +26,14 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   const [pdfLoadingProgress, setPdfLoadingProgress] = useState(0);
   const [pageRendering, setPageRendering] = useState(false);
   const [pageScale, setPageScale] = useState(1.5);
+  // Initialize zoom mode - always enabled to allow proper canvas sizing
+  const [isPdfZoomed, setIsPdfZoomed] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const canvasX = useMotionValue(0);
+  const canvasY = useMotionValue(0);
 
   useEffect(() => {
     if (file) {
@@ -256,12 +262,48 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   }, [totalPages]);
 
   const handleZoomIn = useCallback(() => {
-    setPageScale(prev => Math.min(prev + 0.25, 3));
-  }, []);
+    setPageScale(prev => {
+      const newScale = Math.min(prev + 0.25, 5);
+      // Keep zoom mode enabled for all scales
+      if (!isPdfZoomed) {
+        setIsPdfZoomed(true);
+      }
+      // Reset position to center when zooming
+      canvasX.set(0);
+      canvasY.set(0);
+      return newScale;
+    });
+  }, [isPdfZoomed, canvasX, canvasY]);
 
   const handleZoomOut = useCallback(() => {
-    setPageScale(prev => Math.max(prev - 0.25, 0.5));
-  }, []);
+    setPageScale(prev => {
+      const newScale = Math.max(prev - 0.25, 0.5);
+      // Keep zoom mode enabled for all scales
+      if (!isPdfZoomed) {
+        setIsPdfZoomed(true);
+      }
+      // Reset position to center when zooming
+      canvasX.set(0);
+      canvasY.set(0);
+      return newScale;
+    });
+  }, [isPdfZoomed, canvasX, canvasY]);
+
+  const handlePdfZoomToggle = useCallback(() => {
+    setIsPdfZoomed(prev => {
+      if (!prev) {
+        // Zooming in - set a high scale for actual zoom effect
+        setPageScale(3.0);
+      } else {
+        // Zooming out - reset to default
+        setPageScale(1.5);
+      }
+      // Reset position to center when toggling zoom
+      canvasX.set(0);
+      canvasY.set(0);
+      return !prev;
+    });
+  }, [canvasX, canvasY]);
 
   useEffect(() => {
     if (pdfDoc && currentPage > 0) {
@@ -294,6 +336,13 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfDoc, currentPage, pageScale]);
+
+  // Reset canvas position to center when scale changes
+  useEffect(() => {
+    // Reset position to center when scale changes
+    canvasX.set(0);
+    canvasY.set(0);
+  }, [pageScale, canvasX, canvasY]);
 
   // Keyboard navigation for PDFs
   useEffect(() => {
@@ -357,11 +406,26 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
           {/* Zoom button */}
           {file.type === 'image' && (
             <button
-              onClick={() => setIsZoomed(!isZoomed)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsZoomed(!isZoomed);
+              }}
               className="absolute -top-12 left-0 text-white hover:text-cyber-purple-400 transition-colors z-10"
               aria-label={isZoomed ? 'Zoom out' : 'Zoom in'}
             >
               {isZoomed ? <ZoomOut size={32} /> : <ZoomIn size={32} />}
+            </button>
+          )}
+          {file.type === 'pdf' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePdfZoomToggle();
+              }}
+              className="absolute top-14 left-2 text-white hover:text-cyber-purple-400 transition-colors z-30 bg-black/60 rounded-full p-2"
+              aria-label={isPdfZoomed ? 'Zoom out' : 'Zoom in'}
+            >
+              {isPdfZoomed ? <ZoomOut size={24} /> : <ZoomIn size={24} />}
             </button>
           )}
 
@@ -421,7 +485,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                   </div>
                 </div>
               ) : pdfDoc ? (
-                <div className="relative w-full h-full flex flex-col items-center bg-gray-900 rounded-lg overflow-auto">
+                <div className="relative w-full h-full flex flex-col items-center bg-gray-900 rounded-lg overflow-hidden">
                   {/* PDF Controls */}
                   <div className="sticky top-0 z-20 w-full bg-gray-800/95 backdrop-blur-sm border-b border-cyber-purple-500/50 px-4 py-2 flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -469,8 +533,16 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                     </div>
                   </div>
                   
-                  {/* PDF Canvas */}
-                  <div className="flex-1 w-full flex items-center justify-center p-4 relative min-h-[400px]">
+                  {/* PDF Canvas Container with Zoom and Pan */}
+                  <div 
+                    ref={pdfContainerRef}
+                    className="flex-1 w-full h-full relative overflow-hidden"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
                     {pageRendering && (
                       <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm rounded z-10">
                         <div className="text-center">
@@ -479,14 +551,41 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                         </div>
                       </div>
                     )}
-                    {/* Always render canvas so ref is available */}
-                    <canvas
-                      ref={canvasRef}
-                      className={`max-w-full shadow-2xl bg-gray-100 rounded transition-opacity duration-300 ${
-                        pageRendering ? 'opacity-30' : 'opacity-100'
-                      }`}
-                      style={{ maxHeight: 'calc(100vh - 120px)' }}
-                    />
+                    {/* Canvas wrapper for drag functionality */}
+                    <motion.div
+                      drag={isPdfZoomed && pageScale >= 1.0}
+                      dragConstraints={(isPdfZoomed && pageScale >= 1.0) ? pdfContainerRef : false}
+                      dragElastic={0}
+                      dragMomentum={false}
+                      whileDrag={{ cursor: 'grabbing' }}
+                      style={{
+                        cursor: (isPdfZoomed && pageScale >= 1.0) ? 'grab' : 'default',
+                        display: 'inline-block',
+                        touchAction: 'none',
+                        x: canvasX,
+                        y: canvasY,
+                      }}
+                      onClick={(e) => {
+                        if (isPdfZoomed && pageScale >= 1.0) {
+                          e.stopPropagation();
+                        }
+                      }}
+                    >
+                      <canvas
+                        ref={canvasRef}
+                        className={`shadow-2xl bg-gray-100 rounded transition-opacity duration-300 select-none ${
+                          pageRendering ? 'opacity-30' : 'opacity-100'
+                        }`}
+                        style={{ 
+                          maxWidth: isPdfZoomed ? 'none' : '100%',
+                          maxHeight: isPdfZoomed ? 'none' : 'calc(100vh - 120px)',
+                          width: isPdfZoomed ? undefined : 'auto',
+                          height: isPdfZoomed ? undefined : 'auto',
+                          display: 'block',
+                          objectFit: 'none',
+                        }}
+                      />
+                    </motion.div>
                   </div>
                 </div>
               ) : (
@@ -503,22 +602,36 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
               </div>
             </div>
           ) : fileData ? (
-            <div className="relative">
+            <div 
+              ref={imageContainerRef}
+              className={`relative ${isZoomed ? 'w-full h-full overflow-hidden flex items-center justify-center' : ''}`}
+            >
               {file.type === 'image' ? (
                 <motion.img
                   src={fileData.data}
                   alt={file.name}
                   className={`
-                    max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl
+                    ${isZoomed ? 'w-auto h-auto' : 'max-w-full max-h-[90vh]'}
+                    object-contain rounded-lg shadow-2xl
                     border-2 border-cyber-purple-500/50
+                    select-none
                   `}
-                  style={{ cursor: isZoomed ? 'zoom-out' : 'zoom-in' }}
-                  animate={{ scale: isZoomed ? 1.5 : 1 }}
-                  transition={{ duration: 0.3 }}
+                  style={{
+                    cursor: isZoomed ? 'grab' : 'zoom-in',
+                  }}
+                  animate={{ scale: isZoomed ? 2.5 : 1 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsZoomed(!isZoomed);
+                    if (!isZoomed) {
+                      setIsZoomed(true);
+                    }
                   }}
+                  drag={isZoomed}
+                  dragConstraints={isZoomed ? imageContainerRef : false}
+                  dragElastic={0.1}
+                  dragMomentum={false}
+                  whileDrag={{ cursor: 'grabbing' }}
                 />
               ) : file.type === 'video' ? (
                 <video
