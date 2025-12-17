@@ -5,7 +5,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.2-blue.svg)](https://reactjs.org/)
 [![Electron](https://img.shields.io/badge/Electron-28.1-blue.svg)](https://www.electronjs.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
 The Vault is a powerful desktop application designed for researchers, investigators, and professionals who need to organize, extract, and manage PDF documents systematically. Built with Electron and React, it provides a modern, intuitive interface for converting PDF pages to PNG images and organizing them within a structured case-based filing system.
 
@@ -174,9 +174,10 @@ graph LR
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/the-vault.git
+   git clone <repository-url>
    cd the-vault
    ```
+   Note: Repository access is subject to license terms. See [LICENSE](LICENSE) for details.
 
 2. **Install dependencies**
    ```bash
@@ -484,12 +485,15 @@ The build process consists of two stages:
 
 ### Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Commit with clear messages (`git commit -m 'Add amazing feature'`)
-5. Push to your branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
+**Note**: This is a proprietary software project. Contributions and modifications are subject to the license terms.
+
+If you wish to contribute:
+1. Review the [LICENSE](LICENSE) file to understand the terms
+2. Ensure your contributions comply with the license
+3. Contact Bridgeware Dynamics for guidance on contribution processes
+4. Any contributions must maintain all copyright notices and attribution requirements
+
+For questions about contributing, contact: **Bridgeware Dynamics** at Bridgewarefreelance@gmail.com
 
 ### Code Style
 
@@ -657,7 +661,27 @@ If you continue to experience issues:
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under **The Vault Proprietary License** - see the [LICENSE](LICENSE) file for details.
+
+### License Summary
+
+**Personal Use**: Free for personal, non-commercial use. You can:
+- Use The Vault for personal projects and research
+- View and study the source code for educational purposes
+- Modify the software for your own personal use (but keep modifications private)
+
+**Commercial Use**: Requires explicit written permission from Bridgeware Dynamics. Commercial use includes:
+- Use by businesses or corporations
+- Use in client projects or work-for-hire
+- Any revenue-generating activity
+
+**Restrictions**:
+- No redistribution or sharing of the software
+- No hosting on public repositories without permission
+- No selling or licensing of the software
+- Must maintain all copyright notices
+
+For commercial use inquiries or license questions, contact: **Bridgeware Dynamics** at Bridgewarefreelance@gmail.com
 
 ## Acknowledgments
 

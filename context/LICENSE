@@ -1,6 +1,6 @@
-THE VAULT PROPRIETARY LICENSE
+VIDCAP PROPRIETARY LICENSE
 
-Copyright (c) 2025 Bridgeware Dynamics. All rights reserved.
+Copyright (c) 2024 Bridgeware Dynamics. All rights reserved.
 
 NOTICE: This software and associated documentation files (the "Software") are 
 proprietary and confidential. Unauthorized copying, modification, distribution, 
@@ -12,11 +12,11 @@ LICENSE TERMS AND CONDITIONS
 
 1. DEFINITIONS
 
-1.1. "Software" means The Vault application, including but not limited to 
+1.1. "Software" means the VidCap application, including but not limited to 
      source code, object code, documentation, graphics, user interfaces, and 
      all associated files and materials, but excluding third-party components 
-     that are subject to separate license agreements (such as PDF.js, which is 
-     licensed under Apache 2.0, and Electron, which is licensed under MIT/BSD).
+     that are subject to separate license agreements (such as FFmpeg, which is 
+     licensed under LGPL 2.1+).
 
 1.2. "Personal Use" means use of the Software by an individual for personal, 
      non-commercial purposes only, excluding any use in connection with any 
@@ -91,16 +91,15 @@ You are expressly prohibited from:
 3.5. REMOVAL OF ATTRIBUTION
      Removing, obscuring, or modifying any copyright notices, attribution 
      statements, or license information contained in the Software, except that 
-     You may access and view third-party license information (such as PDF.js's 
-     Apache 2.0 license) as required by those third-party licenses.
+     You may access and view third-party license information (such as FFmpeg's 
+     LGPL license) as required by those third-party licenses.
 
 3.6. REVERSE ENGINEERING FOR COMMERCIAL PURPOSES
      Reverse engineering, decompiling, or disassembling the Software for 
      commercial purposes or to create competing products, except that You 
-     may exercise rights granted under applicable third-party licenses for 
-     third-party components. This exception is required for compliance with 
-     those third-party licenses and does not grant any additional rights beyond 
-     those provided by those licenses.
+     may reverse engineer FFmpeg components as permitted under the LGPL 
+     license terms. This exception is required for LGPL compliance and does 
+     not grant any additional rights beyond those provided by the LGPL.
 
 ================================================================================
 4. ATTRIBUTION REQUIREMENTS
@@ -144,15 +143,11 @@ You are expressly prohibited from:
 6.1. OWNERSHIP
      The Software is protected by copyright, trademark, and other intellectual 
      property laws. All rights, title, and interest in and to the Software 
-     remain with the Owner. The Owner does NOT own PDF.js, Electron, Sharp, 
-     React, or any other third-party components that are subject to separate 
-     license agreements. PDF.js is owned by the Mozilla Foundation and is 
-     licensed under Apache 2.0. Electron is owned by GitHub Inc. and is 
-     licensed under MIT/BSD. Sharp is owned by its respective copyright holders 
-     and is licensed under Apache 2.0. React is owned by Meta Platforms, Inc. 
-     and is licensed under MIT. The relevant copyright holders and license 
-     information for these and other third-party components can be found in 
-     their respective license files or official documentation.
+     remain with the Owner. The Owner does NOT own FFmpeg or any other 
+     third-party components that are subject to separate license agreements. 
+     FFmpeg is owned by its respective copyright holders and is licensed under 
+     LGPL 2.1+. The relevant FFmpeg copyright holders can be found at 
+     https://ffmpeg.org/legal.html.
 
 6.2. NO TRANSFER OF RIGHTS
      This License does not grant You any ownership rights in the Software. You 
@@ -266,63 +261,42 @@ communications, proposals, and agreements relating to the Software.
 14. THIRD-PARTY COMPONENTS
 ================================================================================
 
-14.1. PDF.JS COMPONENT
-     This Software includes PDF.js, which is licensed under the Apache License 
-     version 2.0. PDF.js is a separate component with its own license terms, 
-     and the provisions of this Proprietary License do not apply to PDF.js.
+14.1. FFMPEG COMPONENT
+     This Software includes FFmpeg, which is licensed under the GNU Lesser 
+     General Public License (LGPL) version 2.1 or later. FFmpeg is a separate 
+     component with its own license terms, and the provisions of this 
+     Proprietary License do not apply to FFmpeg.
 
-14.2. PDF.JS LICENSE TERMS
-     PDF.js remains subject to the Apache 2.0 license regardless of this 
-     Proprietary License. The PDF.js license terms are available in the file 
-     `public/pdf.worker.min.js` (which includes copyright notices), or at 
-     https://github.com/mozilla/pdf.js/blob/master/LICENSE.
+14.2. FFMPEG LICENSE TERMS
+     FFmpeg remains subject to the LGPL 2.1+ license regardless of this 
+     Proprietary License. The FFmpeg license terms are available in the file 
+     `build/ffmpeg/LICENSE_FFMPEG.txt` included with this Software, or at 
+     https://ffmpeg.org/legal.html.
 
-14.3. PDF.JS SOURCE CODE
-     In compliance with Apache 2.0 requirements, the source code for PDF.js 
-     is publicly available. You may download it directly from the official 
-     PDF.js repository at https://github.com/mozilla/pdf.js.
+14.3. FFMPEG SOURCE CODE
+     In compliance with LGPL requirements, the source code for the bundled 
+     FFmpeg version is available upon request. You may contact the Owner to 
+     obtain FFmpeg source code, or download it directly from the official 
+     FFmpeg repository.
 
-14.4. ELECTRON COMPONENT
-     This Software includes Electron, which is licensed under the MIT License 
-     and BSD 3-Clause License. Electron is a separate component with its own 
-     license terms, and the provisions of this Proprietary License do not 
-     apply to Electron.
+14.4. REPLACEMENT OF FFMPEG
+     You have the right, under LGPL terms, to replace the bundled FFmpeg 
+     binaries with your own version of FFmpeg, provided that such replacement 
+     complies with the LGPL license terms. This Proprietary License does not 
+     restrict Your rights under the LGPL with respect to FFmpeg.
 
-14.5. ELECTRON LICENSE TERMS
-     Electron remains subject to the MIT/BSD licenses regardless of this 
-     Proprietary License. The Electron license terms are available at 
-     https://github.com/electron/electron/blob/main/LICENSE.
-
-14.6. SHARP COMPONENT
-     This Software includes Sharp, which is licensed under the Apache License 
-     version 2.0. Sharp is a separate component with its own license terms, 
-     and the provisions of this Proprietary License do not apply to Sharp.
-
-14.7. SHARP LICENSE TERMS
-     Sharp remains subject to the Apache 2.0 license regardless of this 
-     Proprietary License. The Sharp license terms are available at 
-     https://github.com/lovell/sharp/blob/main/LICENSE.
-
-14.8. REACT AND OTHER DEPENDENCIES
-     This Software includes React and other third-party components (such as 
-     Framer Motion, Lucide Icons, JSZip, and others) that are subject to 
-     separate open-source licenses (primarily MIT, Apache 2.0, and ISC). All 
-     such components remain subject to their respective licenses, and this 
-     Proprietary License does not modify those license terms.
-
-14.9. NO CONFLICT
+14.5. NO CONFLICT
      Nothing in this Proprietary License is intended to restrict or limit Your 
-     rights under the applicable open-source licenses with respect to third-party 
-     components. If there is any conflict between this Proprietary License and 
-     any third-party license regarding those components, the third-party license 
-     terms shall prevail for those components.
+     rights under the LGPL with respect to FFmpeg. If there is any conflict 
+     between this Proprietary License and the LGPL regarding FFmpeg, the LGPL 
+     terms shall prevail for FFmpeg components.
 
-14.10. THIRD-PARTY LICENSE COMPLIANCE
-      You have the right, under the terms of applicable third-party licenses, 
-      to exercise the rights granted by those licenses with respect to third-party 
-      components. This Proprietary License does not restrict Your rights under 
-      those licenses with respect to third-party components.
+14.6. OTHER THIRD-PARTY COMPONENTS
+     This Software may include other third-party components subject to separate 
+     licenses. All such components remain subject to their respective licenses, 
+     and this Proprietary License does not modify those license terms.
 
 ================================================================================
 END OF LICENSE
 ================================================================================
+
