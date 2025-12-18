@@ -65,28 +65,43 @@ The Vault is a powerful desktop application designed for researchers, investigat
 graph TB
     subgraph Electron[Electron Main Process]
         Main[main.ts]
-        IPC[IPC Handlers]
+        IPC[IPC Handlers<br/>25+ handlers]
         Utils[Utility Modules]
         Main --> IPC
         Main --> Utils
+        
+        subgraph UtilsDetail[Utility Modules]
+            Logger[logger.ts]
+            PathValidator[pathValidator.ts]
+            PDFExtractor[pdfExtractor.ts]
+            ThumbnailGen[thumbnailGenerator.ts]
+            ArchiveConfig[archiveConfig.ts]
+            ArchiveMarker[archiveMarker.ts]
+        end
+        Utils --> UtilsDetail
     end
     
     subgraph Renderer[Renderer Process]
         App[App.tsx]
+        ToastProvider[ToastProvider]
         Welcome[WelcomeScreen]
-        Vault[ArchivePage]
+        ArchivePage[ArchivePage]
         Components[UI Components]
         Hooks[Custom Hooks]
+        
+        App --> ToastProvider
         App --> Welcome
-        App --> Vault
+        App --> ArchivePage
         App --> Components
-        Vault --> Hooks
+        ArchivePage --> Hooks
+        Components --> Hooks
     end
     
     subgraph Storage[File System]
         Cases[Case Folders]
         Extractions[Extraction Folders]
         Files[PDF/Image Files]
+        Config[Archive Config]
     end
     
     Electron <-->|IPC Communication| Renderer
@@ -94,6 +109,7 @@ graph TB
     Storage --> Cases
     Cases --> Extractions
     Extractions --> Files
+    Electron --> Config
 ```
 
 ### IPC Communication Flow
@@ -104,7 +120,9 @@ sequenceDiagram
     participant Preload as Preload Script
     participant Main as Main Process
     participant FS as File System
+    participant Utils as Utility Modules
     
+    Note over UI,Utils: PDF Extraction Flow
     UI->>Preload: window.electronAPI.selectPDFFile()
     Preload->>Main: ipcRenderer.invoke('select-pdf-file')
     Main->>FS: dialog.showOpenDialog()
@@ -112,20 +130,34 @@ sequenceDiagram
     Main-->>Preload: filePath
     Preload-->>UI: Promise<string>
     
-    UI->>Preload: window.electronAPI.extractPDF()
-    Preload->>Main: ipcRenderer.invoke('extract-pdf')
-    Main->>FS: Read PDF file
+    UI->>Preload: window.electronAPI.readPDFFile()
+    Preload->>Main: ipcRenderer.invoke('read-pdf-file')
+    Main->>Utils: pdfExtractor.readPDF()
+    Utils->>FS: Read PDF file
+    FS-->>Utils: PDF data
+    Utils-->>Main: PDF pages
     Main-->>Preload: PDF data
     Preload-->>UI: Extracted pages
+    
+    Note over UI,Utils: Vault Operations Flow
+    UI->>Preload: window.electronAPI.listArchiveCases()
+    Preload->>Main: ipcRenderer.invoke('list-archive-cases')
+    Main->>Utils: archiveConfig.getArchiveDrive()
+    Utils-->>Main: archivePath
+    Main->>FS: Read case folders
+    FS-->>Main: caseList
+    Main-->>Preload: caseList
+    Preload-->>UI: Promise<Case[]>
 ```
 
 ### Component Architecture
 
 ```mermaid
-graph LR
+graph TB
     subgraph App[Application Root]
-        AppContent[AppContent]
+        App[App.tsx]
         ToastProvider[ToastProvider]
+        ToastContainer[ToastContainer]
     end
     
     subgraph MainViews[Main Views]
@@ -133,11 +165,13 @@ graph LR
         ArchivePage[ArchivePage]
     end
     
-    subgraph Components[UI Components]
+    subgraph PDFComponents[PDF Extraction Components]
         Gallery[Gallery]
+        GalleryItem[GalleryItem]
         ImageViewer[ImageViewer]
         Toolbar[Toolbar]
         ProgressBar[ProgressBar]
+        SaveOptions[SaveOptions]
     end
     
     subgraph VaultComponents[Vault Components]
@@ -149,17 +183,50 @@ graph LR
     end
     
     subgraph Dialogs[Dialog Components]
-        CaseNameDialog[CaseNameDialog]
-        RenameFileDialog[RenameFileDialog]
         ArchiveDriveDialog[ArchiveDriveDialog]
+        CaseNameDialog[CaseNameDialog]
         ExtractionFolderDialog[ExtractionFolderDialog]
+        SaveParentDialog[SaveParentDialog]
+        FolderSelectionDialog[FolderSelectionDialog]
+        DeleteFolderConfirmDialog[DeleteFolderConfirmDialog]
+        RenameFileDialog[RenameFileDialog]
+        PDFOptionsDropdown[PDFOptionsDropdown]
     end
     
-    AppContent --> WelcomeScreen
-    AppContent --> ArchivePage
+    subgraph ToastSystem[Toast System]
+        Toast[Toast]
+        ToastContext[ToastContext]
+    end
+    
+    subgraph Hooks[Custom Hooks]
+        usePDFExtraction[usePDFExtraction]
+        useArchive[useArchive]
+        useArchiveExtraction[useArchiveExtraction]
+    end
+    
+    App --> ToastProvider
+    App --> WelcomeScreen
+    App --> ArchivePage
+    ToastProvider --> ToastContainer
+    ToastContainer --> Toast
+    ToastProvider --> ToastContext
+    
+    WelcomeScreen --> Gallery
+    WelcomeScreen --> Toolbar
     ArchivePage --> VaultComponents
     ArchivePage --> Dialogs
-    AppContent --> Components
+    ArchivePage --> ArchiveSearchBar
+    
+    Gallery --> GalleryItem
+    Gallery --> ImageViewer
+    Toolbar --> SaveOptions
+    Toolbar --> ProgressBar
+    
+    ArchivePage --> useArchive
+    ArchivePage --> useArchiveExtraction
+    WelcomeScreen --> usePDFExtraction
+    
+    VaultComponents --> ArchiveFileViewer
 ```
 
 ## Installation & Setup

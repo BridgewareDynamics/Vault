@@ -30,10 +30,17 @@ function isVideoFile(filePath: string): boolean {
 
 /**
  * Generate thumbnail for an image file using Sharp
+ * Reads file into memory first to avoid keeping file handle open (especially important for WebP files)
  */
 async function generateImageThumbnail(filePath: string): Promise<string> {
+  let fileBuffer: Buffer | null = null;
   try {
-    const buffer = await sharp(filePath)
+    // Read file into memory first - this ensures the file handle is closed before Sharp processes it
+    // This is especially important for WebP files which Sharp may keep handles open longer
+    fileBuffer = await fs.readFile(filePath);
+    
+    // Process from buffer instead of file path - this prevents Sharp from keeping file handle open
+    const buffer = await sharp(fileBuffer)
       .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
         fit: 'inside',
         withoutEnlargement: true,
@@ -42,9 +49,14 @@ async function generateImageThumbnail(filePath: string): Promise<string> {
       .png()
       .toBuffer();
 
+    // Clear the file buffer reference to help GC
+    fileBuffer = null;
+    
     const base64 = buffer.toString('base64');
     return `data:image/png;base64,${base64}`;
   } catch (error) {
+    // Ensure buffer is cleared even on error
+    fileBuffer = null;
     throw new Error(`Failed to generate image thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

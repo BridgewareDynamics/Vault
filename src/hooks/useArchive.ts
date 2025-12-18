@@ -514,6 +514,18 @@ export function useArchive() {
         return false;
       }
 
+      // Clear thumbnail cache for this file to release any references
+      if (globalThumbnailCache.has(filePath)) {
+        globalThumbnailCache.delete(filePath);
+      }
+      
+      // Also clear from loading thumbnails set
+      setLoadingThumbnails(prev => {
+        const next = new Set(prev);
+        next.delete(filePath);
+        return next;
+      });
+
       await window.electronAPI.deleteFile(filePath, isFolder);
       toast.success(isFolder ? 'Folder deleted' : 'File deleted');
       

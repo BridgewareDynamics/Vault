@@ -489,7 +489,15 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                               key={item.path}
                               file={item}
                               onClick={() => handleFileClick(item)}
-                              onDelete={() => deleteFile(item.path)}
+                              onDelete={async () => {
+                                // Close file viewer if this file is currently open
+                                if (selectedFile?.path === item.path) {
+                                  setSelectedFile(null);
+                                  // Small delay to ensure viewer closes and releases file handle
+                                  await new Promise(resolve => setTimeout(resolve, 100));
+                                }
+                                await deleteFile(item.path);
+                              }}
                               onExtract={undefined} // No extraction inside folders
                               onRename={() => {
                                 setFileToRename(item);
@@ -638,7 +646,15 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     key={item.path}
                                     file={item}
                                     onClick={() => handleFileClick(item)}
-                                    onDelete={() => deleteFile(item.path)}
+                                    onDelete={async () => {
+                                      // Close file viewer if this file is currently open
+                                      if (selectedFile?.path === item.path) {
+                                        setSelectedFile(null);
+                                        // Small delay to ensure viewer closes and releases file handle
+                                        await new Promise(resolve => setTimeout(resolve, 100));
+                                      }
+                                      await deleteFile(item.path);
+                                    }}
                                     onExtract={item.type === 'pdf' ? () => handleExtractPDF(item) : undefined}
                                     onRename={() => {
                                       setFileToRename(item);
@@ -685,7 +701,15 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                               <ArchiveFileItem
                                 file={item}
                                 onClick={() => handleFileClick(item)}
-                                onDelete={() => deleteFile(item.path)}
+                                onDelete={async () => {
+                                  // Close file viewer if this file is currently open
+                                  if (selectedFile?.path === item.path) {
+                                    setSelectedFile(null);
+                                    // Small delay to ensure viewer closes and releases file handle
+                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                  }
+                                  await deleteFile(item.path);
+                                }}
                                 onExtract={() => handleExtractPDF(item)}
                                 onRename={() => {
                                   setFileToRename(item);
@@ -695,19 +719,36 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                             </div>
                           );
                         } else {
-                          // Non-PDF file - no spacer needed
+                          // Non-PDF file: Add spacer above to align with PDFs
+                          // The spacer matches the height of a folder (p-6 + icon + text) + gap-4
                           return (
-                            <ArchiveFileItem
-                              key={item.path}
-                              file={item}
-                              onClick={() => handleFileClick(item)}
-                              onDelete={() => deleteFile(item.path)}
-                              onExtract={undefined}
-                              onRename={() => {
-                                setFileToRename(item);
-                                setShowRenameDialog(true);
-                              }}
-                            />
+                            <div key={item.path} className="flex flex-col gap-4">
+                              {/* Invisible spacer matching folder height to align with PDFs */}
+                              <div className="invisible rounded-lg border-2 border-transparent p-6">
+                                <div className="flex flex-col items-center gap-3">
+                                  <div className="w-16 h-16" />
+                                  <div className="h-5 w-full" />
+                                </div>
+                              </div>
+                              <ArchiveFileItem
+                                file={item}
+                                onClick={() => handleFileClick(item)}
+                                onDelete={async () => {
+                                  // Close file viewer if this file is currently open
+                                  if (selectedFile?.path === item.path) {
+                                    setSelectedFile(null);
+                                    // Small delay to ensure viewer closes and releases file handle
+                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                  }
+                                  await deleteFile(item.path);
+                                }}
+                                onExtract={undefined}
+                                onRename={() => {
+                                  setFileToRename(item);
+                                  setShowRenameDialog(true);
+                                }}
+                              />
+                            </div>
                           );
                         }
                       }
@@ -821,6 +862,12 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         }}
         onConfirm={async () => {
           if (folderToDelete) {
+            // Close file viewer if we're deleting the folder we're currently viewing
+            if (selectedFile && selectedFile.path.startsWith(folderToDelete.path)) {
+              setSelectedFile(null);
+              // Small delay to ensure viewer closes and releases file handles
+              await new Promise(resolve => setTimeout(resolve, 200));
+            }
             await deleteFile(folderToDelete.path, true);
             setFolderToDelete(null);
           }

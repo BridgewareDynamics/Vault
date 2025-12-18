@@ -1216,56 +1216,104 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
   // If it's a directory (detected OR explicitly marked as folder), ALWAYS use recursive delete
   if (isDirectory || isFolder) {
     logger.log('[Main] Using recursive delete for folder');
-    try {
-      await fs.rm(filePath, { recursive: true, force: true });
-      logger.log('[Main] Folder deleted successfully');
-      return true;
-    } catch (error) {
-      logger.error('[Main] Failed to delete folder:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to delete folder: ${errorMessage}`);
+    
+    // Small delay to allow any ongoing operations to complete
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Simple retry logic for folder deletion (handles occasional EBUSY errors)
+    const maxRetries = 3;
+    const retryDelays = [200, 500, 1000]; // milliseconds
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        await fs.rm(filePath, { recursive: true, force: true });
+        logger.log('[Main] Folder deleted successfully');
+        return true;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorCode = (error as any)?.code;
+        const isBusyError = errorCode === 'EBUSY' || errorMessage.includes('EBUSY') || errorMessage.includes('resource busy');
+        
+        if (isBusyError && attempt < maxRetries - 1) {
+          const delay = retryDelays[attempt] || 1000;
+          logger.log(`[Main] Folder contains locked files (EBUSY), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        logger.error('[Main] Failed to delete folder:', error);
+        if (isBusyError) {
+          throw new Error(`Failed to delete folder: Some files are locked or in use. Please close any applications using files in this folder and try again.`);
+        } else {
+          throw new Error(`Failed to delete folder: ${errorMessage}`);
+        }
+      }
     }
   }
 
   // Only try unlink if we're CERTAIN it's a file (not a directory)
   logger.log('[Main] Deleting as file');
-  try {
-    await fs.unlink(filePath);
-    logger.log('[Main] File deleted successfully');
-    return true;
-  } catch (unlinkError) {
-    // If unlink fails with EPERM, EISDIR, or ENOTEMPTY, it's definitely a directory
-    // Try recursive delete as fallback
-    const errorMessage = unlinkError instanceof Error ? unlinkError.message : String(unlinkError);
-    const errorCode = (unlinkError as any)?.code;
-    
-    logger.log('[Main] Unlink failed:', { errorMessage, errorCode });
-    
-    // Check if error indicates it's a directory
-    const isDirectoryError = 
-      errorMessage.includes('EISDIR') || 
-      errorMessage.includes('EPERM') ||
-      errorMessage.includes('ENOTEMPTY') ||
-      errorCode === 'EISDIR' ||
-      errorCode === 'EPERM' ||
-      errorCode === 'ENOTEMPTY';
-    
-    if (isDirectoryError) {
-      logger.log('[Main] Detected directory error, trying recursive delete as fallback');
-      try {
-        await fs.rm(filePath, { recursive: true, force: true });
-        logger.log('[Main] Folder deleted successfully (fallback)');
-        return true;
-      } catch (rmError) {
-        logger.error('[Main] Recursive delete also failed:', rmError);
-        const rmErrorMessage = rmError instanceof Error ? rmError.message : 'Unknown error';
-        throw new Error(`Failed to delete folder: ${rmErrorMessage}`);
+  
+  // Initial delay to allow any ongoing operations (like thumbnail generation) to complete
+  // WebP files need longer delay as Sharp may process them differently
+  const fileExt = path.extname(filePath).toLowerCase();
+  const isWebP = fileExt === '.webp';
+  const initialDelay = isWebP ? 500 : 200; // WebP files need a bit more time
+  await new Promise(resolve => setTimeout(resolve, initialDelay));
+  
+  // Simple retry logic for file deletion (handles occasional EBUSY errors)
+  const maxRetries = 3;
+  const retryDelays = [200, 500, 1000]; // milliseconds
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      await fs.unlink(filePath);
+      logger.log('[Main] File deleted successfully');
+      return true;
+    } catch (unlinkError) {
+      const errorMessage = unlinkError instanceof Error ? unlinkError.message : String(unlinkError);
+      const errorCode = (unlinkError as any)?.code;
+      
+      // Check if error indicates it's a directory
+      const isDirectoryError = 
+        errorMessage.includes('EISDIR') || 
+        errorMessage.includes('EPERM') ||
+        errorMessage.includes('ENOTEMPTY') ||
+        errorCode === 'EISDIR' ||
+        errorCode === 'EPERM' ||
+        errorCode === 'ENOTEMPTY';
+      
+      if (isDirectoryError) {
+        logger.log('[Main] Detected directory error, trying recursive delete as fallback');
+        try {
+          await fs.rm(filePath, { recursive: true, force: true });
+          logger.log('[Main] Folder deleted successfully (fallback)');
+          return true;
+        } catch (rmError) {
+          logger.error('[Main] Recursive delete also failed:', rmError);
+          const rmErrorMessage = rmError instanceof Error ? rmError.message : 'Unknown error';
+          throw new Error(`Failed to delete folder: ${rmErrorMessage}`);
+        }
+      }
+      
+      // Handle EBUSY (file locked) errors with retry
+      const isBusyError = errorCode === 'EBUSY' || errorMessage.includes('EBUSY') || errorMessage.includes('resource busy');
+      
+      if (isBusyError && attempt < maxRetries - 1) {
+        const delay = retryDelays[attempt] || 1000;
+        logger.log(`[Main] File is locked (EBUSY), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue; // Retry
+      }
+      
+      // If it's the last attempt, throw with appropriate error message
+      logger.error('[Main] File deletion failed:', unlinkError);
+      if (isBusyError) {
+        throw new Error(`Failed to delete file: File is locked or in use. Please close any applications using this file and try again.`);
+      } else {
+        throw new Error(`Failed to delete file: ${errorMessage}`);
       }
     }
-    
-    // Re-throw original error if it's not a directory error
-    logger.error('[Main] File deletion failed:', unlinkError);
-    throw new Error(`Failed to delete file: ${errorMessage}`);
   }
 });
 
