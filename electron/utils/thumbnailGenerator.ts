@@ -72,10 +72,12 @@ async function generatePDFThumbnail(filePath: string): Promise<string> {
 
 /**
  * Generate thumbnail for a video file (placeholder)
+ * Note: Video thumbnails are generated in the renderer process using HTML5 Video API
+ * This function is kept as a fallback for cases where renderer generation fails
  */
 async function generateVideoThumbnail(filePath: string): Promise<string> {
-  // Video thumbnails would require ffmpeg
-  // For now, return a placeholder
+  // Video thumbnails are handled in renderer process using HTML5 Video API
+  // Return placeholder as fallback
   return generatePlaceholderThumbnail('🎬', '#8b5cf6');
 }
 

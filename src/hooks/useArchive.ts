@@ -282,6 +282,132 @@ export function useArchive() {
     }
   }, []);
 
+  // Generate video thumbnail in renderer using HTML5 Video API
+  const generateVideoThumbnailInRenderer = useCallback(async (filePath: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      try {
+        if (!window.electronAPI) {
+          throw new Error('Electron API not available');
+        }
+
+        // Create a video element
+        const video = document.createElement('video');
+        video.crossOrigin = 'anonymous';
+        video.preload = 'metadata';
+        video.muted = true; // Muted videos can autoplay
+        video.playsInline = true;
+
+        // Use vault-video protocol for efficient file access
+        const videoUrl = filePath.startsWith('http') 
+          ? filePath 
+          : `vault-video://${encodeURIComponent(filePath)}`;
+        video.src = videoUrl;
+
+        // Create canvas for capturing frame
+        const canvas = document.createElement('canvas');
+        const THUMBNAIL_SIZE = 200;
+        canvas.width = THUMBNAIL_SIZE;
+        canvas.height = THUMBNAIL_SIZE;
+        const context = canvas.getContext('2d');
+        
+        if (!context) {
+          throw new Error('Failed to get canvas context');
+        }
+
+        // Set up error handlers
+        const cleanup = () => {
+          video.removeEventListener('loadedmetadata', onLoadedMetadata);
+          video.removeEventListener('seeked', onSeeked);
+          video.removeEventListener('error', onError);
+          video.src = '';
+          video.load();
+        };
+
+        const onError = (_error: Event) => {
+          cleanup();
+          reject(new Error('Failed to load video for thumbnail generation'));
+        };
+
+        const onLoadedMetadata = () => {
+          try {
+            // Check if video has valid duration
+            if (!video.duration || isNaN(video.duration) || video.duration === 0) {
+              // If no duration, try to seek to a small time (0.1s) or just capture first frame
+              video.currentTime = 0.1;
+              return;
+            }
+            
+            // Seek to 10% of video duration or 1 second, whichever is smaller
+            const seekTime = Math.min(video.duration * 0.1, 1.0);
+            video.currentTime = seekTime;
+          } catch (_error) {
+            cleanup();
+            reject(new Error('Failed to seek video'));
+          }
+        };
+
+        const onSeeked = () => {
+          try {
+            // Check if video has valid dimensions
+            if (!video.videoWidth || !video.videoHeight || video.videoWidth === 0 || video.videoHeight === 0) {
+              cleanup();
+              reject(new Error('Video has invalid dimensions'));
+              return;
+            }
+
+            // Calculate thumbnail dimensions maintaining aspect ratio
+            const videoAspectRatio = video.videoWidth / video.videoHeight;
+            let width = THUMBNAIL_SIZE;
+            let height = THUMBNAIL_SIZE;
+
+            if (videoAspectRatio > 1) {
+              // Landscape: width is larger
+              height = THUMBNAIL_SIZE / videoAspectRatio;
+            } else {
+              // Portrait or square: height is larger or equal
+              width = THUMBNAIL_SIZE * videoAspectRatio;
+            }
+
+            // Set canvas size
+            canvas.width = width;
+            canvas.height = height;
+
+            // Fill background
+            context.fillStyle = '#1a1a2e';
+            context.fillRect(0, 0, width, height);
+
+            // Draw video frame
+            context.drawImage(video, 0, 0, width, height);
+
+            // Convert to base64
+            const thumbnail = canvas.toDataURL('image/png');
+            cleanup();
+            resolve(thumbnail);
+          } catch (_error) {
+            cleanup();
+            reject(new Error('Failed to capture video frame'));
+          }
+        };
+
+        // Set up event listeners
+        video.addEventListener('loadedmetadata', onLoadedMetadata);
+        video.addEventListener('seeked', onSeeked);
+        video.addEventListener('error', onError);
+
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          cleanup();
+          reject(new Error('Video thumbnail generation timeout'));
+        }, 10000);
+
+        // Start loading
+        video.load();
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error('Unknown error generating video thumbnail'));
+      }
+    });
+  }, []);
+
   const loadFileThumbnail = useCallback(async (filePath: string, fileType: 'image' | 'pdf' | 'video' | 'other') => {
     // Check global cache first - if thumbnail exists, use it immediately
     if (globalThumbnailCache.has(filePath)) {
@@ -309,8 +435,21 @@ export function useArchive() {
       // For PDFs, generate thumbnail in renderer using pdfjs-dist
       if (fileType === 'pdf') {
         thumbnail = await generatePDFThumbnailInRenderer(filePath);
+      } else if (fileType === 'video') {
+        // For videos, generate thumbnail in renderer using HTML5 Video API
+        try {
+          thumbnail = await generateVideoThumbnailInRenderer(filePath);
+        } catch (error) {
+          logger.error(`Failed to generate video thumbnail for ${filePath}:`, error);
+          // Fallback to placeholder on error
+          const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100%" height="100%" fill="#1a1a2e"/>
+            <text x="50%" y="50%" font-size="64" text-anchor="middle" dominant-baseline="middle" fill="#8b5cf6">🎬</text>
+          </svg>`;
+          thumbnail = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+        }
       } else {
-        // Use Electron API for other file types
+        // Use Electron API for other file types (images, etc.)
         thumbnail = await window.electronAPI.getFileThumbnail(filePath);
       }
       
@@ -333,7 +472,7 @@ export function useArchive() {
         return next;
       });
     }
-  }, [loadingThumbnails, generatePDFThumbnailInRenderer]);
+  }, [loadingThumbnails, generatePDFThumbnailInRenderer, generateVideoThumbnailInRenderer]);
 
   const loadFiles = useCallback(async (path: string, preserveThumbnails: boolean = false) => {
     try {
