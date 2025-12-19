@@ -717,17 +717,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                   onDragStart={(e) => {
                     isDraggingRef.current = true;
                     e.stopPropagation();
-                    // Prevent default drag behavior
-                    if (e.nativeEvent instanceof DragEvent) {
-                      e.nativeEvent.preventDefault();
-                    }
                   }}
                   onDrag={(e) => {
                     e.stopPropagation();
-                    // Prevent default drag behavior
-                    if (e.nativeEvent instanceof DragEvent) {
-                      e.nativeEvent.preventDefault();
-                    }
                   }}
                   onDragEnd={(e) => {
                     // Use setTimeout to allow drag to complete before resetting flag
@@ -754,11 +746,11 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                       display: 'block',
                       pointerEvents: 'none',
                       userSelect: 'none',
-                      WebkitUserDrag: 'none',
+                      WebkitUserDrag: 'none' as any,
                       draggable: false,
                       transform: `scale(${imageScale})`,
                       transition: 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
-                    }}
+                    } as React.CSSProperties}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       if (imageScale > 1) {
