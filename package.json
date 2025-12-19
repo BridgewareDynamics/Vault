@@ -1,6 +1,6 @@
 {
   "name": "vault",
-  "version": "1.0.0-prerelease.1",
+  "version": "1.0.0-prerelease.2",
   "description": "Extract PDF pages into PNG images with a modern cyberpunk-themed UI",
   "author": "Vault",
   "main": "dist-electron/electron/main.cjs",

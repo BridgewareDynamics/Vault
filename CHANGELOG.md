@@ -7,7 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0-prerelease.1] - 2025-01-XX
+## [1.0.0-prerelease.2] - 2025-12-18
+
+**Note:** This is a prerelease version. Features and APIs may change before the stable 1.0.0 release.
+
+### Added
+
+#### Video Thumbnail Generation
+- Video thumbnail generation using HTML5 Video API
+- Automatic thumbnail generation for video files (MP4, AVI, MOV, MKV, WebM)
+- Thumbnails captured at 10% of video duration or 1 second (whichever is smaller)
+- Maintains video aspect ratio in thumbnails
+- Cached thumbnails for improved performance
+- Graceful error handling with placeholder fallback on failure
+- No additional dependencies required (uses native HTML5 Video API)
+
+### Fixed
+
+#### File Deletion Improvements
+- Fixed WebP file deletion issue where files were locked due to Sharp file handles
+- Improved file deletion reliability by reading files into memory before Sharp processing
+- Added WebP-specific delay to ensure file handles are released before deletion attempts
+- Simplified retry logic for file deletion (reduced from aggressive 8 retries to 3 retries with reasonable delays)
+- Close file viewer before deletion to release file handles
+- Clear thumbnail cache before deletion to prevent file locks
+
+#### Gallery Alignment
+- Fixed alignment issue where non-PDF files (images, WebP, videos) appeared slightly above PDF files
+- Added invisible spacer to non-PDF files to align with PDF files and folders
+- All file types now align vertically in the gallery view
+
+### Changed
+
+- Simplified file deletion retry logic (reduced from 10 to 3 retries with delays: 200ms, 500ms, 1000ms)
+- Improved error messages for locked files
+- Video thumbnails now generated in renderer process (following same pattern as PDF thumbnails)
+- **Image Viewer Improvements**:
+  - Redesigned image viewer with professional zoom controls toolbar
+  - Added zoom in/out buttons with live percentage display and reset button
+  - Improved layout: file name moved to top-left, zoom controls centered, close button top-right
+  - Added keyboard shortcuts for zoom control (+/=, -, 0, Escape)
+  - Added double-click to zoom functionality
+  - Enhanced animations and visual feedback
+  - Better drag-to-pan when zoomed
+
+### Deprecated
+
+- None in this release
+
+### Removed
+
+- None in this release
+
+### Security
+
+- No security changes in this release
+
+---
+
+## [1.0.0-prerelease.1] - 2025-12-17
 
 **Note:** This is a prerelease version. Features and APIs may change before the stable 1.0.0 release.
 
@@ -118,7 +176,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed** for any bug fixes
 - **Security** for vulnerability fixes
 
-[Unreleased]: https://github.com/yourusername/the-vault/compare/v1.0.0-prerelease.1...HEAD
+[Unreleased]: https://github.com/yourusername/the-vault/compare/v1.0.0-prerelease.2...HEAD
+[1.0.0-prerelease.2]: https://github.com/yourusername/the-vault/releases/tag/v1.0.0-prerelease.2
 [1.0.0-prerelease.1]: https://github.com/yourusername/the-vault/releases/tag/v1.0.0-prerelease.1
 
 

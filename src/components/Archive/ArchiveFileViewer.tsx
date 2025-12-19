@@ -15,6 +15,7 @@ interface ArchiveFileViewerProps {
 
 export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: ArchiveFileViewerProps) {
   const [isZoomed, setIsZoomed] = useState(false);
+  const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
   const [loading, setLoading] = useState(false);
   
@@ -34,6 +35,8 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const canvasX = useMotionValue(0);
   const canvasY = useMotionValue(0);
+  const imageX = useMotionValue(0);
+  const imageY = useMotionValue(0);
 
   useEffect(() => {
     if (file) {
@@ -48,6 +51,11 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       setCurrentPage(1);
       setTotalPages(0);
     }
+    // Reset image zoom when file changes
+    setIsZoomed(false);
+    setImageScale(1);
+    imageX.set(0);
+    imageY.set(0);
   }, [file]);
 
   const loadFileData = async () => {
@@ -368,6 +376,54 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [file, pdfDoc, handlePreviousPage, handleNextPage, handleZoomIn, handleZoomOut]);
 
+  // Keyboard navigation for images
+  useEffect(() => {
+    if (file?.type !== 'image' || !fileData) return;
+
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        setImageScale(prev => {
+          const newScale = Math.min(4, prev + 0.25);
+          if (newScale >= 0.75) {
+            setIsZoomed(true);
+          }
+          imageX.set(0);
+          imageY.set(0);
+          return newScale;
+        });
+      } else if (e.key === '-') {
+        e.preventDefault();
+        setImageScale(prev => {
+          const newScale = Math.max(0.5, prev - 0.25);
+          if (newScale <= 1.25) {
+            setIsZoomed(false);
+          }
+          imageX.set(0);
+          imageY.set(0);
+          return newScale;
+        });
+      } else if (e.key === '0') {
+        e.preventDefault();
+        setImageScale(1);
+        setIsZoomed(false);
+        imageX.set(0);
+        imageY.set(0);
+      } else if (e.key === 'Escape') {
+        if (imageScale > 1) {
+          e.preventDefault();
+          setImageScale(1);
+          setIsZoomed(false);
+          imageX.set(0);
+          imageY.set(0);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [file, fileData, imageX, imageY]);
+
   if (!file) return null;
 
   const currentIndex = files.findIndex(f => f.path === file.path);
@@ -388,33 +444,82 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
         className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-0"
       >
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
+          initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className={`relative ${file?.type === 'pdf' ? 'w-full h-full' : 'max-w-[90vw] max-h-[90vh]'}`}
+          exit={{ scale: 0.95, opacity: 0 }}
+          transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+          className={`relative ${file?.type === 'pdf' ? 'w-full h-full' : 'w-full h-full flex items-center justify-center'}`}
+          onClick={(e) => {
+            // Close on backdrop click only when not zoomed
+            if (e.target === e.currentTarget && file?.type === 'image' && imageScale <= 1) {
+              onClose();
+            } else if (e.target === e.currentTarget && file?.type !== 'image' && file?.type !== 'pdf') {
+              onClose();
+            }
+          }}
         >
           {/* Close button */}
           <button
             onClick={onClose}
-            className={`absolute ${file?.type === 'pdf' ? 'top-14 right-2' : '-top-12 right-0'} text-white hover:text-cyber-purple-400 transition-colors z-30 bg-black/60 rounded-full p-2`}
+            className={`absolute ${file?.type === 'pdf' ? 'top-14 right-2' : 'top-4 right-4'} text-white hover:text-cyber-purple-400 transition-colors z-30 bg-black/70 backdrop-blur-sm rounded-full p-2.5 hover:bg-black/90 border border-cyber-purple-500/50`}
             aria-label="Close"
           >
-            <X size={24} />
+            <X size={20} />
           </button>
 
-          {/* Zoom button */}
-          {file.type === 'image' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsZoomed(!isZoomed);
-              }}
-              className="absolute -top-12 left-0 text-white hover:text-cyber-purple-400 transition-colors z-10"
-              aria-label={isZoomed ? 'Zoom out' : 'Zoom in'}
-            >
-              {isZoomed ? <ZoomOut size={32} /> : <ZoomIn size={32} />}
-            </button>
+          {/* Image Zoom Controls */}
+          {file.type === 'image' && fileData && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30 flex items-center gap-2 bg-black/70 backdrop-blur-sm rounded-full px-3 py-2 border border-cyber-purple-500/50">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageScale(prev => Math.max(0.5, prev - 0.25));
+                  if (imageScale <= 1.25) {
+                    setIsZoomed(false);
+                  }
+                  imageX.set(0);
+                  imageY.set(0);
+                }}
+                className="text-white hover:text-cyber-purple-400 transition-colors p-1.5 rounded hover:bg-gray-700/50"
+                aria-label="Zoom out"
+                disabled={imageScale <= 0.5}
+              >
+                <ZoomOut size={18} />
+              </button>
+              <span className="text-white text-sm font-medium min-w-[50px] text-center">
+                {Math.round(imageScale * 100)}%
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageScale(prev => Math.min(4, prev + 0.25));
+                  if (imageScale >= 0.75) {
+                    setIsZoomed(true);
+                  }
+                  imageX.set(0);
+                  imageY.set(0);
+                }}
+                className="text-white hover:text-cyber-purple-400 transition-colors p-1.5 rounded hover:bg-gray-700/50"
+                aria-label="Zoom in"
+                disabled={imageScale >= 4}
+              >
+                <ZoomIn size={18} />
+              </button>
+              <div className="w-px h-4 bg-gray-600 mx-1" />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageScale(1);
+                  setIsZoomed(false);
+                  imageX.set(0);
+                  imageY.set(0);
+                }}
+                className="text-white hover:text-cyber-purple-400 transition-colors text-xs px-2 py-1 rounded hover:bg-gray-700/50"
+                aria-label="Reset zoom"
+              >
+                Reset
+              </button>
+            </div>
           )}
           {file.type === 'pdf' && (
             <button
@@ -458,7 +563,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
 
           {/* File name */}
           {file.type !== 'pdf' && (
-            <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gradient-purple text-white font-bold px-4 py-2 rounded-full text-sm shadow-lg border border-cyber-cyan-400/50">
+            <div className="absolute top-4 left-4 z-30 bg-black/70 backdrop-blur-sm text-white font-medium px-4 py-2 rounded-lg text-sm shadow-lg border border-cyber-purple-500/50 max-w-xs truncate">
               {file.name}
             </div>
           )}
@@ -604,35 +709,61 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
           ) : fileData ? (
             <div 
               ref={imageContainerRef}
-              className={`relative ${isZoomed ? 'w-full h-full overflow-hidden flex items-center justify-center' : ''}`}
+              className={`relative w-full h-full flex items-center justify-center ${
+                imageScale > 1 ? 'overflow-hidden' : ''
+              }`}
             >
               {file.type === 'image' ? (
-                <motion.img
-                  src={fileData.data}
-                  alt={file.name}
-                  className={`
-                    ${isZoomed ? 'w-auto h-auto' : 'max-w-full max-h-[90vh]'}
-                    object-contain rounded-lg shadow-2xl
-                    border-2 border-cyber-purple-500/50
-                    select-none
-                  `}
+                <motion.div
+                  className="relative flex items-center justify-center"
                   style={{
-                    cursor: isZoomed ? 'grab' : 'zoom-in',
+                    x: imageX,
+                    y: imageY,
+                    cursor: imageScale > 1 ? 'grab' : 'default',
                   }}
-                  animate={{ scale: isZoomed ? 2.5 : 1 }}
-                  transition={{ duration: 0.3, ease: 'easeOut' }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isZoomed) {
-                      setIsZoomed(true);
-                    }
-                  }}
-                  drag={isZoomed}
-                  dragConstraints={isZoomed ? imageContainerRef : false}
+                  drag={imageScale > 1}
+                  dragConstraints={imageScale > 1 ? imageContainerRef : false}
                   dragElastic={0.1}
                   dragMomentum={false}
                   whileDrag={{ cursor: 'grabbing' }}
-                />
+                  onClick={(e) => {
+                    if (imageScale <= 1) {
+                      e.stopPropagation();
+                      setImageScale(2);
+                      setIsZoomed(true);
+                    }
+                  }}
+                >
+                  <motion.img
+                    src={fileData.data}
+                    alt={file.name}
+                    className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl border-2 border-cyber-purple-500/50 select-none"
+                    style={{
+                      cursor: imageScale > 1 ? 'grab' : 'zoom-in',
+                    }}
+                    animate={{ 
+                      scale: imageScale,
+                    }}
+                    transition={{ 
+                      duration: 0.3, 
+                      ease: [0.25, 0.1, 0.25, 1] 
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      if (imageScale > 1) {
+                        setImageScale(1);
+                        setIsZoomed(false);
+                        imageX.set(0);
+                        imageY.set(0);
+                      } else {
+                        setImageScale(2);
+                        setIsZoomed(true);
+                        imageX.set(0);
+                        imageY.set(0);
+                      }
+                    }}
+                  />
+                </motion.div>
               ) : file.type === 'video' ? (
                 <video
                   src={file.path.startsWith('http') ? file.path : `vault-video://${encodeURIComponent(file.path)}`}
