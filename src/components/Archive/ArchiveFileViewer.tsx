@@ -14,7 +14,6 @@ interface ArchiveFileViewerProps {
 }
 
 export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: ArchiveFileViewerProps) {
-  const [isZoomed, setIsZoomed] = useState(false);
   const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,6 +36,8 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   const canvasY = useMotionValue(0);
   const imageX = useMotionValue(0);
   const imageY = useMotionValue(0);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const isDraggingRef = useRef(false);
 
   useEffect(() => {
     if (file) {
@@ -52,7 +53,6 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       setTotalPages(0);
     }
     // Reset image zoom when file changes
-    setIsZoomed(false);
     setImageScale(1);
     imageX.set(0);
     imageY.set(0);
@@ -385,9 +385,6 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
         e.preventDefault();
         setImageScale(prev => {
           const newScale = Math.min(4, prev + 0.25);
-          if (newScale >= 0.75) {
-            setIsZoomed(true);
-          }
           imageX.set(0);
           imageY.set(0);
           return newScale;
@@ -396,9 +393,6 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
         e.preventDefault();
         setImageScale(prev => {
           const newScale = Math.max(0.5, prev - 0.25);
-          if (newScale <= 1.25) {
-            setIsZoomed(false);
-          }
           imageX.set(0);
           imageY.set(0);
           return newScale;
@@ -406,14 +400,12 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       } else if (e.key === '0') {
         e.preventDefault();
         setImageScale(1);
-        setIsZoomed(false);
         imageX.set(0);
         imageY.set(0);
       } else if (e.key === 'Escape') {
         if (imageScale > 1) {
           e.preventDefault();
           setImageScale(1);
-          setIsZoomed(false);
           imageX.set(0);
           imageY.set(0);
         }
@@ -474,9 +466,6 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                 onClick={(e) => {
                   e.stopPropagation();
                   setImageScale(prev => Math.max(0.5, prev - 0.25));
-                  if (imageScale <= 1.25) {
-                    setIsZoomed(false);
-                  }
                   imageX.set(0);
                   imageY.set(0);
                 }}
@@ -493,9 +482,6 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                 onClick={(e) => {
                   e.stopPropagation();
                   setImageScale(prev => Math.min(4, prev + 0.25));
-                  if (imageScale >= 0.75) {
-                    setIsZoomed(true);
-                  }
                   imageX.set(0);
                   imageY.set(0);
                 }}
@@ -510,7 +496,6 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                 onClick={(e) => {
                   e.stopPropagation();
                   setImageScale(1);
-                  setIsZoomed(false);
                   imageX.set(0);
                   imageY.set(0);
                 }}
@@ -715,52 +700,86 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
             >
               {file.type === 'image' ? (
                 <motion.div
-                  className="relative flex items-center justify-center"
                   style={{
                     x: imageX,
                     y: imageY,
                     cursor: imageScale > 1 ? 'grab' : 'default',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    touchAction: 'none',
                   }}
                   drag={imageScale > 1}
                   dragConstraints={imageScale > 1 ? imageContainerRef : false}
-                  dragElastic={0.1}
+                  dragElastic={0}
                   dragMomentum={false}
                   whileDrag={{ cursor: 'grabbing' }}
+                  onDragStart={(e) => {
+                    isDraggingRef.current = true;
+                    e.stopPropagation();
+                    // Prevent default drag behavior
+                    if (e.nativeEvent instanceof DragEvent) {
+                      e.nativeEvent.preventDefault();
+                    }
+                  }}
+                  onDrag={(e) => {
+                    e.stopPropagation();
+                    // Prevent default drag behavior
+                    if (e.nativeEvent instanceof DragEvent) {
+                      e.nativeEvent.preventDefault();
+                    }
+                  }}
+                  onDragEnd={(e) => {
+                    // Use setTimeout to allow drag to complete before resetting flag
+                    setTimeout(() => {
+                      isDraggingRef.current = false;
+                    }, 100);
+                    e.stopPropagation();
+                  }}
                   onClick={(e) => {
-                    if (imageScale <= 1) {
+                    // Only zoom on click if not zoomed and not dragging
+                    if (!isDraggingRef.current && imageScale <= 1) {
                       e.stopPropagation();
                       setImageScale(2);
-                      setIsZoomed(true);
                     }
                   }}
                 >
-                  <motion.img
+                  <img
+                    ref={imageRef}
                     src={fileData.data}
                     alt={file.name}
                     className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl border-2 border-cyber-purple-500/50 select-none"
                     style={{
                       cursor: imageScale > 1 ? 'grab' : 'zoom-in',
-                    }}
-                    animate={{ 
-                      scale: imageScale,
-                    }}
-                    transition={{ 
-                      duration: 0.3, 
-                      ease: [0.25, 0.1, 0.25, 1] 
+                      display: 'block',
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                      WebkitUserDrag: 'none',
+                      draggable: false,
+                      transform: `scale(${imageScale})`,
+                      transition: 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
                     }}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       if (imageScale > 1) {
                         setImageScale(1);
-                        setIsZoomed(false);
                         imageX.set(0);
                         imageY.set(0);
                       } else {
                         setImageScale(2);
-                        setIsZoomed(true);
                         imageX.set(0);
                         imageY.set(0);
                       }
+                    }}
+                    onLoad={() => {
+                      // Reset position when image loads
+                      imageX.set(0);
+                      imageY.set(0);
+                    }}
+                    onDragStart={(e) => {
+                      // Prevent browser's default image drag
+                      e.preventDefault();
+                      e.stopPropagation();
                     }}
                   />
                 </motion.div>
