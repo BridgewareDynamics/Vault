@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added invisible spacer to non-PDF files to align with PDF files and folders
 - All file types now align vertically in the gallery view
 
+#### Image Viewer Drag-to-Pan
+- Fixed drag-to-pan functionality when image is zoomed
+- Prevented browser's default image drag behavior that was creating ghost image on cursor
+- Fixed issue where drag events were not working properly on zoomed images
+- Improved drag handling to enable smooth panning within container bounds
+
 ### Changed
 
 - Simplified file deletion retry logic (reduced from 10 to 3 retries with delays: 200ms, 500ms, 1000ms)
