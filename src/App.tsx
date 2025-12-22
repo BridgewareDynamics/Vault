@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { ToastProvider, useToast } from './components/Toast/ToastContext';
 import { ToastContainer } from './components/Toast/ToastContainer';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ProgressBar } from './components/ProgressBar';
 import { Gallery } from './components/Gallery';
@@ -260,7 +261,9 @@ function AppContent() {
 function App() {
   return (
     <ToastProvider>
-      <AppContent />
+      <ErrorBoundary>
+        <AppContent />
+      </ErrorBoundary>
     </ToastProvider>
   );
 }
