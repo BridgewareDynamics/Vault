@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { ExtractedPage } from '../types';
 
@@ -6,7 +7,7 @@ interface GalleryItemProps {
   onClick: () => void;
 }
 
-export function GalleryItem({ page, onClick }: GalleryItemProps) {
+export const GalleryItem = memo(function GalleryItem({ page, onClick }: GalleryItemProps) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -58,7 +59,7 @@ export function GalleryItem({ page, onClick }: GalleryItemProps) {
       </div>
     </motion.div>
   );
-}
+});
 
 
 

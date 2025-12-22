@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { FolderOpen, Save, Circle } from 'lucide-react';
@@ -14,7 +15,7 @@ interface ToolbarProps {
   canSave: boolean;
 }
 
-export function Toolbar({
+export const Toolbar = memo(function Toolbar({
   saveDirectory,
   saveParentFile,
   saveToZip,
@@ -114,5 +115,5 @@ export function Toolbar({
       />
     </>
   );
-}
+});
 

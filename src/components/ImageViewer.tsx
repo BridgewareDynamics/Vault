@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useRef, useCallback } from 'react';
 import { ExtractedPage } from '../types';
@@ -8,7 +9,7 @@ interface ImageViewerProps {
   onClose: () => void;
 }
 
-export function ImageViewer({ page, onClose }: ImageViewerProps) {
+export const ImageViewer = memo(function ImageViewer({ page, onClose }: ImageViewerProps) {
   const [isZoomed, setIsZoomed] = useState(false);
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -104,5 +105,5 @@ export function ImageViewer({ page, onClose }: ImageViewerProps) {
       </motion.div>
     </AnimatePresence>
   );
-}
+});
 

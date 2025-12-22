@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { ToastProvider, useToast } from './components/Toast/ToastContext';
 import { ToastContainer } from './components/Toast/ToastContainer';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -6,7 +6,7 @@ import { ProgressBar } from './components/ProgressBar';
 import { Gallery } from './components/Gallery';
 import { ImageViewer } from './components/ImageViewer';
 import { Toolbar } from './components/Toolbar';
-import { ArchivePage } from './components/Archive/ArchivePage';
+const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
 import { usePDFExtraction } from './hooks/usePDFExtraction';
 import { ExtractedPage } from './types';
 import { Home } from 'lucide-react';
@@ -129,7 +129,18 @@ function AppContent() {
   if (showArchive) {
     return (
       <>
-        <ArchivePage onBack={() => setShowArchive(false)} />
+        <Suspense
+          fallback={
+            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
+                <p className="text-gray-300">Loading Archive...</p>
+              </div>
+            </div>
+          }
+        >
+          <ArchivePage onBack={() => setShowArchive(false)} />
+        </Suspense>
         <ToastContainer />
       </>
     );
