@@ -1,6 +1,10 @@
 import log from 'electron-log';
 import { app } from 'electron';
 
+// Type definitions for logger
+type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
+type LogArgs = Parameters<typeof console.log>;
+
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 // Configure electron-log
@@ -19,27 +23,31 @@ log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB max file size
 
 // Create a logger interface that matches console API for easy migration
 export const logger = {
-  log: (...args: any[]) => {
+  log: (...args: LogArgs) => {
     log.info(...args);
   },
-  info: (...args: any[]) => {
+  info: (...args: LogArgs) => {
     log.info(...args);
   },
-  warn: (...args: any[]) => {
+  warn: (...args: LogArgs) => {
     log.warn(...args);
   },
-  error: (...args: any[]) => {
+  error: (...args: LogArgs) => {
     log.error(...args);
   },
-  debug: (...args: any[]) => {
+  debug: (...args: LogArgs) => {
     if (isDev) {
       log.debug(...args);
     }
   },
 };
 
+// Export types for use in other electron files
+export type { LogLevel, LogArgs };
+
 // Export the raw log instance for advanced usage if needed
 export { log };
+
 
 
 

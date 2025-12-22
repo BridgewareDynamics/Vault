@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// Type definitions for IPC
+type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
+type LogArgs = Parameters<typeof console.log>;
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -42,7 +46,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     extractedPages: Array<{ pageNumber: number; imageData: string }>;
   }) => ipcRenderer.invoke('extract-pdf-from-archive', options),
   // Logging API
-  logToMain: (level: 'log' | 'info' | 'warn' | 'error' | 'debug', ...args: any[]) => ipcRenderer.invoke('log-renderer', level, ...args),
+  logToMain: (level: LogLevel, ...args: LogArgs) => ipcRenderer.invoke('log-renderer', level, ...args),
 });
 
 // Type declaration for TypeScript
@@ -87,7 +91,7 @@ declare global {
         saveParentFile: boolean;
         extractedPages: Array<{ pageNumber: number; imageData: string }>;
       }) => Promise<{ success: boolean; messages: string[]; extractionFolder: string }>;
-      logToMain: (level: 'log' | 'info' | 'warn' | 'error' | 'debug', ...args: any[]) => Promise<void>;
+      logToMain: (level: LogLevel, ...args: LogArgs) => Promise<void>;
     };
   }
 }

@@ -1,7 +1,7 @@
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
-import { ArchiveFile } from '../../types';
+import { ArchiveFile, PDFDocument, PDFRenderTask } from '../../types';
 import { logger } from '../../utils/logger';
 import { setupPDFWorker } from '../../utils/pdfWorker';
 
@@ -19,7 +19,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   const [loading, setLoading] = useState(false);
   
   // PDF.js state
-  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [pdfDoc, setPdfDoc] = useState<PDFDocument | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -29,7 +29,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   // Initialize zoom mode - always enabled to allow proper canvas sizing
   const [isPdfZoomed, setIsPdfZoomed] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const renderTaskRef = useRef<any>(null);
+  const renderTaskRef = useRef<PDFRenderTask | null>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const canvasX = useMotionValue(0);
@@ -92,7 +92,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       setPdfLoadingProgress(10);
       const fileData = await window.electronAPI.readPDFFile(file.path);
       
-      let pdf: any;
+      let pdf: PDFDocument;
       
       // Handle new format with type field
       if (fileData && typeof fileData === 'object' && 'type' in fileData) {
@@ -249,9 +249,11 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       }
       
       setPageRendering(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Ignore cancellation errors
-      if (error?.name === 'RenderingCancelledException' || error?.message?.includes('cancelled')) {
+      const errorName = error && typeof error === 'object' && 'name' in error ? String(error.name) : undefined;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorName === 'RenderingCancelledException' || errorMessage.includes('cancelled')) {
         return;
       }
       logger.error('Failed to render PDF page:', error);
@@ -746,7 +748,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                       display: 'block',
                       pointerEvents: 'none',
                       userSelect: 'none',
-                      WebkitUserDrag: 'none' as any,
+                      ...({ WebkitUserDrag: 'none' } as React.CSSProperties),
                       draggable: false,
                       transform: `scale(${imageScale})`,
                       transition: 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',

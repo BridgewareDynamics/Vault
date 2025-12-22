@@ -8,9 +8,23 @@ import JSZip from 'jszip';
 import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive } from './utils/archiveConfig';
 import { generateFileThumbnail } from './utils/thumbnailGenerator';
 import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMarker } from './utils/archiveMarker';
-import { logger } from './utils/logger';
+import { logger, type LogLevel, type LogArgs } from './utils/logger';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+// Type guard for errors with code property
+interface ErrorWithCode extends Error {
+  code?: string;
+}
+
+function isErrorWithCode(error: unknown): error is ErrorWithCode {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error instanceof Error || 'message' in error)
+  );
+}
 
 // Initialize crash reporter before app ready
 if (!isDev) {
@@ -32,7 +46,7 @@ process.on('uncaughtException', (error: Error) => {
 });
 
 // Handle unhandled promise rejections in main process
-process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
   logger.error('Unhandled Rejection in main process:', reason, promise);
   // Log the rejection but don't crash the app
 });
@@ -340,7 +354,7 @@ app.on('window-all-closed', () => {
 // IPC Handlers
 
 // Renderer logging handler
-ipcMain.handle('log-renderer', async (event, level: 'log' | 'info' | 'warn' | 'error' | 'debug', ...args: any[]) => {
+ipcMain.handle('log-renderer', async (event, level: LogLevel, ...args: LogArgs) => {
   // Use the logger utility to log messages from renderer process
   logger[level](`[Renderer]`, ...args);
 });
@@ -704,8 +718,8 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
   try {
     await fs.access(casePath);
     throw new Error('Case folder already exists');
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
+  } catch (error: unknown) {
+    if (isErrorWithCode(error) && error.code === 'ENOENT') {
       // Folder doesn't exist, create it
       await fs.mkdir(casePath, { recursive: true });
       
@@ -966,7 +980,7 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     
     // Assign folders to their parent PDFs
     folders.forEach(folder => {
-      const parentPdfName = (folder as any).parentPdfName;
+      const parentPdfName = folder.parentPdfName;
       let matched = false;
       
       if (parentPdfName) {
@@ -1231,7 +1245,7 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
         return true;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        const errorCode = (error as any)?.code;
+        const errorCode = isErrorWithCode(error) ? error.code : undefined;
         const isBusyError = errorCode === 'EBUSY' || errorMessage.includes('EBUSY') || errorMessage.includes('resource busy');
         
         if (isBusyError && attempt < maxRetries - 1) {
@@ -1272,7 +1286,7 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
       return true;
     } catch (unlinkError) {
       const errorMessage = unlinkError instanceof Error ? unlinkError.message : String(unlinkError);
-      const errorCode = (unlinkError as any)?.code;
+      const errorCode = isErrorWithCode(unlinkError) ? unlinkError.code : undefined;
       
       // Check if error indicates it's a directory
       const isDirectoryError = 
@@ -1343,7 +1357,7 @@ ipcMain.handle('rename-file', async (event, filePath: string, newName: string) =
       throw new Error('A file or folder with this name already exists');
     } catch (error) {
       // If error is not ENOENT (file doesn't exist), re-throw it
-      const errorCode = (error as any)?.code;
+      const errorCode = isErrorWithCode(error) ? error.code : undefined;
       // Re-throw if it's not ENOENT, or if it's our manually thrown error (no code property)
       if (!errorCode || errorCode !== 'ENOENT') {
         throw error;

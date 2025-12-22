@@ -58,3 +58,33 @@ export interface ArchiveFile {
   parentPdfName?: string; // Name of the parent PDF file this folder was created from
 }
 
+// Logger Types
+export type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
+export type LogArgs = Parameters<typeof console.log>;
+
+// Error Types
+export interface ErrorWithCode extends Error {
+  code?: string;
+}
+
+// PDF.js Types
+// Re-export PDFDocumentProxy from pdfjs-dist for use throughout the app
+// This ensures type compatibility with the actual pdfjs-dist library
+export type { PDFDocumentProxy as PDFDocument } from 'pdfjs-dist';
+
+export interface PDFRenderTask {
+  promise: Promise<void>;
+  cancel: () => void;
+}
+
+export interface PDFPage {
+  render: (options: { canvasContext: CanvasRenderingContext2D; viewport: PDFViewport }) => PDFRenderTask;
+  getViewport: (options: { scale: number }) => PDFViewport;
+}
+
+export interface PDFViewport {
+  width: number;
+  height: number;
+  transform: [number, number, number, number, number, number];
+}
+

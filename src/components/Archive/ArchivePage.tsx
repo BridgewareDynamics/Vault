@@ -101,7 +101,16 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
       const droppedFiles = Array.from(e.dataTransfer?.files || []);
       if (droppedFiles.length > 0) {
-        const filePaths = droppedFiles.map(file => (file as any).path).filter(Boolean);
+        const filePaths = droppedFiles
+          .map(file => {
+            // DataTransferItem can have a getAsFile() method or webkitGetAsEntry()
+            // For Electron file drops, the path might be in the file object
+            if ('path' in file && typeof (file as { path?: string }).path === 'string') {
+              return (file as { path: string }).path;
+            }
+            return null;
+          })
+          .filter((path): path is string => path !== null);
         if (filePaths.length > 0) {
           await addFilesToCase(currentCase.path, filePaths);
         }

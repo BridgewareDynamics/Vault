@@ -486,7 +486,7 @@ export function useArchive() {
       // Always check global cache first for thumbnails
       const thumbnailCache = new Map<string, string>();
       // Use global cache for all files
-      itemsList.forEach((item: any) => {
+      itemsList.forEach((item: Awaited<ReturnType<typeof window.electronAPI.listCaseFiles>>[number]) => {
         if (!item.isFolder && globalThumbnailCache.has(item.path)) {
           thumbnailCache.set(item.path, globalThumbnailCache.get(item.path)!);
         }
@@ -505,7 +505,7 @@ export function useArchive() {
       
       // Process items (files and folders)
       // Filter out hidden metadata files as a safety measure (backend should already filter, but double-check)
-      const filteredItems = itemsList.filter((item: any) => {
+      const filteredItems = itemsList.filter((item: Awaited<ReturnType<typeof window.electronAPI.listCaseFiles>>[number]) => {
         // Exclude .parent-pdf metadata files
         if (!item.isFolder) {
           const fileName = item.name.toLowerCase();
@@ -532,7 +532,7 @@ export function useArchive() {
         return true;
       });
       
-      const itemsWithTypes: ArchiveFile[] = filteredItems.map((item: any) => {
+      const itemsWithTypes: ArchiveFile[] = filteredItems.map((item: Awaited<ReturnType<typeof window.electronAPI.listCaseFiles>>[number]) => {
         // If it's a folder, return it as-is with folder properties
         if (item.isFolder) {
           return {
@@ -540,7 +540,7 @@ export function useArchive() {
             type: 'other' as const,
             isFolder: true,
             folderType: item.folderType || 'extraction',
-            parentPdfName: (item as any).parentPdfName,
+            parentPdfName: item.parentPdfName,
           };
         }
 

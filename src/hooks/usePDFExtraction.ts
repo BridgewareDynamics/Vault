@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ExtractedPage, ExtractionProgress } from '../types';
+import { ExtractedPage, ExtractionProgress, PDFDocument } from '../types';
 import { setupPDFWorker } from '../utils/pdfWorker';
 import { getUserFriendlyError } from '../utils/errorMessages';
 
@@ -63,7 +63,7 @@ export function usePDFExtraction() {
         percentage: 10,
       });
 
-      let pdf: any;
+      let pdf: PDFDocument;
       
       // Handle new format with type field
       if (fileData && typeof fileData === 'object' && 'type' in fileData) {

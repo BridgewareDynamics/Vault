@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ExtractionProgress } from '../types';
+import { ExtractionProgress, PDFDocument } from '../types';
 import { useToast } from '../components/Toast/ToastContext';
 import { setupPDFWorker } from '../utils/pdfWorker';
 import { getUserFriendlyError } from '../utils/errorMessages';
@@ -72,7 +72,7 @@ export function useArchiveExtraction() {
         percentage: 10,
       });
 
-      let pdf: any;
+      let pdf: PDFDocument;
       
       // Handle new format with type field
       if (fileData && typeof fileData === 'object' && 'type' in fileData) {
