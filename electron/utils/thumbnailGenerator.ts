@@ -31,6 +31,7 @@ function isVideoFile(filePath: string): boolean {
 /**
  * Generate thumbnail for an image file using Sharp
  * Reads file into memory first to avoid keeping file handle open (especially important for WebP files)
+ * Auto-detects format from file content, not extension (handles cases where .png files contain JPEG data)
  */
 async function generateImageThumbnail(filePath: string): Promise<string> {
   let fileBuffer: Buffer | null = null;
@@ -40,13 +41,16 @@ async function generateImageThumbnail(filePath: string): Promise<string> {
     fileBuffer = await fs.readFile(filePath);
     
     // Process from buffer instead of file path - this prevents Sharp from keeping file handle open
+    // Sharp will auto-detect the format from the buffer content (magic bytes), not the file extension
+    // This handles cases where files have .png extension but contain JPEG data (or vice versa)
+    // We don't specify input format - Sharp will detect it automatically from the buffer
     const buffer = await sharp(fileBuffer)
       .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
         fit: 'inside',
         withoutEnlargement: true,
         background: { r: 26, g: 26, b: 46, alpha: 1 }, // #1a1a2e
       })
-      .png()
+      .png() // Output format is always PNG for thumbnails
       .toBuffer();
 
     // Clear the file buffer reference to help GC
@@ -57,7 +61,60 @@ async function generateImageThumbnail(filePath: string): Promise<string> {
   } catch (error) {
     // Ensure buffer is cleared even on error
     fileBuffer = null;
-    throw new Error(`Failed to generate image thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    
+    // If Sharp fails, it might be because the file format doesn't match the extension
+    // Try to get more information about the error
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Check if it's a format detection issue
+    if (errorMessage.includes('unsupported image format') || errorMessage.includes('Input buffer contains')) {
+      // Try to detect format from file header
+      try {
+        fileBuffer = await fs.readFile(filePath);
+        const header = fileBuffer.slice(0, 12);
+        
+        // Check for JPEG signature (FF D8 FF)
+        if (header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF) {
+          // File is actually JPEG, process it as such
+          const buffer = await sharp(fileBuffer, { failOn: 'none' })
+            .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+              fit: 'inside',
+              withoutEnlargement: true,
+              background: { r: 26, g: 26, b: 46, alpha: 1 },
+            })
+            .jpeg({ quality: 90 })
+            .toBuffer();
+          
+          fileBuffer = null;
+          const base64 = buffer.toString('base64');
+          return `data:image/jpeg;base64,${base64}`;
+        }
+        
+        // Check for PNG signature (89 50 4E 47)
+        if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) {
+          // File is actually PNG, retry with explicit format
+          const buffer = await sharp(fileBuffer, { failOn: 'none' })
+            .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+              fit: 'inside',
+              withoutEnlargement: true,
+              background: { r: 26, g: 26, b: 46, alpha: 1 },
+            })
+            .png()
+            .toBuffer();
+          
+          fileBuffer = null;
+          const base64 = buffer.toString('base64');
+          return `data:image/png;base64,${base64}`;
+        }
+        
+        fileBuffer = null;
+      } catch (retryError) {
+        fileBuffer = null;
+        // If retry also fails, throw original error
+      }
+    }
+    
+    throw new Error(`Failed to generate image thumbnail: ${errorMessage}`);
   }
 }
 

@@ -42,7 +42,10 @@ describe('pdfSource', () => {
     global.URL.createObjectURL = mockCreateObjectURL;
     global.URL.revokeObjectURL = mockRevokeObjectURL;
     mockElectronAPI.getPDFFileSize.mockResolvedValue(1000);
-    mockElectronAPI.readPDFFileChunk.mockResolvedValue('dGVzdA=='); // base64 for "test"
+    // Mock ArrayBuffer return (convert base64 "test" to ArrayBuffer)
+    const testBytes = new Uint8Array([116, 101, 115, 116]); // "test"
+    mockElectronAPI.readPDFFileChunk.mockResolvedValue(testBytes.buffer);
+    mockElectronAPI.closePDFFileHandle.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -61,7 +64,8 @@ describe('pdfSource', () => {
     });
 
     mockElectronAPI.getPDFFileSize.mockResolvedValue(5 * 1024 * 1024); // 5MB
-    mockElectronAPI.readPDFFileChunk.mockResolvedValue('dGVzdA==');
+    const testBytes = new Uint8Array([116, 101, 115, 116]); // "test"
+    mockElectronAPI.readPDFFileChunk.mockResolvedValue(testBytes.buffer);
 
     const result = await createChunkedPDFSource('/path/to/large.pdf', pdfjsLib);
 
@@ -83,9 +87,12 @@ describe('pdfSource', () => {
 
     const fileSize = 4 * 1024 * 1024; // 4MB (2 chunks of 2MB each)
     mockElectronAPI.getPDFFileSize.mockResolvedValue(fileSize);
+    // Mock ArrayBuffer returns for chunks
+    const chunk1Bytes = new Uint8Array([99, 104, 117, 110, 107, 49]); // "chunk1"
+    const chunk2Bytes = new Uint8Array([99, 104, 117, 110, 107, 50]); // "chunk2"
     mockElectronAPI.readPDFFileChunk
-      .mockResolvedValueOnce('Y2h1bmsx') // base64 for "chunk1"
-      .mockResolvedValueOnce('Y2h1bmsy'); // base64 for "chunk2"
+      .mockResolvedValueOnce(chunk1Bytes.buffer)
+      .mockResolvedValueOnce(chunk2Bytes.buffer);
 
     await createChunkedPDFSource('/path/to/file.pdf', pdfjsLib);
 
@@ -104,7 +111,8 @@ describe('pdfSource', () => {
     });
 
     mockElectronAPI.getPDFFileSize.mockResolvedValue(1000);
-    mockElectronAPI.readPDFFileChunk.mockResolvedValue('dGVzdA==');
+    const testBytes = new Uint8Array([116, 101, 115, 116]); // "test"
+    mockElectronAPI.readPDFFileChunk.mockResolvedValue(testBytes.buffer);
 
     await expect(
       createChunkedPDFSource('/path/to/file.pdf', pdfjsLib)

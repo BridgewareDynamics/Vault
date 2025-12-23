@@ -1609,8 +1609,12 @@ describe('IPC Handlers', () => {
 
       expect(fs.open).toHaveBeenCalledWith('/path/to/file.pdf', 'r');
       expect(mockFileHandle.read).toHaveBeenCalled();
-      expect(mockFileHandle.close).toHaveBeenCalled();
-      expect(result).toBe(mockBuffer.toString('base64'));
+      // Note: File handle is now cached and reused, so close may not be called immediately
+      // Result should be an ArrayBuffer
+      expect(result).toBeInstanceOf(ArrayBuffer);
+      const resultArray = new Uint8Array(result);
+      const expectedArray = new Uint8Array(mockBuffer);
+      expect(resultArray).toEqual(expectedArray);
     });
 
     it('should throw error for invalid PDF file path', async () => {

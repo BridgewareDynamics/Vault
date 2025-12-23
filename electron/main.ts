@@ -4,6 +4,7 @@ import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath } from 
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
+import * as os from 'os';
 import JSZip from 'jszip';
 import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive } from './utils/archiveConfig';
 import { generateFileThumbnail } from './utils/thumbnailGenerator';
@@ -351,12 +352,30 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Cleanup file handles on app exit
+app.on('before-quit', async () => {
+  await closeAllFileHandles();
+});
+
 // IPC Handlers
 
 // Renderer logging handler
 ipcMain.handle('log-renderer', async (event, level: LogLevel, ...args: LogArgs) => {
   // Use the logger utility to log messages from renderer process
   logger[level](`[Renderer]`, ...args);
+});
+
+// Get system memory information
+ipcMain.handle('get-system-memory', async () => {
+  const totalMemory = os.totalmem();
+  const freeMemory = os.freemem();
+  const usedMemory = totalMemory - freeMemory;
+  
+  return {
+    totalMemory,
+    freeMemory,
+    usedMemory,
+  };
 });
 
 // Select PDF file
@@ -514,9 +533,27 @@ ipcMain.handle('save-files', async (
 
       // Add all extracted pages to ZIP
       for (const page of extractedPages) {
-        const imageData = page.imageData.replace(/^data:image\/png;base64,/, '');
+        // Detect image format from data URL (supports both PNG and JPEG)
+        const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+        const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+        
+        let imageData: string;
+        let extension: string;
+        
+        if (pngMatch) {
+          imageData = pngMatch[1];
+          extension = 'png';
+        } else if (jpegMatch) {
+          imageData = jpegMatch[1];
+          extension = 'jpg';
+        } else {
+          // Fallback: try to strip any data URL prefix
+          imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+          extension = 'png'; // Default to PNG for backward compatibility
+        }
+        
         const buffer = Buffer.from(imageData, 'base64');
-        folder.file(`page-${page.pageNumber}.png`, buffer);
+        folder.file(`page-${page.pageNumber}.${extension}`, buffer);
       }
 
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
@@ -546,47 +583,233 @@ ipcMain.handle('read-pdf-file', async (event, filePath: string) => {
     throw new Error('Invalid PDF file path');
   }
 
-  try {
-    // Check file size - if larger than ~350MB, return path instead of data
-    // JavaScript strings have a max length of ~512MB (0x1fffffe8 characters = ~536MB)
-    // Base64 encoding increases size by ~33%, so limit to ~350MB raw file size for safety
-    // This leaves ~50MB buffer to account for any overhead
-    const MAX_FILE_SIZE_FOR_BASE64 = 350 * 1024 * 1024; // 350MB
-    
-    const stats = await fs.stat(filePath);
-    
-    if (stats.size > MAX_FILE_SIZE_FOR_BASE64) {
-      // For large files, return a special marker indicating we should use file path
-      // The renderer will need to use a custom PDF.js source
-      return { type: 'file-path', path: filePath };
+  // Retry logic for EBUSY errors (file might be temporarily locked)
+  const maxRetries = 5;
+  const retryDelay = 100; // 100ms between retries
+  
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Check file size - if larger than ~350MB, return path instead of data
+      // JavaScript strings have a max length of ~512MB (0x1fffffe8 characters = ~536MB)
+      // Base64 encoding increases size by ~33%, so limit to ~350MB raw file size for safety
+      // This leaves ~50MB buffer to account for any overhead
+      const MAX_FILE_SIZE_FOR_BASE64 = 350 * 1024 * 1024; // 350MB
+      
+      const stats = await fs.stat(filePath);
+      
+      if (stats.size > MAX_FILE_SIZE_FOR_BASE64) {
+        // For large files, return a special marker indicating we should use file path
+        // The renderer will need to use a custom PDF.js source
+        return { type: 'file-path', path: filePath };
+      }
+      
+      const data = await fs.readFile(filePath);
+      // Use base64 encoding for smaller files
+      const base64 = data.toString('base64');
+      return { type: 'base64', data: base64 };
+    } catch (error) {
+      const errorCode = (error as NodeJS.ErrnoException)?.code;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // If it's an EBUSY error and we have retries left, wait and retry
+      if (errorCode === 'EBUSY' && attempt < maxRetries - 1) {
+        lastError = error instanceof Error ? error : new Error(errorMessage);
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, retryDelay * (attempt + 1)));
+        continue;
+      }
+      
+      // For other errors or if we're out of retries, throw immediately
+      if (errorCode === 'ENOENT') {
+        throw new Error(`PDF file not found: ${filePath}`);
+      }
+      
+      throw new Error(`Failed to read PDF file: ${errorMessage}`);
     }
-    
-    const data = await fs.readFile(filePath);
-    // Use base64 encoding for smaller files
-    const base64 = data.toString('base64');
-    return { type: 'base64', data: base64 };
-  } catch (error) {
-    throw new Error(`Failed to read PDF file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+  
+  // If we exhausted all retries, throw the last error
+  throw new Error(`Failed to read PDF file after ${maxRetries} attempts: ${lastError?.message || 'File is busy or locked'}`);
 });
 
+// File handle manager for efficient PDF chunk reading
+// Reuses file handles to avoid repeated open/close operations
+interface FileHandleEntry {
+  handle: fs.FileHandle;
+  lastUsed: number;
+  accessCount: number;
+}
+
+const fileHandleCache = new Map<string, FileHandleEntry>();
+const MAX_CACHE_SIZE = 10; // Maximum number of cached file handles
+const HANDLE_IDLE_TIMEOUT = 30000; // Close handles after 30 seconds of inactivity
+
+// Cleanup function to close idle file handles
+function cleanupIdleHandles() {
+  const now = Date.now();
+  const entriesToClose: string[] = [];
+  
+  for (const [filePath, entry] of fileHandleCache.entries()) {
+    if (now - entry.lastUsed > HANDLE_IDLE_TIMEOUT) {
+      entriesToClose.push(filePath);
+    }
+  }
+  
+  for (const filePath of entriesToClose) {
+    const entry = fileHandleCache.get(filePath);
+    if (entry) {
+      entry.handle.close().catch(() => {
+        // Ignore close errors
+      });
+      fileHandleCache.delete(filePath);
+    }
+  }
+  
+  // If cache is still too large, close least recently used handles
+  if (fileHandleCache.size > MAX_CACHE_SIZE) {
+    const sortedEntries = Array.from(fileHandleCache.entries())
+      .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+    
+    const toRemove = sortedEntries.slice(0, fileHandleCache.size - MAX_CACHE_SIZE);
+    for (const [filePath, entry] of toRemove) {
+      entry.handle.close().catch(() => {
+        // Ignore close errors
+      });
+      fileHandleCache.delete(filePath);
+    }
+  }
+}
+
+// Get or create a file handle for a given file path
+async function getFileHandle(filePath: string): Promise<fs.FileHandle> {
+  // Cleanup idle handles periodically
+  cleanupIdleHandles();
+  
+  const entry = fileHandleCache.get(filePath);
+  if (entry) {
+    entry.lastUsed = Date.now();
+    entry.accessCount++;
+    return entry.handle;
+  }
+  
+  // Open new file handle
+  const handle = await fs.open(filePath, 'r');
+  fileHandleCache.set(filePath, {
+    handle,
+    lastUsed: Date.now(),
+    accessCount: 1,
+  });
+  
+  return handle;
+}
+
+// Close a specific file handle
+export async function closeFileHandle(filePath: string): Promise<void> {
+  const entry = fileHandleCache.get(filePath);
+  if (entry) {
+    await entry.handle.close().catch(() => {
+      // Ignore close errors
+    });
+    fileHandleCache.delete(filePath);
+  }
+}
+
+// Close all file handles (cleanup on app exit)
+export async function closeAllFileHandles(): Promise<void> {
+  const closePromises = Array.from(fileHandleCache.values()).map(entry =>
+    entry.handle.close().catch(() => {
+      // Ignore close errors
+    })
+  );
+  await Promise.all(closePromises);
+  fileHandleCache.clear();
+}
+
 // Read PDF file chunk for large files
+// Returns ArrayBuffer directly for efficient transfer (no base64 encoding overhead)
 ipcMain.handle('read-pdf-file-chunk', async (event, filePath: string, start: number, length: number) => {
   if (!isValidPDFFile(filePath) || !isSafePath(filePath)) {
     throw new Error('Invalid PDF file path');
   }
 
+  // Check if file exists first
   try {
-    const fileHandle = await fs.open(filePath, 'r');
-    const buffer = Buffer.alloc(length);
-    await fileHandle.read(buffer, 0, length, start);
-    await fileHandle.close();
-    
-    // Return as base64 for IPC
-    return buffer.toString('base64');
+    await fs.access(filePath);
   } catch (error) {
-    throw new Error(`Failed to read PDF file chunk: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const errorCode = (error as NodeJS.ErrnoException)?.code;
+    if (errorCode === 'ENOENT') {
+      throw new Error(`PDF file not found: ${filePath}`);
+    }
+    throw error;
   }
+
+  // Retry logic for EBUSY errors (file might be temporarily locked)
+  const maxRetries = 5;
+  const retryDelay = 100; // 100ms between retries
+  
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Get or create file handle (reused from cache)
+      const fileHandle = await getFileHandle(filePath);
+      
+      const buffer = Buffer.alloc(length);
+      const result = await fileHandle.read(buffer, 0, length, start);
+      
+      // Return only the bytes that were actually read
+      const actualBuffer = result.bytesRead < length 
+        ? buffer.slice(0, result.bytesRead)
+        : buffer;
+      
+      // Convert Buffer to ArrayBuffer for efficient IPC transfer
+      // Electron's structured clone supports ArrayBuffer transfer
+      const arrayBuffer = actualBuffer.buffer.slice(
+        actualBuffer.byteOffset,
+        actualBuffer.byteOffset + actualBuffer.byteLength
+      );
+      
+      return arrayBuffer;
+    } catch (error) {
+      const errorCode = (error as NodeJS.ErrnoException)?.code;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // If it's an EBUSY error and we have retries left, wait and retry
+      if (errorCode === 'EBUSY' && attempt < maxRetries - 1) {
+        lastError = error instanceof Error ? error : new Error(errorMessage);
+        // Remove handle from cache if it's causing issues
+        const entry = fileHandleCache.get(filePath);
+        if (entry) {
+          try {
+            await entry.handle.close();
+          } catch {
+            // Ignore close errors
+          }
+          fileHandleCache.delete(filePath);
+        }
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, retryDelay * (attempt + 1)));
+        continue;
+      }
+      
+      // For other errors or if we're out of retries, throw immediately
+      if (errorCode === 'ENOENT') {
+        throw new Error(`PDF file not found: ${filePath}`);
+      }
+      
+      throw new Error(`Failed to read PDF file chunk: ${errorMessage}`);
+    }
+  }
+  
+  // If we exhausted all retries, throw the last error
+  throw new Error(`Failed to read PDF file chunk after ${maxRetries} attempts: ${lastError?.message || 'File is busy or locked'}`);
+});
+
+// IPC handler to close a file handle when done with a PDF
+ipcMain.handle('close-pdf-file-handle', async (event, filePath: string) => {
+  await closeFileHandle(filePath);
 });
 
 // Get PDF file size
@@ -595,12 +818,39 @@ ipcMain.handle('get-pdf-file-size', async (event, filePath: string) => {
     throw new Error('Invalid PDF file path');
   }
 
-  try {
-    const stats = await fs.stat(filePath);
-    return stats.size;
-  } catch (error) {
-    throw new Error(`Failed to get PDF file size: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  // Retry logic for EBUSY errors (file might be temporarily locked)
+  const maxRetries = 5;
+  const retryDelay = 100; // 100ms between retries
+  
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const stats = await fs.stat(filePath);
+      return stats.size;
+    } catch (error) {
+      const errorCode = (error as NodeJS.ErrnoException)?.code;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // If it's an EBUSY error and we have retries left, wait and retry
+      if (errorCode === 'EBUSY' && attempt < maxRetries - 1) {
+        lastError = error instanceof Error ? error : new Error(errorMessage);
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, retryDelay * (attempt + 1)));
+        continue;
+      }
+      
+      // For other errors or if we're out of retries, throw immediately
+      if (errorCode === 'ENOENT') {
+        throw new Error(`PDF file not found: ${filePath}`);
+      }
+      
+      throw new Error(`Failed to get PDF file size: ${errorMessage}`);
+    }
   }
+  
+  // If we exhausted all retries, throw the last error
+  throw new Error(`Failed to get PDF file size after ${maxRetries} attempts: ${lastError?.message || 'File is busy or locked'}`);
 });
 
 // Archive IPC Handlers
@@ -929,7 +1179,18 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     // Process folders
     const folders = await Promise.all(
       entries
-        .filter(entry => entry.isDirectory())
+        .filter(entry => {
+          if (!entry.isDirectory()) {
+            return false;
+          }
+          // Exclude .thumbnails folder
+          const folderName = entry.name.toLowerCase();
+          if (folderName === '.thumbnails') {
+            logger.log('[Main] Filtering out .thumbnails folder:', entry.name);
+            return false;
+          }
+          return true;
+        })
         .map(async (entry) => {
           const folderPath = path.join(casePath, entry.name);
           const stats = await fs.stat(folderPath);
@@ -1453,9 +1714,27 @@ ipcMain.handle('extract-pdf-from-archive', async (
 
     // Save extracted pages
     for (const page of extractedPages) {
-      const imageData = page.imageData.replace(/^data:image\/png;base64,/, '');
+      // Detect image format from data URL (supports both PNG and JPEG)
+      const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+      const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+      
+      let imageData: string;
+      let extension: string;
+      
+      if (pngMatch) {
+        imageData = pngMatch[1];
+        extension = 'png';
+      } else if (jpegMatch) {
+        imageData = jpegMatch[1];
+        extension = 'jpg';
+      } else {
+        // Fallback: try to strip any data URL prefix
+        imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+        extension = 'png'; // Default to PNG for backward compatibility
+      }
+      
       const buffer = Buffer.from(imageData, 'base64');
-      const imagePath = path.join(extractionFolder, `page-${page.pageNumber}.png`);
+      const imagePath = path.join(extractionFolder, `page-${page.pageNumber}.${extension}`);
       await fs.writeFile(imagePath, buffer);
       results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
     }

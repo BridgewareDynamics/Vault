@@ -4,6 +4,8 @@ import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ArchiveFile, PDFDocument, PDFRenderTask } from '../../types';
 import { logger } from '../../utils/logger';
 import { setupPDFWorker } from '../../utils/pdfWorker';
+import { cleanupPDFBlobUrl } from '../../utils/pdfSource';
+import { LargePDFWarningDialog } from '../LargePDFWarningDialog';
 
 interface ArchiveFileViewerProps {
   file: ArchiveFile | null;
@@ -38,6 +40,153 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   const imageY = useMotionValue(0);
   const imageRef = useRef<HTMLImageElement>(null);
   const isDraggingRef = useRef(false);
+  
+  // Warning dialog state
+  const [showWarningDialog, setShowWarningDialog] = useState(false);
+  const [warningFileSize, setWarningFileSize] = useState(0);
+  const [memoryInfo, setMemoryInfo] = useState<{ totalMemory: number; freeMemory: number; usedMemory: number } | null>(null);
+  const [pendingLoad, setPendingLoad] = useState<{ filePath: string; pdfjsLib: any } | null>(null);
+  const warningResolveRef = useRef<((value: boolean) => void) | null>(null);
+  
+  // Handle warning dialog actions
+  const handleWarningContinue = async () => {
+    setShowWarningDialog(false);
+    if (warningResolveRef.current) {
+      warningResolveRef.current(true);
+      warningResolveRef.current = null;
+    }
+    
+    // Continue loading the PDF
+    if (pendingLoad) {
+      try {
+        // Ensure worker is set up before loading
+        await setupPDFWorker();
+        
+        // Small delay to ensure worker is fully initialized
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const { createChunkedPDFSource } = await import('../../utils/pdfSource');
+        const pdf = await createChunkedPDFSource(
+          pendingLoad.filePath, 
+          pendingLoad.pdfjsLib,
+          undefined, // showWarning (not needed here, already shown)
+          (progress) => setPdfLoadingProgress(progress) // onProgress
+        );
+        
+        // Verify PDF is valid before setting state
+        if (pdf && typeof pdf.numPages === 'number' && pdf.numPages > 0) {
+          setPdfDoc(pdf);
+          setTotalPages(pdf.numPages);
+          setCurrentPage(1);
+          setPdfLoading(false);
+          setPdfLoadingProgress(0);
+        } else {
+          throw new Error('Invalid PDF document loaded');
+        }
+      } catch (error) {
+        logger.error('Failed to load PDF after warning:', error);
+        setPdfLoading(false);
+        setPdfLoadingProgress(0);
+        setPdfDoc(null);
+      }
+      setPendingLoad(null);
+    }
+  };
+  
+  const handleWarningCancel = () => {
+    setShowWarningDialog(false);
+    if (warningResolveRef.current) {
+      warningResolveRef.current(false);
+      warningResolveRef.current = null;
+    }
+    
+    // Cleanup any pending PDF resources
+    if (pendingLoad) {
+      // Cancel any ongoing operations
+      setPendingLoad(null);
+    }
+    
+    // Cleanup PDF document if it exists
+    if (pdfDoc) {
+      try {
+        cleanupPDFBlobUrl(pdfDoc);
+        pdfDoc.destroy().catch(() => {
+          // Ignore destroy errors
+        });
+        
+        // Close file handle if this was a streaming source
+        if (file && file.type === 'pdf' && window.electronAPI) {
+          window.electronAPI.closePDFFileHandle(file.path).catch(() => {
+            // Ignore cleanup errors
+          });
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      setPdfDoc(null);
+    }
+    
+    setPdfLoading(false);
+    setPdfLoadingProgress(0);
+    
+    // Force garbage collection hint
+    if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+      (globalThis as any).gc();
+    }
+  };
+  
+  const handleWarningSplit = () => {
+    // Placeholder for future split feature
+    logger.info('Split PDF feature coming soon');
+  };
+
+  // Cleanup PDF when component unmounts or file changes
+  useEffect(() => {
+    return () => {
+      // Cleanup PDF document when component unmounts
+      if (pdfDoc) {
+        try {
+          cleanupPDFBlobUrl(pdfDoc);
+          pdfDoc.destroy().catch(() => {
+            // Ignore destroy errors
+          });
+          
+          // Close file handle if this was a streaming source
+          if (file && file.type === 'pdf' && window.electronAPI) {
+            window.electronAPI.closePDFFileHandle(file.path).catch(() => {
+              // Ignore cleanup errors
+            });
+          }
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    };
+  }, [pdfDoc, file]);
+  
+  // Cleanup when viewer closes
+  const handleClose = useCallback(() => {
+    // Cleanup PDF before closing
+    if (pdfDoc) {
+      try {
+        cleanupPDFBlobUrl(pdfDoc);
+        pdfDoc.destroy().catch(() => {
+          // Ignore destroy errors
+        });
+        
+        // Close file handle if this was a streaming source
+        if (file && file.type === 'pdf' && window.electronAPI) {
+          window.electronAPI.closePDFFileHandle(file.path).catch(() => {
+            // Ignore cleanup errors
+          });
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      setPdfDoc(null);
+    }
+    onClose();
+  }, [pdfDoc, file, onClose]);
 
   useEffect(() => {
     if (file) {
@@ -47,6 +196,17 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
         loadFileData();
       }
     } else {
+      // Cleanup when file is cleared
+      if (pdfDoc) {
+        try {
+          cleanupPDFBlobUrl(pdfDoc);
+          pdfDoc.destroy().catch(() => {
+            // Ignore destroy errors
+          });
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
       setFileData(null);
       setPdfDoc(null);
       setCurrentPage(1);
@@ -97,9 +257,26 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       // Handle new format with type field
       if (fileData && typeof fileData === 'object' && 'type' in fileData) {
         if (fileData.type === 'file-path') {
-          // Large file - use chunked reading
+          // Large file - use chunked reading with warning dialog
           setPdfLoadingProgress(20);
-          pdf = await createChunkedPDFSource(fileData.path, pdfjsLib);
+          
+          // Show warning dialog for large files
+          const showWarning = async (fileSize: number, memInfo: { totalMemory: number; freeMemory: number; usedMemory: number }): Promise<boolean> => {
+            return new Promise((resolve) => {
+              setWarningFileSize(fileSize);
+              setMemoryInfo(memInfo);
+              setShowWarningDialog(true);
+              setPendingLoad({ filePath: fileData.path, pdfjsLib });
+              warningResolveRef.current = resolve;
+            });
+          };
+          
+          pdf = await createChunkedPDFSource(
+            fileData.path, 
+            pdfjsLib, 
+            showWarning,
+            (progress) => setPdfLoadingProgress(progress) // onProgress
+          );
         } else if (fileData.type === 'base64') {
           // Small file - decode base64
           setPdfLoadingProgress(20);
@@ -184,6 +361,18 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   const renderPDFPage = async (pageNum: number) => {
     if (!pdfDoc) return;
 
+    // Verify PDF document is still valid (not destroyed)
+    try {
+      // Check if document is still valid by accessing a property
+      if (typeof pdfDoc.numPages !== 'number' || pdfDoc.numPages <= 0) {
+        logger.warn('PDF document is invalid or destroyed');
+        return;
+      }
+    } catch (e) {
+      logger.warn('PDF document has been destroyed, cannot render');
+      return;
+    }
+
     // Cancel any ongoing render task
     if (renderTaskRef.current) {
       try {
@@ -212,6 +401,12 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
 
     try {
       setPageRendering(true);
+      
+      // Double-check PDF is still valid before getting page
+      if (!pdfDoc) {
+        setPageRendering(false);
+        return;
+      }
       
       const page = await pdfDoc.getPage(pageNum);
       const viewport = page.getViewport({ scale: pageScale });
@@ -253,6 +448,18 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       // Ignore cancellation errors
       const errorName = error && typeof error === 'object' && 'name' in error ? String(error.name) : undefined;
       const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Check if error is due to destroyed document or worker
+      if (errorMessage.includes('sendWithPromise') || 
+          errorMessage.includes('null') ||
+          errorMessage.includes('destroyed') ||
+          errorMessage.includes('worker')) {
+        logger.warn('PDF document or worker was destroyed during render');
+        setPageRendering(false);
+        renderTaskRef.current = null;
+        return;
+      }
+      
       if (errorName === 'RenderingCancelledException' || errorMessage.includes('cancelled')) {
         return;
       }
@@ -317,8 +524,25 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
 
   useEffect(() => {
     if (pdfDoc && currentPage > 0) {
+      // Verify PDF document is still valid before rendering
+      try {
+        // Check if document is still valid by accessing a property
+        if (typeof pdfDoc.numPages !== 'number' || pdfDoc.numPages <= 0) {
+          logger.warn('PDF document is invalid, skipping render');
+          return;
+        }
+      } catch (e) {
+        logger.warn('PDF document has been destroyed, skipping render');
+        return;
+      }
+      
       // Use requestAnimationFrame to ensure canvas is in DOM
       requestAnimationFrame(() => {
+        // Double-check PDF is still valid
+        if (!pdfDoc) {
+          return;
+        }
+        
         // Clear canvas when page changes to avoid showing previous page
         const canvas = canvasRef.current;
         if (canvas) {
@@ -425,14 +649,15 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   const hasPrevious = onPrevious && currentIndex > 0;
 
   return (
-    <AnimatePresence>
-      <motion.div
+    <>
+      <AnimatePresence>
+        <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={(e) => {
           if (e.target === e.currentTarget) {
-            onClose();
+            handleClose();
           }
         }}
         className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-0"
@@ -446,15 +671,15 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
           onClick={(e) => {
             // Close on backdrop click only when not zoomed
             if (e.target === e.currentTarget && file?.type === 'image' && imageScale <= 1) {
-              onClose();
+              handleClose();
             } else if (e.target === e.currentTarget && file?.type !== 'image' && file?.type !== 'pdf') {
-              onClose();
+              handleClose();
             }
           }}
         >
           {/* Close button */}
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className={`absolute ${file?.type === 'pdf' ? 'top-14 right-2' : 'top-4 right-4'} text-white hover:text-cyber-purple-400 transition-colors z-30 bg-black/70 backdrop-blur-sm rounded-full p-2.5 hover:bg-black/90 border border-cyber-purple-500/50`}
             aria-label="Close"
           >
@@ -508,18 +733,6 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
               </button>
             </div>
           )}
-          {file.type === 'pdf' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handlePdfZoomToggle();
-              }}
-              className="absolute top-14 left-2 text-white hover:text-cyber-purple-400 transition-colors z-30 bg-black/60 rounded-full p-2"
-              aria-label={isPdfZoomed ? 'Zoom out' : 'Zoom in'}
-            >
-              {isPdfZoomed ? <ZoomOut size={24} /> : <ZoomIn size={24} />}
-            </button>
-          )}
 
           {/* Navigation buttons */}
           {hasPrevious && (
@@ -562,7 +775,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                 <div className="flex flex-col items-center justify-center w-full h-full bg-gray-900 rounded-lg">
                   <div className="text-center mb-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                    <p className="text-gray-300 mb-2">Loading PDF...</p>
+                    <p className="text-gray-300 mb-2">
+                      {pdfLoadingProgress < 90 ? 'Reading file...' : 'Parsing PDF...'}
+                    </p>
                     {pdfLoadingProgress > 0 && (
                       <div className="w-64 bg-gray-700 rounded-full h-2 overflow-hidden">
                         <div
@@ -572,7 +787,12 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                       </div>
                     )}
                     {pdfLoadingProgress > 0 && (
-                      <p className="text-gray-400 text-sm mt-2">{pdfLoadingProgress}%</p>
+                      <p className="text-gray-400 text-sm mt-2">
+                        {pdfLoadingProgress < 90 
+                          ? `Reading: ${Math.round((pdfLoadingProgress / 90) * 100)}%`
+                          : `Parsing: ${Math.round(((pdfLoadingProgress - 90) / 10) * 100)}%`
+                        }
+                      </p>
                     )}
                   </div>
                 </div>
@@ -796,7 +1016,21 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
           )}
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+      </AnimatePresence>
+      
+      {/* Large PDF Warning Dialog - Outside main AnimatePresence to avoid key conflicts */}
+      {memoryInfo && (
+        <LargePDFWarningDialog
+          isOpen={showWarningDialog}
+          fileSize={warningFileSize}
+          totalMemory={memoryInfo.totalMemory}
+          freeMemory={memoryInfo.freeMemory}
+          onContinue={handleWarningContinue}
+          onSplit={handleWarningSplit}
+          onCancel={handleWarningCancel}
+        />
+      )}
+    </>
   );
 }
 

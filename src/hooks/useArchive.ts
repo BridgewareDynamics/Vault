@@ -156,9 +156,27 @@ export function useArchive() {
 
   // Generate PDF thumbnail in renderer
   const generatePDFThumbnailInRenderer = useCallback(async (filePath: string): Promise<string> => {
+    let pdf: any = null;
+    let page: any = null;
+    let canvas: HTMLCanvasElement | null = null;
+    
     try {
       if (!window.electronAPI) {
         throw new Error('Electron API not available');
+      }
+
+      // Check file size first - skip thumbnail generation for very large files to prevent OOM
+      const fileSize = await window.electronAPI.getPDFFileSize(filePath);
+      const LARGE_FILE_THRESHOLD = 500 * 1024 * 1024; // 500MB
+      
+      if (fileSize > LARGE_FILE_THRESHOLD) {
+        // For large files, return placeholder to prevent OOM
+        logger.warn(`Skipping thumbnail generation for large PDF (${(fileSize / 1024 / 1024).toFixed(2)}MB) to prevent OOM`);
+        const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" fill="#1a1a2e"/>
+          <text x="50%" y="50%" font-size="64" text-anchor="middle" dominant-baseline="middle" fill="#8b5cf6">📄</text>
+        </svg>`;
+        return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
       }
 
       const fileData = await window.electronAPI.readPDFFile(filePath);
@@ -168,7 +186,7 @@ export function useArchive() {
       await setupPDFWorker();
       
       // Handle new format with type field
-      let arrayBuffer: ArrayBuffer;
+      let arrayBuffer: ArrayBuffer | null = null;
       
       if (fileData && typeof fileData === 'object' && 'type' in fileData) {
         if (fileData.type === 'base64') {
@@ -180,10 +198,10 @@ export function useArchive() {
           }
           arrayBuffer = bytes.buffer;
         } else if (fileData.type === 'file-path') {
-          // For thumbnails, we still need the full file, so use chunked source
-          const { createChunkedPDFSource } = await import('../utils/pdfSource');
-          const pdf = await createChunkedPDFSource(fileData.path, pdfjsLib);
-          const page = await pdf.getPage(1);
+          // For large files that passed the threshold, use chunked source but with cleanup
+          const { createChunkedPDFSource, cleanupPDFBlobUrl } = await import('../utils/pdfSource');
+          pdf = await createChunkedPDFSource(fileData.path, pdfjsLib);
+          page = await pdf.getPage(1);
           const viewport = page.getViewport({ scale: 1.0 });
           
           // Calculate thumbnail size
@@ -198,7 +216,7 @@ export function useArchive() {
             width = THUMBNAIL_SIZE * aspectRatio;
           }
           
-          const canvas = document.createElement('canvas');
+          canvas = document.createElement('canvas');
           canvas.width = width;
           canvas.height = height;
           const context = canvas.getContext('2d');
@@ -212,7 +230,33 @@ export function useArchive() {
             viewport: renderViewport,
           }).promise;
           
-          return canvas.toDataURL('image/png');
+          const thumbnail = canvas.toDataURL('image/png');
+          
+          // Cleanup immediately after generating thumbnail
+          if (page) {
+            try {
+              page.cleanup();
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+            page = null;
+          }
+          if (pdf) {
+            try {
+              cleanupPDFBlobUrl(pdf);
+              await pdf.destroy();
+            } catch (e) {
+              // Ignore destroy errors
+            }
+            pdf = null;
+          }
+          if (canvas) {
+            canvas.width = 0;
+            canvas.height = 0;
+            canvas = null;
+          }
+          
+          return thumbnail;
         } else {
           throw new Error('Unexpected PDF file data format');
         }
@@ -232,55 +276,111 @@ export function useArchive() {
         throw new Error('Unexpected PDF file data format');
       }
       
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 1.0 });
-      
-      // Calculate thumbnail size
-      const THUMBNAIL_SIZE = 200;
-      const aspectRatio = viewport.width / viewport.height;
-      let width = THUMBNAIL_SIZE;
-      let height = THUMBNAIL_SIZE;
-      
-      if (aspectRatio > 1) {
-        height = THUMBNAIL_SIZE / aspectRatio;
-      } else {
-        width = THUMBNAIL_SIZE * aspectRatio;
+      // Only process if we have an arrayBuffer (for base64/array formats)
+      if (arrayBuffer) {
+        pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.0 });
+        
+        // Calculate thumbnail size
+        const THUMBNAIL_SIZE = 200;
+        const aspectRatio = viewport.width / viewport.height;
+        let width = THUMBNAIL_SIZE;
+        let height = THUMBNAIL_SIZE;
+        
+        if (aspectRatio > 1) {
+          height = THUMBNAIL_SIZE / aspectRatio;
+        } else {
+          width = THUMBNAIL_SIZE * aspectRatio;
+        }
+        
+        canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+        
+        if (!context) {
+          throw new Error('Failed to get canvas context');
+        }
+        
+        // Fill background
+        context.fillStyle = '#1a1a2e';
+        context.fillRect(0, 0, width, height);
+        
+        // Render PDF page
+        const renderViewport = page.getViewport({ scale: width / viewport.width });
+        await page.render({
+          canvasContext: context,
+          viewport: renderViewport,
+        }).promise;
+        
+        const thumbnail = canvas.toDataURL('image/png');
+        
+        // Cleanup immediately after generating thumbnail
+        if (page) {
+          try {
+            page.cleanup();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          page = null;
+        }
+        if (pdf) {
+          try {
+            await pdf.destroy();
+          } catch (e) {
+            // Ignore destroy errors
+          }
+          pdf = null;
+        }
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+          canvas = null;
+        }
+        
+        // Clear arrayBuffer reference
+        arrayBuffer = null;
+        
+        return thumbnail;
       }
-      
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext('2d');
-      
-      if (!context) {
-        throw new Error('Failed to get canvas context');
-      }
-      
-      // Fill background
-      context.fillStyle = '#1a1a2e';
-      context.fillRect(0, 0, width, height);
-      
-      // Render PDF page
-      const renderViewport = page.getViewport({ scale: width / viewport.width });
-      await page.render({
-        canvasContext: context,
-        viewport: renderViewport,
-      }).promise;
-      
-      return canvas.toDataURL('image/png');
     } catch (error) {
-      logger.error('Failed to generate PDF thumbnail:', error);
-      // Return placeholder on error
-      const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100%" height="100%" fill="#1a1a2e"/>
-        <text x="50%" y="50%" font-size="64" text-anchor="middle" dominant-baseline="middle" fill="#8b5cf6">📄</text>
-      </svg>`;
-      // Properly encode SVG for base64 (handles Unicode characters like emojis)
-      // Use unescape(encodeURIComponent()) to convert Unicode to Latin1 before btoa
-      return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
-    }
-  }, []);
+        // Cleanup on error
+        if (page) {
+          try {
+            page.cleanup();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          page = null;
+        }
+        if (pdf) {
+          try {
+            const { cleanupPDFBlobUrl } = await import('../utils/pdfSource');
+            cleanupPDFBlobUrl(pdf);
+            await pdf.destroy();
+          } catch (e) {
+            // Ignore destroy errors
+          }
+          pdf = null;
+        }
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+          canvas = null;
+        }
+        
+        logger.error('Failed to generate PDF thumbnail:', error);
+        // Return placeholder on error
+        const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" fill="#1a1a2e"/>
+          <text x="50%" y="50%" font-size="64" text-anchor="middle" dominant-baseline="middle" fill="#8b5cf6">📄</text>
+        </svg>`;
+        // Properly encode SVG for base64 (handles Unicode characters like emojis)
+        // Use unescape(encodeURIComponent()) to convert Unicode to Latin1 before btoa
+        return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+      }
+    }, []);
 
   // Generate video thumbnail in renderer using HTML5 Video API
   const generateVideoThumbnailInRenderer = useCallback(async (filePath: string): Promise<string> => {
@@ -506,9 +606,16 @@ export function useArchive() {
       // Process items (files and folders)
       // Filter out hidden metadata files as a safety measure (backend should already filter, but double-check)
       const filteredItems = itemsList.filter((item: Awaited<ReturnType<typeof window.electronAPI.listCaseFiles>>[number]) => {
+        const itemName = item.name.toLowerCase();
+        
+        // Exclude .thumbnails folder
+        if (item.isFolder && itemName === '.thumbnails') {
+          return false;
+        }
+        
         // Exclude .parent-pdf metadata files
         if (!item.isFolder) {
-          const fileName = item.name.toLowerCase();
+          const fileName = itemName;
           if (fileName === '.parent-pdf' || fileName.startsWith('.parent-pdf')) {
             return false;
           }

@@ -10,6 +10,7 @@ export const mockElectronAPI = {
   readPDFFile: vi.fn(),
   getPDFFileSize: vi.fn(),
   readPDFFileChunk: vi.fn(),
+  closePDFFileHandle: vi.fn(),
   // Archive APIs
   selectArchiveDrive: vi.fn(),
   getArchiveConfig: vi.fn(),
