@@ -154,7 +154,8 @@ export function useArchive() {
     }
   }, [toast, loadCases]);
 
-  // Generate PDF thumbnail in renderer
+  // Generate PDF thumbnail in renderer using optimized chunk loading
+  // This works for files of any size by only loading the first page
   const generatePDFThumbnailInRenderer = useCallback(async (filePath: string): Promise<string> => {
     let pdf: any = null;
     let page: any = null;
@@ -165,222 +166,155 @@ export function useArchive() {
         throw new Error('Electron API not available');
       }
 
-      // Check file size first - skip thumbnail generation for very large files to prevent OOM
-      const fileSize = await window.electronAPI.getPDFFileSize(filePath);
-      const LARGE_FILE_THRESHOLD = 500 * 1024 * 1024; // 500MB
-      
-      if (fileSize > LARGE_FILE_THRESHOLD) {
-        // For large files, return placeholder to prevent OOM
-        logger.warn(`Skipping thumbnail generation for large PDF (${(fileSize / 1024 / 1024).toFixed(2)}MB) to prevent OOM`);
-        const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-          <rect width="100%" height="100%" fill="#1a1a2e"/>
-          <text x="50%" y="50%" font-size="64" text-anchor="middle" dominant-baseline="middle" fill="#8b5cf6">📄</text>
-        </svg>`;
-        return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
-      }
-
-      const fileData = await window.electronAPI.readPDFFile(filePath);
-      
       // Import pdfjs-dist and setup worker
       const pdfjsLib = await import('pdfjs-dist');
       await setupPDFWorker();
       
-      // Handle new format with type field
-      let arrayBuffer: ArrayBuffer | null = null;
+      // Use optimized chunked source for all PDFs (handles both small and large files efficiently)
+      // This uses ArrayBuffer transfer and parallel loading we just implemented
+      const { createChunkedPDFSource, cleanupPDFBlobUrl } = await import('../utils/pdfSource');
       
-      if (fileData && typeof fileData === 'object' && 'type' in fileData) {
-        if (fileData.type === 'base64') {
-          const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
-          const binaryString = atob(cleanBase64);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          arrayBuffer = bytes.buffer;
-        } else if (fileData.type === 'file-path') {
-          // For large files that passed the threshold, use chunked source but with cleanup
-          const { createChunkedPDFSource, cleanupPDFBlobUrl } = await import('../utils/pdfSource');
-          pdf = await createChunkedPDFSource(fileData.path, pdfjsLib);
-          page = await pdf.getPage(1);
-          const viewport = page.getViewport({ scale: 1.0 });
-          
-          // Calculate thumbnail size
-          const THUMBNAIL_SIZE = 200;
-          const aspectRatio = viewport.width / viewport.height;
-          let width = THUMBNAIL_SIZE;
-          let height = THUMBNAIL_SIZE;
-          
-          if (aspectRatio > 1) {
-            height = THUMBNAIL_SIZE / aspectRatio;
-          } else {
-            width = THUMBNAIL_SIZE * aspectRatio;
-          }
-          
-          canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const context = canvas.getContext('2d');
-          if (!context) {
-            throw new Error('Failed to get canvas context');
-          }
-          
-          const renderViewport = page.getViewport({ scale: width / viewport.width });
-          await page.render({
-            canvasContext: context,
-            viewport: renderViewport,
-          }).promise;
-          
-          const thumbnail = canvas.toDataURL('image/png');
-          
-          // Cleanup immediately after generating thumbnail
-          if (page) {
-            try {
-              page.cleanup();
-            } catch (e) {
-              // Ignore cleanup errors
-            }
-            page = null;
-          }
-          if (pdf) {
-            try {
-              cleanupPDFBlobUrl(pdf);
-              await pdf.destroy();
-            } catch (e) {
-              // Ignore destroy errors
-            }
-            pdf = null;
-          }
-          if (canvas) {
-            canvas.width = 0;
-            canvas.height = 0;
-            canvas = null;
-          }
-          
-          return thumbnail;
-        } else {
-          throw new Error('Unexpected PDF file data format');
-        }
-      } else if (typeof fileData === 'string') {
-        // Legacy format: base64 string
-        const cleanBase64 = fileData.trim().replace(/\s/g, '');
-        const binaryString = atob(cleanBase64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        arrayBuffer = bytes.buffer;
-      } else if (Array.isArray(fileData)) {
-        // Legacy format: array of numbers
-        arrayBuffer = new Uint8Array(fileData).buffer;
+      // Load PDF using optimized chunked source (no progress callback needed for thumbnails)
+      pdf = await createChunkedPDFSource(filePath, pdfjsLib);
+      
+      // Only load the first page for thumbnail generation
+      page = await pdf.getPage(1);
+      
+      // Get viewport at minimal scale to reduce memory usage
+      const baseViewport = page.getViewport({ scale: 1.0 });
+      
+      // Calculate thumbnail size (200px max dimension)
+      const THUMBNAIL_SIZE = 200;
+      const aspectRatio = baseViewport.width / baseViewport.height;
+      let width = THUMBNAIL_SIZE;
+      let height = THUMBNAIL_SIZE;
+      
+      if (aspectRatio > 1) {
+        height = THUMBNAIL_SIZE / aspectRatio;
       } else {
-        throw new Error('Unexpected PDF file data format');
+        width = THUMBNAIL_SIZE * aspectRatio;
       }
       
-      // Only process if we have an arrayBuffer (for base64/array formats)
-      if (arrayBuffer) {
-        pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.0 });
-        
-        // Calculate thumbnail size
-        const THUMBNAIL_SIZE = 200;
-        const aspectRatio = viewport.width / viewport.height;
-        let width = THUMBNAIL_SIZE;
-        let height = THUMBNAIL_SIZE;
-        
-        if (aspectRatio > 1) {
-          height = THUMBNAIL_SIZE / aspectRatio;
-        } else {
-          width = THUMBNAIL_SIZE * aspectRatio;
-        }
-        
-        canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext('2d');
-        
-        if (!context) {
-          throw new Error('Failed to get canvas context');
-        }
-        
-        // Fill background
-        context.fillStyle = '#1a1a2e';
-        context.fillRect(0, 0, width, height);
-        
-        // Render PDF page
-        const renderViewport = page.getViewport({ scale: width / viewport.width });
-        await page.render({
-          canvasContext: context,
-          viewport: renderViewport,
-        }).promise;
-        
-        const thumbnail = canvas.toDataURL('image/png');
-        
-        // Cleanup immediately after generating thumbnail
-        if (page) {
-          try {
-            page.cleanup();
-          } catch (e) {
-            // Ignore cleanup errors
-          }
-          page = null;
-        }
-        if (pdf) {
-          try {
-            await pdf.destroy();
-          } catch (e) {
-            // Ignore destroy errors
-          }
-          pdf = null;
-        }
-        if (canvas) {
-          canvas.width = 0;
-          canvas.height = 0;
-          canvas = null;
-        }
-        
-        // Clear arrayBuffer reference
-        arrayBuffer = null;
-        
-        return thumbnail;
+      // Create canvas with minimal size to reduce memory footprint
+      canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Use 2D context with memory optimizations
+      const context = canvas.getContext('2d', {
+        willReadFrequently: false,
+        alpha: false, // Disable alpha channel to save memory
+      });
+      
+      if (!context) {
+        throw new Error('Failed to get canvas context');
       }
+      
+      // Fill background
+      context.fillStyle = '#1a1a2e';
+      context.fillRect(0, 0, width, height);
+      
+      // Calculate scale for rendering (very small to minimize memory)
+      const renderScale = width / baseViewport.width;
+      const renderViewport = page.getViewport({ scale: renderScale });
+      
+      // Render PDF page to canvas
+      await page.render({
+        canvasContext: context,
+        viewport: renderViewport,
+      }).promise;
+      
+      // Convert to JPEG with compression to reduce memory (JPEG is more efficient than PNG)
+      // Use 0.85 quality for good balance between size and quality
+      const thumbnail = canvas.toDataURL('image/jpeg', 0.85);
+      
+      // Immediate cleanup to free memory
+      if (page) {
+        try {
+          page.cleanup();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        page = null;
+      }
+      
+      if (pdf) {
+        try {
+          cleanupPDFBlobUrl(pdf);
+          await pdf.destroy();
+        } catch (e) {
+          // Ignore destroy errors
+        }
+        pdf = null;
+      }
+      
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+        canvas = null;
+      }
+      
+      // Close file handle if it was a streaming source
+      try {
+        await window.electronAPI.closePDFFileHandle(filePath);
+      } catch (e) {
+        // Ignore errors - handle might not be cached or already closed
+      }
+      
+      // Force garbage collection hint if available
+      if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+        (globalThis as any).gc();
+      }
+      
+      return thumbnail;
     } catch (error) {
-        // Cleanup on error
-        if (page) {
-          try {
-            page.cleanup();
-          } catch (e) {
-            // Ignore cleanup errors
-          }
-          page = null;
+      // Cleanup on error
+      if (page) {
+        try {
+          page.cleanup();
+        } catch (e) {
+          // Ignore cleanup errors
         }
-        if (pdf) {
-          try {
-            const { cleanupPDFBlobUrl } = await import('../utils/pdfSource');
-            cleanupPDFBlobUrl(pdf);
-            await pdf.destroy();
-          } catch (e) {
-            // Ignore destroy errors
-          }
-          pdf = null;
-        }
-        if (canvas) {
-          canvas.width = 0;
-          canvas.height = 0;
-          canvas = null;
-        }
-        
-        logger.error('Failed to generate PDF thumbnail:', error);
-        // Return placeholder on error
-        const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-          <rect width="100%" height="100%" fill="#1a1a2e"/>
-          <text x="50%" y="50%" font-size="64" text-anchor="middle" dominant-baseline="middle" fill="#8b5cf6">📄</text>
-        </svg>`;
-        // Properly encode SVG for base64 (handles Unicode characters like emojis)
-        // Use unescape(encodeURIComponent()) to convert Unicode to Latin1 before btoa
-        return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+        page = null;
       }
-    }, []);
+      
+      if (pdf) {
+        try {
+          const { cleanupPDFBlobUrl } = await import('../utils/pdfSource');
+          cleanupPDFBlobUrl(pdf);
+          await pdf.destroy();
+        } catch (e) {
+          // Ignore destroy errors
+        }
+        pdf = null;
+      }
+      
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+        canvas = null;
+      }
+      
+      // Close file handle on error
+      try {
+        if (window.electronAPI) {
+          await window.electronAPI.closePDFFileHandle(filePath);
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+      
+      logger.error('Failed to generate PDF thumbnail:', error);
+      
+      // Return placeholder on error
+      const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="#1a1a2e"/>
+        <text x="50%" y="50%" font-size="64" text-anchor="middle" dominant-baseline="middle" fill="#8b5cf6">📄</text>
+      </svg>`;
+      // Properly encode SVG for base64 (handles Unicode characters like emojis)
+      return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    }
+  }, []);
 
   // Generate video thumbnail in renderer using HTML5 Video API
   const generateVideoThumbnailInRenderer = useCallback(async (filePath: string): Promise<string> => {
@@ -532,9 +466,26 @@ export function useArchive() {
       
       let thumbnail: string;
       
-      // For PDFs, generate thumbnail in renderer using pdfjs-dist
+      // For PDFs, check disk cache first (industry standard: disk cache before generation)
       if (fileType === 'pdf') {
-        thumbnail = await generatePDFThumbnailInRenderer(filePath);
+        // Try to load from disk cache first
+        const cachedThumbnail = await window.electronAPI.readPDFThumbnail(filePath);
+        
+        if (cachedThumbnail) {
+          // Thumbnail exists on disk and is valid
+          thumbnail = cachedThumbnail;
+        } else {
+          // Generate thumbnail using optimized chunk loading (prevents OOM)
+          thumbnail = await generatePDFThumbnailInRenderer(filePath);
+          
+          // Save to disk cache for future use (industry standard: persist after generation)
+          try {
+            await window.electronAPI.savePDFThumbnail(filePath, thumbnail);
+          } catch (saveError) {
+            // Log but don't fail - thumbnail is still usable from memory cache
+            logger.warn(`Failed to save PDF thumbnail to disk for ${filePath}:`, saveError);
+          }
+        }
       } else if (fileType === 'video') {
         // For videos, generate thumbnail in renderer using HTML5 Video API
         try {
@@ -553,7 +504,7 @@ export function useArchive() {
         thumbnail = await window.electronAPI.getFileThumbnail(filePath);
       }
       
-      // Store in global cache for future use
+      // Store in global cache for future use (in-memory cache for fast access)
       globalThumbnailCache.set(filePath, thumbnail);
       
       setFiles(prev => {
@@ -772,6 +723,16 @@ export function useArchive() {
         return next;
       });
 
+      // Delete thumbnail from disk if it's a PDF (industry standard: cleanup on delete)
+      if (!isFolder && filePath.toLowerCase().endsWith('.pdf')) {
+        try {
+          await window.electronAPI.deletePDFThumbnail(filePath);
+        } catch (error) {
+          // Log but don't fail - thumbnail deletion is best-effort cleanup
+          logger.warn(`Failed to delete thumbnail for ${filePath}:`, error);
+        }
+      }
+
       await window.electronAPI.deleteFile(filePath, isFolder);
       toast.success(isFolder ? 'Folder deleted' : 'File deleted');
       
@@ -852,6 +813,16 @@ export function useArchive() {
         globalThumbnailCache.delete(filePath);
         if (thumbnail) {
           globalThumbnailCache.set(optimisticNewPath, thumbnail);
+        }
+      }
+
+      // Delete old thumbnail from disk if it's a PDF (industry standard: cleanup on rename)
+      if (filePath.toLowerCase().endsWith('.pdf')) {
+        try {
+          await window.electronAPI.deletePDFThumbnail(filePath);
+        } catch (error) {
+          // Log but don't fail - thumbnail deletion is best-effort cleanup
+          logger.warn(`Failed to delete old thumbnail for ${filePath}:`, error);
         }
       }
 

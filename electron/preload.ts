@@ -38,6 +38,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteFile: (filePath: string, isFolder?: boolean) => ipcRenderer.invoke('delete-file', filePath, isFolder),
   renameFile: (filePath: string, newName: string) => ipcRenderer.invoke('rename-file', filePath, newName),
   getFileThumbnail: (filePath: string) => ipcRenderer.invoke('get-file-thumbnail', filePath),
+  getPDFThumbnailPath: (filePath: string) => ipcRenderer.invoke('get-pdf-thumbnail-path', filePath),
+  savePDFThumbnail: (filePath: string, thumbnailData: string) => ipcRenderer.invoke('save-pdf-thumbnail', filePath, thumbnailData),
+  readPDFThumbnail: (filePath: string) => ipcRenderer.invoke('read-pdf-thumbnail', filePath),
+  deletePDFThumbnail: (filePath: string) => ipcRenderer.invoke('delete-pdf-thumbnail', filePath),
   readFileData: (filePath: string) => ipcRenderer.invoke('read-file-data', filePath),
   extractPDFFromArchive: (options: {
     pdfPath: string;
@@ -87,6 +91,10 @@ declare global {
       deleteFile: (filePath: string, isFolder?: boolean) => Promise<boolean>;
       renameFile: (filePath: string, newName: string) => Promise<{ success: boolean; newPath: string }>;
       getFileThumbnail: (filePath: string) => Promise<string>;
+      getPDFThumbnailPath: (filePath: string) => Promise<string>;
+      savePDFThumbnail: (filePath: string, thumbnailData: string) => Promise<void>;
+      readPDFThumbnail: (filePath: string) => Promise<string | null>;
+      deletePDFThumbnail: (filePath: string) => Promise<void>;
       readFileData: (filePath: string) => Promise<{ data: string; mimeType: string; fileName: string }>;
       extractPDFFromArchive: (options: {
         pdfPath: string;

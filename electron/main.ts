@@ -1647,6 +1647,145 @@ ipcMain.handle('get-file-thumbnail', async (event, filePath: string) => {
   }
 });
 
+// Get PDF thumbnail file path (industry standard: .thumbnails folder next to PDF)
+ipcMain.handle('get-pdf-thumbnail-path', async (event, filePath: string) => {
+  if (!isValidPDFFile(filePath) || !isSafePath(filePath)) {
+    throw new Error('Invalid PDF file path');
+  }
+
+  try {
+    const dir = path.dirname(filePath);
+    const baseName = path.basename(filePath, path.extname(filePath));
+    const thumbnailsDir = path.join(dir, '.thumbnails');
+    
+    // Ensure .thumbnails directory exists
+    try {
+      await fs.access(thumbnailsDir);
+    } catch {
+      await fs.mkdir(thumbnailsDir, { recursive: true });
+    }
+    
+    // Use base64-encoded filename to handle special characters safely
+    // Industry standard: use hash or safe filename encoding
+    const safeName = Buffer.from(baseName).toString('base64').replace(/[/+=]/g, '_');
+    return path.join(thumbnailsDir, `${safeName}.jpg`);
+  } catch (error) {
+    throw new Error(`Failed to get thumbnail path: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Save PDF thumbnail to disk
+ipcMain.handle('save-pdf-thumbnail', async (event, filePath: string, thumbnailData: string) => {
+  if (!isValidPDFFile(filePath) || !isSafePath(filePath)) {
+    throw new Error('Invalid PDF file path');
+  }
+
+  try {
+    // Calculate thumbnail path (same logic as get-pdf-thumbnail-path)
+    const dir = path.dirname(filePath);
+    const baseName = path.basename(filePath, path.extname(filePath));
+    const thumbnailsDir = path.join(dir, '.thumbnails');
+    
+    // Ensure .thumbnails directory exists
+    try {
+      await fs.access(thumbnailsDir);
+    } catch {
+      await fs.mkdir(thumbnailsDir, { recursive: true });
+    }
+    
+    // Use base64-encoded filename to handle special characters safely
+    const safeName = Buffer.from(baseName).toString('base64').replace(/[/+=]/g, '_');
+    const thumbnailPath = path.join(thumbnailsDir, `${safeName}.jpg`);
+
+    // Extract base64 data from data URL (format: data:image/jpeg;base64,...)
+    const base64Match = thumbnailData.match(/^data:image\/[^;]+;base64,(.+)$/);
+    if (!base64Match) {
+      throw new Error('Invalid thumbnail data format');
+    }
+
+    const imageBuffer = Buffer.from(base64Match[1], 'base64');
+    
+    // Write thumbnail file atomically (industry standard: write to temp then rename)
+    const tempPath = `${thumbnailPath}.tmp`;
+    await fs.writeFile(tempPath, imageBuffer);
+    await fs.rename(tempPath, thumbnailPath);
+  } catch (error) {
+    throw new Error(`Failed to save thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Read PDF thumbnail from disk
+ipcMain.handle('read-pdf-thumbnail', async (event, filePath: string) => {
+  if (!isValidPDFFile(filePath) || !isSafePath(filePath)) {
+    throw new Error('Invalid PDF file path');
+  }
+
+  try {
+    const dir = path.dirname(filePath);
+    const baseName = path.basename(filePath, path.extname(filePath));
+    const thumbnailsDir = path.join(dir, '.thumbnails');
+    const safeName = Buffer.from(baseName).toString('base64').replace(/[/+=]/g, '_');
+    const thumbnailPath = path.join(thumbnailsDir, `${safeName}.jpg`);
+
+    // Check if thumbnail exists
+    try {
+      await fs.access(thumbnailPath);
+    } catch {
+      return null; // Thumbnail doesn't exist
+    }
+
+    // Check if PDF file is newer than thumbnail (invalidate stale thumbnails)
+    const pdfStats = await fs.stat(filePath);
+    const thumbnailStats = await fs.stat(thumbnailPath);
+    
+    if (pdfStats.mtime > thumbnailStats.mtime) {
+      // PDF is newer than thumbnail, delete stale thumbnail
+      await fs.unlink(thumbnailPath).catch(() => {
+        // Ignore errors if file is already deleted
+      });
+      return null;
+    }
+
+    // Read thumbnail file
+    const thumbnailBuffer = await fs.readFile(thumbnailPath);
+    const base64 = thumbnailBuffer.toString('base64');
+    return `data:image/jpeg;base64,${base64}`;
+  } catch (error) {
+    // Return null on error (thumbnail doesn't exist or can't be read)
+    return null;
+  }
+});
+
+// Delete PDF thumbnail from disk (industry standard: cleanup on file delete/rename)
+ipcMain.handle('delete-pdf-thumbnail', async (event, filePath: string) => {
+  if (!isValidPDFFile(filePath) || !isSafePath(filePath)) {
+    throw new Error('Invalid PDF file path');
+  }
+
+  try {
+    const dir = path.dirname(filePath);
+    const baseName = path.basename(filePath, path.extname(filePath));
+    const thumbnailsDir = path.join(dir, '.thumbnails');
+    const safeName = Buffer.from(baseName).toString('base64').replace(/[/+=]/g, '_');
+    const thumbnailPath = path.join(thumbnailsDir, `${safeName}.jpg`);
+
+    // Delete thumbnail file if it exists
+    try {
+      await fs.unlink(thumbnailPath);
+    } catch (error) {
+      // Ignore errors if file doesn't exist
+      const errorCode = (error as NodeJS.ErrnoException)?.code;
+      if (errorCode !== 'ENOENT') {
+        // Log non-ENOENT errors but don't throw
+        logger.warn(`Failed to delete thumbnail ${thumbnailPath}:`, error);
+      }
+    }
+  } catch (error) {
+    // Don't throw - thumbnail deletion is best-effort cleanup
+    logger.warn(`Failed to delete thumbnail for ${filePath}:`, error);
+  }
+});
+
 // Read file data (for viewing)
 ipcMain.handle('read-file-data', async (event, filePath: string) => {
   if (!isSafePath(filePath)) {
