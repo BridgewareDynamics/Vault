@@ -1099,12 +1099,15 @@ export function useArchive() {
 
   // Filter files while preserving folder-PDF relationships
   // If a PDF matches, include its associated folders (and vice versa)
+  // Also filters by selectedTagId when set
   const filteredFiles = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return files; // No search query, return all files in backend order
+    // If no search query and no tag filter, return all files in backend order
+    if (!searchQuery.trim() && !selectedTagId) {
+      return files;
     }
 
-    const queryLower = searchQuery.toLowerCase();
+    const queryLower = searchQuery.trim().toLowerCase();
+    const hasSearchQuery = queryLower.length > 0;
     const matchingPaths = new Set<string>();
     const pdfToFolders = new Map<string, string[]>(); // PDF path -> folder paths
     const folderToPdf = new Map<string, string>(); // Folder path -> PDF path
@@ -1128,22 +1131,53 @@ export function useArchive() {
       }
     });
 
-    // Find all matching items
+    // Find all matching items based on search query and/or tag filter
     files.forEach(file => {
-      if (file.name.toLowerCase().includes(queryLower)) {
+      let matchesSearch = !hasSearchQuery; // If no search query, consider it matching
+      let matchesTag = !selectedTagId; // If no tag filter, consider it matching
+
+      // Check search query match
+      if (hasSearchQuery) {
+        matchesSearch = file.name.toLowerCase().includes(queryLower);
+      }
+
+      // Check tag filter match (only files can have tags, not folders)
+      if (selectedTagId) {
+        if (file.isFolder) {
+          // Folders don't have tags, but check if their associated PDF matches the tag
+          const pdfPath = folderToPdf.get(file.path);
+          if (pdfPath) {
+            const associatedPdf = files.find(f => f.path === pdfPath);
+            matchesTag = associatedPdf?.categoryTagId === selectedTagId;
+          } else {
+            // Folder without associated PDF can't match tag filter
+            matchesTag = false;
+          }
+        } else {
+          // Files can have tags
+          matchesTag = file.categoryTagId === selectedTagId;
+        }
+      }
+
+      // Item matches if it passes both filters
+      if (matchesSearch && matchesTag) {
         matchingPaths.add(file.path);
         
-        // If it's a PDF, also include its folders
+        // If it's a PDF, also include its folders (folders inherit PDF's tag match)
         if (!file.isFolder && file.type === 'pdf') {
           const folders = pdfToFolders.get(file.path) || [];
           folders.forEach(folderPath => matchingPaths.add(folderPath));
         }
         
-        // If it's a folder, also include its associated PDF
-        if (file.isFolder) {
+        // If it's a folder that matches search, also include its associated PDF if PDF matches tag
+        // (This handles the case where folder matches search but we need to check if PDF matches tag)
+        if (file.isFolder && hasSearchQuery && selectedTagId) {
           const pdfPath = folderToPdf.get(file.path);
           if (pdfPath) {
-            matchingPaths.add(pdfPath);
+            const associatedPdf = files.find(f => f.path === pdfPath);
+            if (associatedPdf?.categoryTagId === selectedTagId) {
+              matchingPaths.add(pdfPath);
+            }
           }
         }
       }
@@ -1151,7 +1185,7 @@ export function useArchive() {
 
     // Return files in original order, but only those that match (or are related to matches)
     return files.filter(file => matchingPaths.has(file.path));
-  }, [files, searchQuery]);
+  }, [files, searchQuery, selectedTagId]);
 
   const openFolder = useCallback((folderPath: string) => {
     if (!currentCase) return;
