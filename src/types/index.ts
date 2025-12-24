@@ -56,6 +56,7 @@ export interface ArchiveFile {
   isFolder?: boolean;
   folderType?: 'extraction' | 'case';
   parentPdfName?: string; // Name of the parent PDF file this folder was created from
+  backgroundImage?: string; // Path to background image for folders
 }
 
 // Logger Types

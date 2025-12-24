@@ -10,9 +10,11 @@ interface ArchiveFileItemProps {
   onDelete?: () => void;
   onExtract?: () => void;
   onRename?: () => void;
+  onDragStart?: (file: ArchiveFile) => void;
+  onDragEnd?: () => void;
 }
 
-export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename }: ArchiveFileItemProps) {
+export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd }: ArchiveFileItemProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLButtonElement>(null);
@@ -51,6 +53,29 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename }
     }
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    // #region agent log
+    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchiveFileItem.tsx:56',message:'handleDragStart: Drag started',data:{filePath:file.path,fileName:file.name,fileType:file.type,isFolder:file.isFolder},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+    // #endregion
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', file.path);
+    // #region agent log
+    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchiveFileItem.tsx:60',message:'handleDragStart: DataTransfer set',data:{dataTransferTypes:Array.from(e.dataTransfer.types),effectAllowed:e.dataTransfer.effectAllowed},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+    // #endregion
+    if (onDragStart) {
+      onDragStart(file);
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchiveFileItem.tsx:64',message:'handleDragStart: onDragStart called',data:{filePath:file.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+      // #endregion
+    }
+  };
+
+  const handleDragEnd = () => {
+    if (onDragEnd) {
+      onDragEnd();
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -59,6 +84,9 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename }
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
       className="relative cursor-pointer group"
+      draggable={true}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
       <div
         onClick={onClick}

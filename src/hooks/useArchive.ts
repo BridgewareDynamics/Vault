@@ -154,6 +154,37 @@ export function useArchive() {
     }
   }, [toast, loadCases]);
 
+  const updateFolderBackgroundImage = useCallback(async (folderPath: string): Promise<boolean> => {
+    let imagePath: string | null = null;
+    try {
+      if (!window.electronAPI) {
+        toast.error('Electron API not available');
+        return false;
+      }
+
+      // Open file picker to select image
+      imagePath = await window.electronAPI.selectImageFile();
+      if (!imagePath) {
+        return false; // User cancelled
+      }
+
+      // Set the background image
+      await window.electronAPI.setFolderBackgroundImage(folderPath, imagePath);
+      
+      // Reload files to update the UI
+      const parentPath = currentFolderPath || currentCase?.path;
+      if (parentPath && loadFilesRef.current) {
+        await loadFilesRef.current(parentPath, true);
+      }
+      
+      toast.success('Background image updated');
+      return true;
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'update folder background image', path: imagePath || 'unknown' }));
+      return false;
+    }
+  }, [toast, currentCase, currentFolderPath]);
+
   // Generate PDF thumbnail in renderer using optimized chunk loading
   // This works for files of any size by only loading the first page
   const generatePDFThumbnailInRenderer = useCallback(async (filePath: string): Promise<string> => {
@@ -681,6 +712,86 @@ export function useArchive() {
     }
   }, [toast, currentCase, loadFiles]);
 
+  const createFolder = useCallback(async (folderName: string): Promise<boolean> => {
+    try {
+      if (!window.electronAPI) {
+        toast.error('Electron API not available');
+        return false;
+      }
+
+      // Determine the path where folder should be created
+      const parentPath = currentFolderPath || currentCase?.path;
+      if (!parentPath) {
+        toast.error('No case or folder selected');
+        return false;
+      }
+
+      const folderPath = await window.electronAPI.createFolder(parentPath, folderName);
+      if (folderPath) {
+        toast.success('Folder created');
+        
+        // Reload files to show the new folder, preserving existing thumbnails
+        await loadFiles(parentPath, true);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'create folder' }));
+      return false;
+    }
+  }, [toast, currentCase, currentFolderPath, loadFiles]);
+
+  const moveFileToFolder = useCallback(async (filePath: string, folderPath: string): Promise<boolean> => {
+    // #region agent log
+    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:713',message:'moveFileToFolder: Entry',data:{filePath,folderPath,hasElectronAPI:!!window.electronAPI,currentFolderPath,currentCasePath:currentCase?.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
+    // #endregion
+    try {
+      if (!window.electronAPI) {
+        // #region agent log
+        // Note: Can't use debugLog here since electronAPI is not available
+        // #endregion
+        toast.error('Electron API not available');
+        return false;
+      }
+
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:720',message:'moveFileToFolder: Calling electronAPI.moveFileToFolder',data:{filePath,folderPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
+      // #endregion
+      const result = await window.electronAPI.moveFileToFolder(filePath, folderPath);
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:721',message:'moveFileToFolder: Electron API result received',data:{filePath,folderPath,success:result.success,error:result.error,newPath:result.newPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
+      // #endregion
+      if (result.success) {
+        toast.success('File moved to folder');
+        
+        // Reload files to reflect the move, preserving existing thumbnails
+        const parentPath = currentFolderPath || currentCase?.path;
+        // #region agent log
+        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:725',message:'moveFileToFolder: Reloading files',data:{filePath,folderPath,parentPath,hasParentPath:!!parentPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
+        // #endregion
+        if (parentPath) {
+          await loadFiles(parentPath, true);
+          // #region agent log
+          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:727',message:'moveFileToFolder: Files reloaded',data:{filePath,folderPath,parentPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
+          // #endregion
+        }
+        return true;
+      } else {
+        // #region agent log
+        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:730',message:'moveFileToFolder: Move failed',data:{filePath,folderPath,error:result.error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
+        // #endregion
+        toast.error(result.error || 'Failed to move file');
+        return false;
+      }
+    } catch (error) {
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:733',message:'moveFileToFolder: Exception caught',data:{filePath,folderPath,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
+      // #endregion
+      toast.error(getUserFriendlyError(error, { operation: 'move file' }));
+      return false;
+    }
+  }, [toast, currentCase, currentFolderPath, loadFiles]);
+
   const deleteCase = useCallback(async (casePath: string): Promise<boolean> => {
     try {
       if (!window.electronAPI) {
@@ -1081,16 +1192,19 @@ export function useArchive() {
     setSearchQuery,
     selectArchiveDrive,
     createCase,
+    createFolder,
     addFilesToCase,
     deleteCase,
     deleteFile,
     renameFile,
+    moveFileToFolder,
     openFolder,
     goBackToCase,
     goBackToParentFolder,
     navigateToFolder,
     getCurrentPath,
     updateCaseBackgroundImage,
+    updateFolderBackgroundImage,
     refreshCases: loadCases,
     refreshFiles: () => {
       const path = currentFolderPath || currentCase?.path;

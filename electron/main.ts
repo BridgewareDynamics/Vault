@@ -365,6 +365,41 @@ ipcMain.handle('log-renderer', async (event, level: LogLevel, ...args: LogArgs) 
   logger[level](`[Renderer]`, ...args);
 });
 
+// Debug logging handler - writes NDJSON to debug.log file
+ipcMain.handle('debug-log', async (event, logEntry: {
+  location: string;
+  message: string;
+  data?: any;
+  timestamp: number;
+  sessionId: string;
+  runId: string;
+  hypothesisId: string;
+}) => {
+  try {
+    // Use workspace path: .cursor/debug.log relative to where the app is running
+    // In development, this is typically the workspace root
+    // In production, we'll use the app path
+    const workspaceRoot = isDev ? process.cwd() : app.getAppPath();
+    const logPath = join(workspaceRoot, '.cursor', 'debug.log');
+    const logDir = path.dirname(logPath);
+    
+    // Ensure directory exists
+    await fs.mkdir(logDir, { recursive: true });
+    
+    // Format as NDJSON (one JSON object per line)
+    const ndjsonLine = JSON.stringify({
+      id: `log_${logEntry.timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+      ...logEntry
+    }) + '\n';
+    
+    // Append to file
+    await fs.appendFile(logPath, ndjsonLine, 'utf8');
+  } catch (error) {
+    // Silently fail - don't break the app if logging fails
+    logger.debug('Failed to write debug log:', error);
+  }
+});
+
 // Get system memory information
 ipcMain.handle('get-system-memory', async () => {
   const totalMemory = os.totalmem();
@@ -999,6 +1034,64 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
   }
 });
 
+// Create folder (regular folder for organizing files)
+ipcMain.handle('create-folder', async (event, folderPath: string, folderName: string) => {
+  logger.log('[Main] create-folder called:', { folderPath, folderName });
+  
+  if (!isSafePath(folderPath)) {
+    logger.error('[Main] Invalid folder path:', folderPath);
+    throw new Error('Invalid folder path');
+  }
+
+  if (!folderName || !isValidFolderName(folderName)) {
+    logger.error('[Main] Invalid folder name:', folderName);
+    throw new Error('Invalid folder name');
+  }
+
+  try {
+    const newFolderPath = path.join(folderPath, folderName);
+    
+    // Check if folder already exists
+    try {
+      const stats = await fs.stat(newFolderPath);
+      if (stats.isDirectory()) {
+        throw new Error('Folder already exists');
+      }
+    } catch (error) {
+      const errorCode = (error as NodeJS.ErrnoException)?.code;
+      if (errorCode === 'ENOENT') {
+        // Folder doesn't exist, which is what we want
+      } else if (error instanceof Error && error.message === 'Folder already exists') {
+        throw error;
+      } else {
+        // Some other error, log but continue
+        logger.warn('[Main] Error checking folder existence:', error);
+      }
+    }
+    
+    logger.log('[Main] Creating folder at:', newFolderPath);
+    await fs.mkdir(newFolderPath, { recursive: true });
+    
+    // Verify folder was created
+    try {
+      const stats = await fs.stat(newFolderPath);
+      if (!stats.isDirectory()) {
+        throw new Error('Created path is not a directory');
+      }
+      logger.log('[Main] Folder verified, isDirectory:', stats.isDirectory());
+    } catch (statError) {
+      logger.error('[Main] Failed to verify folder:', statError);
+      throw new Error(`Failed to verify folder creation: ${statError instanceof Error ? statError.message : 'Unknown error'}`);
+    }
+    
+    logger.log('[Main] Folder created successfully:', newFolderPath);
+    return newFolderPath;
+  } catch (error) {
+    logger.error('[Main] Error creating folder:', error);
+    throw new Error(`Failed to create folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
 // Create extraction folder
 ipcMain.handle('create-extraction-folder', async (event, casePath: string, folderName: string, parentPdfPath?: string) => {
   logger.log('[Main] create-extraction-folder called:', { casePath, folderName, parentPdfPath });
@@ -1195,15 +1288,42 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
           const folderPath = path.join(casePath, entry.name);
           const stats = await fs.stat(folderPath);
           
-          // Try to read parent PDF metadata
+          // Try to read parent PDF metadata to determine folder type
           let parentPdfName: string | null = null;
+          let folderType: 'extraction' | 'case' = 'case'; // Default to regular folder
+          
           try {
             const metadataPath = path.join(folderPath, '.parent-pdf');
             parentPdfName = await fs.readFile(metadataPath, 'utf8');
             parentPdfName = parentPdfName.trim();
+            // If .parent-pdf exists, it's an extraction folder
+            if (parentPdfName) {
+              folderType = 'extraction';
+            }
           } catch (metadataError) {
-            // Metadata file doesn't exist or can't be read - that's okay
+            // Metadata file doesn't exist - it's a regular case folder
+            folderType = 'case';
             parentPdfName = null;
+          }
+          
+          // Try to read folder background image metadata
+          let backgroundImage: string | undefined = undefined;
+          try {
+            const backgroundMetadataPath = path.join(folderPath, '.folder-background');
+            const backgroundImageName = await fs.readFile(backgroundMetadataPath, 'utf8');
+            const trimmedName = backgroundImageName.trim();
+            if (trimmedName) {
+              const backgroundImagePath = path.join(folderPath, trimmedName);
+              // Verify the image file exists
+              try {
+                await fs.access(backgroundImagePath);
+                backgroundImage = backgroundImagePath;
+              } catch {
+                // Image file doesn't exist, ignore
+              }
+            }
+          } catch {
+            // No background image metadata, ignore
           }
           
           return {
@@ -1212,8 +1332,9 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
             size: 0,
             modified: stats.mtime.getTime(),
             isFolder: true,
-            folderType: 'extraction' as const,
+            folderType: folderType,
             parentPdfName: parentPdfName || undefined,
+            backgroundImage: backgroundImage,
           };
         })
     );
@@ -1464,6 +1585,57 @@ ipcMain.handle('set-case-background-image', async (event, casePath: string, imag
   }
 });
 
+// Set folder background image
+ipcMain.handle('set-folder-background-image', async (event, folderPath: string, imagePath: string) => {
+  if (!isSafePath(folderPath) || !isSafePath(imagePath)) {
+    throw new Error('Invalid path');
+  }
+
+  try {
+    // Check if folder path exists and is a directory
+    const folderStats = await fs.stat(folderPath);
+    if (!folderStats.isDirectory()) {
+      throw new Error('Folder path is not a directory');
+    }
+
+    // Check if image file exists
+    await fs.access(imagePath);
+
+    // Copy image to folder with a standard name
+    const imageExt = path.extname(imagePath);
+    const backgroundImageName = `.folder-background-image${imageExt}`;
+    const destPath = path.join(folderPath, backgroundImageName);
+
+    // Delete old background image if it exists
+    try {
+      const oldMetadataPath = path.join(folderPath, '.folder-background');
+      const oldMetadata = await fs.readFile(oldMetadataPath, 'utf8');
+      const oldImageName = oldMetadata.trim();
+      if (oldImageName && oldImageName !== backgroundImageName) {
+        const oldImagePath = path.join(folderPath, oldImageName);
+        try {
+          await fs.unlink(oldImagePath);
+        } catch {
+          // Old image doesn't exist, ignore
+        }
+      }
+    } catch {
+      // No old metadata, ignore
+    }
+
+    // Copy the new image
+    await fs.copyFile(imagePath, destPath);
+
+    // Store the filename in metadata file
+    const metadataPath = path.join(folderPath, '.folder-background');
+    await fs.writeFile(metadataPath, backgroundImageName, 'utf8');
+
+    return destPath;
+  } catch (error) {
+    throw new Error(`Failed to set folder background image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
 // Delete file or folder
 ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean = false) => {
   if (!isSafePath(filePath)) {
@@ -1589,6 +1761,93 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
         throw new Error(`Failed to delete file: ${errorMessage}`);
       }
     }
+  }
+});
+
+// Move file to folder
+ipcMain.handle('move-file-to-folder', async (event, filePath: string, folderPath: string) => {
+  logger.log('[Main] move-file-to-folder called:', { filePath, folderPath });
+  
+  if (!isSafePath(filePath)) {
+    logger.error('[Main] Invalid file path:', filePath);
+    return { success: false, error: 'Invalid file path' };
+  }
+
+  if (!isSafePath(folderPath)) {
+    logger.error('[Main] Invalid folder path:', folderPath);
+    return { success: false, error: 'Invalid folder path' };
+  }
+
+  try {
+    // Verify file exists
+    const fileStats = await fs.stat(filePath);
+    if (fileStats.isDirectory()) {
+      return { success: false, error: 'Cannot move folders using this handler' };
+    }
+
+    // Verify folder exists
+    const folderStats = await fs.stat(folderPath);
+    if (!folderStats.isDirectory()) {
+      return { success: false, error: 'Target path is not a directory' };
+    }
+
+    // Get filename and construct destination path
+    const fileName = path.basename(filePath);
+    const destPath = path.join(folderPath, fileName);
+
+    // Check if file already exists in destination
+    try {
+      await fs.access(destPath);
+      return { success: false, error: 'File already exists in destination folder' };
+    } catch {
+      // File doesn't exist, which is what we want
+    }
+
+    // Move the file
+    await fs.rename(filePath, destPath);
+    logger.log('[Main] File moved successfully:', { from: filePath, to: destPath });
+
+    // If it's a PDF, also move/update thumbnail
+    if (filePath.toLowerCase().endsWith('.pdf')) {
+      try {
+        // Calculate thumbnail paths (same logic as get-pdf-thumbnail-path)
+        const oldDir = path.dirname(filePath);
+        const oldBaseName = path.basename(filePath, path.extname(filePath));
+        const oldThumbnailsDir = path.join(oldDir, '.thumbnails');
+        const oldThumbnailPath = path.join(oldThumbnailsDir, `${oldBaseName}.jpg`);
+        
+        const newDir = path.dirname(destPath);
+        const newBaseName = path.basename(destPath, path.extname(destPath));
+        const newThumbnailsDir = path.join(newDir, '.thumbnails');
+        const newThumbnailPath = path.join(newThumbnailsDir, `${newBaseName}.jpg`);
+        
+        // Ensure new thumbnails directory exists
+        try {
+          await fs.access(newThumbnailsDir);
+        } catch {
+          await fs.mkdir(newThumbnailsDir, { recursive: true });
+        }
+        
+        // Try to move the thumbnail
+        try {
+          await fs.rename(oldThumbnailPath, newThumbnailPath);
+          logger.log('[Main] PDF thumbnail moved:', { from: oldThumbnailPath, to: newThumbnailPath });
+        } catch (thumbnailError) {
+          // Thumbnail might not exist, that's okay
+          logger.debug('[Main] Thumbnail not found or already moved:', thumbnailError);
+        }
+      } catch (error) {
+        logger.warn('[Main] Failed to move PDF thumbnail:', error);
+      }
+    }
+
+    return { success: true, newPath: destPath };
+  } catch (error) {
+    logger.error('[Main] Error moving file:', error);
+    return { 
+      success: false, 
+      error: `Failed to move file: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    };
   }
 });
 

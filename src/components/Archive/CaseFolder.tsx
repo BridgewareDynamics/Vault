@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Folder, Loader2, Trash2, Pencil } from 'lucide-react';
+import { Folder, Loader2, Trash2, Pencil, Image } from 'lucide-react';
 import { ArchiveCase } from '../../types';
 import { useState, useEffect } from 'react';
 import { logger } from '../../utils/logger';
@@ -9,10 +9,11 @@ interface CaseFolderProps {
   isExtracting?: boolean;
   onClick: () => void;
   onDelete?: () => void;
+  onRename?: () => void;
   onEditBackground?: () => void;
 }
 
-export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, onEditBackground }: CaseFolderProps) {
+export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, onRename, onEditBackground }: CaseFolderProps) {
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | undefined>(undefined);
 
   // Load background image as data URL
@@ -61,20 +62,6 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
             <div className="absolute inset-0 bg-gray-800/50" />
           )}
 
-          {/* Pencil icon in left corner */}
-          {onEditBackground && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditBackground();
-              }}
-              className="absolute top-2 left-2 z-10 p-1.5 bg-gray-800/80 hover:bg-gray-700 rounded-lg transition-colors"
-              aria-label="Edit background image"
-            >
-              <Pencil className="w-4 h-4 text-cyber-purple-400" />
-            </button>
-          )}
-
           {/* Folder Icon */}
           <div className="flex flex-col items-center gap-3 relative z-10">
             <div className="relative">
@@ -93,14 +80,44 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
           {/* Overlay on hover */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-          {/* Delete button */}
+          {/* Image icon in bottom-left corner */}
+          {onEditBackground && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditBackground();
+              }}
+              className="absolute bottom-2 left-2 z-10 p-1.5 bg-gray-800/80 hover:bg-gray-700 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+              aria-label="Edit background image"
+              title="Change background image"
+            >
+              <Image className="w-4 h-4 text-cyber-purple-400" />
+            </button>
+          )}
+
+          {/* Rename pencil in bottom-right */}
+          {onRename && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRename();
+              }}
+              className="absolute bottom-2 right-2 z-10 p-1.5 bg-gray-700/80 hover:bg-gray-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+              aria-label="Rename case"
+              title="Rename case"
+            >
+              <Pencil className="w-4 h-4 text-gray-300 hover:text-cyber-purple-400" />
+            </button>
+          )}
+
+          {/* Delete button in top-right */}
           {onDelete && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();
               }}
-              className="absolute top-2 right-2 p-2 bg-red-600/80 hover:bg-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute top-2 right-2 z-10 p-1.5 bg-red-600/80 hover:bg-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
               aria-label="Delete case"
             >
               <Trash2 className="w-4 h-4 text-white" />
@@ -135,6 +152,3 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
     </div>
   );
 }
-
-
-

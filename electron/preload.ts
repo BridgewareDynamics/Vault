@@ -29,12 +29,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getArchiveConfig: () => ipcRenderer.invoke('get-archive-config'),
   validateArchiveDirectory: (dirPath: string) => ipcRenderer.invoke('validate-archive-directory', dirPath),
   createCaseFolder: (caseName: string, description?: string) => ipcRenderer.invoke('create-case-folder', caseName, description),
+  createFolder: (folderPath: string, folderName: string) => ipcRenderer.invoke('create-folder', folderPath, folderName),
   createExtractionFolder: (casePath: string, folderName: string, parentPdfPath?: string) => ipcRenderer.invoke('create-extraction-folder', casePath, folderName, parentPdfPath),
+  moveFileToFolder: (filePath: string, folderPath: string) => ipcRenderer.invoke('move-file-to-folder', filePath, folderPath),
   listArchiveCases: () => ipcRenderer.invoke('list-archive-cases'),
   listCaseFiles: (casePath: string) => ipcRenderer.invoke('list-case-files', casePath),
   addFilesToCase: (casePath: string, filePaths?: string[]) => ipcRenderer.invoke('add-files-to-case', casePath, filePaths),
   deleteCase: (casePath: string) => ipcRenderer.invoke('delete-case', casePath),
   setCaseBackgroundImage: (casePath: string, imagePath: string) => ipcRenderer.invoke('set-case-background-image', casePath, imagePath),
+  setFolderBackgroundImage: (folderPath: string, imagePath: string) => ipcRenderer.invoke('set-folder-background-image', folderPath, imagePath),
   deleteFile: (filePath: string, isFolder?: boolean) => ipcRenderer.invoke('delete-file', filePath, isFolder),
   renameFile: (filePath: string, newName: string) => ipcRenderer.invoke('rename-file', filePath, newName),
   getFileThumbnail: (filePath: string) => ipcRenderer.invoke('get-file-thumbnail', filePath),
@@ -52,6 +55,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('extract-pdf-from-archive', options),
   // Logging API
   logToMain: (level: LogLevel, ...args: LogArgs) => ipcRenderer.invoke('log-renderer', level, ...args),
+  // Debug logging API - writes NDJSON to debug.log
+  debugLog: (logEntry: {
+    location: string;
+    message: string;
+    data?: any;
+    timestamp: number;
+    sessionId: string;
+    runId: string;
+    hypothesisId: string;
+  }) => ipcRenderer.invoke('debug-log', logEntry),
   // System information
   getSystemMemory: () => ipcRenderer.invoke('get-system-memory'),
 });
@@ -82,12 +95,15 @@ declare global {
       getArchiveConfig: () => Promise<{ archiveDrive: string | null }>;
       validateArchiveDirectory: (dirPath: string) => Promise<{ isValid: boolean; marker?: { version: string; createdAt: number; lastModified: number; caseCount?: number; archiveId: string } }>;
       createCaseFolder: (caseName: string, description?: string) => Promise<string>;
+      createFolder: (folderPath: string, folderName: string) => Promise<string>;
       createExtractionFolder: (casePath: string, folderName: string, parentPdfPath?: string) => Promise<string>;
+      moveFileToFolder: (filePath: string, folderPath: string) => Promise<{ success: boolean; error?: string; newPath?: string }>;
       listArchiveCases: () => Promise<Array<{ name: string; path: string; backgroundImage?: string; description?: string }>>;
       listCaseFiles: (casePath: string) => Promise<Array<{ name: string; path: string; size: number; modified: number; isFolder?: boolean; folderType?: 'extraction' | 'case'; parentPdfName?: string }>>;
       addFilesToCase: (casePath: string, filePaths?: string[]) => Promise<string[]>;
       deleteCase: (casePath: string) => Promise<boolean>;
       setCaseBackgroundImage: (casePath: string, imagePath: string) => Promise<string>;
+      setFolderBackgroundImage: (folderPath: string, imagePath: string) => Promise<string>;
       deleteFile: (filePath: string, isFolder?: boolean) => Promise<boolean>;
       renameFile: (filePath: string, newName: string) => Promise<{ success: boolean; newPath: string }>;
       getFileThumbnail: (filePath: string) => Promise<string>;
@@ -104,6 +120,15 @@ declare global {
         extractedPages: Array<{ pageNumber: number; imageData: string }>;
       }) => Promise<{ success: boolean; messages: string[]; extractionFolder: string }>;
       logToMain: (level: LogLevel, ...args: LogArgs) => Promise<void>;
+      debugLog: (logEntry: {
+        location: string;
+        message: string;
+        data?: any;
+        timestamp: number;
+        sessionId: string;
+        runId: string;
+        hypothesisId: string;
+      }) => Promise<void>;
       getSystemMemory: () => Promise<{ totalMemory: number; freeMemory: number; usedMemory: number }>;
     };
   }

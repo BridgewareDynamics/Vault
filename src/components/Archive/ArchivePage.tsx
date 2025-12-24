@@ -5,6 +5,7 @@ import { useArchive } from '../../hooks/useArchive';
 import { useArchiveExtraction } from '../../hooks/useArchiveExtraction';
 import { useToast } from '../Toast/ToastContext';
 import { CaseFolder } from './CaseFolder';
+import { RegularFolder } from './RegularFolder';
 import { ArchiveFileItem } from './ArchiveFileItem';
 import { ArchiveFileViewer } from './ArchiveFileViewer';
 import { ArchiveSearchBar } from './ArchiveSearchBar';
@@ -15,6 +16,7 @@ import { SaveParentDialog } from './SaveParentDialog';
 import { FolderSelectionDialog } from './FolderSelectionDialog';
 import { DeleteFolderConfirmDialog } from './DeleteFolderConfirmDialog';
 import { RenameFileDialog } from './RenameFileDialog';
+import { CreateFolderDialog } from './CreateFolderDialog';
 import { ExtractionFolder } from './ExtractionFolder';
 import { ArchiveFile } from '../../types';
 import { ProgressBar } from '../ProgressBar';
@@ -38,14 +40,17 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     setSearchQuery,
     selectArchiveDrive,
     createCase,
+    createFolder,
     addFilesToCase,
     deleteCase,
     deleteFile,
     renameFile,
+    moveFileToFolder,
     openFolder,
     goBackToParentFolder,
     navigateToFolder,
     updateCaseBackgroundImage,
+    updateFolderBackgroundImage,
     refreshFiles,
   } = useArchive();
 
@@ -61,12 +66,15 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const [folderToDelete, setFolderToDelete] = useState<ArchiveFile | null>(null);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [fileToRename, setFileToRename] = useState<ArchiveFile | null>(null);
+  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
   const [selectedFileForExtraction, setSelectedFileForExtraction] = useState<ArchiveFile | null>(null);
   const [selectedFile, setSelectedFile] = useState<ArchiveFile | null>(null);
   const [fileViewerIndex, setFileViewerIndex] = useState(0);
 
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [draggedFile, setDraggedFile] = useState<ArchiveFile | null>(null);
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
 
   // Auto-show vault directory dialog on first open if no vault directory is set
   useEffect(() => {
@@ -79,6 +87,22 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   // Handle drag and drop
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:88',message:'Global handleDragOver: Drag over',data:{hasFiles:e.dataTransfer?.files?.length||0,dataTransferTypes:Array.from(e.dataTransfer?.types||[]),hasTextPlain:e.dataTransfer?.types?.includes('text/plain')||false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'}).catch(()=>{});
+      // #endregion
+      
+      // Only prevent default for external file drags
+      // Internal drags should be allowed to propagate to folder handlers
+      const hasExternalFiles = (e.dataTransfer?.files?.length || 0) > 0;
+      const hasInternalDrag = e.dataTransfer?.types?.includes('text/plain') && !hasExternalFiles;
+      
+      if (hasInternalDrag && !hasExternalFiles) {
+        // Internal drag - let it propagate to folder handlers
+        // Don't show global highlight for internal drags
+        return; // Don't prevent default, don't set isDragging
+      }
+      
+      // External file drag - prevent default to allow drop and show highlight
       e.preventDefault();
       e.stopPropagation();
       if (currentCase) {
@@ -87,19 +111,53 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     };
 
     const handleDragLeave = (e: DragEvent) => {
+      // Only handle drag leave for external file drags
+      // Internal drags are handled by folder components
+      const hasExternalFiles = (e.dataTransfer?.files?.length || 0) > 0;
+      const hasInternalDrag = e.dataTransfer?.types?.includes('text/plain') && !hasExternalFiles;
+      
+      if (hasInternalDrag && !hasExternalFiles) {
+        // Internal drag - let folder handlers manage their own drag leave
+        return;
+      }
+      
+      // External file drag - clear highlight
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
     };
 
     const handleDrop = async (e: DragEvent) => {
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:102',message:'Global handleDrop: Drop event',data:{hasFiles:e.dataTransfer?.files?.length||0,dataTransferTypes:Array.from(e.dataTransfer?.types||[]),hasTextPlain:e.dataTransfer?.types?.includes('text/plain')||false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'}).catch(()=>{});
+      // #endregion
+      
+      // Only handle external file drops (from file explorer)
+      // Internal drags (within app) should be handled by folder drop handlers
+      const droppedFiles = Array.from(e.dataTransfer?.files || []);
+      const hasExternalFiles = droppedFiles.length > 0;
+      const hasInternalDrag = e.dataTransfer?.types?.includes('text/plain') && !hasExternalFiles;
+      
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:109',message:'Global handleDrop: Checking drop type',data:{hasExternalFiles,hasInternalDrag,willHandle:hasExternalFiles},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'}).catch(()=>{});
+      // #endregion
+      
+      // If this is an internal drag (no external files), let it propagate to folder handlers
+      if (hasInternalDrag && !hasExternalFiles) {
+        // #region agent log
+        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:113',message:'Global handleDrop: Internal drag - allowing propagation',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'}).catch(()=>{});
+        // #endregion
+        setIsDragging(false);
+        return; // Don't prevent default, let folder handlers handle it
+      }
+      
+      // This is an external file drop - handle it
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
 
       if (!currentCase) return;
 
-      const droppedFiles = Array.from(e.dataTransfer?.files || []);
       if (droppedFiles.length > 0) {
         const filePaths = droppedFiles
           .map(file => {
@@ -144,6 +202,41 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     const success = await createCase(caseName, description);
     if (success) {
       setShowCaseDialog(false);
+    }
+  };
+
+  const handleCreateFolder = async (folderName: string) => {
+    const success = await createFolder(folderName);
+    if (success) {
+      setShowCreateFolderDialog(false);
+    }
+  };
+
+  const handleMoveFileToFolder = async (filePath: string, folderPath: string) => {
+    // #region agent log
+    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:164',message:'handleMoveFileToFolder: Entry',data:{filePath,folderPath,hasFilePath:!!filePath,hasFolderPath:!!folderPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+    // #endregion
+    if (!filePath || !folderPath) {
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:166',message:'handleMoveFileToFolder: Missing paths - returning early',data:{filePath,folderPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+      // #endregion
+      logger.warn('handleMoveFileToFolder: Missing filePath or folderPath', { filePath, folderPath });
+      return;
+    }
+    try {
+      logger.log('handleMoveFileToFolder: Moving file', { filePath, folderPath });
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:171',message:'handleMoveFileToFolder: Calling moveFileToFolder hook',data:{filePath,folderPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
+      // #endregion
+      const result = await moveFileToFolder(filePath, folderPath);
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:173',message:'handleMoveFileToFolder: moveFileToFolder completed',data:{filePath,folderPath,result},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
+      // #endregion
+    } catch (error) {
+      // #region agent log
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:175',message:'handleMoveFileToFolder: Error caught',data:{filePath,folderPath,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
+      // #endregion
+      logger.error('Failed to move file to folder:', error);
     }
   };
 
@@ -403,6 +496,14 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                 <Upload size={20} aria-hidden="true" />
                 Add Files
               </button>
+              <button
+                onClick={() => setShowCreateFolderDialog(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
+                aria-label="Create new folder"
+              >
+                <FolderPlus size={20} aria-hidden="true" />
+                + Folder
+              </button>
             </>
           )}
 
@@ -475,22 +576,104 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                       // Inside a folder: render files normally without grouping or spacers
                       return files.map((item) => {
                         if (item.isFolder) {
-                          return (
-                            <ExtractionFolder
-                              key={item.path}
-                              folder={item}
-                              isExtracting={isExtracting && extractingFolderPath === item.path}
-                              onClick={() => openFolder(item.path)}
-                              onDelete={() => {
-                                setFolderToDelete(item);
-                                setShowDeleteFolderDialog(true);
-                              }}
-                              onRename={() => {
-                                setFileToRename(item);
-                                setShowRenameDialog(true);
-                              }}
-                            />
-                          );
+                          // Use RegularFolder for folders inside folders (full-size, supports drag-and-drop)
+                          // Only use ExtractionFolder if it's actually an extraction folder
+                          if (item.folderType === 'extraction') {
+                            return (
+                              <ExtractionFolder
+                                key={item.path}
+                                folder={item}
+                                isExtracting={isExtracting && extractingFolderPath === item.path}
+                                onClick={() => openFolder(item.path)}
+                                onDelete={() => {
+                                  setFolderToDelete(item);
+                                  setShowDeleteFolderDialog(true);
+                                }}
+                                onRename={() => {
+                                  setFileToRename(item);
+                                  setShowRenameDialog(true);
+                                }}
+                                onEditBackground={() => updateFolderBackgroundImage(item.path)}
+                              />
+                            );
+                          } else {
+                            // Regular folder - use RegularFolder component with drag-and-drop support
+                            return (
+                              <RegularFolder
+                                key={item.path}
+                                folder={item}
+                                onClick={() => openFolder(item.path)}
+                                onDelete={() => {
+                                  setFolderToDelete(item);
+                                  setShowDeleteFolderDialog(true);
+                                }}
+                                onRename={() => {
+                                  setFileToRename(item);
+                                  setShowRenameDialog(true);
+                                }}
+                                onEditBackground={() => updateFolderBackgroundImage(item.path)}
+                                onDragOver={(e) => {
+                                  // #region agent log
+                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:578',message:'onDragOver: Dragging over folder (inside folder)',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+                                  // #endregion
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  e.dataTransfer.dropEffect = 'move';
+                                  const hasFileData = e.dataTransfer.types.includes('text/plain') || draggedFile;
+                                  if (hasFileData) {
+                                    const filePath = draggedFile?.path;
+                                    if (filePath && filePath !== item.path) {
+                                      setDragOverFolder(item.path);
+                                      // #region agent log
+                                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:590',message:'onDragOver: Setting dragOverFolder (inside folder)',data:{folderPath:item.path,filePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+                                      // #endregion
+                                    }
+                                  }
+                                }}
+                                onDragLeave={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setDragOverFolder(null);
+                                }}
+                                onDrop={(e) => {
+                                  // #region agent log
+                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:600',message:'onDrop: Drop event fired (inside folder)',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+                                  // #endregion
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setDragOverFolder(null);
+                                  
+                                  const filePathFromData = e.dataTransfer.getData('text/plain');
+                                  const filePath = filePathFromData || draggedFile?.path;
+                                  
+                                  // #region agent log
+                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:610',message:'onDrop: File path extracted (inside folder)',data:{filePathFromData,filePathFromDataLength:filePathFromData?.length||0,draggedFilePath:draggedFile?.path,finalFilePath:filePath,folderPath:item.path,isValid:!!(filePath && filePath !== item.path)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+                                  // #endregion
+                                  
+                                  logger.log('onDrop: File dropped on folder (inside folder)', { 
+                                    filePath, 
+                                    folderPath: item.path,
+                                    fromDataTransfer: !!filePathFromData,
+                                    fromState: !!draggedFile 
+                                  });
+                                  
+                                  if (filePath && filePath !== item.path) {
+                                    // #region agent log
+                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:622',message:'onDrop: Calling handleMoveFileToFolder (inside folder)',data:{filePath,folderPath:item.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                    // #endregion
+                                    handleMoveFileToFolder(filePath, item.path);
+                                    setDraggedFile(null);
+                                  } else {
+                                    // #region agent log
+                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:627',message:'onDrop: Invalid drop - skipping (inside folder)',data:{filePath,folderPath:item.path,reason:!filePath?'noFilePath':filePath===item.path?'samePath':'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                    // #endregion
+                                    logger.warn('onDrop: Invalid drop (inside folder)', { filePath, folderPath: item.path });
+                                  }
+                                }}
+                                isDragOver={dragOverFolder === item.path}
+                              />
+                            );
+                          }
                         } else {
                           // Inside folder: don't show extraction for PDFs (they're already extracted)
                           return (
@@ -512,6 +695,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 setFileToRename(item);
                                 setShowRenameDialog(true);
                               }}
+                              onDragStart={(file) => setDraggedFile(file)}
+                              onDragEnd={() => setDraggedFile(null)}
                             />
                           );
                         }
@@ -633,22 +818,112 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                           <div key={`group-${groupIndex}`} className="flex flex-col gap-4">
                             {group.items.map((item) => {
                               if (item.isFolder) {
-                                return (
-                                  <ExtractionFolder
-                                    key={item.path}
-                                    folder={item}
-                                    isExtracting={isExtracting && extractingFolderPath === item.path}
-                                    onClick={() => openFolder(item.path)}
-                                    onDelete={() => {
-                                      setFolderToDelete(item);
-                                      setShowDeleteFolderDialog(true);
-                                    }}
-                                    onRename={() => {
-                                      setFileToRename(item);
-                                      setShowRenameDialog(true);
-                                    }}
-                                  />
-                                );
+                                // Use RegularFolder for regular folders, ExtractionFolder for extraction folders
+                                if (item.folderType === 'case' || (!item.folderType && !item.parentPdfName)) {
+                                  return (
+                                    <div key={item.path} className="flex flex-col gap-4">
+                                      {/* Invisible spacer matching folder height to align with PDFs */}
+                                      <div className="invisible rounded-lg border-2 border-transparent p-6">
+                                        <div className="flex flex-col items-center gap-3">
+                                          <div className="w-16 h-16" />
+                                          <div className="h-5 w-full" />
+                                        </div>
+                                      </div>
+                                      <RegularFolder
+                                        folder={item}
+                                        onClick={() => openFolder(item.path)}
+                                        onDelete={() => {
+                                          setFolderToDelete(item);
+                                          setShowDeleteFolderDialog(true);
+                                        }}
+                                        onRename={() => {
+                                          setFileToRename(item);
+                                          setShowRenameDialog(true);
+                                        }}
+                                        onEditBackground={() => updateFolderBackgroundImage(item.path)}
+                                        onDragOver={(e) => {
+                                          // #region agent log
+                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:695',message:'onDragOver: Dragging over folder',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+                                          // #endregion
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          // Set drop effect to allow drop
+                                          e.dataTransfer.dropEffect = 'move';
+                                          // Check if there's a file being dragged (can't read data during dragOver, only check types)
+                                          const hasFileData = e.dataTransfer.types.includes('text/plain') || draggedFile;
+                                          if (hasFileData) {
+                                            const filePath = draggedFile?.path;
+                                            if (filePath && filePath !== item.path) {
+                                              setDragOverFolder(item.path);
+                                              // #region agent log
+                                              if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:706',message:'onDragOver: Setting dragOverFolder',data:{folderPath:item.path,filePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+                                              // #endregion
+                                            }
+                                          }
+                                        }}
+                                        onDragLeave={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          setDragOverFolder(null);
+                                        }}
+                                        onDrop={(e) => {
+                                          // #region agent log
+                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:714',message:'onDrop: Drop event fired',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+                                          // #endregion
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          setDragOverFolder(null);
+                                          
+                                          // Get file path from dataTransfer or state
+                                          const filePathFromData = e.dataTransfer.getData('text/plain');
+                                          const filePath = filePathFromData || draggedFile?.path;
+                                          
+                                          // #region agent log
+                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:723',message:'onDrop: File path extracted',data:{filePathFromData,filePathFromDataLength:filePathFromData?.length||0,draggedFilePath:draggedFile?.path,finalFilePath:filePath,folderPath:item.path,isValid:!!(filePath && filePath !== item.path)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+                                          // #endregion
+                                          
+                                          logger.log('onDrop: File dropped on folder', { 
+                                            filePath, 
+                                            folderPath: item.path,
+                                            fromDataTransfer: !!filePathFromData,
+                                            fromState: !!draggedFile 
+                                          });
+                                          
+                                          if (filePath && filePath !== item.path) {
+                                            // #region agent log
+                                            if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:731',message:'onDrop: Calling handleMoveFileToFolder',data:{filePath,folderPath:item.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                            // #endregion
+                                            handleMoveFileToFolder(filePath, item.path);
+                                            setDraggedFile(null);
+                                          } else {
+                                            // #region agent log
+                                            if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:735',message:'onDrop: Invalid drop - skipping',data:{filePath,folderPath:item.path,reason:!filePath?'noFilePath':filePath===item.path?'samePath':'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                            // #endregion
+                                            logger.warn('onDrop: Invalid drop', { filePath, folderPath: item.path });
+                                          }
+                                        }}
+                                        isDragOver={dragOverFolder === item.path}
+                                      />
+                                    </div>
+                                  );
+                                } else {
+                                  return (
+                                    <ExtractionFolder
+                                      key={item.path}
+                                      folder={item}
+                                      isExtracting={isExtracting && extractingFolderPath === item.path}
+                                      onClick={() => openFolder(item.path)}
+                                      onDelete={() => {
+                                        setFolderToDelete(item);
+                                        setShowDeleteFolderDialog(true);
+                                      }}
+                                      onRename={() => {
+                                        setFileToRename(item);
+                                        setShowRenameDialog(true);
+                                      }}
+                                    />
+                                  );
+                                }
                               } else {
                                 return (
                                   <ArchiveFileItem
@@ -669,6 +944,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                       setFileToRename(item);
                                       setShowRenameDialog(true);
                                     }}
+                                    onDragStart={(file) => setDraggedFile(file)}
+                                    onDragEnd={() => setDraggedFile(null)}
                                   />
                                 );
                               }
@@ -679,22 +956,113 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                         // Single item
                         const item = group.items[0];
                         if (item.isFolder) {
-                          return (
-                            <ExtractionFolder
-                              key={item.path}
-                              folder={item}
-                              isExtracting={isExtracting && extractingFolderPath === item.path}
-                              onClick={() => openFolder(item.path)}
-                              onDelete={() => {
-                                setFolderToDelete(item);
-                                setShowDeleteFolderDialog(true);
-                              }}
-                              onRename={() => {
-                                setFileToRename(item);
-                                setShowRenameDialog(true);
-                              }}
-                            />
-                          );
+                          // Use RegularFolder for regular folders, ExtractionFolder for extraction folders
+                          if (item.folderType === 'case' || (!item.folderType && !item.parentPdfName)) {
+                            return (
+                              <div key={item.path} className="flex flex-col gap-4">
+                                {/* Invisible spacer matching folder height to align with PDFs */}
+                                <div className="invisible rounded-lg border-2 border-transparent p-6">
+                                  <div className="flex flex-col items-center gap-3">
+                                    <div className="w-16 h-16" />
+                                    <div className="h-5 w-full" />
+                                  </div>
+                                </div>
+                                <RegularFolder
+                                  folder={item}
+                                  onClick={() => openFolder(item.path)}
+                                  onDelete={() => {
+                                    setFolderToDelete(item);
+                                    setShowDeleteFolderDialog(true);
+                                  }}
+                                  onRename={() => {
+                                    setFileToRename(item);
+                                    setShowRenameDialog(true);
+                                  }}
+                                  onEditBackground={() => updateFolderBackgroundImage(item.path)}
+                                onDragOver={(e) => {
+                                  // #region agent log
+                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:813',message:'onDragOver: Dragging over folder (single)',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+                                  // #endregion
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  // Set drop effect to allow drop
+                                  e.dataTransfer.dropEffect = 'move';
+                                  // Check if there's a file being dragged (can't read data during dragOver, only check types)
+                                  const hasFileData = e.dataTransfer.types.includes('text/plain') || draggedFile;
+                                  if (hasFileData) {
+                                    const filePath = draggedFile?.path;
+                                    if (filePath && filePath !== item.path) {
+                                      setDragOverFolder(item.path);
+                                      // #region agent log
+                                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:825',message:'onDragOver: Setting dragOverFolder (single)',data:{folderPath:item.path,filePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+                                      // #endregion
+                                    }
+                                  }
+                                }}
+                                  onDragLeave={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setDragOverFolder(null);
+                                  }}
+                                onDrop={(e) => {
+                                  // #region agent log
+                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:832',message:'onDrop: Drop event fired (single)',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+                                  // #endregion
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setDragOverFolder(null);
+                                  
+                                  // Get file path from dataTransfer or state
+                                  const filePathFromData = e.dataTransfer.getData('text/plain');
+                                  const filePath = filePathFromData || draggedFile?.path;
+                                  
+                                  // #region agent log
+                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:841',message:'onDrop: File path extracted (single)',data:{filePathFromData,filePathFromDataLength:filePathFromData?.length||0,draggedFilePath:draggedFile?.path,finalFilePath:filePath,folderPath:item.path,isValid:!!(filePath && filePath !== item.path)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+                                  // #endregion
+                                  
+                                  logger.log('onDrop: File dropped on folder', { 
+                                    filePath, 
+                                    folderPath: item.path,
+                                    fromDataTransfer: !!filePathFromData,
+                                    fromState: !!draggedFile 
+                                  });
+                                  
+                                  if (filePath && filePath !== item.path) {
+                                    // #region agent log
+                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:849',message:'onDrop: Calling handleMoveFileToFolder (single)',data:{filePath,folderPath:item.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                    // #endregion
+                                    handleMoveFileToFolder(filePath, item.path);
+                                    setDraggedFile(null);
+                                  } else {
+                                    // #region agent log
+                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:853',message:'onDrop: Invalid drop - skipping (single)',data:{filePath,folderPath:item.path,reason:!filePath?'noFilePath':filePath===item.path?'samePath':'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                    // #endregion
+                                    logger.warn('onDrop: Invalid drop', { filePath, folderPath: item.path });
+                                  }
+                                }}
+                                  isDragOver={dragOverFolder === item.path}
+                                />
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <ExtractionFolder
+                                key={item.path}
+                                folder={item}
+                                isExtracting={isExtracting && extractingFolderPath === item.path}
+                                onClick={() => openFolder(item.path)}
+                                onDelete={() => {
+                                  setFolderToDelete(item);
+                                  setShowDeleteFolderDialog(true);
+                                }}
+                                onRename={() => {
+                                  setFileToRename(item);
+                                  setShowRenameDialog(true);
+                                }}
+                                onEditBackground={() => updateFolderBackgroundImage(item.path)}
+                              />
+                            );
+                          }
                         } else if (item.type === 'pdf') {
                           // Standalone PDF: Add spacer above to align with PDFs in groups
                           // The spacer matches the height of a folder (p-6 + icon + text) + gap-4
@@ -724,6 +1092,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   setFileToRename(item);
                                   setShowRenameDialog(true);
                                 }}
+                                onDragStart={(file) => setDraggedFile(file)}
+                                onDragEnd={() => setDraggedFile(null)}
                               />
                             </div>
                           );
@@ -756,6 +1126,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   setFileToRename(item);
                                   setShowRenameDialog(true);
                                 }}
+                                onDragStart={(file) => setDraggedFile(file)}
+                                onDragEnd={() => setDraggedFile(null)}
                               />
                             </div>
                           );
@@ -777,6 +1149,17 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                     isExtracting={isExtracting && extractingCasePath === caseItem.path}
                     onClick={() => setCurrentCase(caseItem)}
                     onDelete={() => deleteCase(caseItem.path)}
+                    onRename={() => {
+                      setFileToRename({ 
+                        name: caseItem.name, 
+                        path: caseItem.path, 
+                        size: 0, 
+                        modified: 0, 
+                        type: 'other', 
+                        isFolder: true 
+                      });
+                      setShowRenameDialog(true);
+                    }}
                     onEditBackground={() => updateCaseBackgroundImage(caseItem.path)}
                   />
                 ))}
@@ -827,6 +1210,12 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         isOpen={showCaseDialog}
         onClose={() => setShowCaseDialog(false)}
         onConfirm={handleCreateCase}
+      />
+
+      <CreateFolderDialog
+        isOpen={showCreateFolderDialog}
+        onClose={() => setShowCreateFolderDialog(false)}
+        onConfirm={handleCreateFolder}
       />
 
       <FolderSelectionDialog
