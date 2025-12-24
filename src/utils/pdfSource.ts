@@ -103,9 +103,6 @@ async function createStreamingPDFSource(
   let loadedBytes = 0;
   let totalChunks = 0;
 
-  // Calculate total number of chunks for progress tracking
-  const totalChunkCount = Math.ceil(fileSize / CHUNK_SIZE);
-
   // Load chunks in parallel batches with progress reporting
   const loadChunkBatch = async (offsets: number[]): Promise<void> => {
     const promises = offsets.map(async (offset) => {
@@ -156,7 +153,7 @@ async function createStreamingPDFSource(
   // Combine chunks efficiently using Blob constructor
   // This is more memory efficient than creating a single large Uint8Array
   const chunkArrays = chunks.map(chunk => chunk.data);
-  const blob = new Blob(chunkArrays, { type: 'application/pdf' });
+  const blob = new Blob(chunkArrays as BlobPart[], { type: 'application/pdf' });
   
   // Clear chunks array immediately to free memory (Blob has its own copy)
   chunks.length = 0;

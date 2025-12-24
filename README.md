@@ -2,12 +2,14 @@
 
 **A Professional Research Organization Tool**
 
+**Version**: 1.0.0-prerelease.3
+
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.2-blue.svg)](https://reactjs.org/)
 [![Electron](https://img.shields.io/badge/Electron-28.1-blue.svg)](https://www.electronjs.org/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
-The Vault is a powerful desktop application designed for researchers, investigators, and professionals who need to organize, extract, and manage PDF documents systematically. Built with Electron and React, it provides a modern, intuitive interface for converting PDF pages to PNG images and organizing them within a structured case-based filing system.
+The Vault is a powerful desktop application designed for researchers, investigators, and professionals who need to organize, extract, and manage PDF documents systematically. Built with Electron and React, it provides a modern, intuitive interface for converting PDF pages to PNG images and organizing them within a structured case-based filing system with advanced categorization and tagging capabilities.
 
 ## Table of Contents
 
@@ -29,16 +31,32 @@ The Vault is a powerful desktop application designed for researchers, investigat
 
 ### The Vault - Research Organization System
 - **Case-Based Organization**: Create and manage case files for organizing research projects
+- **Category Tags**: Organize cases and files with custom color-coded category tags
+  - Create custom tags with names and colors
+  - Assign tags to cases and individual files
+  - Filter and search by category tags
+  - Visual tag indicators in the interface
 - **Extraction Folders**: Automatically organize PDF extractions within case folders
 - **Hierarchical Structure**: Navigate through nested folders with breadcrumb navigation
 - **File Management**: 
   - Rename files and folders with inline editing
   - Delete files and folders with confirmation dialogs
-  - Search across cases and files
+  - Search across cases and files (with tag filtering)
   - Drag and drop file uploads
 
 ### File Viewing & Management
 - **Thumbnail Generation**: Automatic thumbnail generation for images, PDFs, and videos
+  - Image thumbnails using Sharp library
+  - PDF page thumbnails (first page)
+  - Video thumbnails captured at 10% duration or 1 second (whichever is smaller)
+  - Cached thumbnails for improved performance
+- **Enhanced Image Viewer**: Professional file viewer with advanced zoom controls
+  - Zoom in/out with buttons and keyboard shortcuts (+/=, -, 0)
+  - Live zoom percentage display
+  - Double-click to zoom functionality
+  - Drag-to-pan when zoomed
+  - Reset zoom button
+  - Smooth animations and visual feedback
 - **Full-Screen Viewer**: View files in a dedicated viewer with navigation controls
 - **File Type Detection**: Automatic categorization of files (images, PDFs, videos, other)
 - **Metadata Tracking**: File size, modification dates, and parent PDF relationships
@@ -47,17 +65,22 @@ The Vault is a powerful desktop application designed for researchers, investigat
 - **Modern UI**: Cyberpunk-themed interface with smooth animations
 - **Real-Time Feedback**: Toast notifications and progress bars
 - **Responsive Design**: Adapts to different screen sizes
-- **Keyboard Shortcuts**: Enter to confirm, Escape to cancel in dialogs
+- **Keyboard Shortcuts**: 
+  - Enter to confirm, Escape to cancel in dialogs
+  - Arrow keys to navigate between files in viewer
+  - Zoom controls: +/= (zoom in), - (zoom out), 0 (reset)
+  - Escape to close viewers and dialogs
 
 ## Architecture
 
 ### Tech Stack
 
 - **Frontend**: React 18.2, TypeScript 5.3, TailwindCSS, Framer Motion
-- **Backend**: Electron 28.1, Node.js
-- **PDF Processing**: PDF.js 3.11
-- **Image Processing**: Sharp 0.33
-- **Build Tools**: Vite 5.0, Electron Builder
+- **Backend**: Electron 28.1, Node.js 20+
+- **PDF Processing**: PDF.js 3.11.174
+- **Image Processing**: Sharp 0.33.2
+- **Testing**: Vitest 1.1.0, Testing Library
+- **Build Tools**: Vite 5.0, Electron Builder 24.9
 
 
 ## Installation & Setup
@@ -104,6 +127,15 @@ The Vault is a powerful desktop application designed for researchers, investigat
    
    # Preview production build
    npm run preview
+   
+   # Run tests
+   npm run test
+   npm run test:watch
+   npm run test:ui
+   npm run test:coverage
+   
+   # Linting
+   npm run lint
    ```
 
 ### Production Build
@@ -142,9 +174,11 @@ the-vault/
 │   ├── hooks/              # Custom React hooks
 │   │   ├── useArchive.ts   # Vault management
 │   │   ├── useArchiveExtraction.ts # Vault PDF extraction
-│   │   └── usePDFExtraction.ts # Standard PDF extraction
+│   │   ├── usePDFExtraction.ts # Standard PDF extraction
+│   │   └── useCategoryTags.ts # Category tag management
 │   ├── types/              # TypeScript type definitions
-│   └── utils/              # Utility functions
+│   ├── utils/              # Utility functions
+│   └── test-utils/         # Testing utilities and mocks
 ├── dist/                    # Built frontend (generated)
 ├── dist-electron/          # Built Electron main (generated)
 └── release/                 # Production installers (generated)
@@ -227,14 +261,23 @@ the-vault/
    - Click the trash icon
    - Confirm deletion in the dialog
 
-3. **Search**
+3. **Search & Filter**
    - Use the search bar to find files or cases
    - Search works across case names and file names
+   - Filter by category tags using the tag selector
    - Results update in real-time
 
-4. **View Files**
+4. **Category Tags**
+   - Create custom category tags with names and colors
+   - Assign tags to cases or individual files
+   - Use tags to organize and filter your research materials
+   - Tags are visually displayed on cases and files
+
+5. **View Files**
    - Click on any file to open the viewer
    - Use arrow keys or buttons to navigate between files
+   - Zoom controls: +/= (zoom in), - (zoom out), 0 (reset), double-click to zoom
+   - Drag to pan when zoomed in
    - Press Escape to close the viewer
 
 ### Best Practices for Research Organization
@@ -294,6 +337,11 @@ the-vault/
 - Integrates with case folder structure
 - Saves directly to extraction folders
 
+**`useCategoryTags`** (`src/hooks/useCategoryTags.ts`)
+- Manages category tag creation and assignment
+- Handles tag-to-case and tag-to-file relationships
+- Provides tag lookup and filtering capabilities
+
 ### IPC Handlers
 
 The application uses Electron IPC for secure communication between processes:
@@ -312,9 +360,15 @@ The application uses Electron IPC for secure communication between processes:
 - `delete-case`: Delete a case folder
 - `delete-file`: Delete a file or folder
 - `rename-file`: Rename a file or folder
-- `get-file-thumbnail`: Generate thumbnail for a file
+- `get-file-thumbnail`: Generate thumbnail for a file (images, PDFs, videos)
 - `read-file-data`: Read file data for viewing
 - `extract-pdf-from-archive`: Extract PDF pages to Vault folder
+- `get-category-tags`: Get all category tags
+- `create-category-tag`: Create a new category tag
+- `set-case-category-tag`: Assign/remove category tag from a case
+- `set-file-category-tag`: Assign/remove category tag from a file
+- `get-case-category-tag`: Get category tag for a case
+- `get-file-category-tag`: Get category tag for a file
 
 ### State Management
 
@@ -361,6 +415,11 @@ vault-directory/
 - **ESLint**: Code quality and consistency
 - **Component-Based**: Modular React components
 - **Separation of Concerns**: Clear separation between UI and business logic
+- **Testing**: Comprehensive test suite with Vitest
+  - Unit tests for hooks and utilities
+  - Component tests with Testing Library
+  - Coverage reporting with v8 provider
+  - Test UI for interactive debugging
 
 ### Building
 
@@ -438,6 +497,7 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
 - **Performance**:
   - Thumbnail generation for large image files may be slow
   - PDF extraction of very large documents (>1000 pages) may take several minutes
+  - Video thumbnail generation may take a moment for large video files
   - Search functionality is case-sensitive
 
 - **Features Not Yet Implemented**:
@@ -447,6 +507,7 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
   - Export vault to different formats
   - Cloud storage integration
   - Multi-user support
+  - Tag editing and deletion (tags can be created and assigned, but not yet edited or deleted)
 
 ## Troubleshooting
 
@@ -499,6 +560,8 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
   - Check file permissions for the vault directory
   - Verify file types are supported (images, PDFs, videos)
   - Large files may take time - wait a few moments
+  - For videos: Ensure HTML5 Video API is supported (modern browsers/Electron)
+  - WebP files may require additional processing time
 
 **Problem**: Application crashes on startup
 - **Solution**:
@@ -518,9 +581,11 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
 **Problem**: Tests failing
 - **Solution**:
   - Run `npm install` to ensure all dependencies are installed
-  - Clear test cache: delete `node_modules/.vite`
+  - Clear test cache: delete `node_modules/.vite` and `.vitest` directories
   - Ensure test environment is set up: `npm run test` should work
   - Check that mocks are properly configured in `src/test-utils/`
+  - For coverage issues: Run `npm run test:coverage` to see detailed reports
+  - Use `npm run test:ui` for interactive test debugging
 
 **Problem**: Linting errors
 - **Solution**:
@@ -581,6 +646,42 @@ This project is licensed under **The Vault Proprietary License** - see the [LICE
 
 For commercial use inquiries or license questions, contact: **Bridgeware Dynamics** at Bridgewarefreelance@gmail.com
 
+## Testing
+
+The Vault includes a comprehensive test suite using Vitest and Testing Library:
+
+### Running Tests
+
+```bash
+# Run all tests once
+npm run test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with UI
+npm run test:ui
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests with coverage for CI
+npm run test:coverage:ci
+```
+
+### Test Coverage
+
+- **Unit Tests**: Hooks, utilities, and business logic
+- **Component Tests**: React components with user interaction testing
+- **Integration Tests**: IPC handlers and file system operations
+- **Coverage Reports**: Generated with v8 provider, viewable in `coverage/` directory
+
+### Test Structure
+
+- Test files are co-located with source files (`.test.ts`, `.test.tsx`)
+- Test utilities and mocks in `src/test-utils/`
+- Electron main process tests in `electron/__tests__/`
+
 ## Acknowledgments
 
 - **PDF.js**: Mozilla's PDF rendering library
@@ -588,6 +689,8 @@ For commercial use inquiries or license questions, contact: **Bridgeware Dynamic
 - **React**: UI library
 - **Framer Motion**: Animation library
 - **Lucide Icons**: Icon library
+- **Vitest**: Fast unit test framework
+- **Testing Library**: Simple and complete testing utilities
 
 ---
 

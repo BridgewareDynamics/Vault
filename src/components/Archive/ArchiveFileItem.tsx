@@ -88,7 +88,7 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
       whileTap={{ scale: 0.95 }}
       className="relative cursor-pointer group"
       draggable={true}
-      onDragStart={handleDragStart}
+      onDragStart={handleDragStart as any}
       onDragEnd={handleDragEnd}
     >
       <div

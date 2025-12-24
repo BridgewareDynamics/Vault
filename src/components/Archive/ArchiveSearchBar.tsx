@@ -1,13 +1,16 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Tag, ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { CategoryTag } from '../../types';
 import { CategoryTag as CategoryTagComponent } from './CategoryTag';
+import { CategoryTag } from '../../types';
 
 interface ArchiveSearchBarProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  tags?: CategoryTag[];
+  selectedTagId?: string | null;
+  onTagSelect?: ((tagId: string | null) => void) | null;
 }
 
 export function ArchiveSearchBar({ value, onChange, placeholder = 'Search...', tags = [], selectedTagId, onTagSelect }: ArchiveSearchBarProps) {
@@ -35,8 +38,6 @@ export function ArchiveSearchBar({ value, onChange, placeholder = 'Search...', t
       };
     }
   }, [showTagDropdown]);
-
-  const selectedTag = tags.find(t => t.id === selectedTagId);
 
   return (
     <motion.div
@@ -117,7 +118,7 @@ export function ArchiveSearchBar({ value, onChange, placeholder = 'Search...', t
                       >
                         <span className="text-white text-sm">All Cases</span>
                       </button>
-                      {tags.map((tag) => (
+                      {tags.map((tag: CategoryTag) => (
                         <button
                           key={tag.id}
                           onClick={() => {

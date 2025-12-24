@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { X, Plus, Tag } from 'lucide-react';
+import { Plus, Tag } from 'lucide-react';
 import { CategoryTag } from '../../types';
 import { CategoryTag as CategoryTagComponent } from './CategoryTag';
 import { CategoryTagCreator } from './CategoryTagCreator';

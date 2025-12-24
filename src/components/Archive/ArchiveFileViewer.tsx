@@ -506,21 +506,6 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
     });
   }, [isPdfZoomed, canvasX, canvasY]);
 
-  const handlePdfZoomToggle = useCallback(() => {
-    setIsPdfZoomed(prev => {
-      if (!prev) {
-        // Zooming in - set a high scale for actual zoom effect
-        setPageScale(3.0);
-      } else {
-        // Zooming out - reset to default
-        setPageScale(1.5);
-      }
-      // Reset position to center when toggling zoom
-      canvasX.set(0);
-      canvasY.set(0);
-      return !prev;
-    });
-  }, [canvasX, canvasY]);
 
   useEffect(() => {
     if (pdfDoc && currentPage > 0) {

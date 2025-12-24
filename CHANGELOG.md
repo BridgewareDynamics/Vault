@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-prerelease.3] - 2025-12-24
+
+**Note:** This is a prerelease version. Features and APIs may change before the stable 1.0.0 release.
+
+### Added
+
+#### Category Tags System
+- Comprehensive category tagging system for organizing cases and files
+- Create custom category tags with names and color-coded visual indicators
+- Assign category tags to cases and individual files
+- Tag selector UI with visual tag preview and creation interface
+- Filter and search by category tags in the archive view
+- Tag metadata stored in vault directory (`.category-tags.json`)
+- Case-level tags stored in `.case-category-tag` metadata files
+- File-level tags stored in `.file-category-tag.{filename}` metadata files
+- Visual tag indicators displayed on cases and files in the gallery
+- Tag management via `useCategoryTags` hook with full CRUD operations
+- IPC handlers for tag operations: `get-category-tags`, `create-category-tag`, `set-case-category-tag`, `set-file-category-tag`, `get-case-category-tag`, `get-file-category-tag`
+- Category tag components with multiple size options (xs, small, medium, large)
+- Smooth animations for tag display using Framer Motion
+
+#### Case Descriptions
+- Add optional descriptions to case files when creating new cases
+- Case descriptions displayed prominently in the case view
+- Description metadata stored in `.case-description` files
+- Description textarea in case creation dialog
+- Support for multi-line descriptions with proper formatting
+
+### Changed
+
+- Enhanced case creation dialog to include description field and category tag selection
+- Improved case file listing to include description and category tag metadata
+- Updated archive file listing to include category tag information for files
+- Enhanced search functionality to work with category tag filtering
+- Improved visual organization with category tag indicators throughout the interface
+
+### Fixed
+
+- None in this release
+
+### Deprecated
+
+- None in this release
+
+### Removed
+
+- None in this release
+
+### Security
+
+- No security changes in this release
+
+---
+
 ## [1.0.0-prerelease.2] - 2025-12-18
 
 **Note:** This is a prerelease version. Features and APIs may change before the stable 1.0.0 release.
@@ -182,7 +236,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed** for any bug fixes
 - **Security** for vulnerability fixes
 
-[Unreleased]: https://github.com/yourusername/the-vault/compare/v1.0.0-prerelease.2...HEAD
+[Unreleased]: https://github.com/yourusername/the-vault/compare/v1.0.0-prerelease.3...HEAD
+[1.0.0-prerelease.3]: https://github.com/yourusername/the-vault/releases/tag/v1.0.0-prerelease.3
 [1.0.0-prerelease.2]: https://github.com/yourusername/the-vault/releases/tag/v1.0.0-prerelease.2
 [1.0.0-prerelease.1]: https://github.com/yourusername/the-vault/releases/tag/v1.0.0-prerelease.1
 

@@ -1,6 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
 import { CategoryTag } from './CategoryTag';
 
 interface CategoryTagCreatorProps {
