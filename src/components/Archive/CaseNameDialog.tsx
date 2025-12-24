@@ -16,7 +16,7 @@ export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogPro
   const [description, setDescription] = useState('');
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [showTagSelector, setShowTagSelector] = useState(false);
-  const { tags, createTag } = useCategoryTags();
+  const { tags, createTag, deleteTag } = useCategoryTags();
 
   useEffect(() => {
     if (isOpen) {
@@ -197,6 +197,7 @@ export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogPro
           onSelect={handleTagSelect}
           tags={tags}
           onCreateTag={createTag}
+          onDeleteTag={deleteTag}
           selectedTagId={selectedTagId}
         />
       )}

@@ -61,7 +61,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     getTagById,
   } = useArchive();
 
-  const { createTag, assignTagToCase, assignTagToFile } = useCategoryTags();
+  const { createTag, deleteTag, assignTagToCase, assignTagToFile } = useCategoryTags();
 
   const { extractPDF, isExtracting, progress, statusMessage, extractingCasePath, extractingFolderPath } = useArchiveExtraction();
   const toast = useToast();
@@ -1382,6 +1382,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         onSelect={handleTagSelect}
         tags={tags}
         onCreateTag={createTag}
+        onDeleteTag={deleteTag}
         selectedTagId={
           tagSelectorFilePath
             ? (files.find(f => f.path === tagSelectorFilePath)?.categoryTagId || null)

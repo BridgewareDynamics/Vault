@@ -1424,6 +1424,54 @@ ipcMain.handle('get-file-category-tag', async (event, filePath: string) => {
   }
 });
 
+// Delete a category tag
+ipcMain.handle('delete-category-tag', async (event, tagId: string) => {
+  const archiveDrive = await getArchiveDrive();
+  if (!archiveDrive) {
+    throw new Error('Archive drive not set');
+  }
+
+  if (!tagId || !tagId.trim()) {
+    throw new Error('Invalid tag ID');
+  }
+
+  try {
+    const tagsPath = path.join(archiveDrive, '.category-tags.json');
+    let tags: Array<{ id: string; name: string; color: string }> = [];
+
+    // Try to read existing tags
+    try {
+      const tagsContent = await fs.readFile(tagsPath, 'utf8');
+      tags = JSON.parse(tagsContent);
+      if (!Array.isArray(tags)) {
+        tags = [];
+      }
+    } catch (error: unknown) {
+      if (isErrorWithCode(error) && error.code === 'ENOENT') {
+        // File doesn't exist, nothing to delete
+        throw new Error('Tag not found');
+      } else {
+        throw error;
+      }
+    }
+
+    // Find and remove the tag
+    const tagIndex = tags.findIndex(t => t.id === tagId.trim());
+    if (tagIndex === -1) {
+      throw new Error('Tag not found');
+    }
+
+    // Remove the tag
+    tags.splice(tagIndex, 1);
+
+    // Save updated tags
+    await fs.writeFile(tagsPath, JSON.stringify(tags, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    throw new Error(`Failed to delete category tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
 // List case files
 ipcMain.handle('list-case-files', async (event, casePath: string) => {
   if (!isSafePath(casePath)) {

@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { Plus, Tag } from 'lucide-react';
+import { Plus, Tag, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { CategoryTag } from '../../types';
 import { CategoryTag as CategoryTagComponent } from './CategoryTag';
 import { CategoryTagCreator } from './CategoryTagCreator';
@@ -11,6 +11,7 @@ interface CategoryTagSelectorProps {
   onSelect: (tagId: string | null) => void;
   tags: CategoryTag[];
   onCreateTag: (name: string, color: string) => Promise<CategoryTag | null>;
+  onDeleteTag: (tagId: string) => Promise<boolean>;
   selectedTagId?: string | null;
 }
 
@@ -20,10 +21,13 @@ export function CategoryTagSelector({
   onSelect, 
   tags, 
   onCreateTag,
+  onDeleteTag,
   selectedTagId 
 }: CategoryTagSelectorProps) {
   const [showCreator, setShowCreator] = useState(false);
   const [showExistingList, setShowExistingList] = useState(false);
+  const [showTagsDropdown, setShowTagsDropdown] = useState(false);
+  const [tagToDelete, setTagToDelete] = useState<CategoryTag | null>(null);
 
   const handleCreateTag = async (name: string, color: string) => {
     const newTag = await onCreateTag(name, color);
@@ -43,6 +47,19 @@ export function CategoryTagSelector({
   const handleRemoveTag = () => {
     onSelect(null);
     onClose();
+  };
+
+  const handleDeleteTag = async () => {
+    if (tagToDelete) {
+      const success = await onDeleteTag(tagToDelete.id);
+      if (success) {
+        setTagToDelete(null);
+        // If the deleted tag was selected, clear the selection
+        if (selectedTagId === tagToDelete.id) {
+          onSelect(null);
+        }
+      }
+    }
   };
 
   if (!isOpen) return null;
@@ -125,22 +142,69 @@ export function CategoryTagSelector({
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 max-h-64 overflow-y-auto space-y-2"
+                className="mt-4 space-y-3"
               >
                 <p className="text-sm text-gray-400 mb-2">Select a tag:</p>
-                {tags.length === 0 ? (
-                  <p className="text-gray-500 text-sm text-center py-4">No tags available. Create one first.</p>
-                ) : (
-                  tags.map((tag) => (
-                    <button
-                      key={tag.id}
-                      onClick={() => handleSelectExisting(tag.id)}
-                      className="w-full p-3 bg-gray-900/50 hover:bg-gray-800 rounded-lg transition-colors flex items-center gap-3 text-left"
-                    >
-                      <CategoryTagComponent tag={tag} size="small" />
-                    </button>
-                  ))
-                )}
+                
+                {/* Tags Dropdown */}
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setShowTagsDropdown(!showTagsDropdown)}
+                    className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-between"
+                  >
+                    <span className="font-semibold">Tags::</span>
+                    {showTagsDropdown ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </button>
+
+                  <AnimatePresence>
+                    {showTagsDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="max-h-64 overflow-y-auto space-y-2 p-2 bg-gray-900/50 rounded-lg border border-gray-700">
+                          {tags.length === 0 ? (
+                            <p className="text-gray-500 text-sm text-center py-4">No tags available. Create one first.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 gap-2">
+                              {tags.map((tag) => (
+                                <div
+                                  key={tag.id}
+                                  className="flex items-center gap-2 p-2 bg-gray-800/50 hover:bg-gray-800 rounded-lg transition-colors"
+                                >
+                                  <button
+                                    onClick={() => handleSelectExisting(tag.id)}
+                                    className="flex-1 flex items-center gap-2 text-left"
+                                  >
+                                    <CategoryTagComponent tag={tag} size="small" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setTagToDelete(tag);
+                                    }}
+                                    className="p-1 hover:bg-red-600/20 rounded transition-colors group"
+                                    aria-label={`Delete tag ${tag.name}`}
+                                  >
+                                    <X className="w-4 h-4 text-gray-400 group-hover:text-red-400 transition-colors" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 <button
                   onClick={() => setShowExistingList(false)}
                   className="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm"
@@ -171,6 +235,64 @@ export function CategoryTagSelector({
           existingTagNames={tags.map(t => t.name)}
         />
       )}
+
+      {/* Delete Tag Confirmation Dialog */}
+      <AnimatePresence>
+        {tagToDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setTagToDelete(null)}
+            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-tag-dialog-title"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg border-2 border-red-500/60 shadow-2xl p-6 max-w-md w-full"
+            >
+              <h2 id="delete-tag-dialog-title" className="text-2xl font-bold text-red-400 mb-4">
+                Delete Tag
+              </h2>
+              
+              <div className="mb-6">
+                <p className="text-gray-300 mb-2">
+                  Are you sure you want to delete the tag <span className="font-semibold text-white">"{tagToDelete.name}"</span>?
+                </p>
+                <div className="flex justify-center my-3">
+                  <CategoryTagComponent tag={tagToDelete} size="medium" />
+                </div>
+                <p className="text-red-400 text-sm">
+                  ⚠️ This action cannot be undone.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setTagToDelete(null)}
+                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  aria-label="Cancel deleting tag"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteTag}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-semibold flex items-center justify-center gap-2"
+                  aria-label={`Confirm deletion of tag ${tagToDelete.name}`}
+                >
+                  <X className="w-4 h-4" aria-hidden="true" />
+                  Confirm
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

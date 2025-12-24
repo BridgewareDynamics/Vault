@@ -104,11 +104,35 @@ export function useCategoryTags() {
     return tags.find(tag => tag.id === tagId);
   }, [tags]);
 
+  // Delete a tag
+  const deleteTag = useCallback(async (tagId: string): Promise<boolean> => {
+    if (!window.electronAPI) {
+      toast.error('Electron API not available');
+      return false;
+    }
+
+    if (!tagId || !tagId.trim()) {
+      toast.error('Invalid tag ID');
+      return false;
+    }
+
+    try {
+      await window.electronAPI.deleteCategoryTag(tagId);
+      await loadTags(); // Reload tags
+      toast.success('Category tag deleted');
+      return true;
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'delete category tag' }));
+      return false;
+    }
+  }, [toast, loadTags]);
+
   return {
     tags,
     loading,
     loadTags,
     createTag,
+    deleteTag,
     assignTagToCase,
     assignTagToFile,
     getTagById,

@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       createCaseFolder: (caseName: string, description?: string, categoryTagId?: string) => ipcRenderer.invoke('create-case-folder', caseName, description, categoryTagId),
       getCategoryTags: () => ipcRenderer.invoke('get-category-tags'),
       createCategoryTag: (tag: { id: string; name: string; color: string }) => ipcRenderer.invoke('create-category-tag', tag),
+      deleteCategoryTag: (tagId: string) => ipcRenderer.invoke('delete-category-tag', tagId),
       setCaseCategoryTag: (casePath: string, categoryTagId: string | null) => ipcRenderer.invoke('set-case-category-tag', casePath, categoryTagId),
       getCaseCategoryTag: (casePath: string) => ipcRenderer.invoke('get-case-category-tag', casePath),
       setFileCategoryTag: (filePath: string, categoryTagId: string | null) => ipcRenderer.invoke('set-file-category-tag', filePath, categoryTagId),
@@ -103,6 +104,7 @@ declare global {
       createCaseFolder: (caseName: string, description?: string, categoryTagId?: string) => Promise<string>;
       getCategoryTags: () => Promise<Array<{ id: string; name: string; color: string }>>;
       createCategoryTag: (tag: { id: string; name: string; color: string }) => Promise<{ id: string; name: string; color: string }>;
+      deleteCategoryTag: (tagId: string) => Promise<boolean>;
       setCaseCategoryTag: (casePath: string, categoryTagId: string | null) => Promise<boolean>;
       getCaseCategoryTag: (casePath: string) => Promise<string | null>;
       setFileCategoryTag: (filePath: string, categoryTagId: string | null) => Promise<boolean>;
