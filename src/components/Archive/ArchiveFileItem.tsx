@@ -113,9 +113,9 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
           {/* Overlay on hover */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-          {/* Category Tag - Top left corner */}
+          {/* Category Tag - Top left corner, moved right to avoid overlap with file type badge */}
           {onTagClick && (
-            <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5">
+            <div className="absolute top-2 left-16 z-20 flex items-center gap-1.5">
               {!caseTag ? (
                 // No tag: Show tag button same size as other action buttons
                 <button
