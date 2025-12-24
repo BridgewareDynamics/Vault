@@ -4,6 +4,7 @@ import { Home, FolderPlus, Upload, ArrowLeft, FolderOpen } from 'lucide-react';
 import { useArchive } from '../../hooks/useArchive';
 import { useArchiveExtraction } from '../../hooks/useArchiveExtraction';
 import { useToast } from '../Toast/ToastContext';
+import { useCategoryTags } from '../../hooks/useCategoryTags';
 import { CaseFolder } from './CaseFolder';
 import { RegularFolder } from './RegularFolder';
 import { ArchiveFileItem } from './ArchiveFileItem';
@@ -18,6 +19,7 @@ import { DeleteFolderConfirmDialog } from './DeleteFolderConfirmDialog';
 import { RenameFileDialog } from './RenameFileDialog';
 import { CreateFolderDialog } from './CreateFolderDialog';
 import { ExtractionFolder } from './ExtractionFolder';
+import { CategoryTagSelector } from './CategoryTagSelector';
 import { ArchiveFile } from '../../types';
 import { ProgressBar } from '../ProgressBar';
 import { logger } from '../../utils/logger';
@@ -52,7 +54,14 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     updateCaseBackgroundImage,
     updateFolderBackgroundImage,
     refreshFiles,
+    refreshCases,
+    selectedTagId,
+    setSelectedTagId,
+    tags,
+    getTagById,
   } = useArchive();
+
+  const { createTag, assignTagToCase, assignTagToFile } = useCategoryTags();
 
   const { extractPDF, isExtracting, progress, statusMessage, extractingCasePath, extractingFolderPath } = useArchiveExtraction();
   const toast = useToast();
@@ -70,6 +79,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const [selectedFileForExtraction, setSelectedFileForExtraction] = useState<ArchiveFile | null>(null);
   const [selectedFile, setSelectedFile] = useState<ArchiveFile | null>(null);
   const [fileViewerIndex, setFileViewerIndex] = useState(0);
+  const [showTagSelector, setShowTagSelector] = useState(false);
+  const [tagSelectorCasePath, setTagSelectorCasePath] = useState<string | null>(null);
+  const [tagSelectorFilePath, setTagSelectorFilePath] = useState<string | null>(null);
 
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -198,11 +210,52 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     }
   };
 
-  const handleCreateCase = async (caseName: string, description: string) => {
-    const success = await createCase(caseName, description);
+  const handleCreateCase = async (caseName: string, description: string, categoryTagId?: string) => {
+    const success = await createCase(caseName, description, categoryTagId);
     if (success) {
       setShowCaseDialog(false);
     }
+  };
+
+  const handleTagClick = (casePath: string) => {
+    setTagSelectorCasePath(casePath);
+    setTagSelectorFilePath(null);
+    setShowTagSelector(true);
+  };
+
+  const handleFileTagClick = (filePath: string) => {
+    console.log('[ArchivePage] handleFileTagClick:', { filePath, file: files.find(f => f.path === filePath) });
+    setTagSelectorFilePath(filePath);
+    setTagSelectorCasePath(null);
+    setShowTagSelector(true);
+  };
+
+  const handleTagSelect = async (tagId: string | null) => {
+    if (tagSelectorFilePath) {
+      // Assign tag to specific file
+      console.log('[ArchivePage] handleTagSelect - assigning tag to file:', { tagSelectorFilePath, tagId, file: files.find(f => f.path === tagSelectorFilePath) });
+      const success = await assignTagToFile(tagSelectorFilePath, tagId);
+      if (success) {
+        // Reload files to update the UI with the new tag
+        await refreshFiles();
+      }
+    } else if (tagSelectorCasePath) {
+      // Assign tag to case
+      const success = await assignTagToCase(tagSelectorCasePath, tagId);
+      if (success) {
+        // Reload cases to update the UI with the new tag
+        await refreshCases();
+        
+        // Update currentCase if it's the one we just modified
+        if (currentCase && currentCase.path === tagSelectorCasePath) {
+          // Update currentCase with the new tagId
+          setCurrentCase({ ...currentCase, categoryTagId: tagId || undefined });
+        }
+      }
+    }
+    setShowTagSelector(false);
+    setTagSelectorCasePath(null);
+    setTagSelectorFilePath(null);
   };
 
   const handleCreateFolder = async (folderName: string) => {
@@ -512,6 +565,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               value={searchQuery}
               onChange={setSearchQuery}
               placeholder={currentCase ? 'Search files...' : 'Search cases...'}
+              tags={tags}
+              selectedTagId={selectedTagId}
+              onTagSelect={setSelectedTagId}
             />
           </div>
 
@@ -697,6 +753,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                               }}
                               onDragStart={(file) => setDraggedFile(file)}
                               onDragEnd={() => setDraggedFile(null)}
+                              caseTag={item.categoryTagId ? getTagById(item.categoryTagId) : null}
+                              onTagClick={() => {
+                                console.log('[ArchivePage] onTagClick for file:', { name: item.name, path: item.path, categoryTagId: item.categoryTagId });
+                                handleFileTagClick(item.path);
+                              }}
                             />
                           );
                         }
@@ -946,6 +1007,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     }}
                                     onDragStart={(file) => setDraggedFile(file)}
                                     onDragEnd={() => setDraggedFile(null)}
+                                    caseTag={item.categoryTagId ? getTagById(item.categoryTagId) : null}
+                                    onTagClick={() => handleFileTagClick(item.path)}
                                   />
                                 );
                               }
@@ -1094,6 +1157,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 }}
                                 onDragStart={(file) => setDraggedFile(file)}
                                 onDragEnd={() => setDraggedFile(null)}
+                                caseTag={item.categoryTagId ? getTagById(item.categoryTagId) : null}
+                                onTagClick={() => handleFileTagClick(item.path)}
                               />
                             </div>
                           );
@@ -1128,6 +1193,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 }}
                                 onDragStart={(file) => setDraggedFile(file)}
                                 onDragEnd={() => setDraggedFile(null)}
+                                caseTag={item.categoryTagId ? getTagById(item.categoryTagId) : null}
+                                onTagClick={() => handleFileTagClick(item.path)}
                               />
                             </div>
                           );
@@ -1161,6 +1228,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                       setShowRenameDialog(true);
                     }}
                     onEditBackground={() => updateCaseBackgroundImage(caseItem.path)}
+                    onTagClick={() => handleTagClick(caseItem.path)}
                   />
                 ))}
               </AnimatePresence>
@@ -1303,6 +1371,25 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
           onPrevious={fileViewerIndex > 0 ? handlePreviousFile : undefined}
         />
       )}
+
+      <CategoryTagSelector
+        isOpen={showTagSelector}
+        onClose={() => {
+          setShowTagSelector(false);
+          setTagSelectorCasePath(null);
+          setTagSelectorFilePath(null);
+        }}
+        onSelect={handleTagSelect}
+        tags={tags}
+        onCreateTag={createTag}
+        selectedTagId={
+          tagSelectorFilePath
+            ? (files.find(f => f.path === tagSelectorFilePath)?.categoryTagId || null)
+            : tagSelectorCasePath
+            ? (cases.find(c => c.path === tagSelectorCasePath)?.categoryTagId || currentCase?.categoryTagId || null)
+            : (currentCase?.categoryTagId || null)
+        }
+      />
     </div>
   );
 }

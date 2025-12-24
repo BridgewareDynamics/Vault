@@ -1,13 +1,15 @@
 import { memo } from 'react';
 import { motion } from 'framer-motion';
-import { ExtractedPage } from '../types';
+import { ExtractedPage, CategoryTag } from '../types';
+import { CategoryTag as CategoryTagComponent } from './Archive/CategoryTag';
 
 interface GalleryItemProps {
   page: ExtractedPage;
   onClick: () => void;
+  categoryTag?: CategoryTag | null;
 }
 
-export const GalleryItem = memo(function GalleryItem({ page, onClick }: GalleryItemProps) {
+export const GalleryItem = memo(function GalleryItem({ page, onClick, categoryTag }: GalleryItemProps) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -57,6 +59,13 @@ export const GalleryItem = memo(function GalleryItem({ page, onClick }: GalleryI
           </div>
         </div>
       </div>
+
+      {/* Category Tag - Display below image with extra padding */}
+      {categoryTag && (
+        <div className="mt-3 flex justify-center">
+          <CategoryTagComponent tag={categoryTag} size="small" />
+        </div>
+      )}
     </motion.div>
   );
 });

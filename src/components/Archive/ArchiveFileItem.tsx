@@ -1,8 +1,9 @@
 import { motion } from 'framer-motion';
 import { useState, useRef, useEffect } from 'react';
-import { ArchiveFile } from '../../types';
-import { FileText, Image, Video, File, Trash2, Play, ChevronDown, Pencil } from 'lucide-react';
+import { ArchiveFile, CategoryTag } from '../../types';
+import { FileText, Image, Video, File, Trash2, Play, ChevronDown, Pencil, Tag } from 'lucide-react';
 import { PDFOptionsDropdown } from './PDFOptionsDropdown';
+import { CategoryTag as CategoryTagComponent } from './CategoryTag';
 
 interface ArchiveFileItemProps {
   file: ArchiveFile;
@@ -12,9 +13,11 @@ interface ArchiveFileItemProps {
   onRename?: () => void;
   onDragStart?: (file: ArchiveFile) => void;
   onDragEnd?: () => void;
+  caseTag?: CategoryTag | null;
+  onTagClick?: () => void;
 }
 
-export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd }: ArchiveFileItemProps) {
+export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd, caseTag, onTagClick }: ArchiveFileItemProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLButtonElement>(null);
@@ -110,8 +113,44 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
           {/* Overlay on hover */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-          {/* File type badge */}
-          <div className="absolute top-2 left-2 z-10 bg-black/60 text-white text-xs px-2 py-1 rounded backdrop-blur-sm">
+          {/* Category Tag - Top left corner */}
+          {onTagClick && (
+            <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5">
+              {!caseTag ? (
+                // No tag: Show tag button same size as other action buttons
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTagClick();
+                  }}
+                  className="p-1 hover:bg-gray-700 rounded transition-colors opacity-0 group-hover:opacity-100"
+                  aria-label="Add category tag"
+                  title="Add category tag"
+                >
+                  <Tag className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" />
+                </button>
+              ) : (
+                // Has tag: Show tag badge with small edit button
+                <>
+                  <CategoryTagComponent tag={caseTag} size="xs" />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTagClick();
+                    }}
+                    className="p-0.5 hover:bg-gray-700/50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                    aria-label="Change category tag"
+                    title="Change category tag"
+                  >
+                    <Pencil className="w-2.5 h-2.5 text-gray-400 hover:text-cyber-purple-400" />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* File type badge - positioned below tag if tag exists, otherwise normal position */}
+          <div className={`absolute top-2 z-10 bg-black/60 text-white text-xs px-2 py-1 rounded backdrop-blur-sm ${onTagClick && caseTag ? 'left-2 top-10' : 'left-2'}`}>
             {file.type.toUpperCase()}
           </div>
 

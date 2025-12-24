@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion';
-import { Folder, Loader2, Trash2, Pencil, Image } from 'lucide-react';
+import { Folder, Loader2, Trash2, Pencil, Image, Tag } from 'lucide-react';
 import { ArchiveCase } from '../../types';
 import { useState, useEffect } from 'react';
 import { logger } from '../../utils/logger';
+import { useCategoryTags } from '../../hooks/useCategoryTags';
+import { CategoryTag } from './CategoryTag';
 
 interface CaseFolderProps {
   caseItem: ArchiveCase;
@@ -11,10 +13,13 @@ interface CaseFolderProps {
   onDelete?: () => void;
   onRename?: () => void;
   onEditBackground?: () => void;
+  onTagClick?: () => void;
 }
 
-export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, onRename, onEditBackground }: CaseFolderProps) {
+export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, onRename, onEditBackground, onTagClick }: CaseFolderProps) {
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | undefined>(undefined);
+  const { getTagById } = useCategoryTags();
+  const categoryTag = getTagById(caseItem.categoryTagId);
 
   // Load background image as data URL
   useEffect(() => {
@@ -60,6 +65,42 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
           {/* Background overlay to ensure readability */}
           {backgroundImageUrl && (
             <div className="absolute inset-0 bg-gray-800/50" />
+          )}
+
+          {/* Category Tag - Top left corner */}
+          {onTagClick && (
+            <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5">
+              {!categoryTag ? (
+                // No tag: Show tag button
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTagClick();
+                  }}
+                  className="p-1 hover:bg-gray-700 rounded transition-colors opacity-0 group-hover:opacity-100"
+                  aria-label="Add category tag"
+                  title="Add category tag"
+                >
+                  <Tag className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" />
+                </button>
+              ) : (
+                // Has tag: Show tag badge with small edit button
+                <>
+                  <CategoryTag tag={categoryTag} size="xs" />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTagClick();
+                    }}
+                    className="p-0.5 hover:bg-gray-700/50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                    aria-label="Change category tag"
+                    title="Change category tag"
+                  >
+                    <Pencil className="w-2.5 h-2.5 text-gray-400 hover:text-cyber-purple-400" />
+                  </button>
+                </>
+              )}
+            </div>
           )}
 
           {/* Folder Icon */}
@@ -142,7 +183,7 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
-          className="w-full p-3 bg-gray-800/40 border border-cyber-purple-500/20 rounded-lg backdrop-blur-sm"
+          className="w-full p-4 bg-gray-800/40 border border-cyber-purple-500/20 rounded-lg backdrop-blur-sm"
         >
           <p className="text-gray-300 text-xs leading-relaxed break-words text-center">
             {caseItem.description}

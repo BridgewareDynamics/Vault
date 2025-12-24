@@ -987,7 +987,7 @@ ipcMain.handle('validate-archive-directory', async (event, dirPath: string) => {
 });
 
 // Create case folder
-ipcMain.handle('create-case-folder', async (event, caseName: string, description: string = '') => {
+ipcMain.handle('create-case-folder', async (event, caseName: string, description: string = '', categoryTagId?: string) => {
   if (!caseName || !isValidFolderName(caseName)) {
     throw new Error('Invalid case name');
   }
@@ -1012,6 +1012,12 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
       if (description.trim()) {
         const descriptionPath = path.join(casePath, '.case-description');
         await fs.writeFile(descriptionPath, description.trim(), 'utf8');
+      }
+      
+      // Save category tag if provided
+      if (categoryTagId && categoryTagId.trim()) {
+        const tagPath = path.join(casePath, '.case-category-tag');
+        await fs.writeFile(tagPath, categoryTagId.trim(), 'utf8');
       }
       
       // Update archive marker metadata
@@ -1188,11 +1194,25 @@ ipcMain.handle('list-archive-cases', async () => {
             // Description file doesn't exist or can't be read - that's okay
           }
           
+          // Try to read category tag metadata
+          let categoryTagId: string | undefined = undefined;
+          try {
+            const tagPath = path.join(casePath, '.case-category-tag');
+            const tagContent = await fs.readFile(tagPath, 'utf8');
+            const tagTrimmed = tagContent.trim();
+            if (tagTrimmed) {
+              categoryTagId = tagTrimmed;
+            }
+          } catch (tagError) {
+            // Tag file doesn't exist or can't be read - that's okay
+          }
+          
           return {
             name: entry.name,
             path: casePath,
             backgroundImage,
             description,
+            categoryTagId,
           };
         })
     );
@@ -1201,6 +1221,206 @@ ipcMain.handle('list-archive-cases', async () => {
     return cases;
   } catch (error) {
     throw new Error(`Failed to list archive cases: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Category Tag Handlers
+
+// Get all category tags
+ipcMain.handle('get-category-tags', async () => {
+  const archiveDrive = await getArchiveDrive();
+  if (!archiveDrive) {
+    return [];
+  }
+
+  try {
+    const tagsPath = path.join(archiveDrive, '.category-tags.json');
+    try {
+      const tagsContent = await fs.readFile(tagsPath, 'utf8');
+      const tags = JSON.parse(tagsContent);
+      return Array.isArray(tags) ? tags : [];
+    } catch (error: unknown) {
+      if (isErrorWithCode(error) && error.code === 'ENOENT') {
+        // File doesn't exist yet, return empty array
+        return [];
+      }
+      throw error;
+    }
+  } catch (error) {
+    throw new Error(`Failed to get category tags: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Create a new category tag
+ipcMain.handle('create-category-tag', async (event, tag: { id: string; name: string; color: string }) => {
+  const archiveDrive = await getArchiveDrive();
+  if (!archiveDrive) {
+    throw new Error('Archive drive not set');
+  }
+
+  if (!tag.id || !tag.name || !tag.color) {
+    throw new Error('Invalid tag data');
+  }
+
+  try {
+    const tagsPath = path.join(archiveDrive, '.category-tags.json');
+    let tags: Array<{ id: string; name: string; color: string }> = [];
+
+    // Try to read existing tags
+    try {
+      const tagsContent = await fs.readFile(tagsPath, 'utf8');
+      tags = JSON.parse(tagsContent);
+      if (!Array.isArray(tags)) {
+        tags = [];
+      }
+    } catch (error: unknown) {
+      if (isErrorWithCode(error) && error.code === 'ENOENT') {
+        // File doesn't exist yet, start with empty array
+        tags = [];
+      } else {
+        throw error;
+      }
+    }
+
+    // Check for duplicate ID or name
+    if (tags.some(t => t.id === tag.id || t.name.toLowerCase() === tag.name.toLowerCase())) {
+      throw new Error('Tag with this ID or name already exists');
+    }
+
+    // Add new tag
+    tags.push(tag);
+
+    // Save tags
+    await fs.writeFile(tagsPath, JSON.stringify(tags, null, 2), 'utf8');
+    return tag;
+  } catch (error) {
+    throw new Error(`Failed to create category tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Set category tag for a case
+ipcMain.handle('set-case-category-tag', async (event, casePath: string, categoryTagId: string | null) => {
+  if (!isSafePath(casePath)) {
+    throw new Error('Invalid case path');
+  }
+
+  try {
+    const tagPath = path.join(casePath, '.case-category-tag');
+    
+    if (categoryTagId === null || categoryTagId.trim() === '') {
+      // Remove tag by deleting the file
+      try {
+        await fs.unlink(tagPath);
+      } catch (error: unknown) {
+        if (isErrorWithCode(error) && error.code === 'ENOENT') {
+          // File doesn't exist, that's fine
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      // Write tag ID to file
+      await fs.writeFile(tagPath, categoryTagId.trim(), 'utf8');
+    }
+    
+    return true;
+  } catch (error) {
+    throw new Error(`Failed to set case category tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Get category tag for a case
+ipcMain.handle('get-case-category-tag', async (event, casePath: string) => {
+  if (!isSafePath(casePath)) {
+    throw new Error('Invalid case path');
+  }
+
+  try {
+    const tagPath = path.join(casePath, '.case-category-tag');
+    try {
+      const tagContent = await fs.readFile(tagPath, 'utf8');
+      const tagId = tagContent.trim();
+      return tagId || null;
+    } catch (error: unknown) {
+      if (isErrorWithCode(error) && error.code === 'ENOENT') {
+        // File doesn't exist, return null
+        return null;
+      }
+      throw error;
+    }
+  } catch (error) {
+    throw new Error(`Failed to get case category tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Set category tag for a file
+ipcMain.handle('set-file-category-tag', async (event, filePath: string, categoryTagId: string | null) => {
+  if (!isSafePath(filePath)) {
+    throw new Error('Invalid file path');
+  }
+
+  try {
+    // Normalize the file path to ensure consistency
+    const normalizedFilePath = path.normalize(filePath);
+    // Create metadata file next to the file: .file-category-tag.{filename}
+    const fileDir = path.dirname(normalizedFilePath);
+    const fileName = path.basename(normalizedFilePath);
+    const tagFileName = `.file-category-tag.${fileName}`;
+    const tagPath = path.join(fileDir, tagFileName);
+    
+    logger.log('[Main] set-file-category-tag:', { filePath, normalizedFilePath, fileName, tagPath, categoryTagId });
+    
+    if (categoryTagId === null || categoryTagId.trim() === '') {
+      // Remove tag by deleting the metadata file
+      try {
+        await fs.unlink(tagPath);
+      } catch (error: unknown) {
+        if (isErrorWithCode(error) && error.code === 'ENOENT') {
+          // File doesn't exist, that's fine
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      // Write tag ID to metadata file
+      await fs.writeFile(tagPath, categoryTagId.trim(), 'utf8');
+    }
+    
+    return true;
+  } catch (error) {
+    throw new Error(`Failed to set file category tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Get category tag for a file
+ipcMain.handle('get-file-category-tag', async (event, filePath: string) => {
+  if (!isSafePath(filePath)) {
+    throw new Error('Invalid file path');
+  }
+
+  try {
+    // Normalize the file path to ensure consistency
+    const normalizedFilePath = path.normalize(filePath);
+    const fileDir = path.dirname(normalizedFilePath);
+    const fileName = path.basename(normalizedFilePath);
+    const tagFileName = `.file-category-tag.${fileName}`;
+    const tagPath = path.join(fileDir, tagFileName);
+    
+    logger.log('[Main] get-file-category-tag:', { filePath, normalizedFilePath, fileName, tagPath });
+    
+    try {
+      const tagContent = await fs.readFile(tagPath, 'utf8');
+      const tagId = tagContent.trim();
+      return tagId || null;
+    } catch (error: unknown) {
+      if (isErrorWithCode(error) && error.code === 'ENOENT') {
+        // File doesn't exist, return null
+        return null;
+      }
+      throw error;
+    }
+  } catch (error) {
+    throw new Error(`Failed to get file category tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 
@@ -1242,6 +1462,12 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
             return false;
           }
           
+          // Exclude .case-category-tag metadata file
+          if (fileName === '.case-category-tag') {
+            logger.log('[Main] Filtering out case category tag metadata file:', entry.name);
+            return false;
+          }
+          
           // Exclude .vault-archive.json marker file
           if (fileName === '.vault-archive.json') {
             logger.log('[Main] Filtering out vault archive marker file:', entry.name);
@@ -1254,17 +1480,42 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
             return false;
           }
           
+          // Exclude .file-category-tag.* metadata files
+          if (fileName.startsWith('.file-category-tag.')) {
+            logger.log('[Main] Filtering out file category tag metadata file:', entry.name);
+            return false;
+          }
+          
           return true;
         })
         .map(async (entry) => {
-          const filePath = path.join(casePath, entry.name);
+          const filePath = path.normalize(path.join(casePath, entry.name));
           const stats = await fs.stat(filePath);
+          
+          // Try to read file category tag metadata
+          let categoryTagId: string | undefined = undefined;
+          try {
+            const tagFileName = `.file-category-tag.${entry.name}`;
+            const tagPath = path.normalize(path.join(casePath, tagFileName));
+            logger.log('[Main] list-case-files: Reading tag for file:', { entryName: entry.name, filePath, tagFileName, tagPath });
+            const tagContent = await fs.readFile(tagPath, 'utf8');
+            const tagTrimmed = tagContent.trim();
+            if (tagTrimmed) {
+              categoryTagId = tagTrimmed;
+              logger.log('[Main] list-case-files: Found tag for file:', { entryName: entry.name, categoryTagId });
+            }
+          } catch (tagError) {
+            // Tag file doesn't exist or can't be read - that's okay
+            logger.log('[Main] list-case-files: No tag found for file:', { entryName: entry.name, error: tagError instanceof Error ? tagError.message : 'Unknown' });
+          }
+          
           return {
             name: entry.name,
             path: filePath,
             size: stats.size,
             modified: stats.mtime.getTime(),
             isFolder: false,
+            categoryTagId,
           };
         })
     );

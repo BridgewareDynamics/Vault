@@ -39,11 +39,18 @@ export interface ArchiveMarker {
   archiveId: string;
 }
 
+export interface CategoryTag {
+  id: string;
+  name: string;
+  color: string; // Hex color code (e.g., "#FF5733")
+}
+
 export interface ArchiveCase {
   name: string;
   path: string;
   backgroundImage?: string; // URL or path to background image
   description?: string; // Text explaining the case's purpose/contents
+  categoryTagId?: string; // ID of the category tag assigned to this case
 }
 
 export interface ArchiveFile {
@@ -57,6 +64,7 @@ export interface ArchiveFile {
   folderType?: 'extraction' | 'case';
   parentPdfName?: string; // Name of the parent PDF file this folder was created from
   backgroundImage?: string; // Path to background image for folders
+  categoryTagId?: string; // ID of the category tag assigned to this file
 }
 
 // Logger Types

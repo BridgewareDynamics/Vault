@@ -4,6 +4,7 @@ import { useToast } from '../components/Toast/ToastContext';
 import { logger } from '../utils/logger';
 import { setupPDFWorker } from '../utils/pdfWorker';
 import { getUserFriendlyError } from '../utils/errorMessages';
+import { useCategoryTags } from './useCategoryTags';
 
 // Global thumbnail cache that persists across navigation
 const globalThumbnailCache = new Map<string, string>();
@@ -18,7 +19,9 @@ export function useArchive() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [loadingThumbnails, setLoadingThumbnails] = useState<Set<string>>(new Set());
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const toast = useToast();
+  const { tags, getTagById } = useCategoryTags();
 
   // Load archive config on mount
   useEffect(() => {
@@ -109,14 +112,14 @@ export function useArchive() {
     }
   }, [archiveConfig?.archiveDrive, toast]);
 
-  const createCase = useCallback(async (caseName: string, description: string = ''): Promise<boolean> => {
+  const createCase = useCallback(async (caseName: string, description: string = '', categoryTagId?: string): Promise<boolean> => {
     try {
       if (!window.electronAPI) {
         toast.error('Electron API not available');
         return false;
       }
 
-      await window.electronAPI.createCaseFolder(caseName, description);
+      await window.electronAPI.createCaseFolder(caseName, description, categoryTagId);
       toast.success(`Case "${caseName}" created`);
       await loadCases(); // Reload cases (will auto-alphabetize)
       return true;
@@ -1063,10 +1066,36 @@ export function useArchive() {
     }
   }, [toast, currentFolderPath]);
 
-  // Filter cases and files based on search query
-  const filteredCases = cases.filter(caseItem =>
-    caseItem.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter cases based on search query and selected tag
+  const filteredCases = useMemo(() => {
+    let filtered = cases;
+
+    // Filter by tag if selected
+    if (selectedTagId) {
+      filtered = filtered.filter(caseItem => caseItem.categoryTagId === selectedTagId);
+    }
+
+    // Filter by search query (includes tag name matching)
+    if (searchQuery.trim()) {
+      const queryLower = searchQuery.toLowerCase();
+      filtered = filtered.filter(caseItem => {
+        // Match case name
+        if (caseItem.name.toLowerCase().includes(queryLower)) {
+          return true;
+        }
+        // Match tag name if case has a tag
+        if (caseItem.categoryTagId) {
+          const tag = getTagById(caseItem.categoryTagId);
+          if (tag && tag.name.toLowerCase().includes(queryLower)) {
+            return true;
+          }
+        }
+        return false;
+      });
+    }
+
+    return filtered;
+  }, [cases, searchQuery, selectedTagId, getTagById]);
 
   // Filter files while preserving folder-PDF relationships
   // If a PDF matches, include its associated folders (and vice versa)
@@ -1210,6 +1239,10 @@ export function useArchive() {
       const path = currentFolderPath || currentCase?.path;
       return path ? loadFiles(path, true) : Promise.resolve(); // Preserve thumbnails on refresh
     },
+    selectedTagId,
+    setSelectedTagId,
+    tags,
+    getTagById,
   };
 }
 
