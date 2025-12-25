@@ -171,8 +171,12 @@ export function useArchiveExtraction() {
               imageData,
             });
 
-            // Clean up canvas immediately
+            // Clean up canvas immediately to free memory
             context.clearRect(0, 0, canvas.width, canvas.height);
+            // Remove canvas from DOM if it was added (shouldn't be, but safety check)
+            if (canvas.parentNode) {
+              canvas.parentNode.removeChild(canvas);
+            }
             canvas.width = 0;
             canvas.height = 0;
             canvas = null;

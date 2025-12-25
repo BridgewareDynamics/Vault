@@ -5,9 +5,13 @@ import { logger } from '../utils/logger';
 import { setupPDFWorker } from '../utils/pdfWorker';
 import { getUserFriendlyError } from '../utils/errorMessages';
 import { useCategoryTags } from './useCategoryTags';
+import { LRUCache } from '../utils/lruCache';
+import { isMemoryHigh, requestGarbageCollection, formatBytes, getMemoryInfo } from '../utils/memoryMonitor';
 
-// Global thumbnail cache that persists across navigation
-const globalThumbnailCache = new Map<string, string>();
+// Global thumbnail cache with LRU eviction to prevent memory bloat
+// Limit to 200 thumbnails (~50-100MB depending on size)
+// Each thumbnail is typically 200x200px JPEG, ~50-200KB base64 encoded
+const globalThumbnailCache = new LRUCache<string>(200);
 
 export function useArchive() {
   const [archiveConfig, setArchiveConfig] = useState<ArchiveConfig | null>(null);
@@ -50,12 +54,69 @@ export function useArchive() {
         loadFilesRef.current(currentCase.path);
       }
     } else if (!currentCase) {
+      // Cleanup when navigating away from archive
       setFiles([]);
       filesRef.current = [];
       setCurrentFolderPath(null);
       setFolderNavigationStack([]);
+      // Clear thumbnails for files that are no longer visible to free memory
+      // Keep cache but let LRU handle eviction naturally
     }
   }, [currentCase, currentFolderPath]);
+
+  // Cleanup thumbnails for files not in current view when case changes
+  useEffect(() => {
+    if (!currentCase) {
+      return;
+    }
+
+    // Cleanup function: remove thumbnails for files not in current view
+    return () => {
+      // When navigating away, clean up thumbnails for files not in current files list
+      const currentFilePaths = new Set(filesRef.current.map(f => f.path));
+      const deleted = globalThumbnailCache.deleteIf((key) => !currentFilePaths.has(key));
+      if (deleted > 0) {
+        logger.debug(`Cleaned up ${deleted} thumbnail(s) from cache`);
+      }
+    };
+  }, [currentCase?.path, currentFolderPath]);
+
+  // Automatic memory cleanup when memory usage is high
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      // Check memory usage every 30 seconds
+      if (isMemoryHigh(85)) {
+        const memoryInfo = getMemoryInfo();
+        logger.warn(`High memory usage detected: ${memoryInfo ? formatBytes(memoryInfo.usedJSHeapSize) : 'unknown'}. Triggering cleanup...`);
+        
+        // Clean up thumbnails for files not in current view
+        const currentFilePaths = new Set(filesRef.current.map(f => f.path));
+        const deleted = globalThumbnailCache.deleteIf((key) => !currentFilePaths.has(key));
+        
+        if (deleted > 0) {
+          logger.info(`Auto-cleanup: Removed ${deleted} thumbnail(s) from cache`);
+        }
+        
+        // Reduce cache size by 25% if still high
+        if (globalThumbnailCache.size() > 150) {
+          const targetSize = Math.floor(globalThumbnailCache.size() * 0.75);
+          const keys = globalThumbnailCache.keys();
+          const keysToDelete = keys.slice(0, globalThumbnailCache.size() - targetSize);
+          keysToDelete.forEach(key => {
+            if (!currentFilePaths.has(key)) {
+              globalThumbnailCache.delete(key);
+            }
+          });
+          logger.info(`Auto-cleanup: Reduced cache size to ${globalThumbnailCache.size()}`);
+        }
+        
+        // Request garbage collection if available
+        requestGarbageCollection();
+      }
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(cleanupInterval);
+  }, []);
 
   const loadArchiveConfig = useCallback(async () => {
     try {

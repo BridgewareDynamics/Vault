@@ -185,11 +185,25 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       }
       setPdfDoc(null);
     }
+    
+    // Clear file data to free memory immediately
+    setFileData(null);
+    
+    // Force garbage collection hint if available
+    if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+      (globalThis as any).gc();
+    }
+    
     onClose();
   }, [pdfDoc, file, onClose]);
 
   useEffect(() => {
     if (file) {
+      // Clear previous file data before loading new one to free memory
+      if (fileData) {
+        setFileData(null);
+      }
+      
       if (file.type === 'pdf') {
         loadPDF();
       } else {
