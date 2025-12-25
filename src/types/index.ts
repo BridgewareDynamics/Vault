@@ -97,3 +97,16 @@ export interface PDFViewport {
   transform: [number, number, number, number, number, number];
 }
 
+// Settings Types
+export type ExtractionQuality = 'high' | 'medium' | 'low';
+export type PerformanceMode = 'auto' | 'high' | 'balanced' | 'low';
+
+export interface AppSettings {
+  hardwareAcceleration: boolean;
+  ramLimitMB: number;
+  fullscreen: boolean;
+  extractionQuality: ExtractionQuality;
+  thumbnailSize: number;
+  performanceMode: PerformanceMode;
+}
+

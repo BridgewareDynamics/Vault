@@ -7,12 +7,15 @@ import { ProgressBar } from './components/ProgressBar';
 import { Gallery } from './components/Gallery';
 import { ImageViewer } from './components/ImageViewer';
 import { Toolbar } from './components/Toolbar';
+import { SettingsPanel } from './components/Settings/SettingsPanel';
 const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
 import { usePDFExtraction } from './hooks/usePDFExtraction';
 import { ExtractedPage } from './types';
 import { Home } from 'lucide-react';
 import { logger } from './utils/logger';
 import { getUserFriendlyError } from './utils/errorMessages';
+import { SettingsProvider, useSettingsContext } from './utils/settingsContext';
+import { getMemoryManager } from './utils/memoryManager';
 import './App.css';
 
 function AppContent() {
@@ -26,6 +29,7 @@ function AppContent() {
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
+  const { settings, updateSettings } = useSettingsContext();
 
   // Check if Electron API is available
   useEffect(() => {
@@ -33,6 +37,35 @@ function AppContent() {
       logger.warn('Electron API not available - running in browser mode');
     }
   }, []);
+
+  // Initialize memory manager when settings are loaded
+  useEffect(() => {
+    if (settings) {
+      const memoryManager = getMemoryManager();
+      memoryManager.initialize(settings);
+
+      // Register cleanup callback for image caches
+      const unregister = memoryManager.registerCleanupCallback(() => {
+        // Clear any image caches if needed
+        // This is a placeholder - actual cache clearing would be implemented
+        // based on your specific caching strategy
+        logger.info('[MemoryManager] Cleanup triggered - clearing caches');
+      });
+
+      return () => {
+        unregister();
+        memoryManager.shutdown();
+      };
+    }
+  }, [settings]);
+
+  // Update memory manager when settings change
+  useEffect(() => {
+    if (settings) {
+      const memoryManager = getMemoryManager();
+      memoryManager.updateSettings(settings);
+    }
+  }, [settings]);
 
   // Handle PDF file selection
   const handleSelectFile = async () => {
@@ -156,6 +189,7 @@ function AppContent() {
           onOpenArchive={() => setShowArchive(true)}
         />
         <ToastContainer />
+        <SettingsPanel />
       </>
     );
   }
@@ -261,9 +295,11 @@ function AppContent() {
 function App() {
   return (
     <ToastProvider>
-      <ErrorBoundary>
-        <AppContent />
-      </ErrorBoundary>
+      <SettingsProvider>
+        <ErrorBoundary>
+          <AppContent />
+        </ErrorBoundary>
+      </SettingsProvider>
     </ToastProvider>
   );
 }

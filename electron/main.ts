@@ -10,8 +10,15 @@ import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive 
 import { generateFileThumbnail } from './utils/thumbnailGenerator';
 import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMarker } from './utils/archiveMarker';
 import { logger, type LogLevel, type LogArgs } from './utils/logger';
+import { loadSettings } from './utils/settings';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+// Enable hardware acceleration command line switches
+// These must be set before app is ready
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('enable-hardware-acceleration');
 
 // Type guard for errors with code property
 interface ErrorWithCode extends Error {
@@ -81,7 +88,7 @@ function registerVideoProtocol() {
   });
 }
 
-function createWindow() {
+async function createWindow() {
   // Determine preload path based on environment
   // In production: files are in app.asar/dist-electron/electron/
   // In development: files are in dist-electron/electron/
@@ -194,6 +201,15 @@ function createWindow() {
     logger.warn(`Icon file not found at ${iconPath}, using default Electron icon`);
   }
 
+  // Load settings to apply hardware acceleration and fullscreen
+  let settings;
+  try {
+    settings = await loadSettings();
+  } catch (error) {
+    logger.warn('Failed to load settings, using defaults:', error);
+    settings = null;
+  }
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -207,10 +223,13 @@ function createWindow() {
       contextIsolation: true,
       webSecurity: true, // Explicitly enable web security
       devTools: isDev, // Only enable DevTools in development
-    },
+      // Note: enableWebGPU is not available in Electron 28, hardware acceleration is enabled via command line switches
+      offscreen: false, // Keep onscreen for better performance
+    } as Electron.WebPreferences,
     titleBarStyle: 'hiddenInset',
     frame: true,
     show: false, // Don't show until ready
+    fullscreen: settings?.fullscreen === true, // Apply fullscreen from settings
   });
 
   // Remove menu bar in production for a clean app experience
@@ -327,7 +346,7 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Set App User Model ID for Windows icon association
   // This helps Windows properly associate the icon with the application
   if (process.platform === 'win32') {
@@ -337,11 +356,11 @@ app.whenReady().then(() => {
   // Register custom protocols before creating window
   registerVideoProtocol();
   
-  createWindow();
+  await createWindow();
 
-  app.on('activate', () => {
+  app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      await createWindow();
     }
   });
 });
@@ -2439,6 +2458,58 @@ ipcMain.handle('extract-pdf-from-archive', async (
     return { success: true, messages: results, extractionFolder };
   } catch (error) {
     throw new Error(`Failed to extract PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Settings IPC Handlers
+
+// Get app settings
+ipcMain.handle('get-settings', async () => {
+  try {
+    const settings = await loadSettings();
+    return settings;
+  } catch (error) {
+    logger.error('Failed to get settings:', error);
+    throw new Error(`Failed to get settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Update app settings
+ipcMain.handle('update-settings', async (event, updates: Partial<import('./utils/settings').AppSettings>) => {
+  try {
+    const { updateSettings } = await import('./utils/settings');
+    const updated = await updateSettings(updates);
+    
+    // Apply fullscreen change immediately if needed
+    if (updates.fullscreen !== undefined && mainWindow) {
+      mainWindow.setFullScreen(updates.fullscreen);
+    }
+    
+    return updated;
+  } catch (error) {
+    logger.error('Failed to update settings:', error);
+    throw new Error(`Failed to update settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Toggle fullscreen
+ipcMain.handle('toggle-fullscreen', async () => {
+  try {
+    if (!mainWindow) {
+      throw new Error('Main window not available');
+    }
+    
+    const isFullscreen = mainWindow.isFullScreen();
+    mainWindow.setFullScreen(!isFullscreen);
+    
+    // Update settings to persist the change
+    const { updateSettings } = await import('./utils/settings');
+    await updateSettings({ fullscreen: !isFullscreen });
+    
+    return !isFullscreen;
+  } catch (error) {
+    logger.error('Failed to toggle fullscreen:', error);
+    throw new Error(`Failed to toggle fullscreen: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 

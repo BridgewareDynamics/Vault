@@ -88,6 +88,8 @@ export const ImageViewer = memo(function ImageViewer({ page, onClose }: ImageVie
               `}
               style={{
                 cursor: isZoomed ? 'grab' : 'zoom-in',
+                willChange: 'transform',
+                transform: 'translate3d(0, 0, 0)', // Force GPU acceleration
               }}
               animate={{
                 scale: isZoomed ? 2.5 : 1,

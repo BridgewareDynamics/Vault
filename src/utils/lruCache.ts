@@ -24,6 +24,24 @@ export class LRUCache<T> {
   }
 
   /**
+   * Update cache capacity dynamically
+   */
+  setCapacity(newCapacity: number): void {
+    this.capacity = newCapacity;
+    // Evict items if over new capacity
+    while (this.cache.size > this.capacity) {
+      this.evictLRU();
+    }
+  }
+
+  /**
+   * Get current capacity
+   */
+  getCapacity(): number {
+    return this.capacity;
+  }
+
+  /**
    * Get value from cache and mark as recently used
    */
   get(key: string): T | undefined {

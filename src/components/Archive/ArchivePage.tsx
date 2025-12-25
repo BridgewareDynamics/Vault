@@ -22,6 +22,7 @@ import { ExtractionFolder } from './ExtractionFolder';
 import { CategoryTagSelector } from './CategoryTagSelector';
 import { ArchiveFile } from '../../types';
 import { ProgressBar } from '../ProgressBar';
+import { SettingsPanel } from '../Settings/SettingsPanel';
 import { logger } from '../../utils/logger';
 
 interface ArchivePageProps {
@@ -1391,6 +1392,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             : (currentCase?.categoryTagId || null)
         }
       />
+
+      <SettingsPanel />
     </div>
   );
 }

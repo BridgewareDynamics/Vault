@@ -101,8 +101,21 @@ export const Gallery = memo(function Gallery({ pages, onPageClick }: GalleryProp
 
   // Fallback to regular grid for smaller lists
   return (
-    <div ref={containerRef} className="w-full h-full overflow-y-auto px-4 py-4 pb-32">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+    <div 
+      ref={containerRef} 
+      className="w-full h-full overflow-y-auto px-4 py-4 pb-32"
+      style={{
+        willChange: 'scroll-position',
+        transform: 'translateZ(0)', // Force GPU acceleration
+      }}
+    >
+      <div 
+        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
+        style={{
+          willChange: 'contents',
+          transform: 'translate3d(0, 0, 0)', // Force GPU acceleration
+        }}
+      >
         {pages.map((page) => (
           <GalleryItem
             key={page.pageNumber}

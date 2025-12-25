@@ -74,6 +74,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('debug-log', logEntry),
   // System information
   getSystemMemory: () => ipcRenderer.invoke('get-system-memory'),
+  // Settings API
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  updateSettings: (updates: any) => ipcRenderer.invoke('update-settings', updates),
+  toggleFullscreen: () => ipcRenderer.invoke('toggle-fullscreen'),
 });
 
 // Type declaration for TypeScript
@@ -144,6 +148,31 @@ declare global {
         hypothesisId: string;
       }) => Promise<void>;
       getSystemMemory: () => Promise<{ totalMemory: number; freeMemory: number; usedMemory: number }>;
+      // Settings API
+      getSettings: () => Promise<{
+        hardwareAcceleration: boolean;
+        ramLimitMB: number;
+        fullscreen: boolean;
+        extractionQuality: 'high' | 'medium' | 'low';
+        thumbnailSize: number;
+        performanceMode: 'auto' | 'high' | 'balanced' | 'low';
+      }>;
+      updateSettings: (updates: Partial<{
+        hardwareAcceleration: boolean;
+        ramLimitMB: number;
+        fullscreen: boolean;
+        extractionQuality: 'high' | 'medium' | 'low';
+        thumbnailSize: number;
+        performanceMode: 'auto' | 'high' | 'balanced' | 'low';
+      }>) => Promise<{
+        hardwareAcceleration: boolean;
+        ramLimitMB: number;
+        fullscreen: boolean;
+        extractionQuality: 'high' | 'medium' | 'low';
+        thumbnailSize: number;
+        performanceMode: 'auto' | 'high' | 'balanced' | 'low';
+      }>;
+      toggleFullscreen: () => Promise<boolean>;
     };
   }
 }
