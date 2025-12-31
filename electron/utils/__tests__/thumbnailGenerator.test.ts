@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import sharp from 'sharp';
 import { generateFileThumbnail } from '../thumbnailGenerator';
+import * as fs from 'fs/promises';
+
+// Mock fs/promises to avoid actual file system operations
+vi.mock('fs/promises', () => ({
+  readFile: vi.fn().mockResolvedValue(Buffer.from('mock-file-data')),
+}));
 
 // Mock sharp
 vi.mock('sharp', () => {
@@ -30,6 +36,8 @@ vi.mock('path', async () => {
 describe('thumbnailGenerator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset fs.readFile mock to return a Buffer
+    (fs.readFile as any).mockResolvedValue(Buffer.from('mock-file-data'));
   });
 
   afterEach(() => {
@@ -48,7 +56,8 @@ describe('thumbnailGenerator', () => {
       const thumbnail = await generateFileThumbnail('/path/to/image.jpg');
 
       expect(thumbnail).toContain('data:image/png;base64,');
-      expect(sharp).toHaveBeenCalledWith('/path/to/image.jpg');
+      // The implementation reads file to Buffer first, then passes Buffer to sharp
+      expect(sharp).toHaveBeenCalledWith(expect.any(Buffer));
     });
 
     it('should generate thumbnail for image file (PNG)', async () => {
@@ -62,7 +71,8 @@ describe('thumbnailGenerator', () => {
       const thumbnail = await generateFileThumbnail('/path/to/image.png');
 
       expect(thumbnail).toContain('data:image/png;base64,');
-      expect(sharp).toHaveBeenCalledWith('/path/to/image.png');
+      // The implementation reads file to Buffer first, then passes Buffer to sharp
+      expect(sharp).toHaveBeenCalledWith(expect.any(Buffer));
     });
 
     it('should generate placeholder thumbnail for PDF file', async () => {

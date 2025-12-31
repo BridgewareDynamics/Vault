@@ -1,11 +1,14 @@
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText, BookmarkPlus, Bookmark } from 'lucide-react';
 import { ArchiveFile, PDFDocument, PDFRenderTask } from '../../types';
 import { logger } from '../../utils/logger';
 import { setupPDFWorker } from '../../utils/pdfWorker';
 import { cleanupPDFBlobUrl } from '../../utils/pdfSource';
 import { LargePDFWarningDialog } from '../LargePDFWarningDialog';
+import { useWordEditor } from '../../contexts/WordEditorContext';
+import { BookmarkCreator } from '../Bookmarks/BookmarkCreator';
+import { useToast } from '../Toast/ToastContext';
 
 interface ArchiveFileViewerProps {
   file: ArchiveFile | null;
@@ -13,12 +16,19 @@ interface ArchiveFileViewerProps {
   onClose: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
+  initialPage?: number;
+  onInitialPageApplied?: () => void;
 }
 
-export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: ArchiveFileViewerProps) {
+export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, initialPage, onInitialPageApplied }: ArchiveFileViewerProps) {
+  const { isOpen: isWordEditorOpen, setIsOpen: setWordEditorOpen } = useWordEditor();
+  const toast = useToast();
   const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showBookmarkCreator, setShowBookmarkCreator] = useState(false);
+  const [currentPageBookmarks, setCurrentPageBookmarks] = useState<Array<{ id: string; name: string }>>([]);
+  const initialPageAppliedRef = useRef(false);
   
   // PDF.js state
   const [pdfDoc, setPdfDoc] = useState<PDFDocument | null>(null);
@@ -28,6 +38,8 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   const [pdfLoadingProgress, setPdfLoadingProgress] = useState(0);
   const [pageRendering, setPageRendering] = useState(false);
   const [pageScale, setPageScale] = useState(1.5);
+  const [pageJumpValue, setPageJumpValue] = useState('');
+  const pageJumpInputRef = useRef<HTMLInputElement>(null);
   // Initialize zoom mode - always enabled to allow proper canvas sizing
   const [isPdfZoomed, setIsPdfZoomed] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -77,7 +89,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
         if (pdf && typeof pdf.numPages === 'number' && pdf.numPages > 0) {
           setPdfDoc(pdf);
           setTotalPages(pdf.numPages);
-          setCurrentPage(1);
+          // Use initialPage if provided, otherwise default to 1
+          const startPage = initialPage && initialPage >= 1 && initialPage <= pdf.numPages ? initialPage : 1;
+          setCurrentPage(startPage);
           setPdfLoading(false);
           setPdfLoadingProgress(0);
         } else {
@@ -353,7 +367,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
       
       setPdfDoc(pdf);
       setTotalPages(pdf.numPages);
-      setCurrentPage(1);
+      // Use initialPage if provided, otherwise default to 1
+      const startPage = initialPage && initialPage >= 1 && initialPage <= pdf.numPages ? initialPage : 1;
+      setCurrentPage(startPage);
       setPdfLoadingProgress(100);
       
       // Wait for first page to render before hiding loading screen
@@ -492,6 +508,31 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
     setCurrentPage(prev => Math.min(totalPages, prev + 1));
   }, [totalPages]);
 
+  const handlePageJump = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    const pageNum = parseInt(pageJumpValue, 10);
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+      setCurrentPage(pageNum);
+      setPageJumpValue('');
+      pageJumpInputRef.current?.blur();
+    }
+  }, [pageJumpValue, totalPages]);
+
+  const handlePageJumpChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Only allow numbers
+    if (value === '' || /^\d+$/.test(value)) {
+      setPageJumpValue(value);
+    }
+  }, []);
+
+  const handlePageJumpKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setPageJumpValue('');
+      pageJumpInputRef.current?.blur();
+    }
+  }, []);
+
   const handleZoomIn = useCallback(() => {
     setPageScale(prev => {
       const newScale = Math.min(prev + 0.25, 5);
@@ -601,6 +642,46 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [file, pdfDoc, handlePreviousPage, handleNextPage, handleZoomIn, handleZoomOut]);
 
+  // Reset initialPageAppliedRef when file changes
+  useEffect(() => {
+    initialPageAppliedRef.current = false;
+  }, [file]);
+
+  // Set initial page once when PDF loads and initialPage is provided
+  useEffect(() => {
+    if (initialPage && initialPage >= 1 && pdfDoc && initialPage <= totalPages && !initialPageAppliedRef.current) {
+      setCurrentPage(initialPage);
+      initialPageAppliedRef.current = true;
+      // Notify parent that initial page has been applied
+      if (onInitialPageApplied) {
+        onInitialPageApplied();
+      }
+    }
+  }, [initialPage, pdfDoc, totalPages, onInitialPageApplied]);
+
+  // Check for bookmarks on current page
+  useEffect(() => {
+    const checkBookmarks = async () => {
+      if (!file || file.type !== 'pdf' || !window.electronAPI) {
+        setCurrentPageBookmarks([]);
+        return;
+      }
+
+      try {
+        const allBookmarks = await window.electronAPI.getBookmarks();
+        const pageBookmarks = allBookmarks.filter(
+          b => b.pdfPath === file.path && b.pageNumber === currentPage
+        );
+        setCurrentPageBookmarks(pageBookmarks.map(b => ({ id: b.id, name: b.name })));
+      } catch (error) {
+        logger.error('Failed to check bookmarks:', error);
+        setCurrentPageBookmarks([]);
+      }
+    };
+
+    checkBookmarks();
+  }, [file, currentPage]);
+
   // Keyboard navigation for images
   useEffect(() => {
     if (file?.type !== 'image' || !fileData) return;
@@ -647,6 +728,152 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
   const hasNext = onNext && currentIndex < files.length - 1;
   const hasPrevious = onPrevious && currentIndex > 0;
 
+  // Generate thumbnail from current PDF page
+  const generatePageThumbnail = useCallback(async (): Promise<string | undefined> => {
+    if (!pdfDoc || !canvasRef.current || file?.type !== 'pdf') {
+      return undefined;
+    }
+
+    try {
+      const page = await pdfDoc.getPage(currentPage);
+      const viewport = page.getViewport({ scale: 1.0 });
+      
+      // Calculate thumbnail size (200px max dimension)
+      const THUMBNAIL_SIZE = 200;
+      const aspectRatio = viewport.width / viewport.height;
+      let width = THUMBNAIL_SIZE;
+      let height = THUMBNAIL_SIZE;
+      
+      if (aspectRatio > 1) {
+        height = THUMBNAIL_SIZE / aspectRatio;
+      } else {
+        width = THUMBNAIL_SIZE * aspectRatio;
+      }
+      
+      // Create temporary canvas for thumbnail
+      const thumbnailCanvas = document.createElement('canvas');
+      thumbnailCanvas.width = width;
+      thumbnailCanvas.height = height;
+      const context = thumbnailCanvas.getContext('2d', {
+        willReadFrequently: false,
+        alpha: false,
+      });
+      
+      if (!context) {
+        return undefined;
+      }
+      
+      // Render page to thumbnail canvas
+      const thumbnailViewport = page.getViewport({ scale: width / viewport.width });
+      await page.render({
+        canvasContext: context,
+        viewport: thumbnailViewport,
+      }).promise;
+      
+      // Convert to base64 PNG
+      return thumbnailCanvas.toDataURL('image/png');
+    } catch (error) {
+      logger.error('Failed to generate bookmark thumbnail:', error);
+      return undefined;
+    }
+  }, [pdfDoc, currentPage, file?.type]);
+
+  // Handle bookmark creation
+  const handleCreateBookmark = useCallback(async (bookmarkData: {
+    pdfPath: string;
+    pageNumber: number;
+    name: string;
+    description?: string;
+    note?: string;
+    createFolder: boolean;
+    thumbnail?: string;
+  }) => {
+    if (!window.electronAPI) {
+      toast.error('Electron API not available');
+      return;
+    }
+
+    try {
+      // Generate thumbnail if not provided
+      let thumbnail = bookmarkData.thumbnail;
+      if (!thumbnail) {
+        thumbnail = await generatePageThumbnail();
+      }
+
+      // Check if folder already exists for this PDF (always check, not just if createFolder is true)
+      const folders = await window.electronAPI.getBookmarkFolders();
+      // Normalize paths for comparison
+      const normalizePath = (path: string) => path.replace(/\\/g, '/');
+      const normalizedPdfPath = normalizePath(bookmarkData.pdfPath);
+      const existingFolder = folders.find(f => normalizePath(f.pdfPath) === normalizedPdfPath);
+      
+      let folderId: string | undefined = undefined;
+      
+      // If folder exists, use it; otherwise create one if requested
+      if (existingFolder) {
+        folderId = existingFolder.id;
+      } else if (bookmarkData.createFolder) {
+        try {
+          const newFolder = await window.electronAPI.createBookmarkFolder({
+            name: `${file?.name || 'PDF'} Bookmarks`,
+            pdfPath: bookmarkData.pdfPath,
+            thumbnail,
+          });
+          
+          folderId = newFolder.id;
+          
+          // Dispatch event for folder creation
+          const folderEvent = new CustomEvent('bookmark-folder-created', {
+            detail: { folderId: newFolder.id }
+          });
+          window.dispatchEvent(folderEvent);
+        } catch (error) {
+          logger.warn('Failed to create bookmark folder:', error);
+        }
+      }
+
+      // Create bookmark with folderId if we have one
+      const bookmark = await window.electronAPI.createBookmark({
+        pdfPath: bookmarkData.pdfPath,
+        pageNumber: bookmarkData.pageNumber,
+        name: bookmarkData.name,
+        description: bookmarkData.description,
+        note: bookmarkData.note,
+        thumbnail,
+        folderId,
+        tags: [],
+      });
+
+      // Save thumbnail if generated
+      if (thumbnail) {
+        try {
+          await window.electronAPI.saveBookmarkThumbnail(bookmark.id, thumbnail);
+        } catch (error) {
+          logger.warn('Failed to save bookmark thumbnail:', error);
+        }
+      }
+
+      toast.success('Bookmark created successfully');
+      setShowBookmarkCreator(false);
+      
+      // Refresh bookmark indicator for current page
+      const allBookmarks = await window.electronAPI.getBookmarks();
+      const pageBookmarks = allBookmarks.filter(
+        b => b.pdfPath === file?.path && b.pageNumber === currentPage
+      );
+      setCurrentPageBookmarks(pageBookmarks.map(b => ({ id: b.id, name: b.name })));
+      
+      // Dispatch event to notify bookmark library to refresh
+      const refreshEvent = new CustomEvent('bookmark-created', {
+        detail: { bookmarkId: bookmark.id, folderId: bookmark.folderId }
+      });
+      window.dispatchEvent(refreshEvent);
+    } catch (error) {
+      logger.error('Failed to create bookmark:', error);
+      toast.error('Failed to create bookmark');
+    }
+  }, [generatePageThumbnail, file?.name, toast]);
+
   return (
     <>
       <AnimatePresence>
@@ -659,7 +886,11 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
             handleClose();
           }
         }}
-        className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-0"
+        className="fixed inset-y-0 left-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-0 transition-all duration-300"
+        style={{
+          width: isWordEditorOpen ? 'calc(100vw - 500px)' : '100vw',
+          right: isWordEditorOpen ? '500px' : '0',
+        }}
       >
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
@@ -676,14 +907,6 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
             }
           }}
         >
-          {/* Close button */}
-          <button
-            onClick={handleClose}
-            className={`absolute ${file?.type === 'pdf' ? 'top-14 right-2' : 'top-4 right-4'} text-white hover:text-cyber-purple-400 transition-colors z-30 bg-black/70 backdrop-blur-sm rounded-full p-2.5 hover:bg-black/90 border border-cyber-purple-500/50`}
-            aria-label="Close"
-          >
-            <X size={20} />
-          </button>
 
           {/* Image Zoom Controls */}
           {file.type === 'image' && fileData && (
@@ -767,6 +990,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
             </div>
           )}
 
+
           {/* File content */}
           {file.type === 'pdf' ? (
             <>
@@ -811,6 +1035,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                       <span className="text-white font-medium">
                         Page {currentPage} of {totalPages}
                       </span>
+                      <form onSubmit={handlePageJump} className="flex items-center gap-1">
+                        <input
+                          ref={pageJumpInputRef}
+                          type="text"
+                          value={pageJumpValue}
+                          onChange={handlePageJumpChange}
+                          onKeyDown={handlePageJumpKeyDown}
+                          placeholder="Go to..."
+                          className="w-20 px-2 py-1 text-sm text-white bg-gray-700/50 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-cyber-purple-500/50 focus:border-cyber-purple-500 placeholder-gray-500"
+                          aria-label="Jump to page number"
+                          title={`Enter page number (1-${totalPages}) and press Enter`}
+                        />
+                      </form>
                       <button
                         onClick={handleNextPage}
                         disabled={currentPage >= totalPages}
@@ -819,8 +1056,44 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                       >
                         <ChevronRight size={20} />
                       </button>
+                      {/* Bookmarked indicator */}
+                      {currentPageBookmarks.length > 0 && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="flex items-center gap-1 px-2 py-1 bg-cyber-purple-500/20 border border-cyber-purple-500/50 rounded text-xs text-cyber-purple-300"
+                          title={`${currentPageBookmarks.length} bookmark${currentPageBookmarks.length > 1 ? 's' : ''} on this page`}
+                        >
+                          <Bookmark size={12} className="fill-cyber-purple-400" />
+                          <span>Bookmarked</span>
+                        </motion.div>
+                      )}
+                      {/* Bookmark button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowBookmarkCreator(true);
+                        }}
+                        className="p-2 text-white hover:text-cyber-purple-400 transition-colors rounded hover:bg-gray-700"
+                        aria-label="Create bookmark"
+                        title="Create bookmark for this page"
+                      >
+                        <BookmarkPlus size={20} />
+                      </button>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* Word Editor button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWordEditorOpen(true);
+                        }}
+                        className="p-2 text-white hover:text-cyber-purple-400 transition-colors rounded hover:bg-gray-700"
+                        aria-label="Open word editor"
+                        title="Open word editor"
+                      >
+                        <FileText size={20} />
+                      </button>
                       <span className="text-white text-xs font-medium">{file.name}</span>
                       <div className="flex items-center gap-2 border-l border-gray-600 pl-3">
                         <button
@@ -841,6 +1114,14 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
                           <ZoomIn size={20} />
                         </button>
                       </div>
+                      {/* Close button */}
+                      <button
+                        onClick={handleClose}
+                        className="p-2 text-white hover:text-cyber-purple-400 transition-colors rounded hover:bg-gray-700"
+                        aria-label="Close"
+                      >
+                        <X size={20} />
+                      </button>
                     </div>
                   </div>
                   
@@ -1027,6 +1308,18 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious }: 
           onContinue={handleWarningContinue}
           onSplit={handleWarningSplit}
           onCancel={handleWarningCancel}
+        />
+      )}
+
+      {/* Bookmark Creator */}
+      {file?.type === 'pdf' && (
+        <BookmarkCreator
+          isOpen={showBookmarkCreator}
+          onClose={() => setShowBookmarkCreator(false)}
+          onConfirm={handleCreateBookmark}
+          pdfPath={file.path}
+          pageNumber={currentPage}
+          pdfName={file.name}
         />
       )}
     </>

@@ -24,13 +24,13 @@ Before you begin, ensure you have the following installed:
 
 1. **Fork and clone the repository**
    ```bash
-   git clone https://github.com/yourusername/the-vault.git
-   cd the-vault
+   git clone https://github.com/BridgewareDynamics/Vault.git
+   cd Vault
    ```
 
 2. **Install dependencies**
    ```bash
-   npm install
+   npm ci
    ```
 
 3. **Verify installation**

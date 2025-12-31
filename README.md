@@ -2,14 +2,14 @@
 
 **A Professional Research Organization Tool**
 
-**Version**: 1.0.0-prerelease.3
+**Version**: 1.0.0-prerelease.4
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.2-blue.svg)](https://reactjs.org/)
 [![Electron](https://img.shields.io/badge/Electron-28.1-blue.svg)](https://www.electronjs.org/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
-The Vault is a powerful desktop application designed for researchers, investigators, and professionals who need to organize, extract, and manage PDF documents systematically. Built with Electron and React, it provides a modern, intuitive interface for converting PDF pages to PNG images and organizing them within a structured case-based filing system with advanced categorization and tagging capabilities.
+The Vault is a powerful desktop application designed for researchers, investigators, and professionals who need to organize, extract, and manage PDF documents systematically. Built with Electron and React, it provides a modern, intuitive interface for converting PDF pages to PNG images and organizing them within a structured case-based filing system with advanced categorization, tagging, bookmark management, and rich text editing capabilities.
 
 ## Table of Contents
 
@@ -61,6 +61,35 @@ The Vault is a powerful desktop application designed for researchers, investigat
 - **File Type Detection**: Automatic categorization of files (images, PDFs, videos, other)
 - **Metadata Tracking**: File size, modification dates, and parent PDF relationships
 
+### Bookmark System
+- **PDF Page Bookmarks**: Create bookmarks directly from PDF viewer for quick reference
+- **Automatic Thumbnails**: Bookmarks automatically generate and store thumbnails
+- **Organized Library**: Browse and manage bookmarks in a dedicated library interface
+- **Folder Organization**: Organize bookmarks in hierarchical folders
+- **Rich Metadata**: Add names, descriptions, notes, and tags to bookmarks
+- **Quick Navigation**: Open bookmarked PDF pages directly from the library
+- **Visual Indicators**: See bookmark indicators in the PDF viewer
+- **Cross-Window Support**: Open bookmarks from detached editor windows in the main window
+
+### Word Editor
+- **Rich Text Editing**: Full-featured word processor built on Lexical framework
+- **Text Formatting**: Bold, italic, underline, font sizes (8pt-72pt), text alignment
+- **File Management**: Create, save, delete, and export text files
+- **Text Library**: Browse and manage all your text files in one place
+- **Detached Windows**: Edit in separate windows for multi-document workflows
+- **Auto-Save Drafts**: Automatic draft saving to localStorage with debouncing
+- **Unsaved Changes Detection**: Confirmation dialogs prevent accidental data loss
+- **Keyboard Shortcuts**: 
+  - Ctrl+S / Cmd+S: Save file
+  - Ctrl+N / Cmd+N: New file
+  - Ctrl+B / Cmd+B: Toggle bold
+  - Ctrl+I / Cmd+I: Toggle italic
+  - Ctrl+U / Cmd+U: Toggle underline
+  - Ctrl+Z / Cmd+Z: Undo
+  - Ctrl+Shift+Z / Cmd+Shift+Z: Redo
+- **Text Statistics**: Word count, sentence count, and more
+- **Export Support**: Export to TXT (PDF, DOCX, RTF planned)
+
 ### User Experience
 - **Modern UI**: Cyberpunk-themed interface with smooth animations
 - **Real-Time Feedback**: Toast notifications and progress bars
@@ -95,14 +124,14 @@ The Vault is a powerful desktop application designed for researchers, investigat
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
-   cd the-vault
+   git clone https://github.com/BridgewareDynamics/Vault.git
+   cd Vault
    ```
    Note: Repository access is subject to license terms. See [LICENSE](LICENSE) for details.
 
 2. **Install dependencies**
    ```bash
-   npm install
+   npm ci
    ```
 
 3. **Run in development mode**
@@ -113,6 +142,12 @@ The Vault is a powerful desktop application designed for researchers, investigat
    - Build the Electron main process
    - Start the Vite dev server
    - Launch the Electron application
+   
+   **Note**: For development, you can also run just the frontend dev server:
+   ```bash
+   npm run dev
+   ```
+   This starts only the Vite dev server (useful for frontend-only development).
 
 4. **Development scripts**
    ```bash
@@ -140,24 +175,39 @@ The Vault is a powerful desktop application designed for researchers, investigat
 
 ### Production Build
 
-1. **Build for all platforms**
+1. **Build the executable/installer**
    ```bash
    npm run electron:build
    ```
+   This command will:
+   - Clean previous release builds
+   - Build both frontend and Electron main process
+   - Create platform-specific installers:
+     - **Windows**: Creates an NSIS installer (`.exe`) in `release/`
+     - **macOS**: Creates a DMG file in `release/`
+     - **Linux**: Creates an AppImage in `release/`
 
-2. **Platform-specific builds**
-   - **Windows**: Creates an NSIS installer in `release/`
-   - **macOS**: Creates a DMG file in `release/`
-   - **Linux**: Creates an AppImage in `release/`
-
-3. **Build output**
+2. **Build output locations**
    - Compiled files: `dist/` (frontend) and `dist-electron/` (main process)
-   - Installers: `release/`
+   - Installers/Executables: `release/`
+   - Windows installer: `release/Vault Setup X.X.X.exe`
+
+3. **Individual build steps** (if needed)
+   ```bash
+   # Build frontend only
+   npm run build
+   
+   # Build Electron main process only
+   npm run build:electron
+   
+   # Build both (frontend + Electron)
+   npm run build:all
+   ```
 
 ### Project Structure
 
 ```
-the-vault/
+Vault/
 ├── electron/                 # Electron main process
 │   ├── main.ts              # Main entry point
 │   ├── preload.ts           # Preload script (IPC bridge)
@@ -227,6 +277,52 @@ the-vault/
    - Click "Start Case File" button
    - Enter a case name (e.g., "Research Project 2024")
    - The case folder is created in your vault directory
+
+#### Using Bookmarks
+
+1. **Create a Bookmark**
+   - Open a PDF in the viewer
+   - Navigate to the page you want to bookmark
+   - Click the bookmark icon or use the bookmark button
+   - Enter bookmark details (name, description, notes, tags)
+   - The bookmark is saved with an automatic thumbnail
+
+2. **Access Bookmark Library**
+   - Click the bookmark icon in the toolbar
+   - Browse all your bookmarks organized by folders
+   - Search and filter bookmarks
+   - Click "Open" on any bookmark to navigate to that PDF page
+
+3. **Organize Bookmarks**
+   - Create folders to organize bookmarks
+   - Move bookmarks between folders
+   - Edit bookmark details (name, description, notes, tags)
+   - Delete bookmarks you no longer need
+
+#### Using the Word Editor
+
+1. **Open the Word Editor**
+   - Click the word editor icon in the toolbar
+   - Create a new file or open an existing one
+   - Start typing and formatting your text
+
+2. **Text Formatting**
+   - Use the toolbar buttons or keyboard shortcuts
+   - Format text: bold, italic, underline
+   - Adjust font size (8pt to 72pt)
+   - Align text: left, center, right, justify
+
+3. **File Management**
+   - Create new files with Ctrl+N / Cmd+N
+   - Save files with Ctrl+S / Cmd+S
+   - Access the text library to browse all your text files
+   - Delete files you no longer need
+
+4. **Detached Editor**
+   - Click the detach button to open editor in a separate window
+   - Work on multiple documents simultaneously
+   - Reattach the editor to return to the main window
+   - Bookmarks opened from detached editor open in the main window
 
 #### Organizing Research Materials
 
@@ -369,6 +465,22 @@ The application uses Electron IPC for secure communication between processes:
 - `set-file-category-tag`: Assign/remove category tag from a file
 - `get-case-category-tag`: Get category tag for a case
 - `get-file-category-tag`: Get category tag for a file
+- `create-bookmark`: Create a new bookmark
+- `get-bookmarks`: Get all bookmarks
+- `update-bookmark`: Update an existing bookmark
+- `delete-bookmark`: Delete a bookmark
+- `get-bookmark-thumbnail`: Get thumbnail for a bookmark
+- `create-bookmark-folder`: Create a bookmark folder
+- `update-bookmark-folder`: Update a bookmark folder
+- `delete-bookmark-folder`: Delete a bookmark folder
+- `create-word-editor-window`: Create detached word editor window
+- `reattach-word-editor`: Reattach word editor to main window
+- `open-bookmark-in-main-window`: Open bookmark in main window from detached editor
+- `create-text-file`: Create a new text file
+- `read-text-file`: Read text file content
+- `save-text-file`: Save text file
+- `delete-text-file`: Delete a text file
+- `list-text-files`: List all text files in vault
 
 ### State Management
 

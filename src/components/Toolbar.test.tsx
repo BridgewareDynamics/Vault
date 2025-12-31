@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toolbar } from './Toolbar';
 
@@ -161,7 +161,9 @@ describe('Toolbar', () => {
     );
     
     const saveButton = screen.getByText('Save');
-    await user.click(saveButton);
+    await act(async () => {
+      await user.click(saveButton);
+    });
     
     // Dialog should appear
     expect(screen.getByText('Name Folder')).toBeInTheDocument();
@@ -181,13 +183,19 @@ describe('Toolbar', () => {
     
     // Open dialog
     const saveButton = screen.getByText('Save');
-    await user.click(saveButton);
+    await act(async () => {
+      await user.click(saveButton);
+    });
     
     // Enter folder name and confirm
     const input = screen.getByPlaceholderText('Enter folder name...');
-    await user.type(input, 'My Folder');
+    await act(async () => {
+      await user.type(input, 'My Folder');
+    });
     const okButton = screen.getByText('OK');
-    await user.click(okButton);
+    await act(async () => {
+      await user.click(okButton);
+    });
     
     expect(mockOnSave).toHaveBeenCalledTimes(1);
     expect(mockOnSave).toHaveBeenCalledWith('My Folder');

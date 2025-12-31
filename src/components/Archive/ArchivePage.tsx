@@ -24,6 +24,7 @@ import { ArchiveFile } from '../../types';
 import { ProgressBar } from '../ProgressBar';
 import { SettingsPanel } from '../Settings/SettingsPanel';
 import { logger } from '../../utils/logger';
+import { useWordEditor } from '../../contexts/WordEditorContext';
 
 interface ArchivePageProps {
   onBack: () => void;
@@ -50,6 +51,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     renameFile,
     moveFileToFolder,
     openFolder,
+    goBackToCase,
     goBackToParentFolder,
     navigateToFolder,
     updateCaseBackgroundImage,
@@ -60,12 +62,14 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     setSelectedTagId,
     tags,
     getTagById,
+    findFileInArchive,
   } = useArchive();
 
   const { createTag, deleteTag, assignTagToCase, assignTagToFile } = useCategoryTags();
 
   const { extractPDF, isExtracting, progress, statusMessage, extractingCasePath, extractingFolderPath } = useArchiveExtraction();
   const toast = useToast();
+  const { isOpen: isWordEditorOpen } = useWordEditor();
 
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showCaseDialog, setShowCaseDialog] = useState(false);
@@ -80,9 +84,12 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const [selectedFileForExtraction, setSelectedFileForExtraction] = useState<ArchiveFile | null>(null);
   const [selectedFile, setSelectedFile] = useState<ArchiveFile | null>(null);
   const [fileViewerIndex, setFileViewerIndex] = useState(0);
+  const [initialPage, setInitialPage] = useState<number | undefined>(undefined);
   const [showTagSelector, setShowTagSelector] = useState(false);
   const [tagSelectorCasePath, setTagSelectorCasePath] = useState<string | null>(null);
   const [tagSelectorFilePath, setTagSelectorFilePath] = useState<string | null>(null);
+  const [pendingBookmarkOpen, setPendingBookmarkOpen] = useState<{ pdfPath: string; pageNumber: number } | null>(null);
+  const [targetFolderPath, setTargetFolderPath] = useState<string | null>(null);
 
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -96,6 +103,207 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       setShowDriveDialog(true);
     }
   }, [archiveConfig]);
+
+  // Check for pending bookmark open on mount (handles case where archive was just opened)
+  useEffect(() => {
+    // Check if there's a pending bookmark open stored in sessionStorage
+    const pendingBookmark = sessionStorage.getItem('pending-bookmark-open');
+    if (pendingBookmark && files.length > 0) {
+      try {
+        const { pdfPath, pageNumber } = JSON.parse(pendingBookmark);
+        sessionStorage.removeItem('pending-bookmark-open');
+        
+        // Dispatch the event so the normal handler can process it
+        const event = new CustomEvent('open-bookmark', {
+          detail: { pdfPath, pageNumber }
+        });
+        window.dispatchEvent(event);
+      } catch (error) {
+        console.error('Failed to parse pending bookmark:', error);
+      }
+    }
+  }, [files.length]); // Only check when files are loaded
+
+  // Navigate to target folder after case is loaded
+  useEffect(() => {
+    if (targetFolderPath && currentCase && !loading && files.length > 0) {
+      // We've switched to a new case and files are loaded, now navigate to the folder
+      const normalizePath = (path: string) => path.replace(/\\/g, '/');
+      
+      // Only navigate if we're not already in the target folder
+      if (!currentFolderPath || normalizePath(currentFolderPath) !== normalizePath(targetFolderPath)) {
+        if (currentCase) {
+          openFolder(targetFolderPath);
+        }
+      }
+      
+      // Clear target folder path
+      setTargetFolderPath(null);
+    }
+  }, [targetFolderPath, currentCase, files, loading, currentFolderPath, openFolder]);
+
+  // Handle opening pending bookmark after navigation completes
+  useEffect(() => {
+    if (!pendingBookmarkOpen || files.length === 0 || loading) {
+      return;
+    }
+
+    const { pdfPath } = pendingBookmarkOpen;
+    
+    // Normalize paths for comparison
+    const normalizePath = (path: string) => path.replace(/\\/g, '/');
+    const normalizedPdfPath = normalizePath(pdfPath);
+    
+    // Find the file in the current files list
+    const matchingFile = files.find(f => !f.isFolder && normalizePath(f.path) === normalizedPdfPath);
+    
+    if (matchingFile) {
+      // Clear pending bookmark immediately to prevent re-triggering
+      const bookmarkToOpen = pendingBookmarkOpen;
+      setPendingBookmarkOpen(null);
+      
+      // Find the index of the file
+      const index = files.filter(f => !f.isFolder).findIndex(f => normalizePath(f.path) === normalizedPdfPath);
+      if (index !== -1) {
+        setFileViewerIndex(index);
+        setInitialPage(bookmarkToOpen.pageNumber);
+        setSelectedFile(matchingFile);
+        // Don't show toast - the PDF opening is visual feedback enough
+      }
+    }
+  }, [pendingBookmarkOpen, files, loading]);
+
+  // Listen for bookmark open events
+  useEffect(() => {
+    // Track if we're currently processing a bookmark to prevent duplicates
+    let isProcessing = false;
+    
+    const handleOpenBookmark = async (event: CustomEvent<{ pdfPath: string; pageNumber: number }>) => {
+      // Prevent duplicate handling
+      if (isProcessing) {
+        return;
+      }
+      
+      const { pdfPath, pageNumber } = event.detail;
+      isProcessing = true;
+      
+      try {
+        // Normalize paths for comparison (handle different path separators)
+        const normalizePath = (path: string) => path.replace(/\\/g, '/');
+        const normalizedPdfPath = normalizePath(pdfPath);
+        
+        // First, check if the file is in the current view
+        const matchingFile = files.find(f => !f.isFolder && normalizePath(f.path) === normalizedPdfPath);
+        
+        if (matchingFile) {
+          // File is in current view - open it immediately
+          const index = files.filter(f => !f.isFolder).findIndex(f => normalizePath(f.path) === normalizedPdfPath);
+          if (index !== -1) {
+            setFileViewerIndex(index);
+            setInitialPage(pageNumber);
+            // If the file is already selected, we still need to update the page
+            // Force a re-render by setting selectedFile again
+            if (selectedFile && normalizePath(selectedFile.path) === normalizedPdfPath) {
+              // File is already open, just update the page
+              // Set initialPage first, then update selectedFile to trigger re-render
+              setInitialPage(pageNumber);
+              setSelectedFile(null);
+              setTimeout(() => {
+                setSelectedFile(matchingFile);
+              }, 10);
+            } else {
+              setSelectedFile(matchingFile);
+            }
+          } else {
+            toast.error('File not found in current view');
+          }
+        } else {
+          // File is not in current view - search across all cases
+          // Don't show toast - navigation will happen silently
+          let fileFound = false;
+          try {
+            const result = await findFileInArchive(pdfPath);
+            
+            if (!result) {
+              toast.error('PDF not found in archive. The file may have been moved or deleted.');
+              return;
+            }
+
+            fileFound = true; // Mark that we successfully found the file
+
+            // Check if we need to navigate to a different case
+            const needsCaseNavigation = !currentCase || normalizePath(currentCase.path) !== normalizePath(result.casePath);
+            
+            // Check if we need to navigate to a different folder
+            const currentPath = currentFolderPath || currentCase?.path;
+            const needsFolderNavigation = result.folderPath && 
+              (!currentPath || normalizePath(currentPath) !== normalizePath(result.folderPath));
+
+            // File was found successfully - proceed with navigation
+            if (needsCaseNavigation || needsFolderNavigation) {
+              // Store bookmark info for opening after navigation
+              setPendingBookmarkOpen({ pdfPath, pageNumber });
+              
+              // Navigate to the correct case if needed
+              if (needsCaseNavigation) {
+                const targetCase = cases.find(c => normalizePath(c.path) === normalizePath(result.casePath));
+                if (!targetCase) {
+                  toast.error('Case not found in archive');
+                  setPendingBookmarkOpen(null);
+                  return;
+                }
+                
+                // Store target folder path if we need to navigate to a folder
+                if (needsFolderNavigation && result.folderPath) {
+                  setTargetFolderPath(result.folderPath);
+                } else {
+                  setTargetFolderPath(null);
+                }
+                
+                setCurrentCase(targetCase);
+                // Reset folder navigation when switching cases
+                goBackToCase();
+              } else if (needsFolderNavigation && result.folderPath) {
+                // We're in the right case, just need to navigate to folder
+                // Use openFolder to properly build navigation stack
+                if (currentCase) {
+                  openFolder(result.folderPath);
+                } else {
+                  // Fallback: navigate to folder directly
+                  navigateToFolder(result.folderPath);
+                }
+              }
+              // Navigation started successfully - no need to show error
+              return;
+            } else {
+              // We're already in the right location, but file might not be loaded yet
+              // Set pending bookmark to trigger file open once files are loaded
+              setPendingBookmarkOpen({ pdfPath, pageNumber });
+              // File found and we're in the right location - no error
+              return;
+            }
+          } catch (error) {
+            logger.error('Error searching for bookmark file:', error);
+            // Only show error if we didn't successfully find the file
+            // (If file was found, navigation would have started and we'd have returned)
+            if (!fileFound) {
+              toast.error('Failed to search for PDF in archive');
+            }
+          }
+        }
+      } finally {
+        // Reset processing flag after a short delay to allow navigation to complete
+        setTimeout(() => {
+          isProcessing = false;
+        }, 1000);
+      }
+    };
+
+    window.addEventListener('open-bookmark', handleOpenBookmark as unknown as EventListener);
+    return () => {
+      window.removeEventListener('open-bookmark', handleOpenBookmark as unknown as EventListener);
+    };
+  }, [files, toast, selectedFile, findFileInArchive, currentCase, currentFolderPath, cases, setCurrentCase, navigateToFolder, openFolder, goBackToCase]);
 
   // Handle drag and drop
   useEffect(() => {
@@ -443,7 +651,12 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+    <div 
+      className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 transition-all duration-300"
+      style={{
+        width: isWordEditorOpen ? 'calc(100vw - 500px)' : '100%',
+      }}
+    >
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-6 relative flex items-start justify-between">
@@ -1367,9 +1580,17 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         <ArchiveFileViewer
           file={selectedFile}
           files={files.filter(f => !f.isFolder)}
-          onClose={() => setSelectedFile(null)}
+          onClose={() => {
+            setSelectedFile(null);
+            setInitialPage(undefined);
+          }}
           onNext={fileViewerIndex < files.filter(f => !f.isFolder).length - 1 ? handleNextFile : undefined}
           onPrevious={fileViewerIndex > 0 ? handlePreviousFile : undefined}
+          initialPage={initialPage}
+          onInitialPageApplied={() => {
+            // Clear initialPage after it's been applied so it doesn't interfere with navigation
+            setInitialPage(undefined);
+          }}
         />
       )}
 

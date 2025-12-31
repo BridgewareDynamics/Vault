@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import React from 'react';
 import { CaseNameDialog } from './CaseNameDialog';
+import { ToastProvider } from '../Toast/ToastContext';
+
+// Helper to render with ToastProvider
+const renderWithToast = (ui: React.ReactElement) => {
+  return render(<ToastProvider>{ui}</ToastProvider>);
+};
 
 describe('CaseNameDialog', () => {
   const mockOnClose = vi.fn();
@@ -12,7 +19,7 @@ describe('CaseNameDialog', () => {
   });
 
   it('should not render when isOpen is false', () => {
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={false}
         onClose={mockOnClose}
@@ -23,7 +30,7 @@ describe('CaseNameDialog', () => {
   });
 
   it('should render when isOpen is true', () => {
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -34,7 +41,7 @@ describe('CaseNameDialog', () => {
   });
 
   it('should render case name input', () => {
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -47,7 +54,7 @@ describe('CaseNameDialog', () => {
   });
 
   it('should render description textarea', () => {
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -60,7 +67,7 @@ describe('CaseNameDialog', () => {
   });
 
   it('should render Cancel and OK buttons', () => {
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -73,7 +80,7 @@ describe('CaseNameDialog', () => {
 
   it('should update case name input when typing', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -89,7 +96,7 @@ describe('CaseNameDialog', () => {
 
   it('should update description textarea when typing', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -105,7 +112,7 @@ describe('CaseNameDialog', () => {
 
   it('should call onConfirm with trimmed values when OK is clicked', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -123,12 +130,12 @@ describe('CaseNameDialog', () => {
     await user.click(okButton);
     
     expect(mockOnConfirm).toHaveBeenCalledTimes(1);
-    expect(mockOnConfirm).toHaveBeenCalledWith('My Case', 'Description');
+    expect(mockOnConfirm).toHaveBeenCalledWith('My Case', 'Description', undefined);
   });
 
   it('should call onClose when Cancel is clicked', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -144,7 +151,7 @@ describe('CaseNameDialog', () => {
   });
 
   it('should disable OK button when case name is empty', () => {
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -158,7 +165,7 @@ describe('CaseNameDialog', () => {
 
   it('should enable OK button when case name has value', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -178,7 +185,7 @@ describe('CaseNameDialog', () => {
 
   it('should call onConfirm when Enter is pressed in name input', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -190,12 +197,12 @@ describe('CaseNameDialog', () => {
     await user.type(nameInput, 'My Case{Enter}');
     
     expect(mockOnConfirm).toHaveBeenCalledTimes(1);
-    expect(mockOnConfirm).toHaveBeenCalledWith('My Case', '');
+    expect(mockOnConfirm).toHaveBeenCalledWith('My Case', '', undefined);
   });
 
   it('should call onClose when Escape is pressed in name input', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -211,7 +218,7 @@ describe('CaseNameDialog', () => {
 
   it('should call onConfirm when Ctrl+Enter is pressed in description textarea', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -231,7 +238,7 @@ describe('CaseNameDialog', () => {
 
   it('should call onClose when Escape is pressed in description textarea', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -247,7 +254,7 @@ describe('CaseNameDialog', () => {
   });
 
   it('should reset form when dialog closes and reopens', () => {
-    const { rerender } = render(
+    const { rerender } = renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -260,20 +267,24 @@ describe('CaseNameDialog', () => {
     
     // Close dialog
     rerender(
-      <CaseNameDialog
-        isOpen={false}
-        onClose={mockOnClose}
-        onConfirm={mockOnConfirm}
-      />
+      <ToastProvider>
+        <CaseNameDialog
+          isOpen={false}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+        />
+      </ToastProvider>
     );
     
     // Reopen dialog
     rerender(
-      <CaseNameDialog
-        isOpen={true}
-        onClose={mockOnClose}
-        onConfirm={mockOnConfirm}
-      />
+      <ToastProvider>
+        <CaseNameDialog
+          isOpen={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+        />
+      </ToastProvider>
     );
     
     const newNameInput = screen.getByPlaceholderText('Enter case name...') as HTMLInputElement;
@@ -285,7 +296,7 @@ describe('CaseNameDialog', () => {
 
   it('should not call onClose when clicking inside dialog', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -301,7 +312,7 @@ describe('CaseNameDialog', () => {
 
   it('should call onClose when clicking backdrop', async () => {
     const user = userEvent.setup();
-    const { container } = render(
+    const { container } = renderWithToast(
       <CaseNameDialog
         isOpen={true}
         onClose={mockOnClose}

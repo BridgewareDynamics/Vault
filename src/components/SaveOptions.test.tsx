@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SaveOptions } from './SaveOptions';
 
@@ -59,7 +59,9 @@ describe('SaveOptions', () => {
     render(<SaveOptions isOpen={true} onClose={mockOnClose} onConfirm={mockOnConfirm} />);
     
     const input = screen.getByPlaceholderText('Enter folder name...') as HTMLInputElement;
-    await user.type(input, 'My Folder');
+    await act(async () => {
+      await user.type(input, 'My Folder');
+    });
     
     expect(input.value).toBe('My Folder');
   });
@@ -69,10 +71,14 @@ describe('SaveOptions', () => {
     render(<SaveOptions isOpen={true} onClose={mockOnClose} onConfirm={mockOnConfirm} />);
     
     const input = screen.getByPlaceholderText('Enter folder name...');
-    await user.type(input, 'My Folder');
+    await act(async () => {
+      await user.type(input, 'My Folder');
+    });
     
     const okButton = screen.getByText('OK');
-    await user.click(okButton);
+    await act(async () => {
+      await user.click(okButton);
+    });
     
     expect(mockOnConfirm).toHaveBeenCalledTimes(1);
     expect(mockOnConfirm).toHaveBeenCalledWith('My Folder');
@@ -83,10 +89,14 @@ describe('SaveOptions', () => {
     render(<SaveOptions isOpen={true} onClose={mockOnClose} onConfirm={mockOnConfirm} />);
     
     const input = screen.getByPlaceholderText('Enter folder name...');
-    await user.type(input, '  My Folder  ');
+    await act(async () => {
+      await user.type(input, '  My Folder  ');
+    });
     
     const okButton = screen.getByText('OK');
-    await user.click(okButton);
+    await act(async () => {
+      await user.click(okButton);
+    });
     
     expect(mockOnConfirm).toHaveBeenCalledWith('My Folder');
   });
@@ -120,7 +130,9 @@ describe('SaveOptions', () => {
     
     expect(okButton).toBeDisabled();
     
-    await user.type(input, 'Folder');
+    await act(async () => {
+      await user.type(input, 'Folder');
+    });
     
     expect(okButton).not.toBeDisabled();
   });
@@ -130,7 +142,9 @@ describe('SaveOptions', () => {
     render(<SaveOptions isOpen={true} onClose={mockOnClose} onConfirm={mockOnConfirm} />);
     
     const input = screen.getByPlaceholderText('Enter folder name...');
-    await user.type(input, '{Escape}');
+    await act(async () => {
+      await user.type(input, '{Escape}');
+    });
     
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
@@ -140,10 +154,14 @@ describe('SaveOptions', () => {
     render(<SaveOptions isOpen={true} onClose={mockOnClose} onConfirm={mockOnConfirm} />);
     
     const input = screen.getByPlaceholderText('Enter folder name...') as HTMLInputElement;
-    await user.type(input, 'My Folder');
+    await act(async () => {
+      await user.type(input, 'My Folder');
+    });
     expect(input.value).toBe('My Folder');
     
-    await user.type(input, '{Escape}');
+    await act(async () => {
+      await user.type(input, '{Escape}');
+    });
     
     // Input should be cleared (onClose is called, which might unmount, but if still mounted, value should be empty)
     // Actually, the component resets the state when Escape is pressed

@@ -11,6 +11,7 @@ describe('ToastContext', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('should provide toast context', () => {

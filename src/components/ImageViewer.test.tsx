@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ImageViewer } from './ImageViewer';
 import { ExtractedPage } from '../types';
@@ -67,7 +67,9 @@ describe('ImageViewer', () => {
     render(<ImageViewer page={mockPage} onClose={mockOnClose} />);
     
     const image = screen.getByAltText('Page 1');
-    await user.click(image);
+    await act(async () => {
+      await user.click(image);
+    });
     
     // Clicking the image should toggle zoom, not close
     expect(mockOnClose).not.toHaveBeenCalled();
@@ -84,7 +86,9 @@ describe('ImageViewer', () => {
     render(<ImageViewer page={mockPage} onClose={mockOnClose} />);
     
     const zoomButton = screen.getByLabelText('Zoom in');
-    await user.click(zoomButton);
+    await act(async () => {
+      await user.click(zoomButton);
+    });
     
     // After clicking, it should show zoom out
     expect(screen.getByLabelText('Zoom out')).toBeInTheDocument();
@@ -96,7 +100,9 @@ describe('ImageViewer', () => {
     render(<ImageViewer page={mockPage} onClose={mockOnClose} />);
     
     const image = screen.getByAltText('Page 1');
-    await user.click(image);
+    await act(async () => {
+      await user.click(image);
+    });
     
     // After clicking image, it should show zoom out
     expect(screen.getByLabelText('Zoom out')).toBeInTheDocument();

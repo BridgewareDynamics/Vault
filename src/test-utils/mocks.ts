@@ -43,6 +43,20 @@ export const mockElectronAPI = {
   logToMain: vi.fn(),
   debugLog: vi.fn(),
   getSystemMemory: vi.fn(),
+  // Settings API
+  getSettings: vi.fn(),
+  updateSettings: vi.fn(),
+  toggleFullscreen: vi.fn(),
+  // Word Editor APIs
+  readTextFile: vi.fn(),
+  saveTextFile: vi.fn(),
+  createTextFile: vi.fn(),
+  exportTextFile: vi.fn(),
+  listTextFiles: vi.fn(),
+  deleteTextFile: vi.fn(),
+  createWordEditorWindow: vi.fn(),
+  reattachWordEditor: vi.fn(),
+  closeWindow: vi.fn(),
 };
 
 // Type declaration for the mock

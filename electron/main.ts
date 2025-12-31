@@ -11,6 +11,7 @@ import { generateFileThumbnail } from './utils/thumbnailGenerator';
 import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMarker } from './utils/archiveMarker';
 import { logger, type LogLevel, type LogArgs } from './utils/logger';
 import { loadSettings } from './utils/settings';
+import * as bookmarkStorage from './utils/bookmarkStorage';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -1491,6 +1492,131 @@ ipcMain.handle('delete-category-tag', async (event, tagId: string) => {
   }
 });
 
+// Bookmark IPC Handlers
+
+// Get all bookmarks
+ipcMain.handle('get-bookmarks', async () => {
+  try {
+    return await bookmarkStorage.getBookmarks();
+  } catch (error) {
+    logger.error('Failed to get bookmarks:', error);
+    throw new Error(`Failed to get bookmarks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Create a new bookmark
+ipcMain.handle('create-bookmark', async (event, bookmark: Omit<import('./utils/bookmarkStorage').Bookmark, 'id' | 'createdAt' | 'updatedAt'>) => {
+  try {
+    return await bookmarkStorage.createBookmark(bookmark);
+  } catch (error) {
+    logger.error('Failed to create bookmark:', error);
+    throw new Error(`Failed to create bookmark: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Update an existing bookmark
+ipcMain.handle('update-bookmark', async (event, id: string, updates: Partial<Omit<import('./utils/bookmarkStorage').Bookmark, 'id' | 'createdAt'>>) => {
+  try {
+    return await bookmarkStorage.updateBookmark(id, updates);
+  } catch (error) {
+    logger.error('Failed to update bookmark:', error);
+    throw new Error(`Failed to update bookmark: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Delete a bookmark
+ipcMain.handle('delete-bookmark', async (event, id: string) => {
+  try {
+    return await bookmarkStorage.deleteBookmark(id);
+  } catch (error) {
+    logger.error('Failed to delete bookmark:', error);
+    throw new Error(`Failed to delete bookmark: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Get all bookmark folders
+ipcMain.handle('get-bookmark-folders', async () => {
+  try {
+    return await bookmarkStorage.getBookmarkFolders();
+  } catch (error) {
+    logger.error('Failed to get bookmark folders:', error);
+    throw new Error(`Failed to get bookmark folders: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Create a new bookmark folder
+ipcMain.handle('create-bookmark-folder', async (event, folder: Omit<import('./utils/bookmarkStorage').BookmarkFolder, 'id' | 'createdAt' | 'updatedAt'>) => {
+  try {
+    return await bookmarkStorage.createBookmarkFolder(folder);
+  } catch (error) {
+    logger.error('Failed to create bookmark folder:', error);
+    throw new Error(`Failed to create bookmark folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Delete a bookmark folder
+ipcMain.handle('delete-bookmark-folder', async (event, id: string) => {
+  try {
+    return await bookmarkStorage.deleteBookmarkFolder(id);
+  } catch (error) {
+    logger.error('Failed to delete bookmark folder:', error);
+    throw new Error(`Failed to delete bookmark folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Get bookmarks by folder ID
+ipcMain.handle('get-bookmarks-by-folder', async (event, folderId: string | null) => {
+  try {
+    return await bookmarkStorage.getBookmarksByFolder(folderId);
+  } catch (error) {
+    logger.error('Failed to get bookmarks by folder:', error);
+    throw new Error(`Failed to get bookmarks by folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Save bookmark thumbnail (thumbnail is generated in renderer and passed here)
+ipcMain.handle('save-bookmark-thumbnail', async (event, bookmarkId: string, thumbnailData: string) => {
+  try {
+    const thumbnailsDir = await bookmarkStorage.getBookmarkThumbnailsDir();
+    const thumbnailPath = path.join(thumbnailsDir, `${bookmarkId}.png`);
+    
+    // Extract base64 data if it's a data URL
+    const base64Data = thumbnailData.includes(',') 
+      ? thumbnailData.split(',')[1] 
+      : thumbnailData;
+    
+    const buffer = Buffer.from(base64Data, 'base64');
+    await fs.writeFile(thumbnailPath, buffer);
+    
+    return thumbnailPath;
+  } catch (error) {
+    logger.error('Failed to save bookmark thumbnail:', error);
+    throw new Error(`Failed to save bookmark thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Get bookmark thumbnail
+ipcMain.handle('get-bookmark-thumbnail', async (event, bookmarkId: string) => {
+  try {
+    const thumbnailsDir = await bookmarkStorage.getBookmarkThumbnailsDir();
+    const thumbnailPath = path.join(thumbnailsDir, `${bookmarkId}.png`);
+    
+    try {
+      const buffer = await fs.readFile(thumbnailPath);
+      const base64 = buffer.toString('base64');
+      return `data:image/png;base64,${base64}`;
+    } catch (error: unknown) {
+      if (isErrorWithCode(error) && error.code === 'ENOENT') {
+        return null;
+      }
+      throw error;
+    }
+  } catch (error) {
+    logger.error('Failed to get bookmark thumbnail:', error);
+    throw new Error(`Failed to get bookmark thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
 // List case files
 ipcMain.handle('list-case-files', async (event, casePath: string) => {
   if (!isSafePath(casePath)) {
@@ -2513,3 +2639,459 @@ ipcMain.handle('toggle-fullscreen', async () => {
   }
 });
 
+// Word Editor IPC Handlers
+
+// Get vault directory (archive drive)
+ipcMain.handle('get-vault-directory', async () => {
+  try {
+    const archiveDrive = await getArchiveDrive();
+    return archiveDrive;
+  } catch (error) {
+    logger.error('Failed to get vault directory:', error);
+    return null;
+  }
+});
+
+// Get TextLibrary folder path
+async function getTextLibraryPath(): Promise<string> {
+  const archiveDrive = await getArchiveDrive();
+  if (!archiveDrive) {
+    throw new Error('Vault directory not set');
+  }
+  const textLibraryPath = path.join(archiveDrive, 'TextLibrary');
+  // Ensure directory exists
+  try {
+    await fs.mkdir(textLibraryPath, { recursive: true });
+  } catch (error) {
+    logger.error('Failed to create TextLibrary directory:', error);
+  }
+  return textLibraryPath;
+}
+
+// List text files
+ipcMain.handle('list-text-files', async () => {
+  try {
+    const textLibraryPath = await getTextLibraryPath();
+    const entries = await fs.readdir(textLibraryPath, { withFileTypes: true });
+    
+    const files = await Promise.all(
+      entries
+        .filter(entry => entry.isFile() && !entry.name.startsWith('.'))
+        .map(async (entry) => {
+          const filePath = path.join(textLibraryPath, entry.name);
+          try {
+            const stats = await fs.stat(filePath);
+            // Read first 200 characters for preview
+            let preview: string | undefined;
+            try {
+              const content = await fs.readFile(filePath, 'utf8');
+              preview = content.substring(0, 200).replace(/\n/g, ' ').trim();
+            } catch {
+              // Ignore preview errors
+            }
+            
+            return {
+              name: entry.name,
+              path: filePath,
+              size: stats.size,
+              modified: stats.mtimeMs,
+              preview,
+            };
+          } catch (error) {
+            logger.warn(`Failed to get stats for ${filePath}:`, error);
+            return null;
+          }
+        })
+    );
+    
+    return files.filter((f): f is NonNullable<typeof f> => f !== null);
+  } catch (error) {
+    logger.error('Failed to list text files:', error);
+    throw new Error(`Failed to list text files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Read text file
+ipcMain.handle('read-text-file', async (event, filePath: string) => {
+  try {
+    if (!isSafePath(filePath)) {
+      throw new Error('Invalid file path');
+    }
+    
+    const content = await fs.readFile(filePath, 'utf8');
+    return content;
+  } catch (error) {
+    logger.error('Failed to read text file:', error);
+    throw new Error(`Failed to read text file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Create text file
+ipcMain.handle('create-text-file', async (event, fileName: string, content: string) => {
+  try {
+    const textLibraryPath = await getTextLibraryPath();
+    const filePath = path.join(textLibraryPath, fileName);
+    
+    if (!isSafePath(filePath)) {
+      throw new Error('Invalid file name');
+    }
+    
+    await fs.writeFile(filePath, content, 'utf8');
+    return filePath;
+  } catch (error) {
+    logger.error('Failed to create text file:', error);
+    throw new Error(`Failed to create text file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Save text file
+ipcMain.handle('save-text-file', async (event, filePath: string, content: string) => {
+  try {
+    if (!isSafePath(filePath)) {
+      throw new Error('Invalid file path');
+    }
+    
+    await fs.writeFile(filePath, content, 'utf8');
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to save text file:', error);
+    throw new Error(`Failed to save text file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Delete text file
+ipcMain.handle('delete-text-file', async (event, filePath: string) => {
+  try {
+    if (!isSafePath(filePath)) {
+      throw new Error('Invalid file path');
+    }
+    
+    await fs.unlink(filePath);
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to delete text file:', error);
+    throw new Error(`Failed to delete text file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Export text file to different formats
+ipcMain.handle('export-text-file', async (event, options: {
+  content: string;
+  format: 'pdf' | 'docx' | 'rtf';
+  filePath?: string;
+}) => {
+  try {
+    const { content, format, filePath } = options;
+    const textLibraryPath = await getTextLibraryPath();
+    
+    // Extract plain text from HTML - remove tags and decode entities
+    let plainText = content
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
+      .replace(/&amp;/g, '&') // Decode HTML entities
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ') // Collapse whitespace
+      .trim();
+    
+    // Try to preserve line breaks from <br> and <p> tags
+    const textWithBreaks = content
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<p[^>]*>/gi, '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n\s*\n/g, '\n') // Remove empty lines
+      .trim();
+    
+    const finalText = textWithBreaks || plainText;
+    
+    let exportPath: string;
+    let fileName: string;
+    
+    if (filePath) {
+      const ext = path.extname(filePath);
+      fileName = path.basename(filePath, ext) + '.' + format;
+      exportPath = path.join(path.dirname(filePath), fileName);
+    } else {
+      fileName = `Untitled.${format}`;
+      exportPath = path.join(textLibraryPath, fileName);
+    }
+    
+    // Ensure unique filename
+    let counter = 1;
+    while (existsSync(exportPath)) {
+      const nameWithoutExt = path.basename(exportPath, path.extname(exportPath));
+      exportPath = path.join(path.dirname(exportPath), `${nameWithoutExt}_${counter}.${format}`);
+      counter++;
+    }
+    
+    if (format === 'pdf') {
+      // For PDF export, save as plain text for now
+      // TODO: Add pdfkit library for proper PDF generation
+      await fs.writeFile(exportPath, finalText, 'utf8');
+      logger.warn('PDF export not fully implemented, saved as text file');
+    } else if (format === 'docx') {
+      // For DOCX, create a simple RTF file for now
+      // TODO: Add docx library for proper DOCX generation
+      const rtfContent = `{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}
+\\f0\\fs24 ${finalText.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\n/g, '\\par ')} }`;
+      const rtfPath = exportPath.replace(/\.docx$/i, '.rtf');
+      await fs.writeFile(rtfPath, rtfContent, 'utf8');
+      exportPath = rtfPath;
+      logger.warn('DOCX export not fully implemented, saved as RTF file');
+    } else if (format === 'rtf') {
+      // Create RTF file with proper formatting
+      const escapedText = finalText
+        .replace(/\\/g, '\\\\') // Escape backslashes
+        .replace(/\{/g, '\\{') // Escape braces
+        .replace(/\}/g, '\\}') // Escape braces
+        .replace(/\n/g, '\\par '); // Convert newlines to RTF paragraph breaks
+      
+      const rtfContent = `{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}
+\\f0\\fs24 ${escapedText} }`;
+      await fs.writeFile(exportPath, rtfContent, 'utf8');
+    }
+    
+    return {
+      success: true,
+      filePath: exportPath,
+    };
+  } catch (error) {
+    logger.error('Failed to export text file:', error);
+    // Fallback: save as plain text
+    try {
+      const textLibraryPath = await getTextLibraryPath();
+      const fallbackPath = path.join(textLibraryPath, `export_${Date.now()}.txt`);
+      const fallbackText = options.content
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim();
+      await fs.writeFile(fallbackPath, fallbackText, 'utf8');
+      return {
+        success: true,
+        filePath: fallbackPath,
+      };
+    } catch (fallbackError) {
+      throw new Error(`Failed to export text file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+});
+
+// Create word editor window
+let wordEditorWindow: BrowserWindow | null = null;
+
+ipcMain.handle('create-word-editor-window', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }) => {
+  try {
+    if (wordEditorWindow && !wordEditorWindow.isDestroyed()) {
+      wordEditorWindow.focus();
+      return;
+    }
+    
+    // Determine preload path
+    let preloadPath: string;
+    if (isDev) {
+      preloadPath = join(__dirname, 'preload.cjs');
+    } else {
+      const appPath = app.getAppPath();
+      preloadPath = join(appPath, 'dist-electron', 'electron', 'preload.cjs');
+    }
+    
+    wordEditorWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      minWidth: 800,
+      minHeight: 600,
+      backgroundColor: '#0f0f1e',
+      webPreferences: {
+        preload: preloadPath,
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: true,
+        devTools: isDev,
+      },
+      titleBarStyle: 'hiddenInset',
+      frame: true,
+      show: false,
+    });
+    
+    // Load the app
+    if (isDev) {
+      wordEditorWindow.loadURL('http://localhost:5173?editor=detached').catch((err) => {
+        logger.error('Failed to load dev server in word editor window:', err);
+      });
+    } else {
+      const appPath = app.getAppPath();
+      wordEditorWindow.loadFile(join(appPath, 'dist', 'index.html'), { hash: 'editor=detached' }).catch((err) => {
+        logger.error('Failed to load file in word editor window:', err);
+      });
+    }
+    
+    wordEditorWindow.once('ready-to-show', () => {
+      wordEditorWindow?.show();
+    });
+    
+    // Handle window close with unsaved changes check
+    wordEditorWindow.on('close', async (event) => {
+      if (!wordEditorWindow) return;
+      
+      try {
+        // Check for unsaved changes by querying the renderer
+        const hasUnsavedChanges = await wordEditorWindow.webContents.executeJavaScript(`
+          (function() {
+            // Try to get the editor ref from the window
+            // This is a fallback - the renderer should handle this via beforeunload
+            return false;
+          })();
+        `);
+        
+        // The renderer process should handle the beforeunload event
+        // If it returns true, we prevent close
+        // For now, we'll let the renderer handle it via beforeunload
+      } catch (error) {
+        logger.error('Error checking unsaved changes:', error);
+      }
+    });
+    
+    wordEditorWindow.on('closed', () => {
+      wordEditorWindow = null;
+    });
+    
+    // Send initial data to window after it loads
+    wordEditorWindow.webContents.once('did-finish-load', () => {
+      // Small delay to ensure React has mounted
+      setTimeout(() => {
+        // Execute JavaScript to dispatch custom event
+        const viewState = options.viewState || 'editor';
+        logger.info(`Sending word-editor-data to detached window with viewState: ${viewState}`);
+        wordEditorWindow?.webContents.executeJavaScript(`
+          (function() {
+            const data = {
+              content: ${JSON.stringify(options.content)},
+              filePath: ${options.filePath ? JSON.stringify(options.filePath) : 'null'},
+              viewState: ${JSON.stringify(viewState)}
+            };
+            console.log('Main process: Dispatching word-editor-data event', data);
+            // Store data in case listener isn't ready yet
+            window.__wordEditorInitialData = data;
+            const event = new CustomEvent('word-editor-data', {
+              detail: data
+            });
+            window.dispatchEvent(event);
+          })();
+        `).catch((err) => {
+          logger.error('Failed to send data to word editor window:', err);
+        });
+      }, 500);
+    });
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create word editor window:', error);
+    throw new Error(`Failed to create word editor window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Reattach word editor window
+ipcMain.handle('reattach-word-editor', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }) => {
+  try {
+    // Get the window that sent the request (the detached editor window)
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    
+    // Send data to main window to reopen the panel
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Execute JavaScript to dispatch custom event in main window
+      const viewState = options.viewState || 'editor';
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const event = new CustomEvent('reattach-word-editor-data', {
+            detail: {
+              content: ${JSON.stringify(options.content)},
+              filePath: ${options.filePath ? JSON.stringify(options.filePath) : 'null'},
+              viewState: ${JSON.stringify(viewState)}
+            }
+          });
+          window.dispatchEvent(event);
+        })();
+      `).catch((err) => {
+        logger.error('Failed to send reattach data to main window:', err);
+      });
+    }
+
+    // Close the detached window (the one that sent the request)
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    
+    // Also clear the wordEditorWindow reference if it matches
+    if (wordEditorWindow === senderWindow) {
+      wordEditorWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach word editor window:', error);
+    throw new Error(`Failed to reattach word editor window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Open bookmark in main window (from detached editor)
+ipcMain.handle('open-bookmark-in-main-window', async (event, options: { pdfPath: string; pageNumber: number }) => {
+  try {
+    // Get the window that sent the request (the detached editor window)
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    
+    // Send bookmark data to main window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Focus the main window
+      mainWindow.focus();
+      
+      // Execute JavaScript to dispatch custom event in main window
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const event = new CustomEvent('open-bookmark', {
+            detail: {
+              pdfPath: ${JSON.stringify(options.pdfPath)},
+              pageNumber: ${options.pageNumber}
+            }
+          });
+          window.dispatchEvent(event);
+        })();
+      `).catch((err) => {
+        logger.error('Failed to send bookmark data to main window:', err);
+      });
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to open bookmark in main window:', error);
+    throw new Error(`Failed to open bookmark in main window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Close current window
+ipcMain.handle('close-window', async () => {
+  try {
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    if (focusedWindow && focusedWindow !== mainWindow) {
+      focusedWindow.close();
+      return { success: true };
+    }
+    return { success: false };
+  } catch (error) {
+    logger.error('Failed to close window:', error);
+    throw new Error(`Failed to close window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});

@@ -1223,27 +1223,44 @@ export function useArchive() {
       // Item matches if it passes both filters
       if (matchesSearch && matchesTag) {
         matchingPaths.add(file.path);
-        
-        // If it's a PDF, also include its folders (folders inherit PDF's tag match)
-        if (!file.isFolder && file.type === 'pdf') {
-          const folders = pdfToFolders.get(file.path) || [];
-          folders.forEach(folderPath => matchingPaths.add(folderPath));
-        }
-        
-        // If it's a folder that matches search, also include its associated PDF if PDF matches tag
-        // (This handles the case where folder matches search but we need to check if PDF matches tag)
-        if (file.isFolder && hasSearchQuery && selectedTagId) {
-          const pdfPath = folderToPdf.get(file.path);
-          if (pdfPath) {
-            const associatedPdf = files.find(f => f.path === pdfPath);
-            if (associatedPdf?.categoryTagId === selectedTagId) {
-              matchingPaths.add(pdfPath);
-            }
+      }
+    });
+
+    // After finding all direct matches, include related items (folders <-> PDFs)
+    // This ensures that when searching, related items are included even if they don't match the search
+    const relatedPaths = new Set<string>();
+    matchingPaths.forEach(path => {
+      const file = files.find(f => f.path === path);
+      if (!file) return;
+      
+      // If it's a PDF that matches, also include its folders
+      if (!file.isFolder && file.type === 'pdf') {
+        const folders = pdfToFolders.get(file.path) || [];
+        folders.forEach(folderPath => {
+          const folder = files.find(f => f.path === folderPath);
+          // Include folder if there's no tag filter, or if folder's associated PDF matches tag
+          if (!selectedTagId || (folder && folderToPdf.get(folderPath) && file.categoryTagId === selectedTagId)) {
+            relatedPaths.add(folderPath);
+          }
+        });
+      }
+      
+      // If it's a folder that matches, also include its associated PDF
+      if (file.isFolder) {
+        const pdfPath = folderToPdf.get(file.path);
+        if (pdfPath) {
+          const associatedPdf = files.find(f => f.path === pdfPath);
+          // Include PDF if there's no tag filter, or if PDF matches the tag filter
+          if (!selectedTagId || associatedPdf?.categoryTagId === selectedTagId) {
+            relatedPaths.add(pdfPath);
           }
         }
       }
     });
-
+    
+    // Add related paths to matching paths
+    relatedPaths.forEach(path => matchingPaths.add(path));
+    
     // Return files in original order, but only those that match (or are related to matches)
     return files.filter(file => matchingPaths.has(file.path));
   }, [files, searchQuery, selectedTagId]);
@@ -1302,6 +1319,107 @@ export function useArchive() {
     return currentFolderPath || currentCase?.path || null;
   }, [currentFolderPath, currentCase]);
 
+  // Find a file across all cases in the archive
+  // Returns the case path, folder path (if in subfolder), and file info
+  const findFileInArchive = useCallback(async (pdfPath: string): Promise<{
+    casePath: string;
+    folderPath: string | null;
+    file: ArchiveFile;
+  } | null> => {
+    if (!window.electronAPI || !archiveConfig?.archiveDrive) {
+      return null;
+    }
+
+    const electronAPI = window.electronAPI; // Store reference for use in nested function
+
+    // Normalize paths for comparison (handle different path separators)
+    const normalizePath = (path: string) => path.replace(/\\/g, '/').toLowerCase();
+
+    const normalizedTargetPath = normalizePath(pdfPath);
+
+    // Helper function to recursively search a directory
+    const searchDirectory = async (dirPath: string, casePath: string): Promise<{
+      casePath: string;
+      folderPath: string | null;
+      file: ArchiveFile;
+    } | null> => {
+      try {
+        const items = await electronAPI.listCaseFiles(dirPath);
+
+        // Check files first
+        for (const item of items) {
+          if (!item.isFolder) {
+            const normalizedItemPath = normalizePath(item.path);
+            if (normalizedItemPath === normalizedTargetPath) {
+              // Found the file!
+              const ext = item.name.toLowerCase().split('.').pop() || '';
+              let type: 'image' | 'pdf' | 'video' | 'other' = 'other';
+              
+              if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) {
+                type = 'image';
+              } else if (ext === 'pdf') {
+                type = 'pdf';
+              } else if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(ext)) {
+                type = 'video';
+              }
+
+              const archiveFile: ArchiveFile = {
+                ...item,
+                type,
+                isFolder: false,
+              };
+
+              // Determine if this is in a subfolder (not directly in case root)
+              const folderPath = dirPath !== casePath ? dirPath : null;
+
+              return {
+                casePath,
+                folderPath,
+                file: archiveFile,
+              };
+            }
+          }
+        }
+
+        // If not found in files, search subfolders recursively
+        for (const item of items) {
+          if (item.isFolder) {
+            const result = await searchDirectory(item.path, casePath);
+            if (result) {
+              return result;
+            }
+          }
+        }
+
+        return null;
+      } catch (error) {
+        logger.error(`Error searching directory ${dirPath}:`, error);
+        return null;
+      }
+    };
+
+    // Load all cases if not already loaded
+    let casesToSearch = cases;
+    if (casesToSearch.length === 0) {
+      try {
+        casesToSearch = await electronAPI.listArchiveCases();
+      } catch (error) {
+        logger.error('Failed to load cases for file search:', error);
+        return null;
+      }
+    }
+
+    // Search each case
+    for (const caseItem of casesToSearch) {
+      const result = await searchDirectory(caseItem.path, caseItem.path);
+      if (result) {
+        return result;
+      }
+    }
+
+    return null;
+  }, [archiveConfig?.archiveDrive, cases]);
+
   return {
     archiveConfig,
     cases: filteredCases,
@@ -1338,6 +1456,7 @@ export function useArchive() {
     setSelectedTagId,
     tags,
     getTagById,
+    findFileInArchive,
   };
 }
 

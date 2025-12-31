@@ -78,6 +78,44 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (updates: any) => ipcRenderer.invoke('update-settings', updates),
   toggleFullscreen: () => ipcRenderer.invoke('toggle-fullscreen'),
+  // Word Editor API
+  getVaultDirectory: () => ipcRenderer.invoke('get-vault-directory'),
+  listTextFiles: () => ipcRenderer.invoke('list-text-files'),
+  readTextFile: (filePath: string) => ipcRenderer.invoke('read-text-file', filePath),
+  createTextFile: (fileName: string, content: string) => ipcRenderer.invoke('create-text-file', fileName, content),
+  saveTextFile: (filePath: string, content: string) => ipcRenderer.invoke('save-text-file', filePath, content),
+  deleteTextFile: (filePath: string) => ipcRenderer.invoke('delete-text-file', filePath),
+  exportTextFile: (options: {
+    content: string;
+    format: 'pdf' | 'docx' | 'rtf';
+    filePath?: string;
+  }) => ipcRenderer.invoke('export-text-file', options),
+  createWordEditorWindow: (options: {
+    content: string;
+    filePath?: string | null;
+    viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+  }) => ipcRenderer.invoke('create-word-editor-window', options),
+  reattachWordEditor: (options: {
+    content: string;
+    filePath?: string | null;
+    viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+  }) => ipcRenderer.invoke('reattach-word-editor', options),
+  closeWindow: () => ipcRenderer.invoke('close-window'),
+  openBookmarkInMainWindow: (options: {
+    pdfPath: string;
+    pageNumber: number;
+  }) => ipcRenderer.invoke('open-bookmark-in-main-window', options),
+  // Bookmark API
+  getBookmarks: () => ipcRenderer.invoke('get-bookmarks'),
+  createBookmark: (bookmark: any) => ipcRenderer.invoke('create-bookmark', bookmark),
+  updateBookmark: (id: string, updates: any) => ipcRenderer.invoke('update-bookmark', id, updates),
+  deleteBookmark: (id: string) => ipcRenderer.invoke('delete-bookmark', id),
+  getBookmarkFolders: () => ipcRenderer.invoke('get-bookmark-folders'),
+  createBookmarkFolder: (folder: any) => ipcRenderer.invoke('create-bookmark-folder', folder),
+  deleteBookmarkFolder: (id: string) => ipcRenderer.invoke('delete-bookmark-folder', id),
+  getBookmarksByFolder: (folderId: string | null) => ipcRenderer.invoke('get-bookmarks-by-folder', folderId),
+  saveBookmarkThumbnail: (bookmarkId: string, thumbnailData: string) => ipcRenderer.invoke('save-bookmark-thumbnail', bookmarkId, thumbnailData),
+  getBookmarkThumbnail: (bookmarkId: string) => ipcRenderer.invoke('get-bookmark-thumbnail', bookmarkId),
 });
 
 // Type declaration for TypeScript
@@ -173,6 +211,50 @@ declare global {
         performanceMode: 'auto' | 'high' | 'balanced' | 'low';
       }>;
       toggleFullscreen: () => Promise<boolean>;
+      // Word Editor API
+      getVaultDirectory: () => Promise<string | null>;
+      listTextFiles: () => Promise<Array<{
+        name: string;
+        path: string;
+        size: number;
+        modified: number;
+        preview?: string;
+      }>>;
+      readTextFile: (filePath: string) => Promise<string>;
+      createTextFile: (fileName: string, content: string) => Promise<string>;
+      saveTextFile: (filePath: string, content: string) => Promise<{ success: boolean }>;
+      deleteTextFile: (filePath: string) => Promise<{ success: boolean }>;
+      exportTextFile: (options: {
+        content: string;
+        format: 'pdf' | 'docx' | 'rtf';
+        filePath?: string;
+      }) => Promise<{ success: boolean; filePath: string }>;
+      createWordEditorWindow: (options: {
+        content: string;
+        filePath?: string | null;
+        viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+      }) => Promise<{ success: boolean }>;
+      reattachWordEditor: (options: {
+        content: string;
+        filePath?: string | null;
+        viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+      }) => Promise<{ success: boolean }>;
+      closeWindow: () => Promise<{ success: boolean }>;
+      openBookmarkInMainWindow: (options: {
+        pdfPath: string;
+        pageNumber: number;
+      }) => Promise<{ success: boolean }>;
+      // Bookmark API
+      getBookmarks: () => Promise<Array<any>>;
+      createBookmark: (bookmark: any) => Promise<any>;
+      updateBookmark: (id: string, updates: any) => Promise<any>;
+      deleteBookmark: (id: string) => Promise<boolean>;
+      getBookmarkFolders: () => Promise<Array<any>>;
+      createBookmarkFolder: (folder: any) => Promise<any>;
+      deleteBookmarkFolder: (id: string) => Promise<boolean>;
+      getBookmarksByFolder: (folderId: string | null) => Promise<Array<any>>;
+      saveBookmarkThumbnail: (bookmarkId: string, thumbnailData: string) => Promise<string>;
+      getBookmarkThumbnail: (bookmarkId: string) => Promise<string | null>;
     };
   }
 }

@@ -51,11 +51,12 @@ describe('WelcomeScreen', () => {
     expect(screen.getByText('PDF to PNG')).toBeInTheDocument();
   });
 
-  it('should render Lock icon', () => {
-    const { container } = render(<WelcomeScreen onSelectFile={mockOnSelectFile} onOpenArchive={mockOnOpenArchive} />);
-    // The Lock icon from lucide-react should be rendered
-    const lockIcon = container.querySelector('svg');
-    expect(lockIcon).toBeInTheDocument();
+  it('should render vault icon image', () => {
+    render(<WelcomeScreen onSelectFile={mockOnSelectFile} onOpenArchive={mockOnOpenArchive} />);
+    // The vault icon image should be rendered
+    const vaultIcon = screen.getByAltText('The Vault');
+    expect(vaultIcon).toBeInTheDocument();
+    expect(vaultIcon).toHaveAttribute('src');
   });
 });
 

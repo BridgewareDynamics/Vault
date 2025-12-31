@@ -117,7 +117,7 @@ describe('useArchive', () => {
         expect(success).toBe(true);
       });
 
-      expect(mockElectronAPI.createCaseFolder).toHaveBeenCalledWith('New Case', 'Description');
+      expect(mockElectronAPI.createCaseFolder).toHaveBeenCalledWith('New Case', 'Description', undefined);
     });
 
     it('should handle case creation failure', async () => {

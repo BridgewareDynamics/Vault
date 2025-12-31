@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-prerelease.4] - 2025-01-15
+
+**Note:** This is a prerelease version. Features and APIs may change before the stable 1.0.0 release.
+
+### Added
+
+#### Bookmark System
+- Comprehensive bookmark management system for PDF pages
+- Create bookmarks directly from PDF viewer with automatic thumbnail generation
+- Organize bookmarks in folders with hierarchical structure
+- Bookmark library UI with search, filtering, and folder navigation
+- Navigate directly to bookmarked PDF pages from library
+- Thumbnail storage and retrieval system (`.bookmark-thumbnails/` directory)
+- Full CRUD operations: create, read, update, delete bookmarks and folders
+- Bookmark metadata: name, description, notes, tags, timestamps
+- Visual bookmark indicators in PDF viewer
+- IPC handlers for all bookmark operations
+- Bookmark storage in vault directory (`.bookmarks.json`)
+
+#### Word Editor
+- Full-featured rich text editor built on Lexical framework
+- Rich text formatting: bold, italic, underline
+- Font size controls (8pt - 72pt)
+- Text alignment: left, center, right, justify
+- Complete file management: create, save, delete, export text files
+- Detached window support for multi-window editing
+- Text library for browsing and managing text files
+- Auto-save drafts to localStorage with debouncing
+- Unsaved changes detection with confirmation dialogs
+- Keyboard shortcuts:
+  - Ctrl+S / Cmd+S: Save file
+  - Ctrl+N / Cmd+N: New file
+  - Ctrl+B / Cmd+B: Toggle bold
+  - Ctrl+I / Cmd+I: Toggle italic
+  - Ctrl+U / Cmd+U: Toggle underline
+  - Ctrl+Z / Cmd+Z: Undo
+  - Ctrl+Shift+Z / Cmd+Shift+Z: Redo
+- Error boundaries and graceful error handling
+- Text statistics: word count, sentence count
+- Export support: TXT, PDF (planned), DOCX (planned), RTF (planned)
+- IPC handlers for all text file operations
+
+### Changed
+
+- Enhanced PDF viewer with bookmark creation integration
+- Improved file management with text file support
+- Updated main application UI to include bookmark library and word editor access
+- Enhanced IPC communication with new bookmark and text file handlers
+
+### Fixed
+
+#### JSON Consistency Issue
+- **Critical Fix**: Implemented atomic write pattern for all JSON file operations
+- Prevents data corruption from concurrent writes or process crashes
+- Applied atomic writes to bookmark storage (`.bookmarks.json`)
+- Applied atomic writes to settings storage (`app-settings.json`)
+- Uses temp file + rename pattern ensuring all-or-nothing writes
+- Resolves issue where JSON files could become corrupted during writes
+- Ensures data integrity and prevents partial file writes
+
+### Testing
+
+- All existing tests pass
+- New Word Editor tests: 100+ test cases covering components, hooks, and error boundaries
+- Bookmark storage validated with atomic write pattern tests
+- Manual testing completed for all new features
+- **Note**: Unit testing coverage will continue to be improved as development
+  progresses. Future updates will include expanded test coverage for bookmark
+  UI components, integration tests for bookmark workflows, and enhanced E2E
+  test scenarios for both bookmark and word editor features.
+
+### Deprecated
+
+- None in this release
+
+### Removed
+
+- None in this release
+
+### Security
+
+- No security changes in this release
+
+---
+
 ## [1.0.0-prerelease.3] - 2025-12-24
 
 **Note:** This is a prerelease version. Features and APIs may change before the stable 1.0.0 release.
@@ -236,10 +321,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed** for any bug fixes
 - **Security** for vulnerability fixes
 
-[Unreleased]: https://github.com/yourusername/the-vault/compare/v1.0.0-prerelease.3...HEAD
-[1.0.0-prerelease.3]: https://github.com/yourusername/the-vault/releases/tag/v1.0.0-prerelease.3
-[1.0.0-prerelease.2]: https://github.com/yourusername/the-vault/releases/tag/v1.0.0-prerelease.2
-[1.0.0-prerelease.1]: https://github.com/yourusername/the-vault/releases/tag/v1.0.0-prerelease.1
+[Unreleased]: https://github.com/BridgewareDynamics/Vault/compare/Vault1.0.0-prerelease.4...HEAD
+[1.0.0-prerelease.4]: https://github.com/BridgewareDynamics/Vault/releases/tag/Vault1.0.0-prerelease.4
+[1.0.0-prerelease.3]: https://github.com/BridgewareDynamics/Vault/releases/tag/Vault1.0.0-prerelease.3
+[1.0.0-prerelease.2]: https://github.com/BridgewareDynamics/Vault/releases/tag/Vault1.0.0-prerelease.2
+[1.0.0-prerelease.1]: https://github.com/BridgewareDynamics/Vault/releases/tag/Vault1.0.0-prerelease.1
 
 
 

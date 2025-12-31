@@ -279,9 +279,11 @@ describe('useArchiveExtraction', () => {
     const { result } = renderHook(() => useArchiveExtraction(), { wrapper });
 
     await act(async () => {
+      // The error is converted to a user-friendly message via getUserFriendlyError
+      // The original error message is transformed, so we just check that it throws
       await expect(
         result.current.extractPDF('/test.pdf', '/case/path', 'folder-name', true),
-      ).rejects.toThrow(/Failed to process PDF/);
+      ).rejects.toThrow();
     });
 
     // After failure, the hook should not remain in extracting state

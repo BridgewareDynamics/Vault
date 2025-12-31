@@ -16,6 +16,8 @@ import { logger } from './utils/logger';
 import { getUserFriendlyError } from './utils/errorMessages';
 import { SettingsProvider, useSettingsContext } from './utils/settingsContext';
 import { getMemoryManager } from './utils/memoryManager';
+import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext';
+import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
 import './App.css';
 
 function AppContent() {
@@ -29,7 +31,45 @@ function AppContent() {
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
-  const { settings, updateSettings } = useSettingsContext();
+  const { settings } = useSettingsContext();
+  const { isOpen: isWordEditorOpen } = useWordEditor();
+
+  // Check if we're in detached editor mode
+  // In dev mode, it's a query param: ?editor=detached
+  // In production, it's a hash: #editor=detached
+  const [isDetachedEditor, setIsDetachedEditor] = useState(false);
+
+  // Check for detached editor mode on mount and after window loads
+  // This needs to run after the window is fully loaded because hash might not be available immediately
+  useEffect(() => {
+    const checkDetached = () => {
+      const search = window.location.search || '';
+      const hash = window.location.hash || '';
+      const isDetached = search.includes('editor=detached') || hash.includes('editor=detached');
+      
+      if (isDetached !== isDetachedEditor) {
+        setIsDetachedEditor(isDetached);
+      }
+    };
+    
+    // Check immediately
+    checkDetached();
+    
+    // Check again after a short delay (for production builds where hash might not be ready)
+    const timeoutId = setTimeout(checkDetached, 100);
+    
+    // Also check on hash changes
+    window.addEventListener('hashchange', checkDetached);
+    
+    // Check when window loads (for production builds)
+    window.addEventListener('load', checkDetached);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('hashchange', checkDetached);
+      window.removeEventListener('load', checkDetached);
+    };
+  }, [isDetachedEditor]);
 
   // Check if Electron API is available
   useEffect(() => {
@@ -37,6 +77,16 @@ function AppContent() {
       logger.warn('Electron API not available - running in browser mode');
     }
   }, []);
+
+  // If in detached editor mode, show only the editor
+  // Use direct check as fallback in case state hasn't updated yet (for production builds)
+  const shouldShowDetached = isDetachedEditor || 
+    window.location.search.includes('editor=detached') || 
+    window.location.hash.includes('editor=detached');
+  
+  if (shouldShowDetached) {
+    return <DetachedWordEditor />;
+  }
 
   // Initialize memory manager when settings are loaded
   useEffect(() => {
@@ -58,6 +108,65 @@ function AppContent() {
       };
     }
   }, [settings]);
+
+  // Listen for bookmark open events - open archive if needed
+  useEffect(() => {
+    // Track last processed bookmark to prevent duplicates
+    let lastProcessedBookmark: string | null = null;
+    
+    const handleOpenBookmark = (event: CustomEvent<{ pdfPath: string; pageNumber: number; keepPanelOpen?: boolean }>) => {
+      const { pdfPath, pageNumber, keepPanelOpen } = event.detail;
+      
+      // Create a unique key for this bookmark
+      const bookmarkKey = `${pdfPath}:${pageNumber}`;
+      
+      // Skip if we just processed this bookmark (prevent duplicates)
+      if (lastProcessedBookmark === bookmarkKey) {
+        return;
+      }
+      lastProcessedBookmark = bookmarkKey;
+      
+      // Reset after a delay to allow the same bookmark to be opened again if needed
+      setTimeout(() => {
+        if (lastProcessedBookmark === bookmarkKey) {
+          lastProcessedBookmark = null;
+        }
+      }, 2000);
+      
+      // Always store bookmark info in sessionStorage for ArchivePage to pick up
+      sessionStorage.setItem('pending-bookmark-open', JSON.stringify({ pdfPath, pageNumber }));
+      
+      // Close word editor if open - but only if not opened from within the panel
+      // If keepPanelOpen is true, the bookmark was opened from the Word Editor panel's bookmark library
+      if (isWordEditorOpen && !keepPanelOpen) {
+        // Dispatch a custom event to close the word editor
+        // The SettingsPanel will handle this via the WordEditorContext
+        const closeEvent = new CustomEvent('close-word-editor-for-bookmark');
+        window.dispatchEvent(closeEvent);
+      }
+      
+      // Open archive if not already open
+      if (!showArchive) {
+        setShowArchive(true);
+        // Small delay to ensure ArchivePage is mounted before handling the event
+        setTimeout(() => {
+          // Re-dispatch the event so ArchivePage can handle it
+          window.dispatchEvent(event);
+        }, 300);
+      } else {
+        // Archive is already open, dispatch event immediately for ArchivePage to handle
+        // Small delay to ensure ArchivePage is ready
+        setTimeout(() => {
+          window.dispatchEvent(event);
+        }, 100);
+      }
+    };
+
+    window.addEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
+    return () => {
+      window.removeEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
+    };
+  }, [showArchive, isWordEditorOpen]);
 
   // Update memory manager when settings change
   useEffect(() => {
@@ -163,18 +272,25 @@ function AppContent() {
   if (showArchive) {
     return (
       <>
-        <Suspense
-          fallback={
-            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                <p className="text-gray-300">Loading Archive...</p>
-              </div>
-            </div>
-          }
+        <div 
+          className="transition-all duration-300"
+          style={{
+            width: isWordEditorOpen ? 'calc(100% - 500px)' : '100%',
+          }}
         >
-          <ArchivePage onBack={() => setShowArchive(false)} />
-        </Suspense>
+          <Suspense
+            fallback={
+              <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
+                  <p className="text-gray-300">Loading Archive...</p>
+                </div>
+              </div>
+            }
+          >
+            <ArchivePage onBack={() => setShowArchive(false)} />
+          </Suspense>
+        </div>
         <ToastContainer />
       </>
     );
@@ -184,12 +300,22 @@ function AppContent() {
   if (!selectedPdfPath && !isExtracting && extractedPages.length === 0) {
     return (
       <>
-        <WelcomeScreen 
-          onSelectFile={handleSelectFile}
-          onOpenArchive={() => setShowArchive(true)}
-        />
+        <div 
+          className="transition-all duration-300"
+          style={{
+            width: isWordEditorOpen ? 'calc(100vw - 500px)' : '100vw',
+            maxWidth: isWordEditorOpen ? 'calc(100vw - 500px)' : 'none',
+            marginLeft: '0',
+            marginRight: '0',
+          }}
+        >
+          <WelcomeScreen 
+            onSelectFile={handleSelectFile}
+            onOpenArchive={() => setShowArchive(true)}
+          />
+        </div>
         <ToastContainer />
-        <SettingsPanel />
+        <SettingsPanel hideWordEditorButton={true} />
       </>
     );
   }
@@ -210,7 +336,16 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-      <div className="container mx-auto px-4 py-8">
+      <div 
+        className="transition-all duration-300"
+        style={{
+          width: isWordEditorOpen ? 'calc(100vw - 500px)' : '100%',
+          maxWidth: isWordEditorOpen ? 'calc(100vw - 500px)' : '1280px',
+          marginLeft: isWordEditorOpen ? '0' : 'auto',
+          marginRight: isWordEditorOpen ? '0' : 'auto',
+          padding: '2rem 1rem',
+        }}
+      >
         {/* Header */}
         <div className="mb-6 relative flex items-start">
           <div className="flex-1">
@@ -296,9 +431,11 @@ function App() {
   return (
     <ToastProvider>
       <SettingsProvider>
-        <ErrorBoundary>
-          <AppContent />
-        </ErrorBoundary>
+        <WordEditorProvider>
+          <ErrorBoundary>
+            <AppContent />
+          </ErrorBoundary>
+        </WordEditorProvider>
       </SettingsProvider>
     </ToastProvider>
   );

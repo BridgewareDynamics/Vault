@@ -46,9 +46,12 @@ describe('App', () => {
     
     if (archiveButton) {
       await userEvent.click(archiveButton);
+      // Wait for lazy-loaded ArchivePage to load (Suspense resolves)
       await waitFor(() => {
+        // The page should show "The Vault" title, not "Loading Archive..."
+        expect(screen.queryByText('Loading Archive...')).not.toBeInTheDocument();
         expect(screen.getByText(/The Vault/i)).toBeInTheDocument();
-      });
+      }, { timeout: 3000 });
     }
   });
 

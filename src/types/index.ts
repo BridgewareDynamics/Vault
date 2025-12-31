@@ -110,3 +110,27 @@ export interface AppSettings {
   performanceMode: PerformanceMode;
 }
 
+// Bookmark Types
+export interface Bookmark {
+  id: string;
+  pdfPath: string;
+  pageNumber: number;
+  name: string;
+  description?: string;
+  note?: string;
+  thumbnail?: string; // Base64 or path to thumbnail
+  folderId?: string;
+  tags: string[]; // Array of tag IDs
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface BookmarkFolder {
+  id: string;
+  name: string;
+  pdfPath: string; // PDF this folder is associated with
+  thumbnail?: string; // Base64 or path to thumbnail
+  createdAt: number;
+  updatedAt: number;
+}
+

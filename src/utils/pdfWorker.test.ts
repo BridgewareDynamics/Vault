@@ -20,12 +20,13 @@ describe('pdfWorker', () => {
   it('should setup PDF worker with correct worker source', async () => {
     await setupPDFWorker();
     
-    // Worker source should be set to the public path
+    // Worker source should be set to the relative path (./pdf.worker.min.js)
     // Re-import to check the value was set (dynamic imports in the function may bypass mock)
     const pdfjsLib = await import('pdfjs-dist');
     // The workerSrc should be set - if mock worked, check mock object, otherwise check actual
     const workerSrc = pdfjsLib.GlobalWorkerOptions?.workerSrc || mockGlobalWorkerOptions.workerSrc;
-    expect(workerSrc).toBe('/pdf.worker.min.js');
+    // The implementation uses relative path './pdf.worker.min.js' for Electron compatibility
+    expect(workerSrc).toBe('./pdf.worker.min.js');
   });
 
   it('should handle worker setup without errors', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useEffect } from 'react';
 import { ToastContainer } from './ToastContainer';
@@ -47,7 +47,9 @@ describe('ToastContainer', () => {
     const TestComponent = () => {
       const { showToast, dismissToast, toasts } = useToast();
       useEffect(() => {
-        showToast('Test toast', 'info');
+        act(() => {
+          showToast('Test toast', 'info');
+        });
       }, [showToast]);
       return (
         <div>
@@ -71,7 +73,9 @@ describe('ToastContainer', () => {
     });
 
     const dismissButton = screen.getByText('Dismiss');
-    await user.click(dismissButton);
+    await act(async () => {
+      await user.click(dismissButton);
+    });
 
     // Toast should be removed
     await waitFor(() => {

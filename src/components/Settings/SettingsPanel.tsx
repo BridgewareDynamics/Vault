@@ -1,13 +1,48 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge } from 'lucide-react';
+import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge, FileText } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { formatBytes } from '../../utils/memoryMonitor';
 import { useToast } from '../Toast/ToastContext';
+import { WordEditorPanel } from '../WordEditor/WordEditorPanel';
+import { WordEditorDialog } from '../WordEditor/WordEditorDialog';
+import { useWordEditor } from '../../contexts/WordEditorContext';
 
-export function SettingsPanel() {
+interface SettingsPanelProps {
+  hideWordEditorButton?: boolean;
+}
+
+export function SettingsPanel({ hideWordEditorButton = false }: SettingsPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isWordEditorOpen, setIsWordEditorOpen] = useState(false);
+  const [showWordEditorDialog, setShowWordEditorDialog] = useState(false);
+  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
+  const [openLibraryOnMount, setOpenLibraryOnMount] = useState(false);
   const [memoryInfo, setMemoryInfo] = useState<{ used: number; total: number } | null>(null);
+  const { setIsOpen: setWordEditorContextOpen } = useWordEditor();
+
+  // Listen for reattach data from detached window
+  useEffect(() => {
+    const handleReattach = (_event: CustomEvent<{ content: string; filePath?: string | null }>) => {
+      // Open the word editor panel when reattaching
+      setIsWordEditorOpen(true);
+      setWordEditorContextOpen(true);
+    };
+
+    // Listen for bookmark open events that should close the word editor
+    const handleCloseForBookmark = () => {
+      setIsWordEditorOpen(false);
+      setWordEditorContextOpen(false);
+      setOpenLibraryOnMount(false);
+    };
+
+    window.addEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
+    window.addEventListener('close-word-editor-for-bookmark' as any, handleCloseForBookmark as EventListener);
+    return () => {
+      window.removeEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
+      window.removeEventListener('close-word-editor-for-bookmark' as any, handleCloseForBookmark as EventListener);
+    };
+  }, [setWordEditorContextOpen]);
   const {
     settings,
     loading,
@@ -24,15 +59,21 @@ export function SettingsPanel() {
   useEffect(() => {
     const updateMemoryInfo = async () => {
       try {
-        if (window.electronAPI) {
+        if (window.electronAPI && typeof window.electronAPI.getSystemMemory === 'function') {
           const systemMemory = await window.electronAPI.getSystemMemory();
-          setMemoryInfo({
-            used: systemMemory.usedMemory,
-            total: systemMemory.totalMemory,
-          });
+          if (systemMemory && typeof systemMemory.usedMemory === 'number' && typeof systemMemory.totalMemory === 'number') {
+            setMemoryInfo({
+              used: systemMemory.usedMemory,
+              total: systemMemory.totalMemory,
+            });
+          }
         }
       } catch (error) {
-        console.error('Failed to get memory info:', error);
+        // Silently fail - memory info is not critical for app functionality
+        // Only log in development to avoid test noise
+        if (import.meta.env.DEV) {
+          console.error('Failed to get memory info:', error);
+        }
       }
     };
 
@@ -113,6 +154,20 @@ export function SettingsPanel() {
 
   return (
     <>
+      {/* Word Editor Icon Button - Below Settings */}
+      {!hideWordEditorButton && (
+        <motion.button
+          onClick={() => setShowWordEditorDialog(true)}
+          className="fixed bottom-0 right-4 z-40 p-3 bg-gray-800/90 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-lg backdrop-blur-sm transition-colors"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          aria-label="Open word editor"
+          style={{ marginBottom: '140px' }} // Offset above Settings button
+        >
+          <FileText size={24} />
+        </motion.button>
+      )}
+
       {/* Settings Icon Button - Bottom Right */}
       <motion.button
         onClick={() => setIsOpen(!isOpen)}
@@ -313,6 +368,53 @@ export function SettingsPanel() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Word Editor Dialog */}
+      <WordEditorDialog
+        isOpen={showWordEditorDialog}
+        onClose={() => setShowWordEditorDialog(false)}
+        onOpenFile={(filePath) => {
+          setCurrentFilePath(filePath);
+          setIsWordEditorOpen(true);
+          setWordEditorContextOpen(true);
+          setShowWordEditorDialog(false);
+        }}
+        onNewFile={async (fileName) => {
+          try {
+            if (!window.electronAPI) {
+              toast.error('Electron API not available');
+              return;
+            }
+            // Create empty file
+            const filePath = await window.electronAPI.createTextFile(fileName, '');
+            setCurrentFilePath(filePath);
+            setIsWordEditorOpen(true);
+            setWordEditorContextOpen(true);
+            setShowWordEditorDialog(false);
+          } catch (error) {
+            toast.error('Failed to create file');
+            console.error('Create file error:', error);
+          }
+        }}
+        onOpenLibrary={() => {
+          setOpenLibraryOnMount(true);
+          setIsWordEditorOpen(true);
+          setWordEditorContextOpen(true);
+          setShowWordEditorDialog(false);
+        }}
+      />
+
+      {/* Word Editor Panel */}
+      <WordEditorPanel
+        isOpen={isWordEditorOpen}
+        onClose={() => {
+          setIsWordEditorOpen(false);
+          setWordEditorContextOpen(false);
+          setOpenLibraryOnMount(false);
+        }}
+        initialFilePath={currentFilePath}
+        openLibrary={openLibraryOnMount}
+      />
     </>
   );
 }

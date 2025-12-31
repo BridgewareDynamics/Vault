@@ -3,6 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ArchivePage } from './ArchivePage';
 import { ToastProvider } from '../Toast/ToastContext';
+import { WordEditorProvider } from '../../contexts/WordEditorContext';
+import { SettingsProvider } from '../../utils/settingsContext';
 import * as useArchiveModule from '../../hooks/useArchive';
 import * as useArchiveExtractionModule from '../../hooks/useArchiveExtraction';
 import { mockElectronAPI } from '../../test-utils/mocks';
@@ -57,9 +59,13 @@ describe('ArchivePage', () => {
 
   const renderArchivePage = () => {
     return render(
-      <ToastProvider>
-        <ArchivePage onBack={mockOnBack} />
-      </ToastProvider>
+      <SettingsProvider>
+        <ToastProvider>
+          <WordEditorProvider>
+            <ArchivePage onBack={mockOnBack} />
+          </WordEditorProvider>
+        </ToastProvider>
+      </SettingsProvider>
     );
   };
 
