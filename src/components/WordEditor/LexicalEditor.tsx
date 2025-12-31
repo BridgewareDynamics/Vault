@@ -180,11 +180,11 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
 
     return (
       <LexicalComposer initialConfig={initialConfig}>
-        <div className={`lexical-editor-wrapper ${className}`} data-lexical-editor="true">
+        <div className={`lexical-editor-wrapper h-full flex flex-col ${className}`} data-lexical-editor="true">
           <RichTextPlugin
             contentEditable={
               <ContentEditable
-                className="min-h-full w-full bg-gray-800/50 rounded-lg p-4 text-white focus:outline-none focus:ring-2 focus:ring-cyber-purple-500/50 cursor-text"
+                className="flex-1 w-full bg-gray-800/50 rounded-lg p-4 text-white focus:outline-none focus:ring-2 focus:ring-cyber-purple-500/50 cursor-text overflow-auto"
                 style={{
                   fontSize: `${fontSize}pt`,
                   textAlign,
