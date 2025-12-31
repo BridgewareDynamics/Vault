@@ -233,7 +233,16 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
         // For plain text files, wrap in paragraph tags; for HTML, use as-is
         let htmlContent: string;
         if (filePath.endsWith('.txt')) {
-          htmlContent = `<p>${fileContent.replace(/\n/g, '</p><p>')}</p>`;
+          // Split by newlines and create paragraphs, handling empty lines correctly
+          // Trim trailing newlines to prevent empty paragraphs at the end
+          const trimmedContent = fileContent.replace(/\n+$/, '');
+          if (trimmedContent === '') {
+            htmlContent = '<p></p>';
+          } else {
+            // Split by newlines and wrap each line (including empty ones) in paragraph tags
+            const lines = trimmedContent.split('\n');
+            htmlContent = lines.map(line => `<p>${line}</p>`).join('');
+          }
         } else {
           htmlContent = fileContent;
         }
