@@ -116,12 +116,33 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
       },
       getTextContent: () => {
         if (!editorRef.current) return '';
-        let text = '';
+        let html = '';
         editorRef.current.getEditorState().read(() => {
-          const root = $getRoot();
-          text = root.getTextContent();
+          html = $generateHtmlFromNodes(editorRef.current!, null);
         });
-        return text;
+        
+        // Convert HTML to plain text by extracting text from paragraphs
+        // This is the inverse of the loading logic: paragraphs -> lines -> text
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const paragraphs = Array.from(doc.querySelectorAll('p'));
+        
+        if (paragraphs.length === 0) {
+          return '';
+        }
+        
+        // Extract text from each paragraph
+        // textContent automatically handles HTML entities and gives us clean text
+        // Empty paragraphs become empty strings, preserving spacing when joined
+        const lines = paragraphs.map(p => p.textContent || '');
+        
+        // Join paragraphs with newlines
+        // This correctly converts: <p>line1</p><p></p><p>line2</p> -> "line1\n\nline2"
+        let result = lines.join('\n');
+        
+        // Remove trailing newlines to prevent accumulation on save/reload cycles
+        // This normalizes trailing whitespace (standard text editor behavior)
+        return result.replace(/\n+$/, '');
       },
       focus: () => {
         if (editorRef.current) {
