@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileText, ChevronDown, Plus } from 'lucide-react';
 import { useToast } from '../Toast/ToastContext';
+import { isValidFileName } from '../../utils/pathValidator';
 
 interface TextFile {
   name: string;
@@ -25,6 +26,7 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
   const [loading, setLoading] = useState(false);
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -61,7 +63,34 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
 
   const handleNewDocument = () => {
     setShowNameDialog(true);
+    setError(null);
   };
+
+  useEffect(() => {
+    // Validate filename as user types
+    if (showNameDialog && fileName.trim()) {
+      // Ensure .txt extension for validation
+      const fileNameWithExt = fileName.endsWith('.txt') ? fileName : `${fileName}.txt`;
+      if (!isValidFileName(fileNameWithExt)) {
+        // Check which validation failed
+        const nameWithoutExt = fileName.endsWith('.txt') ? fileName.slice(0, -4) : fileName;
+        const invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
+        if (invalidChars.test(nameWithoutExt)) {
+          setError('File name contains invalid characters: < > : " / \\ | ? *');
+        } else if (nameWithoutExt.endsWith('.') || nameWithoutExt.endsWith(' ')) {
+          setError('File name cannot end with a period or space');
+        } else if (fileName.length > 204) {
+          setError('File name is too long (max 200 characters)');
+        } else {
+          setError('Invalid file name');
+        }
+      } else {
+        setError(null);
+      }
+    } else if (showNameDialog) {
+      setError(null);
+    }
+  }, [fileName, showNameDialog]);
 
   const handleCreateNew = async () => {
     if (!fileName.trim()) {
@@ -71,10 +100,18 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
 
     // Ensure .txt extension
     const finalFileName = fileName.endsWith('.txt') ? fileName : `${fileName}.txt`;
+    
+    // Final validation before confirming
+    if (!isValidFileName(finalFileName)) {
+      setError('Please enter a valid file name');
+      return;
+    }
+
     onNewFile(finalFileName);
     onClose();
     setShowNameDialog(false);
     setFileName('');
+    setError(null);
   };
 
   const formatDate = (timestamp: number) => {
@@ -226,6 +263,7 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
             onClick={() => {
               setShowNameDialog(false);
               setFileName('');
+              setError(null);
             }}
           >
             <motion.div
@@ -246,17 +284,26 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
                   } else if (e.key === 'Escape') {
                     setShowNameDialog(false);
                     setFileName('');
+                    setError(null);
                   }
                 }}
                 placeholder="Enter file name..."
                 autoFocus
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyber-purple-500 mb-4"
+                className={`w-full px-4 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-500 focus:outline-none mb-2 ${
+                  error 
+                    ? 'border-red-500 focus:border-red-500' 
+                    : 'border-gray-700 focus:border-cyber-purple-500'
+                }`}
               />
+              {error && (
+                <p className="text-red-400 text-sm mb-4">{error}</p>
+              )}
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => {
                     setShowNameDialog(false);
                     setFileName('');
+                    setError(null);
                   }}
                   className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
                 >
@@ -264,7 +311,8 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
                 </button>
                 <button
                   onClick={handleCreateNew}
-                  className="px-4 py-2 bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white rounded-lg transition-colors"
+                  disabled={!fileName.trim() || !!error}
+                  className="px-4 py-2 bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Create
                 </button>

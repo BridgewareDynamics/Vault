@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { FileText, Plus, ArrowLeft } from 'lucide-react';
 import { TextLibraryItem } from './TextLibraryItem';
 import { useToast } from '../Toast/ToastContext';
+import { NewFileNameDialog } from './NewFileNameDialog';
 
 interface TextFile {
   name: string;
@@ -13,7 +14,7 @@ interface TextFile {
 
 interface TextLibraryProps {
   onOpenFile: (filePath: string) => void;
-  onNewFile: () => void;
+  onNewFile: (fileName: string) => void;
   onClose: () => void;
   isDetached?: boolean;
   onFileDeleted?: (filePath: string) => void;
@@ -22,6 +23,7 @@ interface TextLibraryProps {
 export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false, onFileDeleted }: TextLibraryProps) {
   const [files, setFiles] = useState<TextFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showNewFileDialog, setShowNewFileDialog] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -68,6 +70,15 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
     onOpenFile(filePath);
   };
 
+  const handleNewFileClick = () => {
+    setShowNewFileDialog(true);
+  };
+
+  const handleNewFileConfirm = (fileName: string) => {
+    onNewFile(fileName);
+    setShowNewFileDialog(false);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -94,7 +105,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
           <h3 className="text-lg font-semibold text-white">Text Library</h3>
         </div>
         <button
-          onClick={onNewFile}
+          onClick={handleNewFileClick}
           className="px-3 py-1.5 bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm"
         >
           <Plus size={16} />
@@ -109,7 +120,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
             <FileText size={48} className="text-gray-600 mb-4" />
             <p className="text-gray-400 mb-2">No text files yet</p>
             <button
-              onClick={onNewFile}
+              onClick={handleNewFileClick}
               className="px-4 py-2 bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white rounded-lg transition-colors"
             >
               Create your first document
@@ -133,6 +144,13 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
           </div>
         )}
       </div>
+
+      {/* New File Name Dialog */}
+      <NewFileNameDialog
+        isOpen={showNewFileDialog}
+        onClose={() => setShowNewFileDialog(false)}
+        onConfirm={handleNewFileConfirm}
+      />
     </div>
   );
 }

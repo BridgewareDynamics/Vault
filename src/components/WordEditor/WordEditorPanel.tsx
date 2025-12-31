@@ -141,9 +141,24 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
     setShowLibrary(false);
   };
 
-  const handleNewFile = () => {
-    setCurrentFilePath(null);
-    setShowLibrary(false);
+  const handleNewFile = async (fileName: string) => {
+    if (!window.electronAPI) {
+      toast.error('Electron API not available');
+      return;
+    }
+
+    try {
+      // Create empty file with the provided name
+      const newFilePath = await window.electronAPI.createTextFile(fileName, '');
+      setCurrentFilePath(newFilePath);
+      setShowLibrary(false);
+      // Force a re-render by incrementing editorKey
+      setEditorKey(prev => prev + 1);
+      toast.success('New file created');
+    } catch (error) {
+      toast.error('Failed to create file');
+      console.error('Create file error:', error);
+    }
   };
 
   const handleFileDeleted = (deletedFilePath: string) => {

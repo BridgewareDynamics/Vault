@@ -220,16 +220,31 @@ export function DetachedWordEditor() {
     setShowLibrary(false);
   };
 
-  const handleNewFile = () => {
-    setFilePath(null);
-    setShowLibrary(false);
-    // Ensure editor is cleared and ready immediately
-    requestAnimationFrame(() => {
-      if (editorRef.current) {
-        editorRef.current.setContent('');
-        editorRef.current.focus();
-      }
-    });
+  const handleNewFile = async (fileName: string) => {
+    if (!window.electronAPI) {
+      toast.error('Electron API not available');
+      return;
+    }
+
+    try {
+      // Create empty file with the provided name
+      const newFilePath = await window.electronAPI.createTextFile(fileName, '');
+      setFilePath(newFilePath);
+      setShowLibrary(false);
+      // Force a re-render by incrementing editorKey
+      setEditorKey(prev => prev + 1);
+      // Ensure editor is cleared and ready immediately
+      requestAnimationFrame(() => {
+        if (editorRef.current) {
+          editorRef.current.setContent('');
+          editorRef.current.focus();
+        }
+      });
+      toast.success('New file created');
+    } catch (error) {
+      toast.error('Failed to create file');
+      console.error('Create file error:', error);
+    }
   };
 
   const handleFileDeleted = (deletedFilePath: string) => {

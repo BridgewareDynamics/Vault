@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import { FileText, X } from 'lucide-react';
+import { isValidFileName } from '../../utils/pathValidator';
 
 interface NewFileNameDialogProps {
   isOpen: boolean;
@@ -14,11 +15,13 @@ export function NewFileNameDialog({
   onConfirm,
 }: NewFileNameDialogProps) {
   const [fileName, setFileName] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setFileName('');
+      setError(null);
       // Focus input after dialog opens
       setTimeout(() => {
         if (inputRef.current) {
@@ -28,6 +31,32 @@ export function NewFileNameDialog({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    // Validate filename as user types
+    if (fileName.trim()) {
+      // Ensure .txt extension for validation
+      const fileNameWithExt = fileName.endsWith('.txt') ? fileName : `${fileName}.txt`;
+      if (!isValidFileName(fileNameWithExt)) {
+        // Check which validation failed
+        const nameWithoutExt = fileName.endsWith('.txt') ? fileName.slice(0, -4) : fileName;
+        const invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
+        if (invalidChars.test(nameWithoutExt)) {
+          setError('File name contains invalid characters: < > : " / \\ | ? *');
+        } else if (nameWithoutExt.endsWith('.') || nameWithoutExt.endsWith(' ')) {
+          setError('File name cannot end with a period or space');
+        } else if (fileName.length > 204) {
+          setError('File name is too long (max 200 characters)');
+        } else {
+          setError('Invalid file name');
+        }
+      } else {
+        setError(null);
+      }
+    } else {
+      setError(null);
+    }
+  }, [fileName]);
+
   const handleConfirm = () => {
     if (!fileName.trim()) {
       return;
@@ -35,8 +64,16 @@ export function NewFileNameDialog({
 
     // Ensure .txt extension
     const finalFileName = fileName.endsWith('.txt') ? fileName : `${fileName}.txt`;
+    
+    // Final validation before confirming
+    if (!isValidFileName(finalFileName)) {
+      setError('Please enter a valid file name');
+      return;
+    }
+
     onConfirm(finalFileName);
     setFileName('');
+    setError(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -45,6 +82,7 @@ export function NewFileNameDialog({
     } else if (e.key === 'Escape') {
       onClose();
       setFileName('');
+      setError(null);
     }
   };
 
@@ -87,6 +125,7 @@ export function NewFileNameDialog({
                   onClick={() => {
                     onClose();
                     setFileName('');
+                    setError(null);
                   }}
                   className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
                   aria-label="Close"
@@ -109,13 +148,21 @@ export function NewFileNameDialog({
                   onKeyDown={handleKeyDown}
                   placeholder="Enter file name..."
                   autoFocus
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyber-purple-500 mb-4"
+                  className={`w-full px-4 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-500 focus:outline-none mb-2 ${
+                    error 
+                      ? 'border-red-500 focus:border-red-500' 
+                      : 'border-gray-700 focus:border-cyber-purple-500'
+                  }`}
                 />
+                {error && (
+                  <p className="text-red-400 text-sm mb-4">{error}</p>
+                )}
                 <div className="flex gap-2 justify-end">
                   <button
                     onClick={() => {
                       onClose();
                       setFileName('');
+                      setError(null);
                     }}
                     className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
                   >
@@ -123,7 +170,7 @@ export function NewFileNameDialog({
                   </button>
                   <button
                     onClick={handleConfirm}
-                    disabled={!fileName.trim()}
+                    disabled={!fileName.trim() || !!error}
                     className="px-4 py-2 bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Create

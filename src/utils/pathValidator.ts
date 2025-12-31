@@ -73,5 +73,50 @@ export function isValidFolderName(folderName: string): boolean {
   return true;
 }
 
+/**
+ * Validates a file name (for text file creation)
+ * Similar to folder name validation but also checks for trailing periods/spaces
+ */
+export function isValidFileName(fileName: string): boolean {
+  if (!fileName || typeof fileName !== 'string') {
+    return false;
+  }
+
+  // Remove .txt extension if present for validation
+  const nameWithoutExt = fileName.endsWith('.txt') 
+    ? fileName.slice(0, -4) 
+    : fileName;
+
+  // Check for whitespace-only strings
+  if (nameWithoutExt.trim().length === 0) {
+    return false;
+  }
+
+  // Check for invalid characters in file names
+  const invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
+  if (invalidChars.test(nameWithoutExt)) {
+    return false;
+  }
+
+  // Check for reserved names (Windows)
+  const reservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+  if (reservedNames.includes(nameWithoutExt.toUpperCase())) {
+    return false;
+  }
+
+  // Check for trailing periods or spaces (Windows doesn't allow these)
+  if (nameWithoutExt.endsWith('.') || nameWithoutExt.endsWith(' ')) {
+    return false;
+  }
+
+  // Check length (Windows max is 255, but we'll be conservative)
+  // Account for .txt extension
+  if (fileName.length > 204) {
+    return false;
+  }
+
+  return true;
+}
+
 
 
