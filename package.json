@@ -5,6 +5,10 @@
   "author": "Vault",
   "main": "dist-electron/electron/main.cjs",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0 <21.0.0",
+    "npm": ">=9.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

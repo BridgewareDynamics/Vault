@@ -91,6 +91,23 @@ The Vault is a powerful desktop application designed for researchers, investigat
 - **npm**: Version 9.x or higher (comes with Node.js)
 - **Git**: For cloning the repository
 
+### Node.js Version Management
+
+This project requires Node.js 20.x. To ensure consistent dependency resolution:
+
+- **Using nvm (Node Version Manager)**: 
+  ```bash
+  nvm use
+  ```
+  This will automatically use the version specified in `.nvmrc` (Node.js 20.x)
+
+- **Manual version check**:
+  ```bash
+  node --version  # Should show v20.x.x
+  ```
+
+The project enforces Node.js and npm versions via `package.json` engines field to ensure consistent `package-lock.json` files across all developers.
+
 ### Development Setup
 
 1. **Clone the repository**
@@ -102,8 +119,9 @@ The Vault is a powerful desktop application designed for researchers, investigat
 
 2. **Install dependencies**
    ```bash
-   npm install
+   npm ci
    ```
+   **Note**: We use `npm ci` instead of `npm install` for reproducible, clean installs. It installs dependencies directly from `package-lock.json`, ensuring consistent dependency versions across all environments. If `package-lock.json` is missing or outdated, you may need to run `npm install` first to generate/update it.
 
 3. **Run in development mode**
    ```bash
@@ -513,11 +531,13 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
 
 ### Build Issues
 
-**Problem**: `npm install` fails with dependency errors
+**Problem**: `npm ci` fails with dependency errors
 - **Solution**: 
   - Delete `node_modules` and `package-lock.json`
-  - Run `npm install` again
-  - Ensure Node.js version is 20.x or higher
+  - Run `npm install` to regenerate `package-lock.json`, then use `npm ci` for future installs
+  - Ensure Node.js version is 20.x or higher (check with `node --version`)
+  - If using nvm, run `nvm use` to switch to the correct Node.js version
+  - Verify npm version: `npm --version` (should be 9.x or higher)
 
 **Problem**: TypeScript compilation errors
 - **Solution**:
@@ -580,7 +600,7 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
 
 **Problem**: Tests failing
 - **Solution**:
-  - Run `npm install` to ensure all dependencies are installed
+  - Run `npm ci` to ensure all dependencies are installed with correct versions
   - Clear test cache: delete `node_modules/.vite` and `.vitest` directories
   - Ensure test environment is set up: `npm run test` should work
   - Check that mocks are properly configured in `src/test-utils/`

@@ -28,10 +28,17 @@ Before you begin, ensure you have the following installed:
    cd the-vault
    ```
 
-2. **Install dependencies**
+2. **Set up Node.js version** (if using nvm)
    ```bash
-   npm install
+   nvm use
    ```
+   This will automatically use the Node.js version specified in `.nvmrc` (Node.js 20.x)
+
+3. **Install dependencies**
+   ```bash
+   npm ci
+   ```
+   **Note**: We use `npm ci` for reproducible installs. It installs dependencies directly from `package-lock.json`, ensuring you get the exact same dependency versions as other developers. If `package-lock.json` is missing, you may need to run `npm install` first to generate it.
 
 3. **Verify installation**
    ```bash
