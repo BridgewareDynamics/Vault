@@ -3,6 +3,7 @@ import { FileText, Plus, ArrowLeft } from 'lucide-react';
 import { TextLibraryItem } from './TextLibraryItem';
 import { useToast } from '../Toast/ToastContext';
 import { NewFileNameDialog } from './NewFileNameDialog';
+import { DeleteTextFileConfirmDialog } from './DeleteTextFileConfirmDialog';
 
 interface TextFile {
   name: string;
@@ -24,6 +25,8 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   const [files, setFiles] = useState<TextFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewFileDialog, setShowNewFileDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<{ path: string; name: string } | null>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -48,17 +51,23 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
     }
   };
 
-  const handleDelete = async (filePath: string) => {
-    if (!window.electronAPI) return;
+  const handleDeleteClick = (filePath: string, fileName: string) => {
+    setFileToDelete({ path: filePath, name: fileName });
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!window.electronAPI || !fileToDelete) return;
 
     try {
-      await window.electronAPI.deleteTextFile(filePath);
+      await window.electronAPI.deleteTextFile(fileToDelete.path);
       await loadFiles();
       toast.success('File deleted');
       // Notify parent that a file was deleted (in case it's the currently open file)
       if (onFileDeleted) {
-        onFileDeleted(filePath);
+        onFileDeleted(fileToDelete.path);
       }
+      setFileToDelete(null);
     } catch (error) {
       toast.error('Failed to delete file');
       console.error('Delete error:', error);
@@ -138,7 +147,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
                 onOpen={() => onOpenFile(file.path)}
                 onEdit={() => onOpenFile(file.path)}
                 onSaveAs={() => handleSaveAs(file.path)}
-                onDelete={() => handleDelete(file.path)}
+                onDelete={() => handleDeleteClick(file.path, file.name)}
               />
             ))}
           </div>
@@ -150,6 +159,17 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
         isOpen={showNewFileDialog}
         onClose={() => setShowNewFileDialog(false)}
         onConfirm={handleNewFileConfirm}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteTextFileConfirmDialog
+        isOpen={showDeleteDialog}
+        fileName={fileToDelete?.name || ''}
+        onClose={() => {
+          setShowDeleteDialog(false);
+          setFileToDelete(null);
+        }}
+        onConfirm={handleDeleteConfirm}
       />
     </div>
   );

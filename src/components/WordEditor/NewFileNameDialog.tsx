@@ -22,12 +22,16 @@ export function NewFileNameDialog({
     if (isOpen) {
       setFileName('');
       setError(null);
-      // Focus input after dialog opens
-      setTimeout(() => {
+      // Focus input after dialog opens - use longer delay to ensure any native dialogs are fully closed
+      // This is especially important after a native confirm() dialog closes
+      const focusTimeout = setTimeout(() => {
         if (inputRef.current) {
           inputRef.current.focus();
+          inputRef.current.select();
         }
-      }, 100);
+      }, 200);
+      
+      return () => clearTimeout(focusTimeout);
     }
   }, [isOpen]);
 
@@ -99,6 +103,7 @@ export function NewFileNameDialog({
             exit={{ opacity: 0 }}
             onClick={onClose}
             className="fixed inset-0 bg-black/50 z-[70]"
+            style={{ pointerEvents: 'auto' }}
           />
 
           {/* Dialog */}
@@ -107,8 +112,10 @@ export function NewFileNameDialog({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+            className="fixed inset-0 z-[71] flex items-center justify-center p-4"
             onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ pointerEvents: 'auto' }}
           >
             <div className="bg-gray-900 border border-cyber-purple-500/30 rounded-lg shadow-2xl w-full max-w-sm">
               {/* Header */}
@@ -146,6 +153,8 @@ export function NewFileNameDialog({
                   value={fileName}
                   onChange={(e) => setFileName(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
                   placeholder="Enter file name..."
                   autoFocus
                   className={`w-full px-4 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-500 focus:outline-none mb-2 ${
@@ -153,6 +162,7 @@ export function NewFileNameDialog({
                       ? 'border-red-500 focus:border-red-500' 
                       : 'border-gray-700 focus:border-cyber-purple-500'
                   }`}
+                  style={{ pointerEvents: 'auto' }}
                 />
                 {error && (
                   <p className="text-red-400 text-sm mb-4">{error}</p>

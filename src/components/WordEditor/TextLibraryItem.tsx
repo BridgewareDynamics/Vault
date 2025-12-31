@@ -81,9 +81,7 @@ export function TextLibraryItem({ file, onOpen, onEdit, onSaveAs, onDelete }: Te
           <button
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm(`Delete "${file.name}"?`)) {
-                onDelete();
-              }
+              onDelete();
             }}
             className="absolute top-2 right-2 p-2 bg-red-600/80 hover:bg-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-20"
             aria-label="Delete file"
