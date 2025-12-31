@@ -1177,7 +1177,17 @@ ipcMain.handle('list-archive-cases', async () => {
     const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
     const cases = await Promise.all(
       entries
-        .filter(entry => entry.isDirectory())
+        .filter(entry => {
+          if (!entry.isDirectory()) {
+            return false;
+          }
+          // Exclude .bookmark-thumbnails folder from case list
+          const folderName = entry.name.toLowerCase();
+          if (folderName === '.bookmark-thumbnails') {
+            return false;
+          }
+          return true;
+        })
         .map(async (entry) => {
           const casePath = path.join(archiveDrive, entry.name);
           
@@ -1726,6 +1736,13 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
             logger.log('[Main] Filtering out .thumbnails folder:', entry.name);
             return false;
           }
+          
+          // Exclude .bookmark-thumbnails folder
+          if (folderName === '.bookmark-thumbnails') {
+            logger.log('[Main] Filtering out .bookmark-thumbnails folder:', entry.name);
+            return false;
+          }
+          
           return true;
         })
         .map(async (entry) => {

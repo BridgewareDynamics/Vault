@@ -659,6 +659,11 @@ export function useArchive() {
           return false;
         }
         
+        // Exclude .bookmark-thumbnails folder
+        if (item.isFolder && itemName === '.bookmark-thumbnails') {
+          return false;
+        }
+        
         // Exclude .parent-pdf metadata files
         if (!item.isFolder) {
           const fileName = itemName;
@@ -1130,6 +1135,16 @@ export function useArchive() {
   // Filter cases based on search query and selected tag
   const filteredCases = useMemo(() => {
     let filtered = cases;
+
+    // Exclude system folders (safety check - backend should already filter these)
+    filtered = filtered.filter(caseItem => {
+      const caseName = caseItem.name.toLowerCase();
+      // Exclude .bookmark-thumbnails folder
+      if (caseName === '.bookmark-thumbnails') {
+        return false;
+      }
+      return true;
+    });
 
     // Filter by tag if selected
     if (selectedTagId) {
