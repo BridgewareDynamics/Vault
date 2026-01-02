@@ -116,6 +116,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getBookmarksByFolder: (folderId: string | null) => ipcRenderer.invoke('get-bookmarks-by-folder', folderId),
   saveBookmarkThumbnail: (bookmarkId: string, thumbnailData: string) => ipcRenderer.invoke('save-bookmark-thumbnail', bookmarkId, thumbnailData),
   getBookmarkThumbnail: (bookmarkId: string) => ipcRenderer.invoke('get-bookmark-thumbnail', bookmarkId),
+  // File Security Checker API
+  auditPDFRedaction: (pdfPath: string, options?: any) => ipcRenderer.invoke('audit-pdf-redaction', pdfPath, options),
+  // Listen for audit progress updates
+  onAuditProgress: (callback: (message: string) => void) => {
+    const listener = (_event: any, message: string) => callback(message);
+    ipcRenderer.on('audit-progress', listener);
+    return () => ipcRenderer.removeListener('audit-progress', listener);
+  },
+  // Generate PDF Report
+  generateAuditReport: (auditResult: any, outputPath: string) => ipcRenderer.invoke('generate-audit-report', auditResult, outputPath),
+  // Show Save Dialog
+  showSaveDialog: (options: {
+    title: string;
+    defaultPath: string;
+    filters: Array<{ name: string; extensions: string[] }>;
+  }) => ipcRenderer.invoke('show-save-dialog', options),
 });
 
 // Type declaration for TypeScript
@@ -255,6 +271,41 @@ declare global {
       getBookmarksByFolder: (folderId: string | null) => Promise<Array<any>>;
       saveBookmarkThumbnail: (bookmarkId: string, thumbnailData: string) => Promise<string>;
       getBookmarkThumbnail: (bookmarkId: string) => Promise<string | null>;
+      // File Security Checker API
+      auditPDFRedaction: (pdfPath: string, options?: {
+        blackThreshold?: number;
+        minOverlapArea?: number;
+        minHits?: number;
+        includeSecurityAudit?: boolean;
+      }) => Promise<{
+        filename: string;
+        totalPages: number;
+        flaggedPages: Array<{
+          pageNumber: number;
+          blackRectCount: number;
+          overlapCount: number;
+          confidenceScore: number;
+        }>;
+        security?: {
+          has_metadata: boolean;
+          metadata_keys: string[];
+          has_attachments: boolean;
+          attachment_count: number;
+          has_annotations: boolean;
+          annotation_count: number;
+          has_forms: boolean;
+          form_field_count: number;
+          has_layers: boolean;
+          layer_count: number;
+          has_javascript: boolean;
+          has_actions: boolean;
+          has_thumbnails: boolean;
+          incremental_updates_suspected: boolean;
+          notes: string[];
+        };
+        error?: string;
+      }>;
+      onAuditProgress: (callback: (message: string) => void) => () => void;
     };
   }
 }

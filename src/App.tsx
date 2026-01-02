@@ -3,6 +3,7 @@ import { ToastProvider, useToast } from './components/Toast/ToastContext';
 import { ToastContainer } from './components/Toast/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { WelcomeScreen } from './components/WelcomeScreen';
+import { SecurityCheckerModal } from './components/SecurityCheckerModal';
 import { ProgressBar } from './components/ProgressBar';
 import { Gallery } from './components/Gallery';
 import { ImageViewer } from './components/ImageViewer';
@@ -28,6 +29,7 @@ function AppContent() {
   const [saveToZip, setSaveToZip] = useState(false);
   const [, setFolderName] = useState<string | undefined>(undefined);
   const [showArchive, setShowArchive] = useState(false);
+  const [showSecurityChecker, setShowSecurityChecker] = useState(false);
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
@@ -312,10 +314,15 @@ function AppContent() {
           <WelcomeScreen 
             onSelectFile={handleSelectFile}
             onOpenArchive={() => setShowArchive(true)}
+            onOpenSecurityChecker={() => setShowSecurityChecker(true)}
           />
         </div>
         <ToastContainer />
         <SettingsPanel hideWordEditorButton={true} />
+        <SecurityCheckerModal
+          isOpen={showSecurityChecker}
+          onClose={() => setShowSecurityChecker(false)}
+        />
       </>
     );
   }

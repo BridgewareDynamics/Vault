@@ -12,6 +12,8 @@ import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMa
 import { logger, type LogLevel, type LogArgs } from './utils/logger';
 import { loadSettings } from './utils/settings';
 import * as bookmarkStorage from './utils/bookmarkStorage';
+import { auditPDFRedaction } from './utils/pdfRedactionAudit';
+import { generateAuditReport } from './utils/generateAuditReport';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -906,6 +908,42 @@ ipcMain.handle('get-pdf-file-size', async (event, filePath: string) => {
   
   // If we exhausted all retries, throw the last error
   throw new Error(`Failed to get PDF file size after ${maxRetries} attempts: ${lastError?.message || 'File is busy or locked'}`);
+});
+
+// File Security Checker IPC Handler
+ipcMain.handle('audit-pdf-redaction', async (event, pdfPath: string, options?: any) => {
+  try {
+    // Pass the event object so progress updates can be sent via IPC
+    const result = await auditPDFRedaction(pdfPath, { ...options, event });
+    return result;
+  } catch (error) {
+    logger.error('PDF redaction audit failed:', error);
+    throw error;
+  }
+});
+
+// Generate PDF Report IPC Handler
+ipcMain.handle('generate-audit-report', async (event, auditResult: any, outputPath: string) => {
+  try {
+    const result = await generateAuditReport({
+      auditResult,
+      outputPath,
+    });
+    return result;
+  } catch (error) {
+    logger.error('PDF report generation failed:', error);
+    throw error;
+  }
+});
+
+// Show Save Dialog for Report
+ipcMain.handle('show-save-dialog', async (event, options: {
+  title: string;
+  defaultPath: string;
+  filters: Array<{ name: string; extensions: string[] }>;
+}) => {
+  const { dialog } = await import('electron');
+  return await dialog.showSaveDialog(options);
 });
 
 // Archive IPC Handlers

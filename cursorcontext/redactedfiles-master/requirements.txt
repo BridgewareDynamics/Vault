@@ -1,0 +1,14 @@
+# PDF Overlay Redaction Risk Checker - Dependencies
+
+# Core PDF processing library
+pymupdf>=1.23.0
+
+# Note: PyMuPDF (imported as 'fitz') is the only external dependency required.
+# All other modules used are part of Python's standard library:
+# - argparse (CLI parsing)
+# - json (JSON output)
+# - csv (CSV output)
+# - pathlib (cross-platform paths)
+# - dataclasses (data structures)
+# - typing (type hints)
+# - unittest (testing)
