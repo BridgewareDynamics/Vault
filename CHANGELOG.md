@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- Added comprehensive server architecture research documentation
+  - `docs/NETWORKING_RESEARCH.md`: 60+ page technical analysis of server architectures, frameworks, and deployment strategies
+  - `docs/NETWORKING_DISCUSSION_STARTER.md`: Community-friendly discussion guide for gathering feedback
+  - `docs/README.md`: Documentation index and quick summary
+  - Evaluation of Python/FastAPI, Node.js/NestJS, Go/Gin, and Rust/Actix frameworks
+  - Deployment strategy recommendations (local-first with installer integration)
+  - Security considerations, performance benchmarks, and scalability targets
+  - Implementation roadmap with 8-11 month timeline to production-ready v2.0
+
 ## [1.0.0-prerelease.4] - 2025-01-15
 
 **Note:** This is a prerelease version. Features and APIs may change before the stable 1.0.0 release.

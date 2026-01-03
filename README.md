@@ -111,6 +111,21 @@ The Vault is a powerful desktop application designed for researchers, investigat
 - **Testing**: Vitest 1.1.0, Testing Library
 - **Build Tools**: Vite 5.0, Electron Builder 24.9
 
+### Future: Networking & Server Architecture
+
+We're researching adding networking capabilities to enable multi-user collaboration, remote access, and cloud synchronization. For detailed research and architectural options, see:
+
+- **[Server Architecture Research](docs/NETWORKING_RESEARCH.md)** - Comprehensive technical analysis of server architectures, frameworks, and deployment strategies
+- **[Discussion Starter](docs/NETWORKING_DISCUSSION_STARTER.md)** - Community-friendly overview for gathering feedback
+- **[Documentation Index](docs/README.md)** - Quick summary and navigation
+
+**Key considerations:**
+- Python/FastAPI for server implementation
+- Local-first deployment bundled with installer
+- Optional cloud synchronization
+- Estimated timeline: 8-11 months to production-ready v2.0
+
+Join the discussion to share your use case and requirements!
 
 ## Installation & Setup
 
@@ -617,8 +632,9 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
   - PDF password support
   - Custom thumbnail sizes
   - Export vault to different formats
-  - Cloud storage integration
-  - Multi-user support
+  - Cloud storage integration (see [Server Architecture Research](docs/NETWORKING_RESEARCH.md))
+  - Multi-user support (see [Server Architecture Research](docs/NETWORKING_RESEARCH.md))
+  - Remote access and collaboration (see [Server Architecture Research](docs/NETWORKING_RESEARCH.md))
   - Tag editing and deletion (tags can be created and assigned, but not yet edited or deleted)
 
 ## Troubleshooting
