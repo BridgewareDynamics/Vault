@@ -12,6 +12,7 @@ const getAssetPath = (path: string) => {
 interface WelcomeScreenProps {
   onSelectFile: () => void;
   onOpenArchive: () => void;
+  onOpenSecurityChecker: () => void;
 }
 
 // Generate stable star positions
@@ -29,9 +30,10 @@ const generateStars = (count: number) => {
   });
 };
 
-export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProps) {
+export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityChecker }: WelcomeScreenProps) {
   const selectFileStars = useMemo(() => generateStars(12), []);
   const vaultStars = useMemo(() => generateStars(12), []);
+  const securityStars = useMemo(() => generateStars(12), []);
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
       <motion.div
@@ -336,6 +338,98 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive }: WelcomeScreenProp
               <span className="relative z-10 flex items-center gap-2">
                 <img src={getAssetPath('The Vault Button.png')} alt="" className="w-16 h-16 drop-shadow-lg" aria-hidden="true" />
                 The Vault
+              </span>
+            </motion.button>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.7 }}
+            className="relative"
+          >
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onOpenSecurityChecker}
+              className="
+                px-8 py-4 rounded-full
+                text-white font-semibold text-lg
+                relative overflow-hidden
+                group
+                border-2 border-cyber-purple-400/40
+                backdrop-blur-sm
+                transition-all duration-500 ease-out
+              "
+              aria-label="Open PDF Audit"
+            >
+              {/* Dark galaxy base */}
+              <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-purple-900/80 to-gray-900" />
+              
+              {/* Rotating nebula gradient - refined */}
+              <motion.div
+                className="absolute inset-0 opacity-15 blur-sm"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+                style={{
+                  background: 'conic-gradient(from 0deg, transparent 0%, transparent 20%, rgba(139, 92, 246, 0.3) 30%, rgba(34, 211, 238, 0.2) 50%, rgba(139, 92, 246, 0.3) 70%, transparent 80%, transparent 100%)',
+                }}
+              />
+              
+              {/* Secondary subtle rotating layer */}
+              <motion.div
+                className="absolute inset-0 opacity-10 blur-[2px]"
+                animate={{ rotate: -360 }}
+                transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+                style={{
+                  background: 'conic-gradient(from 180deg, transparent 0%, rgba(168, 85, 247, 0.2) 25%, transparent 50%, rgba(34, 211, 238, 0.15) 75%, transparent 100%)',
+                }}
+              />
+              
+              {/* Animated starfield */}
+              {securityStars.map((star) => (
+                <motion.div
+                  key={star.id}
+                  className="absolute rounded-full bg-white"
+                  style={{
+                    width: `${star.size}px`,
+                    height: `${star.size}px`,
+                    left: `${star.left}%`,
+                    top: `${star.top}%`,
+                  }}
+                  animate={{
+                    opacity: [0.2, 1, 0.2],
+                    scale: [0.8, 1.2, 0.8],
+                  }}
+                  transition={{
+                    duration: parseFloat(star.duration),
+                    repeat: Infinity,
+                    delay: star.delay,
+                    ease: "easeInOut",
+                  }}
+                />
+              ))}
+              
+              {/* Subtle pulsing glow */}
+              <motion.div
+                className="absolute inset-0 bg-gradient-to-r from-cyber-purple-500/20 via-cyber-cyan-400/20 to-cyber-purple-500/20"
+                animate={{
+                  opacity: [0.3, 0.5, 0.3],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+              />
+              
+              {/* Glowing border on hover */}
+              <div className="absolute inset-0 rounded-full border-2 border-cyber-cyan-400/0 pointer-events-none transition-all duration-500 ease-out group-hover:border-cyber-cyan-400/70 group-hover:shadow-[0_0_20px_rgba(34,211,238,0.5),0_0_40px_rgba(168,85,247,0.4)]" />
+              
+              {/* Content */}
+              <span className="relative z-10 flex items-center gap-2">
+                <img src={getAssetPath('PDF Audit Button.png')} alt="" className="w-16 h-16 drop-shadow-lg" aria-hidden="true" />
+                PDF Audit
               </span>
             </motion.button>
           </motion.div>

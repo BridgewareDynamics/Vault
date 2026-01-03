@@ -1,0 +1,3 @@
+python -c "import pandas as pd; df = pd.read_csv('court_records_advanced_security_audit.csv'); print('='*80); print('HIGH RISK FILE (score >= 40):'); print('='*80); high = df[df['risk_score'] >= 40]; print(high[['filename', 'risk_score', 'has_javascript', 'has_signatures', 'has_hidden_text', 'notes']].to_string(index=False))"
+python -c "import pandas as pd; df = pd.read_csv('court_records_advanced_security_audit.csv'); print('='*80); print('FILES WITH DIGITAL SIGNATURES (32 files - showing first 15):'); print('='*80); sigs = df[df['has_signatures'] == 'YES'].head(15); print(sigs[['filename', 'risk_score', 'signature_count', 'signer_names']].to_string(index=False))"
+python analyze_court_records.py

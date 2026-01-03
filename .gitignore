@@ -40,5 +40,15 @@ Thumbs.db
 # Electron
 # Note: build/ directory is kept for production build assets
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+*.egg
+
 
 
