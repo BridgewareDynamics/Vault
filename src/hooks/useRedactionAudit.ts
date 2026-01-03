@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useToast } from '../components/Toast/ToastContext';
 
 export interface RedactionAuditResult {
@@ -82,9 +82,6 @@ export function useRedactionAudit() {
     setResult(null);
     setProgressMessage('Initializing...');
 
-    // Only show one initial toast, progress will be visible in UI
-    let toastId: number | null = null;
-
     try {
       // Set up progress listener - update UI state only, no toast spam
       const removeListener = window.electronAPI.onAuditProgress((message: string) => {
@@ -93,7 +90,7 @@ export function useRedactionAudit() {
       });
 
       // Show initial toast only
-      toastId = toast.info('Running security audit...', 3000);
+      toast.info('Running security audit...', 3000);
       
       const auditResult = await window.electronAPI.auditPDFRedaction(pdfPath, options);
       
@@ -135,10 +132,16 @@ export function useRedactionAudit() {
     }
   }, [toast]);
 
+  // Expose setResult so components can restore result state (e.g., when reattaching from detached window)
+  const setResultState = useCallback((newResult: RedactionAuditResult | null) => {
+    setResult(newResult);
+  }, []);
+
   return {
     isAuditing,
     result,
     progressMessage,
     auditPDF,
+    setResult: setResultState,
   };
 }

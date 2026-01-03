@@ -40,6 +40,7 @@ export interface AuditOptions {
   minHits?: number;
   includeSecurityAudit?: boolean;
   event?: Electron.IpcMainEvent; // For sending progress updates via IPC
+  getProgressTarget?: () => Electron.WebContents | null; // Optional function to get current progress target
 }
 
 /**
@@ -149,9 +150,42 @@ export async function auditPDFRedaction(
   pdfPath: string,
   options: AuditOptions = {}
 ): Promise<RedactionAuditResult> {
-  // Validate path
+  // Validate path format
   if (!isValidPDFFile(pdfPath) || !isSafePath(pdfPath)) {
     throw new Error('Invalid PDF file path');
+  }
+
+  // Normalize and resolve PDF path to absolute path
+  // This ensures paths with spaces are handled correctly
+  let normalizedPdfPath: string;
+  try {
+    // Resolve to absolute path - handles relative paths and normalizes separators
+    normalizedPdfPath = path.resolve(pdfPath);
+    // Normalize the path (handles .., ., double slashes, etc.)
+    normalizedPdfPath = path.normalize(normalizedPdfPath);
+  } catch (error) {
+    throw new Error(`Failed to resolve PDF path: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+
+  // Verify PDF file exists and is accessible before proceeding
+  try {
+    await fs.access(normalizedPdfPath);
+    const stats = await fs.stat(normalizedPdfPath);
+    if (!stats.isFile()) {
+      throw new Error(`Path exists but is not a file: ${normalizedPdfPath}`);
+    }
+    if (stats.size === 0) {
+      throw new Error(`PDF file is empty: ${normalizedPdfPath}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('not a file')) {
+      throw error;
+    }
+    if (error instanceof Error && error.message.includes('empty')) {
+      throw error;
+    }
+    // File doesn't exist or can't be accessed
+    throw new Error(`PDF file not found or not accessible: ${normalizedPdfPath}. Original path: ${pdfPath}`);
   }
 
   // Find Python
@@ -239,10 +273,15 @@ export async function auditPDFRedaction(
     throw new Error(`File Security Checker Python scripts not found at: ${scriptPath}. Please reinstall the application.`);
   }
 
+  // Normalize script path as well
+  const normalizedScriptPath = path.normalize(scriptPath);
+
   return new Promise((resolve, reject) => {
+    // Build arguments array - use normalized paths
+    // spawn() with array arguments handles spaces correctly on all platforms
     const args = [
-      scriptPath,
-      pdfPath,
+      normalizedScriptPath,
+      normalizedPdfPath, // Use normalized absolute path
       '--json',
       '--black-threshold', String(options.blackThreshold ?? 0.15),
       '--min-overlap-area', String(options.minOverlapArea ?? 4.0),
@@ -253,18 +292,33 @@ export async function auditPDFRedaction(
       args.push('--no-security-audit');
     }
 
-    const process = spawn(pythonPath, args, {
+    // Log the command for debugging (but don't log full paths in production)
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug('Executing Python audit:', {
+        pythonCmd: pythonPath,
+        scriptPath: normalizedScriptPath,
+        pdfPath: normalizedPdfPath,
+        args: args.slice(2), // Skip script and pdf path for cleaner logs
+      });
+    }
+
+    // Use spawn with array arguments - this properly handles paths with spaces
+    // Do NOT use shell: true as it can cause path splitting issues on Windows
+    // Use pythonProcess instead of process to avoid shadowing global process object
+    const pythonProcess = spawn(pythonPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Explicitly set shell to false to prevent path splitting
+      shell: false,
     });
 
     let stdout = '';
     let stderr = '';
 
-    process.stdout.on('data', (data) => {
+    pythonProcess.stdout.on('data', (data) => {
       stdout += data.toString();
     });
 
-    process.stderr.on('data', (data) => {
+    pythonProcess.stderr.on('data', (data) => {
       const stderrText = data.toString();
       stderr += stderrText;
       
@@ -273,15 +327,27 @@ export async function auditPDFRedaction(
       for (const line of lines) {
         if (line.startsWith('PROGRESS:')) {
           const progressMessage = line.replace('PROGRESS:', '').trim();
-          if (progressMessage && options.event) {
-            // Send progress update via IPC event
-            options.event.sender.send('audit-progress', progressMessage);
+          if (progressMessage) {
+            // Determine which window should receive the progress update
+            // Use getProgressTarget if provided (allows redirecting to detached window)
+            // Otherwise use the original event sender
+            const target = options.getProgressTarget ? options.getProgressTarget() : (options.event?.sender || null);
+            if (target && !target.isDestroyed()) {
+              logger.debug(`Sending progress to target window: ${progressMessage.substring(0, 50)}...`);
+              target.send('audit-progress', progressMessage);
+            } else if (options.event?.sender && !options.event.sender.isDestroyed()) {
+              // Fallback to original sender
+              logger.debug(`Sending progress to original sender (fallback): ${progressMessage.substring(0, 50)}...`);
+              options.event.sender.send('audit-progress', progressMessage);
+            } else {
+              logger.warn('No valid target for progress update, progress message lost:', progressMessage.substring(0, 50));
+            }
           }
         }
       }
     });
 
-    process.on('close', (code) => {
+    pythonProcess.on('close', (code) => {
       if (code !== 0) {
         logger.error('Python redaction audit failed:', { code, stderr, stdout });
         
@@ -298,15 +364,17 @@ export async function auditPDFRedaction(
         
         // Provide more helpful error messages
         if (stderr.includes('File not found') || stderr.includes('not found')) {
-          reject(new Error(`PDF file not found: ${pdfPath}`));
+          reject(new Error(`PDF file not found: ${normalizedPdfPath}`));
         } else if (stderr.includes('Permission denied')) {
-          reject(new Error(`Permission denied accessing PDF file: ${pdfPath}`));
+          reject(new Error(`Permission denied accessing PDF file: ${normalizedPdfPath}`));
         } else if (stderr.includes('encrypted') || stderr.includes('password')) {
           reject(new Error('PDF is encrypted and requires a password'));
         } else if (stderr.includes('corrupt') || stderr.includes('Invalid')) {
           reject(new Error('PDF file is corrupted or invalid'));
         } else {
-          reject(new Error(`Audit failed: ${stderr || 'Unknown error'}`));
+          // Include both normalized and original path in error for debugging
+          const errorMsg = stderr || 'Unknown error';
+          reject(new Error(`Audit failed: ${errorMsg}. PDF path: ${normalizedPdfPath}`));
         }
         return;
       }
@@ -337,7 +405,7 @@ export async function auditPDFRedaction(
       }
     });
 
-    process.on('error', (error) => {
+    pythonProcess.on('error', (error) => {
       logger.error('Failed to start Python process:', error);
       reject(new Error(`Failed to start Python process: ${error.message}`));
     });

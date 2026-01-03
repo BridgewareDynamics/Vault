@@ -100,6 +100,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
     filePath?: string | null;
     viewState?: 'editor' | 'library' | 'bookmarkLibrary';
   }) => ipcRenderer.invoke('reattach-word-editor', options),
+  createPdfAuditWindow: (options: {
+    pdfPath: string | null;
+    settings: {
+      blackThreshold: number;
+      minOverlapArea: number;
+      minHits: number;
+      includeSecurityAudit: boolean;
+    };
+    showSettings: boolean;
+    result: any | null;
+    isAuditing: boolean;
+    progressMessage: string;
+  }) => ipcRenderer.invoke('create-pdf-audit-window', options),
+  reattachPdfAudit: (options: {
+    pdfPath: string | null;
+    settings: {
+      blackThreshold: number;
+      minOverlapArea: number;
+      minHits: number;
+      includeSecurityAudit: boolean;
+    };
+    showSettings: boolean;
+    result: any | null;
+    isAuditing: boolean;
+    progressMessage: string;
+  }) => ipcRenderer.invoke('reattach-pdf-audit', options),
   closeWindow: () => ipcRenderer.invoke('close-window'),
   openBookmarkInMainWindow: (options: {
     pdfPath: string;
@@ -123,6 +149,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (_event: any, message: string) => callback(message);
     ipcRenderer.on('audit-progress', listener);
     return () => ipcRenderer.removeListener('audit-progress', listener);
+  },
+  // Listen for audit completion result
+  onAuditResult: (callback: (result: any) => void) => {
+    const listener = (_event: any, result: any) => callback(result);
+    ipcRenderer.on('audit-result', listener);
+    return () => ipcRenderer.removeListener('audit-result', listener);
+  },
+  // Listen for audit errors
+  onAuditError: (callback: (error: string) => void) => {
+    const listener = (_event: any, error: string) => callback(error);
+    ipcRenderer.on('audit-error', listener);
+    return () => ipcRenderer.removeListener('audit-error', listener);
   },
   // Generate PDF Report
   generateAuditReport: (auditResult: any, outputPath: string) => ipcRenderer.invoke('generate-audit-report', auditResult, outputPath),
@@ -255,6 +293,32 @@ declare global {
         filePath?: string | null;
         viewState?: 'editor' | 'library' | 'bookmarkLibrary';
       }) => Promise<{ success: boolean }>;
+      createPdfAuditWindow: (options: {
+        pdfPath: string | null;
+        settings: {
+          blackThreshold: number;
+          minOverlapArea: number;
+          minHits: number;
+          includeSecurityAudit: boolean;
+        };
+        showSettings: boolean;
+        result: any | null;
+        isAuditing: boolean;
+        progressMessage: string;
+      }) => Promise<{ success: boolean }>;
+      reattachPdfAudit: (options: {
+        pdfPath: string | null;
+        settings: {
+          blackThreshold: number;
+          minOverlapArea: number;
+          minHits: number;
+          includeSecurityAudit: boolean;
+        };
+        showSettings: boolean;
+        result: any | null;
+        isAuditing: boolean;
+        progressMessage: string;
+      }) => Promise<{ success: boolean }>;
       closeWindow: () => Promise<{ success: boolean }>;
       openBookmarkInMainWindow: (options: {
         pdfPath: string;
@@ -306,6 +370,14 @@ declare global {
         error?: string;
       }>;
       onAuditProgress: (callback: (message: string) => void) => () => void;
+      onAuditResult: (callback: (result: any) => void) => () => void;
+      onAuditError: (callback: (error: string) => void) => () => void;
+      generateAuditReport: (auditResult: any, outputPath: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
+      showSaveDialog: (options: {
+        title: string;
+        defaultPath: string;
+        filters: Array<{ name: string; extensions: string[] }>;
+      }) => Promise<{ canceled: boolean; filePath?: string }>;
     };
   }
 }

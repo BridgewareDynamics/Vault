@@ -28,7 +28,12 @@ def main():
         }), file=sys.stderr)
         sys.exit(1)
 
-    pdf_path = Path(sys.argv[1])
+    # Get PDF path from first argument and resolve to absolute path
+    # This handles paths with spaces correctly when passed as a single argument
+    pdf_path_str = sys.argv[1]
+    
+    # Resolve to absolute path to handle relative paths and normalize separators
+    pdf_path = Path(pdf_path_str).resolve()
     
     # Parse options
     black_threshold = 0.15
@@ -57,9 +62,17 @@ def main():
 
     try:
         print("PROGRESS:Validating PDF file...", file=sys.stderr, flush=True)
-        # Validate PDF path exists
+        
+        # Validate PDF path exists and is a file
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+        
+        if not pdf_path.is_file():
+            raise ValueError(f"Path exists but is not a file: {pdf_path}")
+        
+        # Check file is readable
+        if not pdf_path.is_file() or not pdf_path.stat().st_size > 0:
+            raise ValueError(f"PDF file is empty or not accessible: {pdf_path}")
         
         print("PROGRESS:Starting overlay redaction analysis...", file=sys.stderr, flush=True)
         # Run overlay audit

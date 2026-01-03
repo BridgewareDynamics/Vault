@@ -105,25 +105,36 @@ export async function generateAuditReport(
     // Write audit result to temp JSON file
     await fs.writeFile(tempJsonPath, JSON.stringify(auditResult), 'utf-8');
 
-    return new Promise((resolve, reject) => {
-      const args = [scriptPath, tempJsonPath, outputPath];
+    // Normalize all paths before passing to Python
+    const normalizedScriptPath = path.normalize(scriptPath);
+    const normalizedTempJsonPath = path.normalize(tempJsonPath);
+    const normalizedOutputPath = path.normalize(outputPath);
 
-      const process = spawn(pythonPath, args, {
+    return new Promise((resolve, reject) => {
+      // Build arguments array with normalized paths
+      // spawn() with array arguments handles spaces correctly on all platforms
+      const args = [normalizedScriptPath, normalizedTempJsonPath, normalizedOutputPath];
+
+      // Use spawn with array arguments - this properly handles paths with spaces
+      // Do NOT use shell: true as it can cause path splitting issues on Windows
+      // Use pythonProcess instead of process to avoid shadowing global process object
+      const pythonProcess = spawn(pythonPath, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
+        shell: false, // Explicitly set to false to prevent path splitting
       });
 
       let stdout = '';
       let stderr = '';
 
-      process.stdout.on('data', (data) => {
+      pythonProcess.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      process.stderr.on('data', (data) => {
+      pythonProcess.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      process.on('close', async (code) => {
+      pythonProcess.on('close', async (code) => {
         // Clean up temp file
         try {
           await fs.unlink(tempJsonPath);
@@ -162,7 +173,7 @@ export async function generateAuditReport(
         }
       });
 
-      process.on('error', async (error) => {
+      pythonProcess.on('error', async (error) => {
         // Clean up temp file
         try {
           await fs.unlink(tempJsonPath);
