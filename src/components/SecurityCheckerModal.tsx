@@ -490,17 +490,6 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                               className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
                             />
                           </div>
-                          <div className="flex items-end">
-                            <label className="flex items-center gap-3 text-sm text-gray-300 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={settings.includeSecurityAudit}
-                                onChange={(e) => setSettings({ ...settings, includeSecurityAudit: e.target.checked })}
-                                className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-purple-600 focus:ring-purple-500"
-                              />
-                              <span className="font-medium">Include Security Audit</span>
-                            </label>
-                          </div>
                         </div>
                       </motion.div>
                     )}
