@@ -12,6 +12,8 @@ import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMa
 import { logger, type LogLevel, type LogArgs } from './utils/logger';
 import { loadSettings } from './utils/settings';
 import * as bookmarkStorage from './utils/bookmarkStorage';
+import { auditPDFRedaction } from './utils/pdfRedactionAudit';
+import { generateAuditReport } from './utils/generateAuditReport';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -906,6 +908,141 @@ ipcMain.handle('get-pdf-file-size', async (event, filePath: string) => {
   
   // If we exhausted all retries, throw the last error
   throw new Error(`Failed to get PDF file size after ${maxRetries} attempts: ${lastError?.message || 'File is busy or locked'}`);
+});
+
+// File Security Checker IPC Handler
+ipcMain.handle('audit-pdf-redaction', async (event, pdfPath: string, options?: any) => {
+  try {
+    // Set the progress target to the window that initiated the audit
+    // This will be updated to the detached window if user detaches during audit
+    auditProgressTarget = event.sender;
+    
+    // Create a getter function that returns the current progress target
+    // This allows the progress target to be updated when detaching
+    const getProgressTarget = () => {
+      // Return the current target (may be original or detached window)
+      if (auditProgressTarget && !auditProgressTarget.isDestroyed()) {
+        return auditProgressTarget;
+      }
+      // Fallback to original sender if target is destroyed
+      if (!event.sender.isDestroyed()) {
+        return event.sender;
+      }
+      return null;
+    };
+    
+    // Pass the getter function so progress updates can be redirected
+    const result = await auditPDFRedaction(pdfPath, { 
+      ...options, 
+      event,
+      getProgressTarget 
+    });
+    
+    // If audit completed and there's a detached window that should receive the result,
+    // send it to the detached window before clearing the target
+    const currentTarget = auditProgressTarget;
+    logger.info('Audit completed, checking if result should be sent to detached window', {
+      hasCurrentTarget: !!currentTarget,
+      currentTargetDestroyed: currentTarget ? currentTarget.isDestroyed() : 'N/A',
+      currentTargetId: currentTarget ? currentTarget.id : 'N/A',
+      eventSenderId: event.sender.id,
+      isDifferentWindow: currentTarget !== event.sender,
+      pdfAuditWindowExists: !!pdfAuditWindow,
+      pdfAuditWindowId: pdfAuditWindow ? pdfAuditWindow.webContents.id : 'N/A',
+    });
+    
+    // Check if there's a detached window that should receive the result
+    // Try multiple strategies to ensure the result is delivered
+    let resultSent = false;
+    
+    // Strategy 1: Send to current progress target if it's valid and different from sender
+    if (currentTarget && !currentTarget.isDestroyed() && currentTarget !== event.sender) {
+      logger.info('Sending audit result to detached window (via progress target)', { targetId: currentTarget.id });
+      try {
+        currentTarget.send('audit-result', result);
+        logger.info('Audit result sent successfully to detached window');
+        resultSent = true;
+      } catch (error) {
+        logger.error('Failed to send audit result to detached window:', error);
+      }
+    }
+    
+    // Strategy 2: Send to pdfAuditWindow if it exists and is different from sender
+    if (!resultSent && pdfAuditWindow && !pdfAuditWindow.isDestroyed() && pdfAuditWindow.webContents !== event.sender) {
+      logger.info('Sending audit result to pdfAuditWindow (fallback)', { windowId: pdfAuditWindow.webContents.id });
+      try {
+        pdfAuditWindow.webContents.send('audit-result', result);
+        logger.info('Audit result sent successfully to pdfAuditWindow');
+        resultSent = true;
+      } catch (error) {
+        logger.error('Failed to send audit result to pdfAuditWindow:', error);
+      }
+    }
+    
+    // Strategy 3: Store as pending result if no window is available
+    // This will be sent when a new window is created or when window becomes ready
+    if (!resultSent) {
+      logger.info('No detached window available, storing result as pending', {
+        hasCurrentTarget: !!currentTarget,
+        currentTargetDestroyed: currentTarget ? currentTarget.isDestroyed() : 'N/A',
+        hasPdfAuditWindow: !!pdfAuditWindow,
+        pdfAuditWindowDestroyed: pdfAuditWindow ? pdfAuditWindow.isDestroyed() : 'N/A',
+      });
+      pendingAuditResult = { result, timestamp: Date.now() };
+      // Clear pending result after 30 seconds to prevent memory leaks
+      setTimeout(() => {
+        if (pendingAuditResult && Date.now() - pendingAuditResult.timestamp > 30000) {
+          logger.info('Clearing stale pending audit result');
+          pendingAuditResult = null;
+        }
+      }, 30000);
+    }
+    
+    // Clear progress target when audit completes
+    auditProgressTarget = null;
+    return result;
+  } catch (error) {
+    logger.error('PDF redaction audit failed:', error);
+    
+    // If there's a detached window, send the error to it as well
+    const currentTarget = auditProgressTarget;
+    if (currentTarget && !currentTarget.isDestroyed() && currentTarget !== event.sender) {
+      logger.info('Sending audit error to detached window');
+      try {
+        currentTarget.send('audit-error', error instanceof Error ? error.message : String(error));
+      } catch (sendError) {
+        logger.error('Failed to send audit error to detached window:', sendError);
+      }
+    }
+    
+    // Clear progress target on error
+    auditProgressTarget = null;
+    throw error;
+  }
+});
+
+// Generate PDF Report IPC Handler
+ipcMain.handle('generate-audit-report', async (event, auditResult: any, outputPath: string) => {
+  try {
+    const result = await generateAuditReport({
+      auditResult,
+      outputPath,
+    });
+    return result;
+  } catch (error) {
+    logger.error('PDF report generation failed:', error);
+    throw error;
+  }
+});
+
+// Show Save Dialog for Report
+ipcMain.handle('show-save-dialog', async (event, options: {
+  title: string;
+  defaultPath: string;
+  filters: Array<{ name: string; extensions: string[] }>;
+}) => {
+  const { dialog } = await import('electron');
+  return await dialog.showSaveDialog(options);
 });
 
 // Archive IPC Handlers
@@ -2910,6 +3047,17 @@ ipcMain.handle('export-text-file', async (event, options: {
 // Create word editor window
 let wordEditorWindow: BrowserWindow | null = null;
 
+// Create PDF audit window
+let pdfAuditWindow: BrowserWindow | null = null;
+
+// Track which window should receive audit progress updates
+// This allows progress to continue when detaching during an audit
+let auditProgressTarget: Electron.WebContents | null = null;
+
+// Store pending audit result in case window is destroyed/reattached
+// This ensures results aren't lost during detach/reattach cycles
+let pendingAuditResult: { result: any; timestamp: number } | null = null;
+
 ipcMain.handle('create-word-editor-window', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }) => {
   try {
     if (wordEditorWindow && !wordEditorWindow.isDestroyed()) {
@@ -3061,6 +3209,213 @@ ipcMain.handle('reattach-word-editor', async (event, options: { content: string;
   } catch (error) {
     logger.error('Failed to reattach word editor window:', error);
     throw new Error(`Failed to reattach word editor window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Create PDF audit window
+ipcMain.handle('create-pdf-audit-window', async (event, options: {
+  pdfPath: string | null;
+  settings: {
+    blackThreshold: number;
+    minOverlapArea: number;
+    minHits: number;
+    includeSecurityAudit: boolean;
+  };
+  showSettings: boolean;
+  result: any | null;
+  isAuditing: boolean;
+  progressMessage: string;
+}) => {
+  try {
+    if (pdfAuditWindow && !pdfAuditWindow.isDestroyed()) {
+      pdfAuditWindow.focus();
+      // If there's a pending result, send it to the existing window
+      if (pendingAuditResult && pdfAuditWindow.webContents) {
+        logger.info('Sending pending audit result to existing window');
+        try {
+          pdfAuditWindow.webContents.send('audit-result', pendingAuditResult.result);
+          pendingAuditResult = null;
+        } catch (error) {
+          logger.error('Failed to send pending result to existing window:', error);
+        }
+      }
+      return;
+    }
+    
+    // Determine preload path
+    let preloadPath: string;
+    if (isDev) {
+      preloadPath = join(__dirname, 'preload.cjs');
+    } else {
+      const appPath = app.getAppPath();
+      preloadPath = join(appPath, 'dist-electron', 'electron', 'preload.cjs');
+    }
+    
+    pdfAuditWindow = new BrowserWindow({
+      width: 1000,
+      height: 700,
+      minWidth: 800,
+      minHeight: 600,
+      backgroundColor: '#0f0f1e',
+      webPreferences: {
+        preload: preloadPath,
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: true,
+        devTools: isDev,
+      },
+      titleBarStyle: 'hiddenInset',
+      frame: true,
+      show: false,
+      title: 'PDF Audit',
+    });
+    
+    // Load the app
+    if (isDev) {
+      pdfAuditWindow.loadURL('http://localhost:5173?audit=detached').catch((err) => {
+        logger.error('Failed to load dev server in PDF audit window:', err);
+      });
+    } else {
+      const appPath = app.getAppPath();
+      pdfAuditWindow.loadFile(join(appPath, 'dist', 'index.html'), { hash: 'audit=detached' }).catch((err) => {
+        logger.error('Failed to load file in PDF audit window:', err);
+      });
+    }
+    
+    pdfAuditWindow.once('ready-to-show', () => {
+      pdfAuditWindow?.show();
+    });
+    
+    pdfAuditWindow.on('closed', () => {
+      // Clear progress target if this was the target window
+      const wasTarget = auditProgressTarget === pdfAuditWindow?.webContents;
+      pdfAuditWindow = null;
+      if (wasTarget) {
+        auditProgressTarget = null;
+      }
+    });
+    
+    // Send initial data to window after it loads
+    pdfAuditWindow.webContents.once('did-finish-load', () => {
+      // If detaching during an audit, redirect progress updates to the detached window
+      // Do this AFTER the window is loaded so it's ready to receive messages
+      if (options.isAuditing && auditProgressTarget && pdfAuditWindow) {
+        logger.info('Redirecting audit progress to detached window (window loaded)');
+        auditProgressTarget = pdfAuditWindow.webContents;
+      }
+      
+      // Check if there's a pending audit result to send
+      // Merge it with the initial data if available
+      const hasPendingResult = !!pendingAuditResult;
+      const resultToSend = pendingAuditResult ? pendingAuditResult.result : options.result;
+      
+      // Small delay to ensure React has mounted
+      setTimeout(() => {
+        logger.info('Sending pdf-audit-data to detached window', {
+          hasPendingResult,
+          hasResult: !!resultToSend,
+        });
+        pdfAuditWindow?.webContents.executeJavaScript(`
+          (function() {
+            const data = {
+              pdfPath: ${options.pdfPath ? JSON.stringify(options.pdfPath) : 'null'},
+              settings: ${JSON.stringify(options.settings)},
+              showSettings: ${JSON.stringify(options.showSettings)},
+              result: ${resultToSend ? JSON.stringify(resultToSend) : 'null'},
+              isAuditing: ${JSON.stringify(options.isAuditing)},
+              progressMessage: ${JSON.stringify(options.progressMessage)}
+            };
+            console.log('Main process: Dispatching pdf-audit-data event', data);
+            // Store data in case listener isn't ready yet
+            window.__pdfAuditInitialData = data;
+            const event = new CustomEvent('pdf-audit-data', {
+              detail: data
+            });
+            window.dispatchEvent(event);
+          })();
+        `).catch((err) => {
+          logger.error('Failed to send data to PDF audit window:', err);
+        });
+        
+        // Also send via IPC if there's a pending result (more reliable)
+        if (hasPendingResult && pdfAuditWindow) {
+          setTimeout(() => {
+            try {
+              const pendingResult = pendingAuditResult;
+              if (pendingResult && pdfAuditWindow && !pdfAuditWindow.isDestroyed()) {
+                pdfAuditWindow.webContents.send('audit-result', pendingResult.result);
+                logger.info('Pending audit result sent via IPC to detached window');
+                pendingAuditResult = null;
+              }
+            } catch (error) {
+              logger.error('Failed to send pending result via IPC:', error);
+            }
+          }, 1000);
+        }
+      }, 500);
+    });
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create PDF audit window:', error);
+    throw new Error(`Failed to create PDF audit window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Reattach PDF audit window
+ipcMain.handle('reattach-pdf-audit', async (event, options: {
+  pdfPath: string | null;
+  settings: {
+    blackThreshold: number;
+    minOverlapArea: number;
+    minHits: number;
+    includeSecurityAudit: boolean;
+  };
+  showSettings: boolean;
+  result: any | null;
+  isAuditing: boolean;
+  progressMessage: string;
+}) => {
+  try {
+    // Get the window that sent the request (the detached audit window)
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    
+    // Send data to main window to reopen the modal
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Execute JavaScript to dispatch custom event in main window
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const event = new CustomEvent('reattach-pdf-audit-data', {
+            detail: {
+              pdfPath: ${options.pdfPath ? JSON.stringify(options.pdfPath) : 'null'},
+              settings: ${JSON.stringify(options.settings)},
+              showSettings: ${JSON.stringify(options.showSettings)},
+              result: ${options.result ? JSON.stringify(options.result) : 'null'},
+              isAuditing: ${JSON.stringify(options.isAuditing)},
+              progressMessage: ${JSON.stringify(options.progressMessage)}
+            }
+          });
+          window.dispatchEvent(event);
+        })();
+      `).catch((err) => {
+        logger.error('Failed to send reattach data to main window:', err);
+      });
+    }
+
+    // Close the detached window (the one that sent the request)
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    
+    // Also clear the pdfAuditWindow reference if it matches
+    if (pdfAuditWindow === senderWindow) {
+      pdfAuditWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach PDF audit window:', error);
+    throw new Error(`Failed to reattach PDF audit window: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 

@@ -1,0 +1,10 @@
+# PDF Overlay Redaction Risk Checker - Dependencies
+
+# Core PDF processing library
+pymupdf>=1.23.0
+
+# Advanced security checks (optional but recommended)
+pikepdf>=8.0.0
+
+# Note: PyMuPDF (imported as 'fitz') is required for basic functionality.
+# pikepdf enables advanced security checks (layers, JavaScript, actions, thumbnails).

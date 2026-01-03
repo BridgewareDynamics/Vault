@@ -3,6 +3,7 @@ import { ToastProvider, useToast } from './components/Toast/ToastContext';
 import { ToastContainer } from './components/Toast/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { WelcomeScreen } from './components/WelcomeScreen';
+import { SecurityCheckerModal } from './components/SecurityCheckerModal';
 import { ProgressBar } from './components/ProgressBar';
 import { Gallery } from './components/Gallery';
 import { ImageViewer } from './components/ImageViewer';
@@ -18,6 +19,7 @@ import { SettingsProvider, useSettingsContext } from './utils/settingsContext';
 import { getMemoryManager } from './utils/memoryManager';
 import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext';
 import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
+import { DetachedSecurityChecker } from './components/DetachedSecurityChecker';
 import './App.css';
 
 function AppContent() {
@@ -28,6 +30,20 @@ function AppContent() {
   const [saveToZip, setSaveToZip] = useState(false);
   const [, setFolderName] = useState<string | undefined>(undefined);
   const [showArchive, setShowArchive] = useState(false);
+  const [showSecurityChecker, setShowSecurityChecker] = useState(false);
+
+  // Listen for reattach data from detached PDF audit window
+  useEffect(() => {
+    const handleReattach = () => {
+      // Open the security checker modal when reattaching
+      setShowSecurityChecker(true);
+    };
+
+    window.addEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+    return () => {
+      window.removeEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+    };
+  }, []);
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
@@ -38,6 +54,7 @@ function AppContent() {
   // In dev mode, it's a query param: ?editor=detached
   // In production, it's a hash: #editor=detached
   const [isDetachedEditor, setIsDetachedEditor] = useState(false);
+  const [isDetachedAudit, setIsDetachedAudit] = useState(false);
 
   // Check for detached editor mode on mount and after window loads
   // This needs to run after the window is fully loaded because hash might not be available immediately
@@ -46,9 +63,13 @@ function AppContent() {
       const search = window.location.search || '';
       const hash = window.location.hash || '';
       const isDetached = search.includes('editor=detached') || hash.includes('editor=detached');
+      const isAuditDetached = search.includes('audit=detached') || hash.includes('audit=detached');
       
       if (isDetached !== isDetachedEditor) {
         setIsDetachedEditor(isDetached);
+      }
+      if (isAuditDetached !== isDetachedAudit) {
+        setIsDetachedAudit(isAuditDetached);
       }
     };
     
@@ -69,7 +90,7 @@ function AppContent() {
       window.removeEventListener('hashchange', checkDetached);
       window.removeEventListener('load', checkDetached);
     };
-  }, [isDetachedEditor]);
+  }, [isDetachedEditor, isDetachedAudit]);
 
   // Check if Electron API is available
   useEffect(() => {
@@ -77,6 +98,15 @@ function AppContent() {
       logger.warn('Electron API not available - running in browser mode');
     }
   }, []);
+
+  // If in detached audit mode, show only the audit component
+  const shouldShowDetachedAudit = isDetachedAudit || 
+    window.location.search.includes('audit=detached') || 
+    window.location.hash.includes('audit=detached');
+  
+  if (shouldShowDetachedAudit) {
+    return <DetachedSecurityChecker />;
+  }
 
   // If in detached editor mode, show only the editor
   // Use direct check as fallback in case state hasn't updated yet (for production builds)
@@ -312,10 +342,15 @@ function AppContent() {
           <WelcomeScreen 
             onSelectFile={handleSelectFile}
             onOpenArchive={() => setShowArchive(true)}
+            onOpenSecurityChecker={() => setShowSecurityChecker(true)}
           />
         </div>
         <ToastContainer />
         <SettingsPanel hideWordEditorButton={true} />
+        <SecurityCheckerModal
+          isOpen={showSecurityChecker}
+          onClose={() => setShowSecurityChecker(false)}
+        />
       </>
     );
   }

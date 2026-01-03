@@ -1,0 +1,140 @@
+filename,status,javascript_count,javascript_summary,full_details
+"Davies v. Indyke, No. 119-cv-10788 (S.D.N.Y. 2019)____031.pdf",NO_JS,0,No JavaScript found,
+"Davies v. Indyke, No. 119-cv-10788 (S.D.N.Y. 2019)____044.pdf",EXTRACTED,3,"document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(thi; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(ADB; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa","[
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkStrings"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(this.ADBE'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 639\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkVars"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(ADBE.Read'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 287\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0200_VersChkCode_XFACheck"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa_insta'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 414\n})>""
+  }
+]"
+"Doe v. Indyke, No. 119-cv-11869 (S.D.N.Y. 2019)____024.pdf",NO_JS,0,No JavaScript found,
+"Doe v. Indyke, No. 119-cv-11869 (S.D.N.Y. 2019)____034.pdf",EXTRACTED,3,"document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(thi; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(ADB; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa","[
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkStrings"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(this.ADBE'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 639\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkVars"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(ADBE.Read'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 287\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0200_VersChkCode_XFACheck"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa_insta'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 414\n})>""
+  }
+]"
+"Doe v. Indyke, No. 119-cv-11869 (S.D.N.Y. 2019)____035.pdf",EXTRACTED,3,"document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(thi; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(ADB; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa","[
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkStrings"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(this.ADBE'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 639\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkVars"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(ADBE.Read'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 287\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0200_VersChkCode_XFACheck"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa_insta'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 414\n})>""
+  }
+]"
+"Doe v. Indyke, No. 119-cv-11869 (S.D.N.Y. 2019)____036.pdf",EXTRACTED,3,"document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(thi; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(ADB; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa","[
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkStrings"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(this.ADBE'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 639\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkVars"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(ADBE.Read'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 287\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0200_VersChkCode_XFACheck"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa_insta'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 414\n})>""
+  }
+]"
+"Farmer v. Indyke, No. 119-cv-10474 (S.D.N.Y. 2019)____023.pdf",NO_JS,0,No JavaScript found,
+"VE v. Nine East 71st Street, No. 119-cv-07625 (S.D.N.Y. 2019)____034.pdf",EXTRACTED,3,"document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(thi; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(ADB; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa","[
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkStrings"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(this.ADBE'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 639\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkVars"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(ADBE.Read'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 287\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0200_VersChkCode_XFACheck"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa_insta'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 414\n})>""
+  }
+]"
+"VE v. Nine East 71st Street, No. 119-cv-07625 (S.D.N.Y. 2019)____057.pdf",EXTRACTED,3,"document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(thi; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(ADB; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa","[
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkStrings"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(this.ADBE'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 639\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkVars"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(ADBE.Read'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 287\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0200_VersChkCode_XFACheck"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa_insta'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 414\n})>""
+  }
+]"
+"VE v. Nine East 71st Street, No. 119-cv-07625 (S.D.N.Y. 2019)____068.pdf",EXTRACTED,3,"document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(thi; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(ADB; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa","[
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkStrings"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(this.ADBE'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 639\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkVars"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(ADBE.Read'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 287\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0200_VersChkCode_XFACheck"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa_insta'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 414\n})>""
+  }
+]"
+"VE v. Nine East 71st Street, No. 119-cv-07625 (S.D.N.Y. 2019)____069.pdf",EXTRACTED,3,"document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(thi; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(ADB; document_javascript: <pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa","[
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkStrings"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(this.ADBE'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 639\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0100_VersChkVars"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(ADBE.Read'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 287\n})>""
+  },
+  {
+    ""type"": ""document_javascript"",
+    ""name"": ""!ADBE::0200_VersChkCode_XFACheck"",
+    ""code"": ""<pikepdf.Stream(owner=<...>, data=b'if (typeof(xfa_insta'..., {\n  \""/Filter\"": \""/FlateDecode\"",\n  \""/Length\"": 414\n})>""
+  }
+]"

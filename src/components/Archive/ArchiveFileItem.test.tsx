@@ -317,6 +317,77 @@ describe('ArchiveFileItem', () => {
     
     expect(screen.queryByLabelText('Rename file')).not.toBeInTheDocument();
   });
+
+  it('should show PDF options dropdown when only onRunAudit is provided', async () => {
+    const user = userEvent.setup();
+    const mockOnRunAudit = vi.fn();
+    const file = createMockFile({ type: 'pdf' });
+    render(
+      <ArchiveFileItem
+        file={file}
+        onClick={mockOnClick}
+        onRunAudit={mockOnRunAudit}
+      />
+    );
+    
+    const optionsButton = screen.getByLabelText('PDF options');
+    await user.click(optionsButton);
+    
+    await waitFor(() => {
+      expect(screen.getByText('PDF Audit')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Start Page Extraction')).not.toBeInTheDocument();
+  });
+
+  it('should call onRunAudit when PDF Audit is clicked from dropdown', async () => {
+    const user = userEvent.setup();
+    const mockOnRunAudit = vi.fn();
+    const file = createMockFile({ type: 'pdf' });
+    render(
+      <ArchiveFileItem
+        file={file}
+        onClick={mockOnClick}
+        onExtract={mockOnExtract}
+        onRunAudit={mockOnRunAudit}
+      />
+    );
+    
+    const optionsButton = screen.getByLabelText('PDF options');
+    await user.click(optionsButton);
+    
+    await waitFor(() => {
+      expect(screen.getByText('PDF Audit')).toBeInTheDocument();
+    });
+    
+    const auditButton = screen.getByText('PDF Audit');
+    await user.click(auditButton);
+    
+    expect(mockOnRunAudit).toHaveBeenCalledTimes(1);
+    expect(mockOnExtract).not.toHaveBeenCalled();
+    expect(mockOnClick).not.toHaveBeenCalled();
+  });
+
+  it('should show both PDF Audit and Start Page Extraction in dropdown when both callbacks are provided', async () => {
+    const user = userEvent.setup();
+    const mockOnRunAudit = vi.fn();
+    const file = createMockFile({ type: 'pdf' });
+    render(
+      <ArchiveFileItem
+        file={file}
+        onClick={mockOnClick}
+        onExtract={mockOnExtract}
+        onRunAudit={mockOnRunAudit}
+      />
+    );
+    
+    const optionsButton = screen.getByLabelText('PDF options');
+    await user.click(optionsButton);
+    
+    await waitFor(() => {
+      expect(screen.getByText('PDF Audit')).toBeInTheDocument();
+      expect(screen.getByText('Start Page Extraction')).toBeInTheDocument();
+    });
+  });
 });
 
 
