@@ -2,7 +2,7 @@
 
 ## Summary
 
-Applied the working code signing configuration from the VidCap app to fix code signing issues in PDFtract. The solution disables code signing completely and prevents electron-builder from attempting to download/extract the winCodeSign archive that causes symlink permission errors on Windows.
+Applied the working code signing configuration from the VidCap app to fix code signing issues in The Vault. The solution disables code signing completely and prevents electron-builder from attempting to download/extract the winCodeSign archive that causes symlink permission errors on Windows.
 
 ## Changes Made
 
