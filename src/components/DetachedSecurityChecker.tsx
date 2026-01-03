@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Shield, Minimize2, FileText, AlertTriangle, CheckCircle, Loader2, Upload, Settings, Download, Zap, Lock, Eye } from 'lucide-react';
+import { Shield, Minimize2, FileText, AlertTriangle, CheckCircle, Loader2, Upload, Settings, Download, Zap, Lock, Eye, FolderOpen } from 'lucide-react';
 import { useRedactionAudit, RedactionAuditResult } from '../hooks/useRedactionAudit';
 import { useToast } from './Toast/ToastContext';
+import { CaseSelectionDialog } from './Archive/CaseSelectionDialog';
 
 interface PdfAuditState {
   pdfPath: string | null;
@@ -30,6 +31,7 @@ export function DetachedSecurityChecker() {
   const toast = useToast();
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isReattaching, setIsReattaching] = useState(false);
+  const [showCaseSelectionDialog, setShowCaseSelectionDialog] = useState(false);
   
   // Local state for audit when detaching during an audit
   const [localIsAuditing, setLocalIsAuditing] = useState(false);
@@ -262,14 +264,10 @@ export function DetachedSecurityChecker() {
     }
   };
 
-  const handleDownloadReport = async () => {
-    if (!finalResult || !window.electronAPI) return;
-
-    setIsGeneratingReport(true);
-    const toastId = toast.info('Preparing report...', 0);
-
-    try {
-      const auditResult = {
+  // Helper function to format audit result for report generation
+  const formatAuditResult = () => {
+    if (!finalResult) throw new Error('No audit result available');
+    return {
         tool: "PDF Overlay Redaction Risk Checker",
         summary: {
           total_pdfs: 1,
@@ -329,11 +327,74 @@ export function DetachedSecurityChecker() {
             notes: finalResult.security.notes || [],
           } : null,
         }],
-      };
+    };
+  };
 
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-      const baseFilename = finalResult.filename.replace(/\.pdf$/i, '');
-      const defaultFilename = `${baseFilename}_security_audit_${timestamp}.pdf`;
+  // Helper function to generate report filename
+  const generateReportFilename = (baseFilename: string) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const nameWithoutExt = baseFilename.replace(/\.pdf$/i, '');
+    return `${nameWithoutExt}_security_audit_${timestamp}.pdf`;
+  };
+
+  const handleSaveToCaseFolder = async (selectedCasePath?: string) => {
+    if (!finalResult || !window.electronAPI) return;
+
+    if (!selectedCasePath) {
+      // Show case selection dialog if no case path is provided
+      setShowCaseSelectionDialog(true);
+      return;
+    }
+
+    setIsGeneratingReport(true);
+    const toastId = toast.info('Saving report to case folder...', 0);
+
+    try {
+      // Format audit result for report generation
+      const auditResult = formatAuditResult();
+
+      // Generate filename
+      const reportFilename = generateReportFilename(finalResult.filename);
+
+      // Construct full path (use / as separator, main process will handle it)
+      const reportPath = `${selectedCasePath}/${reportFilename}`;
+
+      toast.updateToast(toastId, 'Generating PDF report...', 'info');
+
+      // Generate report directly to case folder
+      const reportResult = await window.electronAPI.generateAuditReport(auditResult, reportPath);
+
+      if (reportResult.success) {
+        toast.dismissToast(toastId);
+        toast.success('Report saved to case folder!', 3000);
+      } else {
+        throw new Error(reportResult.error || 'Failed to generate report');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save report';
+      toast.dismissToast(toastId);
+      toast.error(`Report save failed: ${message}`, 5000);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const handleCaseSelected = (casePath: string) => {
+    handleSaveToCaseFolder(casePath);
+  };
+
+  const handleDownloadReport = async () => {
+    if (!finalResult || !window.electronAPI) return;
+
+    setIsGeneratingReport(true);
+    const toastId = toast.info('Preparing report...', 0);
+
+    try {
+      // Format audit result for report generation
+      const auditResult = formatAuditResult();
+
+      // Generate filename
+      const defaultFilename = generateReportFilename(finalResult.filename);
 
       const saveResult = await window.electronAPI.showSaveDialog({
         title: 'Save Security Audit Report',
@@ -592,23 +653,43 @@ export function DetachedSecurityChecker() {
                           <p className="text-sm text-gray-400">{result?.totalPages || 0} pages analyzed</p>
                         </div>
                       </div>
-                      <button
-                        onClick={handleDownloadReport}
-                        disabled={isGeneratingReport}
-                        className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl"
-                      >
-                        {isGeneratingReport ? (
-                          <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>Generating...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-5 h-5" />
-                            <span>Download Report</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleSaveToCaseFolder()}
+                          disabled={isGeneratingReport}
+                          className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl"
+                          title="Save report to a case"
+                        >
+                          {isGeneratingReport ? (
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              <span>Generating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FolderOpen className="w-5 h-5" />
+                              <span>Save to Case</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={handleDownloadReport}
+                          disabled={isGeneratingReport}
+                          className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl"
+                        >
+                          {isGeneratingReport ? (
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              <span>Generating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-5 h-5" />
+                              <span>Download Report</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Summary Card */}
@@ -1035,6 +1116,13 @@ export function DetachedSecurityChecker() {
           </div>
         </div>
       </div>
+
+      {/* Case Selection Dialog */}
+      <CaseSelectionDialog
+        isOpen={showCaseSelectionDialog}
+        onClose={() => setShowCaseSelectionDialog(false)}
+        onSelectCase={handleCaseSelected}
+      />
     </div>
   );
 }

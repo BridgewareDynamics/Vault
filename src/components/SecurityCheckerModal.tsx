@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, X, FileText, AlertTriangle, CheckCircle, Loader2, Upload, Settings, Download, Maximize2, Zap, Lock, FolderOpen } from 'lucide-react';
 import { useRedactionAudit, RedactionAuditResult } from '../hooks/useRedactionAudit';
 import { useToast } from './Toast/ToastContext';
+import { CaseSelectionDialog } from './Archive/CaseSelectionDialog';
 
 interface SecurityCheckerModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
   const { isAuditing, result, progressMessage, auditPDF, setResult } = useRedactionAudit();
   const toast = useToast();
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [showCaseSelectionDialog, setShowCaseSelectionDialog] = useState(false);
 
   const handleSelectFile = async () => {
     try {
@@ -277,8 +279,15 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
     }
   };
 
-  const handleSaveToCaseFolder = async () => {
-    if (!result || !caseFolderPath || !window.electronAPI) return;
+  const handleSaveToCaseFolder = async (selectedCasePath?: string) => {
+    if (!result || !window.electronAPI) return;
+
+    const targetCasePath = selectedCasePath || caseFolderPath;
+    if (!targetCasePath) {
+      // Show case selection dialog if no case path is provided
+      setShowCaseSelectionDialog(true);
+      return;
+    }
 
     setIsGeneratingReport(true);
     const toastId = toast.info('Saving report to case folder...', 0);
@@ -291,7 +300,7 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
       const reportFilename = generateReportFilename(result.filename);
 
       // Construct full path (use / as separator, main process will handle it)
-      const reportPath = `${caseFolderPath}/${reportFilename}`;
+      const reportPath = `${targetCasePath}/${reportFilename}`;
 
       toast.updateToast(toastId, 'Generating PDF report...', 'info');
 
@@ -316,6 +325,10 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
     } finally {
       setIsGeneratingReport(false);
     }
+  };
+
+  const handleCaseSelected = (casePath: string) => {
+    handleSaveToCaseFolder(casePath);
   };
 
   return (
@@ -560,26 +573,24 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
-                            {caseFolderPath && (
-                              <button
-                                onClick={handleSaveToCaseFolder}
-                                disabled={isGeneratingReport}
-                                className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-sm"
-                                title="Save report to case folder"
-                              >
-                                {isGeneratingReport ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Generating...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <FolderOpen className="w-4 h-4" />
-                                    <span>Save to Case Folder</span>
-                                  </>
-                                )}
-                              </button>
-                            )}
+                            <button
+                              onClick={() => handleSaveToCaseFolder()}
+                              disabled={isGeneratingReport}
+                              className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-sm"
+                              title={caseFolderPath ? "Save report to current case folder" : "Save report to a case"}
+                            >
+                              {isGeneratingReport ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <span>Generating...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <FolderOpen className="w-4 h-4" />
+                                  <span>{caseFolderPath ? 'Save to Current Case' : 'Save to Case'}</span>
+                                </>
+                              )}
+                            </button>
                             <button
                               onClick={handleDownloadReport}
                               disabled={isGeneratingReport}
@@ -1024,6 +1035,13 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
           </motion.div>
         </>
       )}
+
+      {/* Case Selection Dialog */}
+      <CaseSelectionDialog
+        isOpen={showCaseSelectionDialog}
+        onClose={() => setShowCaseSelectionDialog(false)}
+        onSelectCase={handleCaseSelected}
+      />
     </AnimatePresence>
   );
 }
