@@ -4,7 +4,50 @@ This directory contains comprehensive research and analysis for adding networkin
 
 ## 📄 Documents
 
-### 1. [NETWORKING_RESEARCH.md](./NETWORKING_RESEARCH.md)
+### 1. [QUICK_REFERENCE.md](./QUICK_REFERENCE.md)
+**One-Page Quick Reference** - Essential Info at a Glance
+
+A condensed reference guide covering:
+- Decision matrix with recommendations
+- Technology comparison table
+- Implementation phases summary
+- API quick reference
+- Deployment options comparison
+- Security checklist
+- Common Q&A
+
+**Audience:** Everyone - start here!
+
+**Use this for:**
+- Quick decision making
+- At-a-glance comparisons
+- Common questions
+- Getting started
+
+---
+
+### 2. [NETWORKING_DISCUSSION_STARTER.md](./NETWORKING_DISCUSSION_STARTER.md)
+**Community Discussion Guide** - Concise & Accessible
+
+A friendly, discussion-oriented version covering:
+- Overview of proposed server architecture
+- Key decision points
+- Pros/cons of each option
+- Community questions
+- Recommended approach with rationale
+- Timeline and phases
+
+**Audience:** Community members, stakeholders, product managers
+
+**Use this for:**
+- Starting GitHub Discussions thread
+- Gathering community feedback
+- Non-technical stakeholder reviews
+- Quick decision making
+
+---
+
+### 3. [NETWORKING_RESEARCH.md](./NETWORKING_RESEARCH.md)
 **Comprehensive Technical Analysis** - 60+ pages
 
 A deep-dive technical document covering:
@@ -31,27 +74,6 @@ A deep-dive technical document covering:
 
 ---
 
-### 2. [NETWORKING_DISCUSSION_STARTER.md](./NETWORKING_DISCUSSION_STARTER.md)
-**Community Discussion Guide** - Concise & Accessible
-
-A friendly, discussion-oriented version covering:
-- Overview of proposed server architecture
-- Key decision points
-- Pros/cons of each option
-- Community questions
-- Recommended approach with rationale
-- Timeline and phases
-
-**Audience:** Community members, stakeholders, product managers
-
-**Use this for:**
-- Starting GitHub Discussions thread
-- Gathering community feedback
-- Non-technical stakeholder reviews
-- Quick decision making
-
----
-
 ## 🎯 Quick Summary
 
 **Current State:**
@@ -74,6 +96,7 @@ A friendly, discussion-oriented version covering:
 ## 📋 Next Steps
 
 1. **Review Documents**
+   - Start with QUICK_REFERENCE.md for overview
    - Read NETWORKING_RESEARCH.md for technical details
    - Review NETWORKING_DISCUSSION_STARTER.md for discussion points
 
@@ -98,10 +121,11 @@ A friendly, discussion-oriented version covering:
 ## 🤝 Contributing
 
 Have ideas or feedback? Please:
-1. Read both documents to understand the context
-2. Join the GitHub Discussion (link TBD)
-3. Share your use case and requirements
-4. Provide constructive feedback
+1. Start with QUICK_REFERENCE.md to understand the basics
+2. Read the full documents to understand the context
+3. Join the GitHub Discussion (link TBD)
+4. Share your use case and requirements
+5. Provide constructive feedback
 
 ---
 
