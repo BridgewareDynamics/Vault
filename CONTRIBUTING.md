@@ -89,6 +89,26 @@ Before you begin, ensure you have the following installed:
    npm run build:all
    ```
 
+### Branch Structure
+
+The repository uses a three-tier branch structure to manage development, staging, and production releases:
+
+- **main**: Production/stable releases - contains the latest stable code
+- **prerelease**: Pre-production staging and testing - contains code ready for release testing
+- **dev**: Development branch - contains the latest development work and where feature branches are merged
+
+**Workflow:**
+1. Feature branches are created from and merged into `dev` via pull requests
+2. When ready for testing, `dev` is merged into `prerelease` via pull request (PR required by branch protection rules)
+3. When ready for production, `prerelease` is merged into `main` via pull request (PR required by branch protection rules)
+
+**For contributors:**
+- Create feature branches from `dev`
+- Submit pull requests targeting the `dev` branch
+- Keep your feature branch up to date with `dev` (not `main`)
+
+**Note**: Branch protection rules require pull requests for all merges between branches (`dev` → `prerelease` and `prerelease` → `main`). Direct pushes to these branches are not permitted.
+
 ## Code Style Guidelines
 
 ### TypeScript
@@ -286,10 +306,10 @@ npm run test:coverage:ci
 
 1. **Update your branch**
    ```bash
-   git checkout main
-   git pull origin main
+   git checkout dev
+   git pull origin dev
    git checkout your-branch
-   git rebase main
+   git rebase dev
    ```
 
 2. **Run all checks**
@@ -311,6 +331,7 @@ npm run test:coverage:ci
    ```
 
 2. **Create PR on GitHub**
+   - Target the `dev` branch (not `main` or `prerelease`)
    - Use a descriptive title
    - Fill out the PR template (if available)
    - Reference any related issues

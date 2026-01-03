@@ -119,16 +119,52 @@ This document tracks the implementation of all critical blockers for v1.0 releas
 
 ## 🚀 Release Process
 
-1. Update version in `package.json` (e.g., `1.0.0-prerelease.1` for prerelease)
-2. Create a git tag: `git tag v1.0.0-prerelease.1` (or `v1.0.0` for stable release)
-3. Push tag: `git push origin v1.0.0-prerelease.1`
-4. GitHub Actions will automatically:
+The repository uses a three-tier branch structure: **main → prerelease → dev**
+
+- **dev**: Development branch (feature branches merge here)
+- **prerelease**: Pre-production staging (merged from dev when ready for testing)
+- **main**: Production releases (merged from prerelease when ready for release)
+
+**Branch Protection**: Pull requests are required to merge `dev` → `prerelease` and `prerelease` → `main`. Direct pushes to these branches are not permitted.
+
+### Creating a Release
+
+#### Promoting from dev to prerelease
+
+1. **Create a pull request** from `dev` to `prerelease`
+2. **Review and merge** the PR (required by branch protection rules)
+3. Once merged, proceed with tagging from `prerelease` branch (see below)
+
+#### Promoting from prerelease to main
+
+1. **Create a pull request** from `prerelease` to `main`
+2. **Review and merge** the PR (required by branch protection rules)
+3. Once merged, proceed with tagging from `main` branch (see below)
+
+#### Creating Release Tags
+
+1. **Ensure code is in the target branch**: Code should be in `prerelease` for prerelease tags or `main` for stable release tags
+2. **Update version in `package.json`** (e.g., `1.0.0-prerelease.1` for prerelease, `1.0.0` for stable release)
+3. **Create a git tag** from the appropriate branch:
+   ```bash
+   # For prerelease (tag from prerelease branch)
+   git checkout prerelease
+   git tag v1.0.0-prerelease.1
+   git push origin v1.0.0-prerelease.1
+   
+   # For stable release (tag from main branch)
+   git checkout main
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+4. **GitHub Actions will automatically**:
    - Build installers for all platforms
    - Sign installers (if certificates configured)
    - Create a GitHub Release
    - Upload artifacts
 
-Or trigger manually:
+### Manual Workflow Trigger
+
 1. Go to Actions → Build and Release → Run workflow
 2. Select platform and run
 
