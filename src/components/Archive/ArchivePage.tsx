@@ -546,6 +546,13 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     setShowSecurityChecker(true);
   };
 
+  const handleReportSaved = () => {
+    // Refresh files to show the newly saved report
+    if (currentCase) {
+      refreshFiles();
+    }
+  };
+
   const [pendingExtraction, setPendingExtraction] = useState<{
     folderName: string;
     folderPath?: string;
@@ -1635,6 +1642,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
           setPdfPathForAudit(null);
         }}
         initialPdfPath={pdfPathForAudit}
+        caseFolderPath={currentCase?.path || null}
+        onReportSaved={handleReportSaved}
       />
     </div>
   );

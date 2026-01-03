@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, X, FileText, AlertTriangle, CheckCircle, Loader2, Upload, Settings, Download, Maximize2, Zap, Lock } from 'lucide-react';
+import { Shield, X, FileText, AlertTriangle, CheckCircle, Loader2, Upload, Settings, Download, Maximize2, Zap, Lock, FolderOpen } from 'lucide-react';
 import { useRedactionAudit, RedactionAuditResult } from '../hooks/useRedactionAudit';
 import { useToast } from './Toast/ToastContext';
 
@@ -8,9 +8,11 @@ interface SecurityCheckerModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialPdfPath?: string | null;
+  caseFolderPath?: string | null;
+  onReportSaved?: () => void;
 }
 
-export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath }: SecurityCheckerModalProps) {
+export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFolderPath, onReportSaved }: SecurityCheckerModalProps) {
   const [pdfPath, setPdfPath] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState({
@@ -153,15 +155,10 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath }: Securi
     };
   }, [setResult]);
 
-  const handleDownloadReport = async () => {
-    if (!result || !window.electronAPI) return;
-
-    setIsGeneratingReport(true);
-    const toastId = toast.info('Preparing report...', 0);
-
-    try {
-      // Format audit result for report generation
-      const auditResult = {
+  // Helper function to format audit result for report generation
+  const formatAuditResult = () => {
+    if (!result) throw new Error('No audit result available');
+    return {
         tool: "PDF Overlay Redaction Risk Checker",
         summary: {
           total_pdfs: 1,
@@ -221,12 +218,28 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath }: Securi
             notes: result.security.notes || [],
           } : null,
         }],
-      };
+    };
+  };
+
+  // Helper function to generate report filename
+  const generateReportFilename = (baseFilename: string) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const nameWithoutExt = baseFilename.replace(/\.pdf$/i, '');
+    return `${nameWithoutExt}_security_audit_${timestamp}.pdf`;
+  };
+
+  const handleDownloadReport = async () => {
+    if (!result || !window.electronAPI) return;
+
+    setIsGeneratingReport(true);
+    const toastId = toast.info('Preparing report...', 0);
+
+    try {
+      // Format audit result for report generation
+      const auditResult = formatAuditResult();
 
       // Generate filename
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-      const baseFilename = result.filename.replace(/\.pdf$/i, '');
-      const defaultFilename = `${baseFilename}_security_audit_${timestamp}.pdf`;
+      const defaultFilename = generateReportFilename(result.filename);
 
       // Show save dialog via IPC
       const saveResult = await window.electronAPI.showSaveDialog({
@@ -259,6 +272,47 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath }: Securi
       const message = error instanceof Error ? error.message : 'Failed to generate report';
       toast.dismissToast(toastId);
       toast.error(`Report generation failed: ${message}`, 5000);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const handleSaveToCaseFolder = async () => {
+    if (!result || !caseFolderPath || !window.electronAPI) return;
+
+    setIsGeneratingReport(true);
+    const toastId = toast.info('Saving report to case folder...', 0);
+
+    try {
+      // Format audit result for report generation
+      const auditResult = formatAuditResult();
+
+      // Generate filename
+      const reportFilename = generateReportFilename(result.filename);
+
+      // Construct full path (use / as separator, main process will handle it)
+      const reportPath = `${caseFolderPath}/${reportFilename}`;
+
+      toast.updateToast(toastId, 'Generating PDF report...', 'info');
+
+      // Generate report directly to case folder
+      const reportResult = await window.electronAPI.generateAuditReport(auditResult, reportPath);
+
+      if (reportResult.success) {
+        toast.dismissToast(toastId);
+        toast.success('Report saved to case folder!', 3000);
+        
+        // Notify parent component that report was saved (for refreshing file list)
+        if (onReportSaved) {
+          onReportSaved();
+        }
+      } else {
+        throw new Error(reportResult.error || 'Failed to generate report');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save report';
+      toast.dismissToast(toastId);
+      toast.error(`Report save failed: ${message}`, 5000);
     } finally {
       setIsGeneratingReport(false);
     }
@@ -516,23 +570,45 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath }: Securi
                               <p className="text-xs text-gray-400">{result.totalPages} pages analyzed</p>
                             </div>
                           </div>
-                          <button
-                            onClick={handleDownloadReport}
-                            disabled={isGeneratingReport}
-                            className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-sm"
-                          >
-                            {isGeneratingReport ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>Generating...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Download className="w-4 h-4" />
-                                <span>Download Report</span>
-                              </>
+                          <div className="flex items-center gap-3">
+                            {caseFolderPath && (
+                              <button
+                                onClick={handleSaveToCaseFolder}
+                                disabled={isGeneratingReport}
+                                className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-sm"
+                                title="Save report to case folder"
+                              >
+                                {isGeneratingReport ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span>Generating...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <FolderOpen className="w-4 h-4" />
+                                    <span>Save to Case Folder</span>
+                                  </>
+                                )}
+                              </button>
                             )}
-                          </button>
+                            <button
+                              onClick={handleDownloadReport}
+                              disabled={isGeneratingReport}
+                              className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-sm"
+                            >
+                              {isGeneratingReport ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <span>Generating...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="w-4 h-4" />
+                                  <span>Download Report</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
 
                         {/* Summary Card */}
