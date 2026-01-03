@@ -15,9 +15,10 @@ interface ArchiveFileItemProps {
   onDragEnd?: () => void;
   caseTag?: CategoryTag | null;
   onTagClick?: () => void;
+  onRunAudit?: () => void;
 }
 
-export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd, caseTag, onTagClick }: ArchiveFileItemProps) {
+export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd, caseTag, onTagClick, onRunAudit }: ArchiveFileItemProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLButtonElement>(null);
@@ -189,7 +190,7 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                 <Pencil className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" aria-hidden="true" />
               </button>
             )}
-            {file.type === 'pdf' && onExtract && (
+            {file.type === 'pdf' && (onExtract || onRunAudit) && (
               <button
                 ref={arrowRef}
                 onClick={(e) => {
@@ -223,13 +224,17 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
       </div>
 
       {/* PDF Options Dropdown */}
-      {file.type === 'pdf' && onExtract && showDropdown && (
+      {file.type === 'pdf' && (onExtract || onRunAudit) && showDropdown && (
         <div ref={dropdownRef} className="absolute top-full left-0 right-0 z-50 mt-1">
           <PDFOptionsDropdown
-            onStartExtraction={() => {
+            onStartExtraction={onExtract ? () => {
               setShowDropdown(false);
               onExtract();
-            }}
+            } : undefined}
+            onRunAudit={onRunAudit ? () => {
+              setShowDropdown(false);
+              onRunAudit();
+            } : undefined}
           />
         </div>
       )}

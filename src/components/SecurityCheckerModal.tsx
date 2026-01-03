@@ -7,9 +7,10 @@ import { useToast } from './Toast/ToastContext';
 interface SecurityCheckerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialPdfPath?: string | null;
 }
 
-export function SecurityCheckerModal({ isOpen, onClose }: SecurityCheckerModalProps) {
+export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath }: SecurityCheckerModalProps) {
   const [pdfPath, setPdfPath] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState({
@@ -100,6 +101,16 @@ export function SecurityCheckerModal({ isOpen, onClose }: SecurityCheckerModalPr
       console.error('Detach error:', error);
     }
   };
+
+  // Set initial PDF path when modal opens
+  useEffect(() => {
+    if (isOpen && initialPdfPath) {
+      setPdfPath(initialPdfPath);
+    } else if (!isOpen) {
+      // Clear PDF path when modal closes
+      setPdfPath(null);
+    }
+  }, [isOpen, initialPdfPath]);
 
   // Listen for reattach data from detached window
   useEffect(() => {

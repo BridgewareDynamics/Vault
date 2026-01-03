@@ -23,6 +23,7 @@ import { CategoryTagSelector } from './CategoryTagSelector';
 import { ArchiveFile } from '../../types';
 import { ProgressBar } from '../ProgressBar';
 import { SettingsPanel } from '../Settings/SettingsPanel';
+import { SecurityCheckerModal } from '../SecurityCheckerModal';
 import { logger } from '../../utils/logger';
 import { useWordEditor } from '../../contexts/WordEditorContext';
 
@@ -90,6 +91,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const [tagSelectorFilePath, setTagSelectorFilePath] = useState<string | null>(null);
   const [pendingBookmarkOpen, setPendingBookmarkOpen] = useState<{ pdfPath: string; pageNumber: number } | null>(null);
   const [targetFolderPath, setTargetFolderPath] = useState<string | null>(null);
+  const [showSecurityChecker, setShowSecurityChecker] = useState(false);
+  const [pdfPathForAudit, setPdfPathForAudit] = useState<string | null>(null);
 
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -538,6 +541,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     setShowFolderSelectionDialog(true);
   };
 
+  const handleRunPDFAudit = (file: ArchiveFile) => {
+    setPdfPathForAudit(file.path);
+    setShowSecurityChecker(true);
+  };
+
   const [pendingExtraction, setPendingExtraction] = useState<{
     folderName: string;
     folderPath?: string;
@@ -961,6 +969,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 await deleteFile(item.path);
                               }}
                               onExtract={undefined} // No extraction inside folders
+                              onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
                               onRename={() => {
                                 setFileToRename(item);
                                 setShowRenameDialog(true);
@@ -1215,6 +1224,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                       await deleteFile(item.path);
                                     }}
                                     onExtract={item.type === 'pdf' ? () => handleExtractPDF(item) : undefined}
+                                    onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
                                     onRename={() => {
                                       setFileToRename(item);
                                       setShowRenameDialog(true);
@@ -1365,6 +1375,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   await deleteFile(item.path);
                                 }}
                                 onExtract={() => handleExtractPDF(item)}
+                                onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
                                 onRename={() => {
                                   setFileToRename(item);
                                   setShowRenameDialog(true);
@@ -1401,6 +1412,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   await deleteFile(item.path);
                                 }}
                                 onExtract={undefined}
+                                onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
                                 onRename={() => {
                                   setFileToRename(item);
                                   setShowRenameDialog(true);
@@ -1615,6 +1627,15 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       />
 
       <SettingsPanel />
+
+      <SecurityCheckerModal
+        isOpen={showSecurityChecker}
+        onClose={() => {
+          setShowSecurityChecker(false);
+          setPdfPathForAudit(null);
+        }}
+        initialPdfPath={pdfPathForAudit}
+      />
     </div>
   );
 }
