@@ -41,7 +41,13 @@ Before you begin, ensure you have the following installed:
 
 ### Development Workflow
 
-1. **Create a feature branch**
+1. **Checkout the dev branch** (feature branches should be created from `dev`)
+   ```bash
+   git checkout dev
+   git pull origin dev
+   ```
+
+2. **Create a feature branch**
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -50,7 +56,7 @@ Before you begin, ensure you have the following installed:
    git checkout -b fix/your-bug-fix
    ```
 
-2. **Run the development server**
+3. **Run the development server**
    ```bash
    npm run electron:dev
    ```
@@ -59,12 +65,12 @@ Before you begin, ensure you have the following installed:
    - Start the Vite dev server
    - Launch the Electron application
 
-3. **Make your changes**
+4. **Make your changes**
    - Edit files in `src/` for React components
    - Edit files in `electron/` for main process code
    - The app will hot-reload automatically
 
-4. **Run tests**
+5. **Run tests**
    ```bash
    # Run all tests
    npm run test
@@ -79,12 +85,12 @@ Before you begin, ensure you have the following installed:
    npm run test:coverage
    ```
 
-5. **Check code quality**
+6. **Check code quality**
    ```bash
    npm run lint
    ```
 
-6. **Build for production** (optional, to verify build works)
+7. **Build for production** (optional, to verify build works)
    ```bash
    npm run build:all
    ```
