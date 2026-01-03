@@ -13,7 +13,7 @@ export function PDFOptionsDropdown({ onStartExtraction, onRunAudit }: PDFOptions
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.2 }}
-      className="bg-gray-800 border-2 border-cyber-purple-500/60 rounded-lg shadow-xl overflow-hidden"
+      className="bg-gray-800 border-2 border-cyber-purple-500/60 rounded-lg shadow-xl overflow-hidden min-w-0"
     >
       {onRunAudit && (
         <button
@@ -21,7 +21,7 @@ export function PDFOptionsDropdown({ onStartExtraction, onRunAudit }: PDFOptions
             e.stopPropagation();
             onRunAudit();
           }}
-          className={`w-full px-3 py-2 flex items-center gap-2 text-left hover:bg-gray-700 transition-colors text-white ${onStartExtraction ? 'border-b border-gray-700/50' : ''}`}
+          className={`w-full px-2.5 py-1.5 flex items-center gap-2 text-left hover:bg-gray-700 transition-colors text-white ${onStartExtraction ? 'border-b border-gray-700/50' : ''}`}
         >
           <Shield className="w-3.5 h-3.5 text-cyber-purple-400" />
           <span className="text-xs font-medium">PDF Audit</span>
@@ -33,7 +33,7 @@ export function PDFOptionsDropdown({ onStartExtraction, onRunAudit }: PDFOptions
             e.stopPropagation();
             onStartExtraction();
           }}
-          className="w-full px-3 py-2 flex items-center gap-2 text-left hover:bg-gray-700 transition-colors text-white"
+          className="w-full px-2.5 py-1.5 flex items-center gap-2 text-left hover:bg-gray-700 transition-colors text-white"
         >
           <FileText className="w-3.5 h-3.5 text-cyber-purple-400" />
           <span className="text-xs font-medium">Start Page Extraction</span>

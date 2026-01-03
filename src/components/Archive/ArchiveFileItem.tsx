@@ -87,14 +87,14 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
       transition={{ duration: 0.3 }}
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
-      className="relative cursor-pointer group"
+      className={`relative cursor-pointer group ${showDropdown ? 'mb-16' : ''}`}
       draggable={true}
       onDragStart={handleDragStart as any}
       onDragEnd={handleDragEnd}
     >
       <div
         onClick={onClick}
-        className={`relative rounded-lg overflow-hidden border-2 border-gray-700 hover:border-cyber-purple-500 transition-colors bg-gray-800 ${showDropdown ? 'mb-12' : ''}`}
+        className="relative rounded-lg overflow-hidden border-2 border-gray-700 hover:border-cyber-purple-500 transition-colors bg-gray-800"
       >
         {/* Thumbnail or Icon */}
         <div className="aspect-[3/4] bg-gray-900 relative overflow-hidden">
@@ -225,7 +225,7 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
 
       {/* PDF Options Dropdown */}
       {file.type === 'pdf' && (onExtract || onRunAudit) && showDropdown && (
-        <div ref={dropdownRef} className="absolute top-full left-0 right-0 z-50 mt-1">
+        <div ref={dropdownRef} className="absolute top-full left-0 right-0 z-50 mt-0.5">
           <PDFOptionsDropdown
             onStartExtraction={onExtract ? () => {
               setShowDropdown(false);
