@@ -32,7 +32,11 @@ jobs:
         uses: microsoft/setup-msbuild@v1
 
       - name: Install dependencies
-        run: npm ci --no-optional
+        run: |
+          # Install dependencies without running install scripts (avoids canvas build failure)
+          npm ci --ignore-scripts
+          # Install rollup's platform-specific optional dependency (needed for Vite)
+          npm install @rollup/rollup-win32-x64-msvc --no-save --ignore-scripts
         env:
           # Configure for Electron native module builds
           npm_config_msvs_version: "2022"
