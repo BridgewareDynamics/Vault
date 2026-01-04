@@ -22,8 +22,8 @@ import { ExtractionFolder } from './ExtractionFolder';
 import { CategoryTagSelector } from './CategoryTagSelector';
 import { ArchiveFile } from '../../types';
 import { ProgressBar } from '../ProgressBar';
-import { SettingsPanel } from '../Settings/SettingsPanel';
 import { SecurityCheckerModal } from '../SecurityCheckerModal';
+import { ActionToolbar } from '../ActionToolbar';
 import { logger } from '../../utils/logger';
 import { useWordEditor } from '../../contexts/WordEditorContext';
 
@@ -693,9 +693,12 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                 </button>
               )}
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-purple bg-clip-text text-transparent mb-2">
-              The Vault
-            </h1>
+            <div className="flex items-center gap-4">
+              <h1 className="text-4xl font-bold bg-gradient-purple bg-clip-text text-transparent mb-2">
+                The Vault
+              </h1>
+              <ActionToolbar />
+            </div>
             {currentCase && (
               <div className="flex items-center gap-2 flex-wrap">
                 <button
@@ -1629,8 +1632,6 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               : (currentCase?.categoryTagId || null)
         }
       />
-
-      <SettingsPanel />
 
       <SecurityCheckerModal
         isOpen={showSecurityChecker}

@@ -705,26 +705,27 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       </div>
 
       {/* Status bar */}
-      <div className="px-3 py-2 border-t border-gray-700/50 flex items-center justify-between gap-3 overflow-hidden">
-        {/* Left side: Status text and statistics */}
-        <div className="flex items-center gap-1.5 text-xs flex-nowrap min-w-0 flex-shrink">
-          {hasUnsavedChanges && (
-            <>
-              <span className="text-yellow-400 whitespace-nowrap">Unsaved changes</span>
-              <span className="text-gray-600 text-[10px]">•</span>
-            </>
-          )}
-          <span className="text-gray-400 whitespace-nowrap">
-            {wordCount} {wordCount === 1 ? 'word' : 'words'}
-          </span>
-          <span className="text-gray-600 text-[10px]">•</span>
-          <span className="text-gray-400 whitespace-nowrap">
-            {sentenceCount} {sentenceCount === 1 ? 'sentence' : 'sentences'}
-          </span>
-        </div>
+      <div className="border-t border-gray-700/50">
+        <div className="px-3 py-2 flex items-center justify-between gap-3 overflow-hidden">
+          {/* Left side: Status text and statistics */}
+          <div className="flex items-center gap-1.5 text-xs flex-nowrap min-w-0 flex-shrink">
+            {hasUnsavedChanges && (
+              <>
+                <span className="text-yellow-400 whitespace-nowrap">Unsaved changes</span>
+                <span className="text-gray-600 text-[10px]">•</span>
+              </>
+            )}
+            <span className="text-gray-400 whitespace-nowrap">
+              {wordCount} {wordCount === 1 ? 'word' : 'words'}
+            </span>
+            <span className="text-gray-600 text-[10px]">•</span>
+            <span className="text-gray-400 whitespace-nowrap">
+              {sentenceCount} {sentenceCount === 1 ? 'sentence' : 'sentences'}
+            </span>
+          </div>
 
-        {/* Right side: Action buttons and saving indicator */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Right side: Action buttons and saving indicator */}
+          <div className="flex items-center gap-2 flex-shrink-0">
           {/* New File Button */}
           <button
             onClick={handleNewFile}
@@ -902,6 +903,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
               <span>Saving...</span>
             </div>
           )}
+        </div>
         </div>
       </div>
 

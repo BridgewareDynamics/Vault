@@ -12,9 +12,10 @@ import { useWordEditor } from '../../contexts/WordEditorContext';
 interface SettingsPanelProps {
   hideWordEditorButton?: boolean;
   isArchiveVisible?: boolean;
+  hideFixedButtons?: boolean;
 }
 
-export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible = false }: SettingsPanelProps) {
+export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible = false, hideFixedButtons = false }: SettingsPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isWordEditorOpen, setIsWordEditorOpen] = useState(false);
   const [showWordEditorDialog, setShowWordEditorDialog] = useState(false);
@@ -38,11 +39,25 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
       setOpenLibraryOnMount(false);
     };
 
+    // Listen for settings open event from toolbar
+    const handleOpenSettings = () => {
+      setIsOpen(true);
+    };
+
+    // Listen for word editor dialog open event from toolbar
+    const handleOpenWordEditorDialog = () => {
+      setShowWordEditorDialog(true);
+    };
+
     window.addEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
     window.addEventListener('close-word-editor-for-bookmark' as any, handleCloseForBookmark as EventListener);
+    window.addEventListener('open-settings' as any, handleOpenSettings as EventListener);
+    window.addEventListener('open-word-editor-dialog' as any, handleOpenWordEditorDialog as EventListener);
     return () => {
       window.removeEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
       window.removeEventListener('close-word-editor-for-bookmark' as any, handleCloseForBookmark as EventListener);
+      window.removeEventListener('open-settings' as any, handleOpenSettings as EventListener);
+      window.removeEventListener('open-word-editor-dialog' as any, handleOpenWordEditorDialog as EventListener);
     };
   }, [setWordEditorContextOpen]);
   const {
@@ -157,7 +172,7 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
   return (
     <>
       {/* Word Editor Icon Button - Below Settings */}
-      {!hideWordEditorButton && (
+      {!hideFixedButtons && !hideWordEditorButton && (
         <motion.button
           onClick={() => setShowWordEditorDialog(true)}
           className="fixed bottom-0 right-4 z-40 p-3 bg-gray-800/90 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-lg backdrop-blur-sm transition-colors"
@@ -171,16 +186,18 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
       )}
 
       {/* Settings Icon Button - Bottom Right */}
-      <motion.button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-0 right-4 z-40 p-3 bg-gray-800/90 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-lg backdrop-blur-sm transition-colors"
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.95 }}
-        aria-label="Open settings"
-        style={{ marginBottom: '80px' }} // Offset above ToastContainer
-      >
-        <Settings size={24} />
-      </motion.button>
+      {!hideFixedButtons && (
+        <motion.button
+          onClick={() => setIsOpen(!isOpen)}
+          className="fixed bottom-0 right-4 z-40 p-3 bg-gray-800/90 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-lg backdrop-blur-sm transition-colors"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          aria-label="Open settings"
+          style={{ marginBottom: '80px' }} // Offset above ToastContainer
+        >
+          <Settings size={24} />
+        </motion.button>
+      )}
 
       {/* Settings Panel */}
       <AnimatePresence>
