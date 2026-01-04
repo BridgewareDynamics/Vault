@@ -16,6 +16,7 @@ export function DetachedWordEditor() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingClose, setPendingClose] = useState(false);
   const [isReattaching, setIsReattaching] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const editorRef = useRef<WordEditorHandle>(null);
   const toast = useToast();
 
@@ -25,36 +26,44 @@ export function DetachedWordEditor() {
     const handleData = (_event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }>) => {
       const data = _event.detail;
       console.log('DetachedWordEditor: Received word-editor-data event', { viewState: data.viewState, filePath: data.filePath });
-      
+
       // Set the content in the editor by updating the DOM directly
       // The WordEditor component will handle loading the file if filePath is set
       if (data.filePath) {
         setFilePath(data.filePath);
       }
-      
+
       // Restore view state - always set it explicitly to ensure correct state
       const viewState = data.viewState || 'editor';
       console.log('DetachedWordEditor: Setting view state to', viewState);
-      
+
       if (viewState === 'bookmarkLibrary') {
         setShowBookmarkLibrary(true);
         setShowLibrary(false);
         console.log('DetachedWordEditor: Set showBookmarkLibrary=true, showLibrary=false');
+        // Clear loading immediately for library views
+        setIsInitializing(false);
       } else if (viewState === 'library') {
         setShowBookmarkLibrary(false);
         setShowLibrary(true);
         console.log('DetachedWordEditor: Set showBookmarkLibrary=false, showLibrary=true');
+        // Clear loading immediately for library views
+        setIsInitializing(false);
       } else {
         // 'editor' or default
         setShowBookmarkLibrary(false);
         setShowLibrary(false);
         console.log('DetachedWordEditor: Set showBookmarkLibrary=false, showLibrary=false (editor view)');
+        // Mark initialization as complete after a short delay to allow the editor to render
+        setTimeout(() => {
+          setIsInitializing(false);
+        }, 300);
       }
     };
 
     // Listen for custom event - also check if event was already dispatched
     window.addEventListener('word-editor-data' as any, handleData as EventListener);
-    
+
     // Check if event data is already available (in case event fired before listener was attached)
     // This shouldn't happen due to the 500ms delay, but just in case
     const checkExistingData = () => {
@@ -71,6 +80,17 @@ export function DetachedWordEditor() {
       window.removeEventListener('word-editor-data' as any, handleData as EventListener);
     };
   }, []);
+
+  // Fallback: Clear initialization state after a timeout if no data is received
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (isInitializing) {
+        setIsInitializing(false);
+      }
+    }, 2000); // 2 second timeout
+
+    return () => clearTimeout(timeout);
+  }, [isInitializing]);
 
   // Debug: Log view state changes
   useEffect(() => {
@@ -150,7 +170,7 @@ export function DetachedWordEditor() {
 
       // Get current editor content via ref
       const content = editorRef.current?.getContent() || '';
-      
+
       // Determine current view state
       let viewState: 'editor' | 'library' | 'bookmarkLibrary' = 'editor';
       if (showBookmarkLibrary) {
@@ -158,7 +178,7 @@ export function DetachedWordEditor() {
       } else if (showLibrary) {
         viewState = 'library';
       }
-      
+
       // Send data back to main window and close this window
       if (window.electronAPI.reattachWordEditor) {
         await window.electronAPI.reattachWordEditor({
@@ -269,7 +289,7 @@ export function DetachedWordEditor() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+    <div className="min-h-screen bg-gray-900/95 backdrop-blur-lg">
       <div className="h-screen flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-gray-700/50 bg-gray-900/95 flex items-center justify-between">
@@ -321,7 +341,16 @@ export function DetachedWordEditor() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col relative">
+          {/* Loading overlay */}
+          {isInitializing && (
+            <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center z-20">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
+                <p className="text-gray-300">Loading editor...</p>
+              </div>
+            </div>
+          )}
           {showBookmarkLibrary ? (
             <BookmarkLibrary
               onClose={() => {

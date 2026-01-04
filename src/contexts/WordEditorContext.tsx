@@ -11,7 +11,7 @@ const WordEditorContext = createContext<WordEditorContextType | undefined>(undef
 
 const STORAGE_KEY = 'word-editor-panel-width';
 const DEFAULT_WIDTH = 500;
-const MIN_WIDTH = 300;
+const MIN_WIDTH = 400;
 const MAX_WIDTH = 80; // percentage of viewport width
 
 export function WordEditorProvider({ children }: { children: ReactNode }) {
@@ -42,7 +42,7 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
     const maxWidthPx = (window.innerWidth * MAX_WIDTH) / 100;
     const constrainedWidth = Math.max(MIN_WIDTH, Math.min(width, maxWidthPx));
     setPanelWidthState(constrainedWidth);
-    
+
     try {
       localStorage.setItem(STORAGE_KEY, constrainedWidth.toString());
     } catch (error) {

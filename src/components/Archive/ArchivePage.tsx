@@ -668,9 +668,6 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   return (
     <div 
       className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 transition-all duration-300"
-      style={{
-        width: isWordEditorOpen ? 'calc(100vw - 500px)' : '100%',
-      }}
     >
       <div className="container mx-auto px-4 py-8">
         {/* Header */}

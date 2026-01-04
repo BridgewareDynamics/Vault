@@ -10,7 +10,7 @@ import { debugLog } from '../../utils/debugLogger';
 import { WordEditorErrorBoundary } from './WordEditorErrorBoundary';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 
-const MIN_WIDTH = 300;
+const MIN_WIDTH = 400;
 const MAX_WIDTH_PERCENT = 80;
 
 interface WordEditorPanelProps {
@@ -62,7 +62,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
       } else {
         setCurrentFilePath(null);
       }
-      
+
       // Restore view state
       if (data.viewState) {
         if (data.viewState === 'bookmarkLibrary') {
@@ -77,10 +77,10 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
           setShowLibrary(false);
         }
       }
-      
+
       // Force re-render to ensure editor is ready
       setEditorKey(prev => prev + 1);
-      
+
       // Set content after a short delay to ensure editor is ready
       // Use setTimeout to allow the editor to initialize first
       setTimeout(() => {
@@ -107,7 +107,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
 
       // Get current editor content from the WordEditor component via ref
       const content = editorRef.current?.getContent() || '';
-      
+
       // Determine current view state
       let viewState: 'editor' | 'library' | 'bookmarkLibrary' = 'editor';
       if (showBookmarkLibrary) {
@@ -115,9 +115,9 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
       } else if (showLibrary) {
         viewState = 'library';
       }
-      
+
       console.log('WordEditorPanel: Detaching with viewState', viewState, { showBookmarkLibrary, showLibrary });
-      
+
       // Create detached window
       await window.electronAPI.createWordEditorWindow({
         content,
@@ -198,7 +198,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
     setIsResizing(true);
     resizeStartXRef.current = e.clientX;
     resizeStartWidthRef.current = panelWidth;
-    
+
     // Prevent text selection during drag
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'col-resize';
@@ -210,11 +210,11 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
     const handleResizeMove = (e: MouseEvent) => {
       const deltaX = resizeStartXRef.current - e.clientX; // Negative because panel is on right
       const newWidth = resizeStartWidthRef.current + deltaX;
-      
+
       // Enforce min/max constraints
       const maxWidthPx = (window.innerWidth * MAX_WIDTH_PERCENT) / 100;
       const constrainedWidth = Math.max(MIN_WIDTH, Math.min(newWidth, maxWidthPx));
-      
+
       setPanelWidth(constrainedWidth);
     };
 
@@ -243,21 +243,21 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
       <AnimatePresence>
         {isOpen && (
           <motion.div
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed right-0 top-0 bottom-0 bg-gray-900/95 backdrop-blur-lg border-l border-cyber-purple-500/30 shadow-2xl z-50 flex flex-col"
-          style={{ 
-            width: panelWidth,
-            transition: isResizing ? 'none' : 'width 0.2s ease-out'
-          }}
-        >
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed right-0 top-0 bottom-0 bg-gray-900/95 backdrop-blur-lg border-l border-cyber-purple-500/30 shadow-2xl z-50 flex flex-col"
+            style={{
+              width: panelWidth,
+              transition: isResizing ? 'none' : 'width 0.2s ease-out'
+            }}
+          >
             {/* Resize Handle */}
             <div
               onMouseDown={handleResizeStart}
               className="absolute left-0 top-0 bottom-0 cursor-col-resize z-10 group"
-              style={{ 
+              style={{
                 cursor: isResizing ? 'col-resize' : 'col-resize',
                 // Extend the hit area beyond the visible handle for easier grabbing
                 marginLeft: '-2px',
@@ -267,12 +267,11 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
               }}
             >
               {/* Visual indicator - shows on hover and during resize */}
-              <div 
-                className={`absolute left-0 top-0 bottom-0 w-0.5 transition-colors ${
-                  isResizing 
-                    ? 'bg-cyber-purple-500/80' 
-                    : 'bg-cyber-purple-500/0 group-hover:bg-cyber-purple-500/60'
-                }`} 
+              <div
+                className={`absolute left-0 top-0 bottom-0 w-0.5 transition-colors ${isResizing
+                  ? 'bg-cyber-purple-500/80'
+                  : 'bg-cyber-purple-500/0 group-hover:bg-cyber-purple-500/60'
+                  }`}
               />
             </div>
             {/* Header */}
