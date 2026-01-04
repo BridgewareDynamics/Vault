@@ -11,18 +11,7 @@ jobs:
     # Only run when PR is merged (not closed without merging)
     if: github.event.pull_request.merged == true
 
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            platform: linux
-          - os: windows-latest
-            platform: win
-          - os: macos-latest
-            platform: mac
-
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
@@ -47,7 +36,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-build-artifacts
+          name: windows-build-artifacts
           path: release/*
           retention-days: 30
 
@@ -57,7 +46,6 @@ jobs:
           node -e "const pkg = require('./package.json'); require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + pkg.version + '\n')"
 
       - name: Create release summary
-        if: matrix.os == 'ubuntu-latest'
         run: |
           echo "## Prerelease Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -66,9 +54,7 @@ jobs:
           echo "**Merged PR:** #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Build Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- Linux (AppImage)" >> $GITHUB_STEP_SUMMARY
           echo "- Windows (NSIS Installer)" >> $GITHUB_STEP_SUMMARY
-          echo "- macOS (DMG)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Artifacts are available in the workflow run and will be retained for 30 days." >> $GITHUB_STEP_SUMMARY
         shell: bash
