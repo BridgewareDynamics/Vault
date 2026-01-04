@@ -137,17 +137,17 @@ When the Word Editor is open (which requires the Archive to be open), display th
 - Render split layout container when `isWordEditorOpen === true`
 - Structure:
      ```tsx
-          {showArchive && (
-            isWordEditorOpen ? (
-              <div className="flex h-screen">
-                <ArchivePage ... style={{ width: `${dividerPosition}%` }} />
-                <ResizableDivider ... />
-                <WordEditorPanel ... style={{ width: `${100 - dividerPosition}%` }} />
-              </div>
-            ) : (
-              <ArchivePage ... />
-            )
-          )}
+               {showArchive && (
+                 isWordEditorOpen ? (
+                   <div className="flex h-screen">
+                     <ArchivePage ... style={{ width: `${dividerPosition}%` }} />
+                     <ResizableDivider ... />
+                     <WordEditorPanel ... style={{ width: `${100 - dividerPosition}%` }} />
+                   </div>
+                 ) : (
+                   <ArchivePage ... />
+                 )
+               )}
      ```
 
 
@@ -182,4 +182,3 @@ When the Word Editor is open (which requires the Archive to be open), display th
 
 - Very small viewport (< 800px): Consider disabling split view or using fixed minimums
 - Rapid window resize: Maintain percentage, but validate against new min/max
-- Divider at extreme positions: Ensure both sides remain functional

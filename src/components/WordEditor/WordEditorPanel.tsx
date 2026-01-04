@@ -18,9 +18,10 @@ interface WordEditorPanelProps {
   onClose: () => void;
   initialFilePath?: string | null;
   openLibrary?: boolean;
+  layoutMode?: 'overlay' | 'inline';
 }
 
-export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary }: WordEditorPanelProps) {
+export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary, layoutMode = 'overlay' }: WordEditorPanelProps) {
   const [showLibrary, setShowLibrary] = useState(openLibrary || false);
   const [showBookmarkLibrary, setShowBookmarkLibrary] = useState(false);
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(initialFilePath || null);
@@ -238,42 +239,50 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
 
   if (!isOpen) return null;
 
+  const isInline = layoutMode === 'inline';
+
   return (
     <>
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
+            initial={isInline ? { opacity: 0 } : { x: '100%' }}
+            animate={isInline ? { opacity: 1 } : { x: 0 }}
+            exit={isInline ? { opacity: 0 } : { x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 bottom-0 bg-gray-900/95 backdrop-blur-lg border-l border-cyber-purple-500/30 shadow-2xl z-50 flex flex-col"
-            style={{
+            className={`${
+              isInline 
+                ? 'h-full bg-gray-900/95 backdrop-blur-lg border-l border-cyber-purple-500/30 flex flex-col'
+                : 'fixed right-0 top-0 bottom-0 bg-gray-900/95 backdrop-blur-lg border-l border-cyber-purple-500/30 shadow-2xl z-50 flex flex-col'
+            }`}
+            style={isInline ? undefined : {
               width: panelWidth,
               transition: isResizing ? 'none' : 'width 0.2s ease-out'
             }}
           >
-            {/* Resize Handle */}
-            <div
-              onMouseDown={handleResizeStart}
-              className="absolute left-0 top-0 bottom-0 cursor-col-resize z-10 group"
-              style={{
-                cursor: isResizing ? 'col-resize' : 'col-resize',
-                // Extend the hit area beyond the visible handle for easier grabbing
-                marginLeft: '-2px',
-                paddingLeft: '2px',
-                paddingRight: '2px',
-                width: '5px'
-              }}
-            >
-              {/* Visual indicator - shows on hover and during resize */}
+            {/* Resize Handle - only show in overlay mode */}
+            {!isInline && (
               <div
-                className={`absolute left-0 top-0 bottom-0 w-0.5 transition-colors ${isResizing
-                  ? 'bg-cyber-purple-500/80'
-                  : 'bg-cyber-purple-500/0 group-hover:bg-cyber-purple-500/60'
-                  }`}
-              />
-            </div>
+                onMouseDown={handleResizeStart}
+                className="absolute left-0 top-0 bottom-0 cursor-col-resize z-10 group"
+                style={{
+                  cursor: isResizing ? 'col-resize' : 'col-resize',
+                  // Extend the hit area beyond the visible handle for easier grabbing
+                  marginLeft: '-2px',
+                  paddingLeft: '2px',
+                  paddingRight: '2px',
+                  width: '5px'
+                }}
+              >
+                {/* Visual indicator - shows on hover and during resize */}
+                <div
+                  className={`absolute left-0 top-0 bottom-0 w-0.5 transition-colors ${isResizing
+                    ? 'bg-cyber-purple-500/80'
+                    : 'bg-cyber-purple-500/0 group-hover:bg-cyber-purple-500/60'
+                    }`}
+                />
+              </div>
+            )}
             {/* Header */}
             <div className="p-4 border-b border-gray-700/50 flex items-center justify-between">
               <div className="flex items-center gap-2">

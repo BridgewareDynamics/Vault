@@ -20,6 +20,8 @@ import { getMemoryManager } from './utils/memoryManager';
 import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext';
 import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
 import { DetachedSecurityChecker } from './components/DetachedSecurityChecker';
+import { ResizableDivider } from './components/ResizableDivider';
+import { WordEditorPanel } from './components/WordEditor/WordEditorPanel';
 import './App.css';
 
 function AppContent() {
@@ -48,7 +50,7 @@ function AppContent() {
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
   const { settings } = useSettingsContext();
-  const { isOpen: isWordEditorOpen, panelWidth } = useWordEditor();
+  const { isOpen: isWordEditorOpen, panelWidth, dividerPosition, setDividerPosition } = useWordEditor();
 
   // Check if we're in detached editor mode
   // In dev mode, it's a query param: ?editor=detached
@@ -300,6 +302,52 @@ function AppContent() {
 
   // Show archive if requested
   if (showArchive) {
+    // If Editor is open, show side-by-side layout
+    if (isWordEditorOpen) {
+      return (
+        <>
+          <div className="flex h-screen overflow-hidden">
+            {/* Archive on the left */}
+            <div 
+              className="transition-all duration-300 overflow-auto"
+              style={{ width: `${dividerPosition}%` }}
+            >
+              <Suspense
+                fallback={
+                  <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
+                      <p className="text-gray-300">Loading Archive...</p>
+                    </div>
+                  </div>
+                }
+              >
+                <ArchivePage onBack={() => setShowArchive(false)} />
+              </Suspense>
+            </div>
+            
+            {/* Resizable Divider */}
+            <ResizableDivider
+              position={dividerPosition}
+              onResize={setDividerPosition}
+              minLeft={20}
+              minRight={30}
+            />
+            
+            {/* Editor on the right - rendered by SettingsPanel with inline mode */}
+            <div 
+              id="word-editor-inline-container"
+              className="overflow-hidden h-full"
+              style={{ width: `${100 - dividerPosition}%` }}
+            />
+          </div>
+          <SettingsPanel isArchiveVisible={true} />
+          <ToastContainer />
+        </>
+      );
+    }
+    
+    // Editor not open, show full-width Archive
     return (
       <>
         <div 
@@ -318,6 +366,7 @@ function AppContent() {
             <ArchivePage onBack={() => setShowArchive(false)} />
           </Suspense>
         </div>
+        <SettingsPanel isArchiveVisible={true} />
         <ToastContainer />
       </>
     );
@@ -337,7 +386,7 @@ function AppContent() {
           />
         </div>
         <ToastContainer />
-        <SettingsPanel hideWordEditorButton={true} />
+        <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} />
         <SecurityCheckerModal
           isOpen={showSecurityChecker}
           onClose={() => setShowSecurityChecker(false)}
@@ -350,13 +399,16 @@ function AppContent() {
   if (selectedPdfPath && extractedPages.length === 0 && !isExtracting && !error) {
     // This shouldn't happen, but just in case
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-          <p className="text-gray-300">Preparing...</p>
+      <>
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
+            <p className="text-gray-300">Preparing...</p>
+          </div>
         </div>
+        <SettingsPanel isArchiveVisible={false} />
         <ToastContainer />
-      </div>
+      </>
     );
   }
 
@@ -448,6 +500,7 @@ function AppContent() {
         )}
       </div>
 
+      <SettingsPanel isArchiveVisible={false} />
       <ToastContainer />
     </div>
   );

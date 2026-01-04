@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge, FileText } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
@@ -10,9 +11,10 @@ import { useWordEditor } from '../../contexts/WordEditorContext';
 
 interface SettingsPanelProps {
   hideWordEditorButton?: boolean;
+  isArchiveVisible?: boolean;
 }
 
-export function SettingsPanel({ hideWordEditorButton = false }: SettingsPanelProps) {
+export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible = false }: SettingsPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isWordEditorOpen, setIsWordEditorOpen] = useState(false);
   const [showWordEditorDialog, setShowWordEditorDialog] = useState(false);
@@ -243,11 +245,10 @@ export function SettingsPanel({ hideWordEditorButton = false }: SettingsPanelPro
                   </label>
                   <button
                     onClick={handleHardwareAccelerationToggle}
-                    className={`w-full p-3 rounded-lg border transition-colors ${
-                      settings.hardwareAcceleration
+                    className={`w-full p-3 rounded-lg border transition-colors ${settings.hardwareAcceleration
                         ? 'bg-cyber-purple-500/20 border-cyber-purple-500 text-white'
                         : 'bg-gray-800 border-gray-700 text-gray-400'
-                    }`}
+                      }`}
                   >
                     {settings.hardwareAcceleration ? 'Enabled' : 'Disabled'}
                   </button>
@@ -290,11 +291,10 @@ export function SettingsPanel({ hideWordEditorButton = false }: SettingsPanelPro
                   </label>
                   <button
                     onClick={handleFullscreenToggle}
-                    className={`w-full p-3 rounded-lg border transition-colors ${
-                      settings.fullscreen
+                    className={`w-full p-3 rounded-lg border transition-colors ${settings.fullscreen
                         ? 'bg-cyber-purple-500/20 border-cyber-purple-500 text-white'
                         : 'bg-gray-800 border-gray-700 text-gray-400'
-                    }`}
+                      }`}
                   >
                     {settings.fullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
                   </button>
@@ -405,16 +405,56 @@ export function SettingsPanel({ hideWordEditorButton = false }: SettingsPanelPro
       />
 
       {/* Word Editor Panel */}
-      <WordEditorPanel
-        isOpen={isWordEditorOpen}
-        onClose={() => {
-          setIsWordEditorOpen(false);
-          setWordEditorContextOpen(false);
-          setOpenLibraryOnMount(false);
-        }}
-        initialFilePath={currentFilePath}
-        openLibrary={openLibraryOnMount}
-      />
+      {isArchiveVisible && isWordEditorOpen ? (
+        // Render in inline container using portal
+        (() => {
+          // Use useEffect to ensure container exists, but for now try immediate render
+          const container = document.getElementById('word-editor-inline-container');
+          if (!container) {
+            // Container doesn't exist yet, render in overlay mode as fallback
+            return (
+              <WordEditorPanel
+                isOpen={isWordEditorOpen}
+                onClose={() => {
+                  setIsWordEditorOpen(false);
+                  setWordEditorContextOpen(false);
+                  setOpenLibraryOnMount(false);
+                }}
+                initialFilePath={currentFilePath}
+                openLibrary={openLibraryOnMount}
+                layoutMode="overlay"
+              />
+            );
+          }
+          return createPortal(
+            <WordEditorPanel
+              isOpen={isWordEditorOpen}
+              onClose={() => {
+                setIsWordEditorOpen(false);
+                setWordEditorContextOpen(false);
+                setOpenLibraryOnMount(false);
+              }}
+              initialFilePath={currentFilePath}
+              openLibrary={openLibraryOnMount}
+              layoutMode="inline"
+            />,
+            container
+          );
+        })()
+      ) : (
+        // Render in overlay mode (normal)
+        <WordEditorPanel
+          isOpen={isWordEditorOpen}
+          onClose={() => {
+            setIsWordEditorOpen(false);
+            setWordEditorContextOpen(false);
+            setOpenLibraryOnMount(false);
+          }}
+          initialFilePath={currentFilePath}
+          openLibrary={openLibraryOnMount}
+          layoutMode="overlay"
+        />
+      )}
     </>
   );
 }
