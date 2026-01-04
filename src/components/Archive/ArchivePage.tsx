@@ -25,7 +25,6 @@ import { ProgressBar } from '../ProgressBar';
 import { SecurityCheckerModal } from '../SecurityCheckerModal';
 import { ActionToolbar } from '../ActionToolbar';
 import { logger } from '../../utils/logger';
-import { useWordEditor } from '../../contexts/WordEditorContext';
 
 interface ArchivePageProps {
   onBack: () => void;
@@ -70,7 +69,6 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
   const { extractPDF, isExtracting, progress, statusMessage, extractingCasePath, extractingFolderPath } = useArchiveExtraction();
   const toast = useToast();
-  const { isOpen: isWordEditorOpen } = useWordEditor();
 
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showCaseDialog, setShowCaseDialog] = useState(false);
@@ -1419,7 +1417,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   await deleteFile(item.path);
                                 }}
                                 onExtract={undefined}
-                                onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
+                                onRunAudit={undefined}
                                 onRename={() => {
                                   setFileToRename(item);
                                   setShowRenameDialog(true);
