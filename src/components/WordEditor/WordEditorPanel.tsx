@@ -10,6 +10,9 @@ import { debugLog } from '../../utils/debugLogger';
 import { WordEditorErrorBoundary } from './WordEditorErrorBoundary';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 
+const MIN_WIDTH = 300;
+const MAX_WIDTH_PERCENT = 80;
+
 interface WordEditorPanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -24,9 +27,12 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
   const [editorKey, setEditorKey] = useState(0); // Force re-render when file changes
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingClose, setPendingClose] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const editorRef = useRef<WordEditorHandle>(null);
   const toast = useToast();
-  const { setIsOpen: setContextOpen } = useWordEditor();
+  const { setIsOpen: setContextOpen, panelWidth, setPanelWidth } = useWordEditor();
+  const resizeStartXRef = useRef<number>(0);
+  const resizeStartWidthRef = useRef<number>(500);
 
   // Update file path when initialFilePath changes
   useEffect(() => {
@@ -186,6 +192,49 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
     }
   };
 
+  // Resize handlers
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    resizeStartXRef.current = e.clientX;
+    resizeStartWidthRef.current = panelWidth;
+    
+    // Prevent text selection during drag
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleResizeMove = (e: MouseEvent) => {
+      const deltaX = resizeStartXRef.current - e.clientX; // Negative because panel is on right
+      const newWidth = resizeStartWidthRef.current + deltaX;
+      
+      // Enforce min/max constraints
+      const maxWidthPx = (window.innerWidth * MAX_WIDTH_PERCENT) / 100;
+      const constrainedWidth = Math.max(MIN_WIDTH, Math.min(newWidth, maxWidthPx));
+      
+      setPanelWidth(constrainedWidth);
+    };
+
+    const handleResizeEnd = () => {
+      setIsResizing(false);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+
+    window.addEventListener('mousemove', handleResizeMove);
+    window.addEventListener('mouseup', handleResizeEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleResizeMove);
+      window.removeEventListener('mouseup', handleResizeEnd);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, [isResizing, setPanelWidth]);
+
 
   if (!isOpen) return null;
 
@@ -198,8 +247,34 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary 
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed right-0 top-0 bottom-0 w-[500px] bg-gray-900/95 backdrop-blur-lg border-l border-cyber-purple-500/30 shadow-2xl z-50 flex flex-col"
+          className="fixed right-0 top-0 bottom-0 bg-gray-900/95 backdrop-blur-lg border-l border-cyber-purple-500/30 shadow-2xl z-50 flex flex-col"
+          style={{ 
+            width: panelWidth,
+            transition: isResizing ? 'none' : 'width 0.2s ease-out'
+          }}
         >
+            {/* Resize Handle */}
+            <div
+              onMouseDown={handleResizeStart}
+              className="absolute left-0 top-0 bottom-0 cursor-col-resize z-10 group"
+              style={{ 
+                cursor: isResizing ? 'col-resize' : 'col-resize',
+                // Extend the hit area beyond the visible handle for easier grabbing
+                marginLeft: '-2px',
+                paddingLeft: '2px',
+                paddingRight: '2px',
+                width: '5px'
+              }}
+            >
+              {/* Visual indicator - shows on hover and during resize */}
+              <div 
+                className={`absolute left-0 top-0 bottom-0 w-0.5 transition-colors ${
+                  isResizing 
+                    ? 'bg-cyber-purple-500/80' 
+                    : 'bg-cyber-purple-500/0 group-hover:bg-cyber-purple-500/60'
+                }`} 
+              />
+            </div>
             {/* Header */}
             <div className="p-4 border-b border-gray-700/50 flex items-center justify-between">
               <div className="flex items-center gap-2">

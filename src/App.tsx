@@ -48,7 +48,7 @@ function AppContent() {
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
   const { settings } = useSettingsContext();
-  const { isOpen: isWordEditorOpen } = useWordEditor();
+  const { isOpen: isWordEditorOpen, panelWidth } = useWordEditor();
 
   // Check if we're in detached editor mode
   // In dev mode, it's a query param: ?editor=detached
@@ -374,8 +374,8 @@ function AppContent() {
       <div 
         className="transition-all duration-300"
         style={{
-          width: isWordEditorOpen ? 'calc(100vw - 500px)' : '100%',
-          maxWidth: isWordEditorOpen ? 'calc(100vw - 500px)' : '1280px',
+          width: isWordEditorOpen ? `calc(100vw - ${panelWidth}px)` : '100%',
+          maxWidth: isWordEditorOpen ? `calc(100vw - ${panelWidth}px)` : '1280px',
           marginLeft: isWordEditorOpen ? '0' : 'auto',
           marginRight: isWordEditorOpen ? '0' : 'auto',
           padding: '2rem 1rem',
