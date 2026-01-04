@@ -9,7 +9,7 @@ import { debounceWithFlush } from '../../utils/debounce';
 import { LexicalEditor, LexicalEditorHandle } from './LexicalEditor';
 import { useEditorShortcuts } from '../../hooks/useEditorShortcuts';
 import { calculateTextStats } from '../../utils/textStats';
-import { Save, FilePlus, ChevronDown } from 'lucide-react';
+import { Save, FilePlus } from 'lucide-react';
 
 export interface WordEditorHandle {
   getContent: () => string;
@@ -51,9 +51,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
   const [wordCount, setWordCount] = useState(0);
   const [sentenceCount, setSentenceCount] = useState(0);
   const [showSaveMenu, setShowSaveMenu] = useState(false);
-  const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
   const saveMenuRef = useRef<HTMLDivElement>(null);
-  const saveAsMenuRef = useRef<HTMLDivElement>(null);
   
   // Debounced localStorage save function
   const debouncedSaveDraft = useRef(
@@ -333,18 +331,15 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       if (saveMenuRef.current && !saveMenuRef.current.contains(event.target as Node)) {
         setShowSaveMenu(false);
       }
-      if (saveAsMenuRef.current && !saveAsMenuRef.current.contains(event.target as Node)) {
-        setShowSaveAsMenu(false);
-      }
     };
 
-    if (showSaveMenu || showSaveAsMenu) {
+    if (showSaveMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }
-  }, [showSaveMenu, showSaveAsMenu]);
+  }, [showSaveMenu]);
 
   // Flush debounced save on unmount to ensure draft is saved
   useEffect(() => {
@@ -759,142 +754,6 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
             <Save size={14} />
             <span>Save</span>
           </button>
-
-          {/* Save As Button with Dropdown */}
-          <div className="relative" ref={saveAsMenuRef}>
-            <button
-              onClick={() => {
-                setShowSaveAsMenu(!showSaveAsMenu);
-              }}
-              className="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs whitespace-nowrap"
-              title="Save as different format"
-            >
-              <span>Save As</span>
-              <ChevronDown size={14} />
-            </button>
-
-            {/* Save As Menu Dropdown - expands upward */}
-            {showSaveAsMenu && (
-              <div className="absolute right-0 bottom-full mb-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
-                <button
-                  onClick={async () => {
-                    setShowSaveAsMenu(false);
-                    // Save As TXT - create new file
-                    if (window.electronAPI && lexicalEditorRef.current) {
-                      setIsSaving(true);
-                      try {
-                        const textContent = lexicalEditorRef.current.getTextContent();
-                        const baseName = filePath 
-                          ? filePath.split(/[/\\]/).pop()?.replace(/\.[^/.]+$/, '') || 'Untitled'
-                          : 'Untitled';
-                        const fileName = `${baseName}_${Date.now()}.txt`;
-                        await window.electronAPI.createTextFile(fileName, textContent);
-                        toast.success('File saved as TXT');
-                      } catch (error) {
-                        toast.error('Failed to save file');
-                        console.error('Save error:', error);
-                      } finally {
-                        setIsSaving(false);
-                      }
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  Save as TXT
-                </button>
-                <button
-                  onClick={async () => {
-                    setShowSaveAsMenu(false);
-                    // Save As PDF - create new file
-                    if (window.electronAPI && lexicalEditorRef.current) {
-                      setIsSaving(true);
-                      try {
-                        const htmlContent = lexicalEditorRef.current.getContent();
-                        const result = await window.electronAPI.exportTextFile({
-                          content: htmlContent,
-                          format: 'pdf',
-                          filePath: filePath || undefined,
-                        });
-                        if (result.success) {
-                          toast.success('File exported as PDF');
-                        } else {
-                          toast.error('Failed to export as PDF');
-                        }
-                      } catch (error) {
-                        toast.error('Failed to export as PDF');
-                        console.error('Export error:', error);
-                      } finally {
-                        setIsSaving(false);
-                      }
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  Export as PDF
-                </button>
-                <button
-                  onClick={async () => {
-                    setShowSaveAsMenu(false);
-                    // Save As DOCX - create new file
-                    if (window.electronAPI && lexicalEditorRef.current) {
-                      setIsSaving(true);
-                      try {
-                        const htmlContent = lexicalEditorRef.current.getContent();
-                        const result = await window.electronAPI.exportTextFile({
-                          content: htmlContent,
-                          format: 'docx',
-                          filePath: filePath || undefined,
-                        });
-                        if (result.success) {
-                          toast.success('File exported as DOCX');
-                        } else {
-                          toast.error('Failed to export as DOCX');
-                        }
-                      } catch (error) {
-                        toast.error('Failed to export as DOCX');
-                        console.error('Export error:', error);
-                      } finally {
-                        setIsSaving(false);
-                      }
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  Export as DOCX
-                </button>
-                <button
-                  onClick={async () => {
-                    setShowSaveAsMenu(false);
-                    // Save As RTF - create new file
-                    if (window.electronAPI && lexicalEditorRef.current) {
-                      setIsSaving(true);
-                      try {
-                        const htmlContent = lexicalEditorRef.current.getContent();
-                        const result = await window.electronAPI.exportTextFile({
-                          content: htmlContent,
-                          format: 'rtf',
-                          filePath: filePath || undefined,
-                        });
-                        if (result.success) {
-                          toast.success('File exported as RTF');
-                        } else {
-                          toast.error('Failed to export as RTF');
-                        }
-                      } catch (error) {
-                        toast.error('Failed to export as RTF');
-                        console.error('Export error:', error);
-                      } finally {
-                        setIsSaving(false);
-                      }
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  Export as RTF
-                </button>
-              </div>
-            )}
-          </div>
 
           {/* Saving indicator */}
           {isSaving && (
