@@ -50,7 +50,7 @@ function AppContent() {
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
   const { settings } = useSettingsContext();
-  const { isOpen: isWordEditorOpen, panelWidth, dividerPosition, setDividerPosition } = useWordEditor();
+  const { isOpen: isWordEditorOpen, panelWidth, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
 
   // Check if we're in detached editor mode
   // In dev mode, it's a query param: ?editor=detached
@@ -309,7 +309,7 @@ function AppContent() {
           <div className="flex h-screen overflow-hidden">
             {/* Archive on the left */}
             <div 
-              className="transition-all duration-300 overflow-auto"
+              className={`overflow-auto ${isDividerDragging ? '' : 'transition-all duration-300'}`}
               style={{ width: `${dividerPosition}%` }}
             >
               <Suspense
@@ -337,7 +337,7 @@ function AppContent() {
             {/* Editor on the right - rendered by SettingsPanel with inline mode */}
             <div 
               id="word-editor-inline-container"
-              className="overflow-hidden h-full"
+              className={`overflow-hidden h-full ${isDividerDragging ? '' : 'transition-all duration-300'}`}
               style={{ width: `${100 - dividerPosition}%` }}
             />
           </div>

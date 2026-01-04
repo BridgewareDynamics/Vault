@@ -241,15 +241,20 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
 
   const isInline = layoutMode === 'inline';
 
+  // In inline mode, use regular div to avoid animation conflicts with divider resizing
+  const PanelContainer = isInline ? 'div' : motion.div;
+
   return (
     <>
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={isInline ? { opacity: 0 } : { x: '100%' }}
-            animate={isInline ? { opacity: 1 } : { x: 0 }}
-            exit={isInline ? { opacity: 0 } : { x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          <PanelContainer
+            {...(isInline ? {} : {
+              initial: { x: '100%' },
+              animate: { x: 0 },
+              exit: { x: '100%' },
+              transition: { type: 'spring', damping: 25, stiffness: 200 }
+            })}
             className={`${
               isInline 
                 ? 'h-full bg-gray-900/95 backdrop-blur-lg border-l border-cyber-purple-500/30 flex flex-col'
@@ -372,7 +377,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
                 </WordEditorErrorBoundary>
               )}
             </div>
-          </motion.div>
+          </PanelContainer>
         )}
       </AnimatePresence>
 

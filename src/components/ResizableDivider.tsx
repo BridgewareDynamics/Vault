@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useWordEditor } from '../contexts/WordEditorContext';
 
 interface ResizableDividerProps {
   position: number; // Percentage (0-100)
@@ -14,12 +15,14 @@ export function ResizableDivider({
   minRight = 30 
 }: ResizableDividerProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const { setIsDividerDragging } = useWordEditor();
   const dragStartXRef = useRef<number>(0);
   const dragStartPositionRef = useRef<number>(50);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
+    setIsDividerDragging(true);
     dragStartXRef.current = e.clientX;
     dragStartPositionRef.current = position;
 
@@ -46,6 +49,7 @@ export function ResizableDivider({
 
     const handleMouseUp = () => {
       setIsDragging(false);
+      setIsDividerDragging(false);
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
     };
@@ -59,7 +63,7 @@ export function ResizableDivider({
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
     };
-  }, [isDragging, onResize, minLeft, minRight]);
+  }, [isDragging, onResize, minLeft, minRight, setIsDividerDragging]);
 
   return (
     <div

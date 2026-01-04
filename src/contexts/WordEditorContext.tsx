@@ -7,6 +7,8 @@ interface WordEditorContextType {
   setPanelWidth: (width: number) => void;
   dividerPosition: number;
   setDividerPosition: (position: number) => void;
+  isDividerDragging: boolean;
+  setIsDividerDragging: (dragging: boolean) => void;
 }
 
 const WordEditorContext = createContext<WordEditorContextType | undefined>(undefined);
@@ -24,6 +26,7 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [panelWidth, setPanelWidthState] = useState<number>(DEFAULT_WIDTH);
   const [dividerPosition, setDividerPositionState] = useState<number>(DEFAULT_DIVIDER_POSITION);
+  const [isDividerDragging, setIsDividerDragging] = useState(false);
 
   // Load width and divider position from localStorage on mount
   useEffect(() => {
@@ -90,7 +93,9 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
       panelWidth, 
       setPanelWidth,
       dividerPosition,
-      setDividerPosition
+      setDividerPosition,
+      isDividerDragging,
+      setIsDividerDragging
     }}>
       {children}
     </WordEditorContext.Provider>
