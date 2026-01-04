@@ -91,10 +91,17 @@ export function CategoryTagSelector({
             onClick={(e) => e.stopPropagation()}
             className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg border-2 border-cyber-purple-500/60 shadow-2xl p-6 max-w-md w-full"
           >
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center justify-between gap-3 mb-4">
               <h2 id="category-tag-selector-title" className="text-2xl font-bold bg-gradient-purple bg-clip-text text-transparent">
                 {selectedTag ? 'Category Tag' : 'Select Category Tag'}
               </h2>
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-gray-700 rounded-lg transition-colors group"
+                aria-label="Close dialog"
+              >
+                <X className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
+              </button>
             </div>
 
             {selectedTag ? (
@@ -103,20 +110,29 @@ export function CategoryTagSelector({
                   <p className="text-sm text-gray-400 mb-2">Current Tag:</p>
                   <CategoryTagComponent tag={selectedTag} size="medium" />
                 </div>
-                <div className="flex gap-3">
+                <div className="space-y-3">
                   <button
-                    onClick={() => setShowExistingList(true)}
-                    className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                    onClick={() => setShowCreator(true)}
+                    className="w-full px-4 py-3 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold flex items-center justify-center gap-2"
                   >
-                    <Tag className="w-4 h-4" />
-                    Choose Existing
+                    <Plus className="w-5 h-5" />
+                    Create Category Tag
                   </button>
-                  <button
-                    onClick={handleRemoveTag}
-                    className="flex-1 px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition-colors"
-                  >
-                    Remove Tag
-                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowExistingList(true)}
+                      className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Tag className="w-4 h-4" />
+                      Choose Existing
+                    </button>
+                    <button
+                      onClick={handleRemoveTag}
+                      className="flex-1 px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition-colors"
+                    >
+                      Remove Tag
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -204,25 +220,8 @@ export function CategoryTagSelector({
                     )}
                   </AnimatePresence>
                 </div>
-
-                <button
-                  onClick={() => setShowExistingList(false)}
-                  className="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm"
-                >
-                  Cancel
-                </button>
               </motion.div>
             )}
-
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={onClose}
-                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                aria-label="Close dialog"
-              >
-                {selectedTag ? 'Done' : 'Cancel'}
-              </button>
-            </div>
           </motion.div>
         </motion.div>
       </AnimatePresence>
