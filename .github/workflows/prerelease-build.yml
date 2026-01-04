@@ -38,11 +38,15 @@ jobs:
           npm_config_msvs_version: "2022"
 
       - name: Build Electron app
-        run: npm run electron:build
+        run: npm run electron:build -- --win
         env:
           # Disable code signing for prerelease builds
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
           SKIP_NOTARIZATION: "true"
+          # Disable publishing (we only want to build, not publish)
+          PUBLISH: "never"
+          # Mark as CI environment to skip publishing
+          CI: "true"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
