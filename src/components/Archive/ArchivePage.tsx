@@ -115,7 +115,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       try {
         const { pdfPath, pageNumber } = JSON.parse(pendingBookmark);
         sessionStorage.removeItem('pending-bookmark-open');
-        
+
         // Dispatch the event so the normal handler can process it
         const event = new CustomEvent('open-bookmark', {
           detail: { pdfPath, pageNumber }
@@ -132,14 +132,14 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     if (targetFolderPath && currentCase && !loading && files.length > 0) {
       // We've switched to a new case and files are loaded, now navigate to the folder
       const normalizePath = (path: string) => path.replace(/\\/g, '/');
-      
+
       // Only navigate if we're not already in the target folder
       if (!currentFolderPath || normalizePath(currentFolderPath) !== normalizePath(targetFolderPath)) {
         if (currentCase) {
           openFolder(targetFolderPath);
         }
       }
-      
+
       // Clear target folder path
       setTargetFolderPath(null);
     }
@@ -152,19 +152,19 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     }
 
     const { pdfPath } = pendingBookmarkOpen;
-    
+
     // Normalize paths for comparison
     const normalizePath = (path: string) => path.replace(/\\/g, '/');
     const normalizedPdfPath = normalizePath(pdfPath);
-    
+
     // Find the file in the current files list
     const matchingFile = files.find(f => !f.isFolder && normalizePath(f.path) === normalizedPdfPath);
-    
+
     if (matchingFile) {
       // Clear pending bookmark immediately to prevent re-triggering
       const bookmarkToOpen = pendingBookmarkOpen;
       setPendingBookmarkOpen(null);
-      
+
       // Find the index of the file
       const index = files.filter(f => !f.isFolder).findIndex(f => normalizePath(f.path) === normalizedPdfPath);
       if (index !== -1) {
@@ -180,24 +180,24 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   useEffect(() => {
     // Track if we're currently processing a bookmark to prevent duplicates
     let isProcessing = false;
-    
+
     const handleOpenBookmark = async (event: CustomEvent<{ pdfPath: string; pageNumber: number }>) => {
       // Prevent duplicate handling
       if (isProcessing) {
         return;
       }
-      
+
       const { pdfPath, pageNumber } = event.detail;
       isProcessing = true;
-      
+
       try {
         // Normalize paths for comparison (handle different path separators)
         const normalizePath = (path: string) => path.replace(/\\/g, '/');
         const normalizedPdfPath = normalizePath(pdfPath);
-        
+
         // First, check if the file is in the current view
         const matchingFile = files.find(f => !f.isFolder && normalizePath(f.path) === normalizedPdfPath);
-        
+
         if (matchingFile) {
           // File is in current view - open it immediately
           const index = files.filter(f => !f.isFolder).findIndex(f => normalizePath(f.path) === normalizedPdfPath);
@@ -226,7 +226,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
           let fileFound = false;
           try {
             const result = await findFileInArchive(pdfPath);
-            
+
             if (!result) {
               toast.error('PDF not found in archive. The file may have been moved or deleted.');
               return;
@@ -236,17 +236,17 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
             // Check if we need to navigate to a different case
             const needsCaseNavigation = !currentCase || normalizePath(currentCase.path) !== normalizePath(result.casePath);
-            
+
             // Check if we need to navigate to a different folder
             const currentPath = currentFolderPath || currentCase?.path;
-            const needsFolderNavigation = result.folderPath && 
+            const needsFolderNavigation = result.folderPath &&
               (!currentPath || normalizePath(currentPath) !== normalizePath(result.folderPath));
 
             // File was found successfully - proceed with navigation
             if (needsCaseNavigation || needsFolderNavigation) {
               // Store bookmark info for opening after navigation
               setPendingBookmarkOpen({ pdfPath, pageNumber });
-              
+
               // Navigate to the correct case if needed
               if (needsCaseNavigation) {
                 const targetCase = cases.find(c => normalizePath(c.path) === normalizePath(result.casePath));
@@ -255,14 +255,14 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   setPendingBookmarkOpen(null);
                   return;
                 }
-                
+
                 // Store target folder path if we need to navigate to a folder
                 if (needsFolderNavigation && result.folderPath) {
                   setTargetFolderPath(result.folderPath);
                 } else {
                   setTargetFolderPath(null);
                 }
-                
+
                 setCurrentCase(targetCase);
                 // Reset folder navigation when switching cases
                 goBackToCase();
@@ -312,20 +312,20 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
       // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:88',message:'Global handleDragOver: Drag over',data:{hasFiles:e.dataTransfer?.files?.length||0,dataTransferTypes:Array.from(e.dataTransfer?.types||[]),hasTextPlain:e.dataTransfer?.types?.includes('text/plain')||false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'}).catch(()=>{});
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:88', message: 'Global handleDragOver: Drag over', data: { hasFiles: e.dataTransfer?.files?.length || 0, dataTransferTypes: Array.from(e.dataTransfer?.types || []), hasTextPlain: e.dataTransfer?.types?.includes('text/plain') || false }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' }).catch(() => { });
       // #endregion
-      
+
       // Only prevent default for external file drags
       // Internal drags should be allowed to propagate to folder handlers
       const hasExternalFiles = (e.dataTransfer?.files?.length || 0) > 0;
       const hasInternalDrag = e.dataTransfer?.types?.includes('text/plain') && !hasExternalFiles;
-      
+
       if (hasInternalDrag && !hasExternalFiles) {
         // Internal drag - let it propagate to folder handlers
         // Don't show global highlight for internal drags
         return; // Don't prevent default, don't set isDragging
       }
-      
+
       // External file drag - prevent default to allow drop and show highlight
       e.preventDefault();
       e.stopPropagation();
@@ -339,12 +339,12 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       // Internal drags are handled by folder components
       const hasExternalFiles = (e.dataTransfer?.files?.length || 0) > 0;
       const hasInternalDrag = e.dataTransfer?.types?.includes('text/plain') && !hasExternalFiles;
-      
+
       if (hasInternalDrag && !hasExternalFiles) {
         // Internal drag - let folder handlers manage their own drag leave
         return;
       }
-      
+
       // External file drag - clear highlight
       e.preventDefault();
       e.stopPropagation();
@@ -353,28 +353,28 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
     const handleDrop = async (e: DragEvent) => {
       // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:102',message:'Global handleDrop: Drop event',data:{hasFiles:e.dataTransfer?.files?.length||0,dataTransferTypes:Array.from(e.dataTransfer?.types||[]),hasTextPlain:e.dataTransfer?.types?.includes('text/plain')||false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'}).catch(()=>{});
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:102', message: 'Global handleDrop: Drop event', data: { hasFiles: e.dataTransfer?.files?.length || 0, dataTransferTypes: Array.from(e.dataTransfer?.types || []), hasTextPlain: e.dataTransfer?.types?.includes('text/plain') || false }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' }).catch(() => { });
       // #endregion
-      
+
       // Only handle external file drops (from file explorer)
       // Internal drags (within app) should be handled by folder drop handlers
       const droppedFiles = Array.from(e.dataTransfer?.files || []);
       const hasExternalFiles = droppedFiles.length > 0;
       const hasInternalDrag = e.dataTransfer?.types?.includes('text/plain') && !hasExternalFiles;
-      
+
       // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:109',message:'Global handleDrop: Checking drop type',data:{hasExternalFiles,hasInternalDrag,willHandle:hasExternalFiles},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'}).catch(()=>{});
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:109', message: 'Global handleDrop: Checking drop type', data: { hasExternalFiles, hasInternalDrag, willHandle: hasExternalFiles }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' }).catch(() => { });
       // #endregion
-      
+
       // If this is an internal drag (no external files), let it propagate to folder handlers
       if (hasInternalDrag && !hasExternalFiles) {
         // #region agent log
-        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:113',message:'Global handleDrop: Internal drag - allowing propagation',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'}).catch(()=>{});
+        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:113', message: 'Global handleDrop: Internal drag - allowing propagation', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' }).catch(() => { });
         // #endregion
         setIsDragging(false);
         return; // Don't prevent default, let folder handlers handle it
       }
-      
+
       // This is an external file drop - handle it
       e.preventDefault();
       e.stopPropagation();
@@ -457,7 +457,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       if (success) {
         // Reload cases to update the UI with the new tag
         await refreshCases();
-        
+
         // Update currentCase if it's the one we just modified
         if (currentCase && currentCase.path === tagSelectorCasePath) {
           // Update currentCase with the new tagId
@@ -479,11 +479,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
   const handleMoveFileToFolder = async (filePath: string, folderPath: string) => {
     // #region agent log
-    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:164',message:'handleMoveFileToFolder: Entry',data:{filePath,folderPath,hasFilePath:!!filePath,hasFolderPath:!!folderPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:164', message: 'handleMoveFileToFolder: Entry', data: { filePath, folderPath, hasFilePath: !!filePath, hasFolderPath: !!folderPath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
     // #endregion
     if (!filePath || !folderPath) {
       // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:166',message:'handleMoveFileToFolder: Missing paths - returning early',data:{filePath,folderPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:166', message: 'handleMoveFileToFolder: Missing paths - returning early', data: { filePath, folderPath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
       // #endregion
       logger.warn('handleMoveFileToFolder: Missing filePath or folderPath', { filePath, folderPath });
       return;
@@ -491,15 +491,15 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     try {
       logger.log('handleMoveFileToFolder: Moving file', { filePath, folderPath });
       // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:171',message:'handleMoveFileToFolder: Calling moveFileToFolder hook',data:{filePath,folderPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:171', message: 'handleMoveFileToFolder: Calling moveFileToFolder hook', data: { filePath, folderPath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'D' }).catch(() => { });
       // #endregion
       const result = await moveFileToFolder(filePath, folderPath);
       // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:173',message:'handleMoveFileToFolder: moveFileToFolder completed',data:{filePath,folderPath,result},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:173', message: 'handleMoveFileToFolder: moveFileToFolder completed', data: { filePath, folderPath, result }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'D' }).catch(() => { });
       // #endregion
     } catch (error) {
       // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:175',message:'handleMoveFileToFolder: Error caught',data:{filePath,folderPath,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:175', message: 'handleMoveFileToFolder: Error caught', data: { filePath, folderPath, error: error instanceof Error ? error.message : String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }).catch(() => { });
       // #endregion
       logger.error('Failed to move file to folder:', error);
     }
@@ -562,9 +562,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
   const handleFolderSelection = () => {
     if (!selectedFileForExtraction || !currentCase) {
-      logger.error('handleFolderSelection: Missing required data', { 
-        selectedFileForExtraction, 
-        currentCase 
+      logger.error('handleFolderSelection: Missing required data', {
+        selectedFileForExtraction,
+        currentCase
       });
       return;
     }
@@ -574,9 +574,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
   const handleMakeNewFolder = () => {
     if (!selectedFileForExtraction || !currentCase) {
-      logger.error('handleMakeNewFolder: Missing required data', { 
-        selectedFileForExtraction, 
-        currentCase 
+      logger.error('handleMakeNewFolder: Missing required data', {
+        selectedFileForExtraction,
+        currentCase
       });
       return;
     }
@@ -588,7 +588,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     // Capture the values immediately to avoid stale closure issues
     const fileToExtract = selectedFileForExtraction;
     const caseToUse = currentCase;
-    
+
     if (!fileToExtract || !caseToUse) {
       logger.error('Missing required data:', { selectedFileForExtraction: fileToExtract, currentCase: caseToUse });
       setShowExtractionDialog(false);
@@ -605,22 +605,22 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       }
 
       const folderPath = await window.electronAPI.createExtractionFolder(caseToUse.path, folderName, fileToExtract.path);
-      
+
       // Clear search query to ensure folder is visible
       setSearchQuery('');
-      
+
       // Refresh files to show the new folder - use a small delay to ensure folder is fully created
       await new Promise(resolve => setTimeout(resolve, 200));
-      
+
       await refreshFiles();
-      
+
       setPendingExtraction({
         folderName,
         folderPath,
         file: fileToExtract,
         casePath: caseToUse.path,
       });
-      
+
       setShowExtractionDialog(false);
       setShowSaveParentDialog(true);
     } catch (error) {
@@ -639,7 +639,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     }
 
     setShowSaveParentDialog(false);
-    
+
     try {
       // Refresh files immediately to show the folder with loading state
       if (currentCase) {
@@ -652,7 +652,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         pendingExtraction.folderName,
         saveParent
       );
-      
+
       // Refresh files after extraction completes
       if (currentCase) {
         await refreshFiles();
@@ -660,13 +660,13 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     } catch (error) {
       logger.error('Extraction failed:', error);
     }
-    
+
     setSelectedFileForExtraction(null);
     setPendingExtraction(null);
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 transition-all duration-300"
     >
       <div className="container mx-auto px-4 py-8">
@@ -764,7 +764,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               Start Case File
             </button>
           )}
-          
+
           {currentCase && (
             <>
               <button
@@ -841,7 +841,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   </div>
                 </motion.div>
               )}
-              
+
               {/* Unified Grid: Folders and Files in Backend Order */}
               {/* Group folders with their PDFs so folders appear above PDFs in the same column */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -850,7 +850,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                     // Check if we're inside a folder
                     // When inside an extraction folder, PDFs should not show extraction options and no spacers needed
                     const isInsideFolder = !!currentFolderPath;
-                    
+
                     // Group folders with their associated PDFs so they appear stacked vertically
                     // This ensures folders stay above their PDFs in the same column when new files are added
                     // Skip grouping when inside a folder (folders don't appear inside folders)
@@ -896,7 +896,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 onEditBackground={() => updateFolderBackgroundImage(item.path)}
                                 onDragOver={(e) => {
                                   // #region agent log
-                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:578',message:'onDragOver: Dragging over folder (inside folder)',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:578', message: 'onDragOver: Dragging over folder (inside folder)', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
                                   // #endregion
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -907,7 +907,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     if (filePath && filePath !== item.path) {
                                       setDragOverFolder(item.path);
                                       // #region agent log
-                                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:590',message:'onDragOver: Setting dragOverFolder (inside folder)',data:{folderPath:item.path,filePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+                                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:590', message: 'onDragOver: Setting dragOverFolder (inside folder)', data: { folderPath: item.path, filePath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
                                       // #endregion
                                     }
                                   }
@@ -919,35 +919,35 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 }}
                                 onDrop={(e) => {
                                   // #region agent log
-                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:600',message:'onDrop: Drop event fired (inside folder)',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:600', message: 'onDrop: Drop event fired (inside folder)', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
                                   // #endregion
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setDragOverFolder(null);
-                                  
+
                                   const filePathFromData = e.dataTransfer.getData('text/plain');
                                   const filePath = filePathFromData || draggedFile?.path;
-                                  
+
                                   // #region agent log
-                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:610',message:'onDrop: File path extracted (inside folder)',data:{filePathFromData,filePathFromDataLength:filePathFromData?.length||0,draggedFilePath:draggedFile?.path,finalFilePath:filePath,folderPath:item.path,isValid:!!(filePath && filePath !== item.path)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:610', message: 'onDrop: File path extracted (inside folder)', data: { filePathFromData, filePathFromDataLength: filePathFromData?.length || 0, draggedFilePath: draggedFile?.path, finalFilePath: filePath, folderPath: item.path, isValid: !!(filePath && filePath !== item.path) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
                                   // #endregion
-                                  
-                                  logger.log('onDrop: File dropped on folder (inside folder)', { 
-                                    filePath, 
+
+                                  logger.log('onDrop: File dropped on folder (inside folder)', {
+                                    filePath,
                                     folderPath: item.path,
                                     fromDataTransfer: !!filePathFromData,
-                                    fromState: !!draggedFile 
+                                    fromState: !!draggedFile
                                   });
-                                  
+
                                   if (filePath && filePath !== item.path) {
                                     // #region agent log
-                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:622',message:'onDrop: Calling handleMoveFileToFolder (inside folder)',data:{filePath,folderPath:item.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:622', message: 'onDrop: Calling handleMoveFileToFolder (inside folder)', data: { filePath, folderPath: item.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
                                     // #endregion
                                     handleMoveFileToFolder(filePath, item.path);
                                     setDraggedFile(null);
                                   } else {
                                     // #region agent log
-                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:627',message:'onDrop: Invalid drop - skipping (inside folder)',data:{filePath,folderPath:item.path,reason:!filePath?'noFilePath':filePath===item.path?'samePath':'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:627', message: 'onDrop: Invalid drop - skipping (inside folder)', data: { filePath, folderPath: item.path, reason: !filePath ? 'noFilePath' : filePath === item.path ? 'samePath' : 'unknown' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
                                     // #endregion
                                     logger.warn('onDrop: Invalid drop (inside folder)', { filePath, folderPath: item.path });
                                   }
@@ -990,21 +990,21 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                         }
                       });
                     }
-                    
+
                     const groupedItems: Array<{ type: 'group' | 'single'; items: ArchiveFile[] }> = [];
                     const processedPaths = new Set<string>();
-                    
+
                     // Build a map of PDF paths to their folders (for quick lookup)
                     const pdfToFoldersMap = new Map<string, ArchiveFile[]>();
                     const pdfFiles = files.filter(f => !f.isFolder && f.type === 'pdf');
-                    
+
                     files.forEach((item) => {
                       if (item.isFolder && item.parentPdfName) {
                         // Find the PDF this folder belongs to (case-insensitive match)
-                        const associatedPdf = pdfFiles.find(pdf => 
+                        const associatedPdf = pdfFiles.find(pdf =>
                           pdf.name.toLowerCase() === item.parentPdfName!.toLowerCase()
                         );
-                        
+
                         if (associatedPdf) {
                           const pdfKey = associatedPdf.path;
                           if (!pdfToFoldersMap.has(pdfKey)) {
@@ -1014,18 +1014,18 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                         }
                       }
                     });
-                    
+
                     // Process items in backend order to maintain sorting
                     files.forEach((item) => {
                       if (processedPaths.has(item.path)) return;
-                      
+
                       if (item.isFolder && item.parentPdfName) {
                         // Find the PDF this folder belongs to
-                        const associatedPdf = pdfFiles.find(pdf => 
+                        const associatedPdf = pdfFiles.find(pdf =>
                           pdf.name.toLowerCase() === item.parentPdfName!.toLowerCase() &&
                           !processedPaths.has(pdf.path)
                         );
-                        
+
                         if (associatedPdf) {
                           // Get all folders for this PDF (maintain order from backend)
                           const allFoldersForPdf = pdfToFoldersMap.get(associatedPdf.path) || [];
@@ -1035,13 +1035,13 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                             const indexB = files.findIndex(f => f.path === b.path);
                             return indexA - indexB;
                           });
-                          
+
                           // Group all folders with their PDF (folders first, then PDF)
                           groupedItems.push({
                             type: 'group',
                             items: [...sortedFolders, associatedPdf]
                           });
-                          
+
                           // Mark all as processed
                           sortedFolders.forEach(folder => processedPaths.add(folder.path));
                           processedPaths.add(associatedPdf.path);
@@ -1058,7 +1058,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                         const foldersForPdf = (pdfToFoldersMap.get(item.path) || []).filter(
                           folder => !processedPaths.has(folder.path)
                         );
-                        
+
                         if (foldersForPdf.length > 0) {
                           // Sort folders by their position in the original array
                           const sortedFolders = foldersForPdf.sort((a, b) => {
@@ -1066,7 +1066,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                             const indexB = files.findIndex(f => f.path === b.path);
                             return indexA - indexB;
                           });
-                          
+
                           // Group folders with this PDF
                           groupedItems.push({
                             type: 'group',
@@ -1098,7 +1098,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                         processedPaths.add(item.path);
                       }
                     });
-                    
+
                     return groupedItems.map((group, groupIndex) => {
                       if (group.type === 'group') {
                         // Render folder and PDF stacked vertically
@@ -1131,7 +1131,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                         onEditBackground={() => updateFolderBackgroundImage(item.path)}
                                         onDragOver={(e) => {
                                           // #region agent log
-                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:695',message:'onDragOver: Dragging over folder',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:695', message: 'onDragOver: Dragging over folder', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
                                           // #endregion
                                           e.preventDefault();
                                           e.stopPropagation();
@@ -1144,7 +1144,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                             if (filePath && filePath !== item.path) {
                                               setDragOverFolder(item.path);
                                               // #region agent log
-                                              if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:706',message:'onDragOver: Setting dragOverFolder',data:{folderPath:item.path,filePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+                                              if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:706', message: 'onDragOver: Setting dragOverFolder', data: { folderPath: item.path, filePath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
                                               // #endregion
                                             }
                                           }
@@ -1156,36 +1156,36 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                         }}
                                         onDrop={(e) => {
                                           // #region agent log
-                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:714',message:'onDrop: Drop event fired',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:714', message: 'onDrop: Drop event fired', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
                                           // #endregion
                                           e.preventDefault();
                                           e.stopPropagation();
                                           setDragOverFolder(null);
-                                          
+
                                           // Get file path from dataTransfer or state
                                           const filePathFromData = e.dataTransfer.getData('text/plain');
                                           const filePath = filePathFromData || draggedFile?.path;
-                                          
+
                                           // #region agent log
-                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:723',message:'onDrop: File path extracted',data:{filePathFromData,filePathFromDataLength:filePathFromData?.length||0,draggedFilePath:draggedFile?.path,finalFilePath:filePath,folderPath:item.path,isValid:!!(filePath && filePath !== item.path)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
+                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:723', message: 'onDrop: File path extracted', data: { filePathFromData, filePathFromDataLength: filePathFromData?.length || 0, draggedFilePath: draggedFile?.path, finalFilePath: filePath, folderPath: item.path, isValid: !!(filePath && filePath !== item.path) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
                                           // #endregion
-                                          
-                                          logger.log('onDrop: File dropped on folder', { 
-                                            filePath, 
+
+                                          logger.log('onDrop: File dropped on folder', {
+                                            filePath,
                                             folderPath: item.path,
                                             fromDataTransfer: !!filePathFromData,
-                                            fromState: !!draggedFile 
+                                            fromState: !!draggedFile
                                           });
-                                          
+
                                           if (filePath && filePath !== item.path) {
                                             // #region agent log
-                                            if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:731',message:'onDrop: Calling handleMoveFileToFolder',data:{filePath,folderPath:item.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                            if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:731', message: 'onDrop: Calling handleMoveFileToFolder', data: { filePath, folderPath: item.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
                                             // #endregion
                                             handleMoveFileToFolder(filePath, item.path);
                                             setDraggedFile(null);
                                           } else {
                                             // #region agent log
-                                            if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:735',message:'onDrop: Invalid drop - skipping',data:{filePath,folderPath:item.path,reason:!filePath?'noFilePath':filePath===item.path?'samePath':'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                            if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:735', message: 'onDrop: Invalid drop - skipping', data: { filePath, folderPath: item.path, reason: !filePath ? 'noFilePath' : filePath === item.path ? 'samePath' : 'unknown' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
                                             // #endregion
                                             logger.warn('onDrop: Invalid drop', { filePath, folderPath: item.path });
                                           }
@@ -1270,67 +1270,67 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     setShowRenameDialog(true);
                                   }}
                                   onEditBackground={() => updateFolderBackgroundImage(item.path)}
-                                onDragOver={(e) => {
-                                  // #region agent log
-                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:813',message:'onDragOver: Dragging over folder (single)',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-                                  // #endregion
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  // Set drop effect to allow drop
-                                  e.dataTransfer.dropEffect = 'move';
-                                  // Check if there's a file being dragged (can't read data during dragOver, only check types)
-                                  const hasFileData = e.dataTransfer.types.includes('text/plain') || draggedFile;
-                                  if (hasFileData) {
-                                    const filePath = draggedFile?.path;
-                                    if (filePath && filePath !== item.path) {
-                                      setDragOverFolder(item.path);
-                                      // #region agent log
-                                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:825',message:'onDragOver: Setting dragOverFolder (single)',data:{folderPath:item.path,filePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-                                      // #endregion
+                                  onDragOver={(e) => {
+                                    // #region agent log
+                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:813', message: 'onDragOver: Dragging over folder (single)', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
+                                    // #endregion
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    // Set drop effect to allow drop
+                                    e.dataTransfer.dropEffect = 'move';
+                                    // Check if there's a file being dragged (can't read data during dragOver, only check types)
+                                    const hasFileData = e.dataTransfer.types.includes('text/plain') || draggedFile;
+                                    if (hasFileData) {
+                                      const filePath = draggedFile?.path;
+                                      if (filePath && filePath !== item.path) {
+                                        setDragOverFolder(item.path);
+                                        // #region agent log
+                                        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:825', message: 'onDragOver: Setting dragOverFolder (single)', data: { folderPath: item.path, filePath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
+                                        // #endregion
+                                      }
                                     }
-                                  }
-                                }}
+                                  }}
                                   onDragLeave={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
                                     setDragOverFolder(null);
                                   }}
-                                onDrop={(e) => {
-                                  // #region agent log
-                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:832',message:'onDrop: Drop event fired (single)',data:{folderPath:item.path,folderName:item.name,dataTransferTypes:Array.from(e.dataTransfer.types),draggedFilePath:draggedFile?.path,draggedFileName:draggedFile?.name,hasDraggedFile:!!draggedFile},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
-                                  // #endregion
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setDragOverFolder(null);
-                                  
-                                  // Get file path from dataTransfer or state
-                                  const filePathFromData = e.dataTransfer.getData('text/plain');
-                                  const filePath = filePathFromData || draggedFile?.path;
-                                  
-                                  // #region agent log
-                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:841',message:'onDrop: File path extracted (single)',data:{filePathFromData,filePathFromDataLength:filePathFromData?.length||0,draggedFilePath:draggedFile?.path,finalFilePath:filePath,folderPath:item.path,isValid:!!(filePath && filePath !== item.path)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
-                                  // #endregion
-                                  
-                                  logger.log('onDrop: File dropped on folder', { 
-                                    filePath, 
-                                    folderPath: item.path,
-                                    fromDataTransfer: !!filePathFromData,
-                                    fromState: !!draggedFile 
-                                  });
-                                  
-                                  if (filePath && filePath !== item.path) {
+                                  onDrop={(e) => {
                                     // #region agent log
-                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:849',message:'onDrop: Calling handleMoveFileToFolder (single)',data:{filePath,folderPath:item.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:832', message: 'onDrop: Drop event fired (single)', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
                                     // #endregion
-                                    handleMoveFileToFolder(filePath, item.path);
-                                    setDraggedFile(null);
-                                  } else {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setDragOverFolder(null);
+
+                                    // Get file path from dataTransfer or state
+                                    const filePathFromData = e.dataTransfer.getData('text/plain');
+                                    const filePath = filePathFromData || draggedFile?.path;
+
                                     // #region agent log
-                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchivePage.tsx:853',message:'onDrop: Invalid drop - skipping (single)',data:{filePath,folderPath:item.path,reason:!filePath?'noFilePath':filePath===item.path?'samePath':'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
+                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:841', message: 'onDrop: File path extracted (single)', data: { filePathFromData, filePathFromDataLength: filePathFromData?.length || 0, draggedFilePath: draggedFile?.path, finalFilePath: filePath, folderPath: item.path, isValid: !!(filePath && filePath !== item.path) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
                                     // #endregion
-                                    logger.warn('onDrop: Invalid drop', { filePath, folderPath: item.path });
-                                  }
-                                }}
+
+                                    logger.log('onDrop: File dropped on folder', {
+                                      filePath,
+                                      folderPath: item.path,
+                                      fromDataTransfer: !!filePathFromData,
+                                      fromState: !!draggedFile
+                                    });
+
+                                    if (filePath && filePath !== item.path) {
+                                      // #region agent log
+                                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:849', message: 'onDrop: Calling handleMoveFileToFolder (single)', data: { filePath, folderPath: item.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
+                                      // #endregion
+                                      handleMoveFileToFolder(filePath, item.path);
+                                      setDraggedFile(null);
+                                    } else {
+                                      // #region agent log
+                                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:853', message: 'onDrop: Invalid drop - skipping (single)', data: { filePath, folderPath: item.path, reason: !filePath ? 'noFilePath' : filePath === item.path ? 'samePath' : 'unknown' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
+                                      // #endregion
+                                      logger.warn('onDrop: Invalid drop', { filePath, folderPath: item.path });
+                                    }
+                                  }}
                                   isDragOver={dragOverFolder === item.path}
                                 />
                               </div>
@@ -1447,13 +1447,13 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                     onClick={() => setCurrentCase(caseItem)}
                     onDelete={() => deleteCase(caseItem.path)}
                     onRename={() => {
-                      setFileToRename({ 
-                        name: caseItem.name, 
-                        path: caseItem.path, 
-                        size: 0, 
-                        modified: 0, 
-                        type: 'other', 
-                        isFolder: true 
+                      setFileToRename({
+                        name: caseItem.name,
+                        path: caseItem.path,
+                        size: 0,
+                        modified: 0,
+                        type: 'other',
+                        isFolder: true
                       });
                       setShowRenameDialog(true);
                     }}
@@ -1625,8 +1625,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
           tagSelectorFilePath
             ? (files.find(f => f.path === tagSelectorFilePath)?.categoryTagId || null)
             : tagSelectorCasePath
-            ? (cases.find(c => c.path === tagSelectorCasePath)?.categoryTagId || currentCase?.categoryTagId || null)
-            : (currentCase?.categoryTagId || null)
+              ? (cases.find(c => c.path === tagSelectorCasePath)?.categoryTagId || currentCase?.categoryTagId || null)
+              : (currentCase?.categoryTagId || null)
         }
       />
 
