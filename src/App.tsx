@@ -21,7 +21,6 @@ import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext'
 import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
 import { DetachedSecurityChecker } from './components/DetachedSecurityChecker';
 import { ResizableDivider } from './components/ResizableDivider';
-import { WordEditorPanel } from './components/WordEditor/WordEditorPanel';
 import './App.css';
 
 function AppContent() {
@@ -50,7 +49,7 @@ function AppContent() {
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
   const { settings } = useSettingsContext();
-  const { isOpen: isWordEditorOpen, panelWidth, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
+  const { isOpen: isWordEditorOpen, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
 
   // Check if we're in detached editor mode
   // In dev mode, it's a query param: ?editor=detached
