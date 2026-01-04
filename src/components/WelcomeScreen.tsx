@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useMemo } from 'react';
+import { ActionToolbar } from './ActionToolbar';
 
 // Get base URL for assets (works in both dev and production)
 const getAssetPath = (path: string) => {
@@ -35,13 +36,23 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
   const vaultStars = useMemo(() => generateStars(12), []);
   const securityStars = useMemo(() => generateStars(12), []);
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="text-center space-y-8"
-      >
+    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+      {/* Header with Toolbar */}
+      <div className="w-full px-8 pt-8 pb-4 flex items-center justify-between">
+        <h1 className="text-4xl font-bold bg-gradient-purple bg-clip-text text-transparent">
+          The Vault
+        </h1>
+        <ActionToolbar hideWordEditorButton={true} />
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="text-center space-y-8"
+        >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -435,6 +446,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
           </motion.div>
         </div>
       </motion.div>
+      </div>
     </div>
   );
 }

@@ -341,7 +341,7 @@ function AppContent() {
               style={{ width: `${100 - dividerPosition}%` }}
             />
           </div>
-          <SettingsPanel isArchiveVisible={true} />
+          <SettingsPanel isArchiveVisible={true} hideFixedButtons={true} />
           <ToastContainer />
         </>
       );
@@ -366,7 +366,7 @@ function AppContent() {
             <ArchivePage onBack={() => setShowArchive(false)} />
           </Suspense>
         </div>
-        <SettingsPanel isArchiveVisible={true} />
+        <SettingsPanel isArchiveVisible={true} hideFixedButtons={true} />
         <ToastContainer />
       </>
     );
@@ -386,7 +386,7 @@ function AppContent() {
           />
         </div>
         <ToastContainer />
-        <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} />
+        <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
         <SecurityCheckerModal
           isOpen={showSecurityChecker}
           onClose={() => setShowSecurityChecker(false)}
@@ -406,7 +406,7 @@ function AppContent() {
             <p className="text-gray-300">Preparing...</p>
           </div>
         </div>
-        <SettingsPanel isArchiveVisible={false} />
+        <SettingsPanel isArchiveVisible={false} hideFixedButtons={true} />
         <ToastContainer />
       </>
     );
@@ -500,7 +500,7 @@ function AppContent() {
         )}
       </div>
 
-      <SettingsPanel isArchiveVisible={false} />
+      <SettingsPanel isArchiveVisible={false} hideFixedButtons={true} />
       <ToastContainer />
     </div>
   );
