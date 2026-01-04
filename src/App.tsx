@@ -304,9 +304,6 @@ function AppContent() {
       <>
         <div 
           className="transition-all duration-300"
-          style={{
-            width: isWordEditorOpen ? 'calc(100% - 500px)' : '100%',
-          }}
         >
           <Suspense
             fallback={
@@ -332,12 +329,6 @@ function AppContent() {
       <>
         <div 
           className="transition-all duration-300"
-          style={{
-            width: isWordEditorOpen ? 'calc(100vw - 500px)' : '100vw',
-            maxWidth: isWordEditorOpen ? 'calc(100vw - 500px)' : 'none',
-            marginLeft: '0',
-            marginRight: '0',
-          }}
         >
           <WelcomeScreen 
             onSelectFile={handleSelectFile}
@@ -374,10 +365,10 @@ function AppContent() {
       <div 
         className="transition-all duration-300"
         style={{
-          width: isWordEditorOpen ? `calc(100vw - ${panelWidth}px)` : '100%',
-          maxWidth: isWordEditorOpen ? `calc(100vw - ${panelWidth}px)` : '1280px',
-          marginLeft: isWordEditorOpen ? '0' : 'auto',
-          marginRight: isWordEditorOpen ? '0' : 'auto',
+          width: '100%',
+          maxWidth: '1280px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
           padding: '2rem 1rem',
         }}
       >
