@@ -6,6 +6,7 @@ import { TextLibrary } from './TextLibrary';
 import { BookmarkLibrary } from '../Bookmarks/BookmarkLibrary';
 import { useToast } from '../Toast/ToastContext';
 import { useWordEditor } from '../../contexts/WordEditorContext';
+import { useArchiveContext } from '../../contexts/ArchiveContext';
 import { debugLog } from '../../utils/debugLogger';
 import { WordEditorErrorBoundary } from './WordEditorErrorBoundary';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
@@ -32,6 +33,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   const editorRef = useRef<WordEditorHandle>(null);
   const toast = useToast();
   const { setIsOpen: setContextOpen, panelWidth, setPanelWidth } = useWordEditor();
+  const { currentCase } = useArchiveContext();
   const resizeStartXRef = useRef<number>(0);
   const resizeStartWidthRef = useRef<number>(500);
 
@@ -42,12 +44,14 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
     }
   }, [initialFilePath]);
 
-  // Open library if requested
+  // Open library if requested and set panel to minimum width
   useEffect(() => {
     if (openLibrary && isOpen) {
       setShowLibrary(true);
+      // Set panel width to minimum when opening with library
+      setPanelWidth(MIN_WIDTH);
     }
-  }, [openLibrary, isOpen]);
+  }, [openLibrary, isOpen, setPanelWidth]);
 
   useEffect(() => {
     setContextOpen(isOpen);
@@ -155,13 +159,19 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
     }
 
     try {
-      // Create empty file with the provided name
-      const newFilePath = await window.electronAPI.createTextFile(fileName, '');
+      let newFilePath: string;
+      // If we have a current case, create case note; otherwise create global file
+      if (currentCase?.path) {
+        newFilePath = await window.electronAPI.createCaseNote(currentCase.path, fileName, '');
+        toast.success('Note created');
+      } else {
+        newFilePath = await window.electronAPI.createTextFile(fileName, '');
+        toast.success('New file created');
+      }
       setCurrentFilePath(newFilePath);
       setShowLibrary(false);
       // Force a re-render by incrementing editorKey
       setEditorKey(prev => prev + 1);
-      toast.success('New file created');
     } catch (error) {
       toast.error('Failed to create file');
       console.error('Create file error:', error);
@@ -320,8 +330,13 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
                 {/* Library button */}
                 <button
                   onClick={() => {
-                    setShowLibrary(!showLibrary);
+                    const willShowLibrary = !showLibrary;
+                    setShowLibrary(willShowLibrary);
                     setShowBookmarkLibrary(false);
+                    // Set panel to minimum width when opening library
+                    if (willShowLibrary) {
+                      setPanelWidth(MIN_WIDTH);
+                    }
                   }}
                   className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
                   aria-label="Open text library"

@@ -1320,7 +1320,7 @@ ipcMain.handle('list-archive-cases', async () => {
           }
           // Exclude .bookmark-thumbnails folder from case list
           const folderName = entry.name.toLowerCase();
-          if (folderName === '.bookmark-thumbnails') {
+          if (folderName === '.bookmark-thumbnails' || folderName === 'textlibrary') {
             return false;
           }
           return true;
@@ -2822,6 +2822,21 @@ async function getTextLibraryPath(): Promise<string> {
   return textLibraryPath;
 }
 
+// Get case notes folder path
+async function getCaseNotesPath(casePath: string): Promise<string> {
+  if (!isSafePath(casePath)) {
+    throw new Error('Invalid case path');
+  }
+  const notesPath = path.join(casePath, '.notes');
+  // Ensure directory exists
+  try {
+    await fs.mkdir(notesPath, { recursive: true });
+  } catch (error) {
+    logger.error('Failed to create case notes directory:', error);
+  }
+  return notesPath;
+}
+
 // List text files
 ipcMain.handle('list-text-files', async () => {
   try {
@@ -2925,6 +2940,77 @@ ipcMain.handle('delete-text-file', async (event, filePath: string) => {
   } catch (error) {
     logger.error('Failed to delete text file:', error);
     throw new Error(`Failed to delete text file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Case Notes Handlers
+
+// List case notes
+ipcMain.handle('list-case-notes', async (event, casePath: string) => {
+  try {
+    if (!isSafePath(casePath)) {
+      throw new Error('Invalid case path');
+    }
+    
+    const notesPath = await getCaseNotesPath(casePath);
+    const entries = await fs.readdir(notesPath, { withFileTypes: true });
+    
+    const files = await Promise.all(
+      entries
+        .filter(entry => entry.isFile() && !entry.name.startsWith('.'))
+        .map(async (entry) => {
+          const filePath = path.join(notesPath, entry.name);
+          try {
+            const stats = await fs.stat(filePath);
+            // Read first 200 characters for preview
+            let preview: string | undefined;
+            try {
+              const content = await fs.readFile(filePath, 'utf8');
+              preview = content.substring(0, 200).replace(/\n/g, ' ').trim();
+            } catch {
+              // Ignore preview errors
+            }
+            
+            return {
+              name: entry.name,
+              path: filePath,
+              size: stats.size,
+              modified: stats.mtimeMs,
+              preview,
+            };
+          } catch (error) {
+            logger.warn(`Failed to get stats for ${filePath}:`, error);
+            return null;
+          }
+        })
+    );
+    
+    return files.filter((f): f is NonNullable<typeof f> => f !== null);
+  } catch (error) {
+    logger.error('Failed to list case notes:', error);
+    throw new Error(`Failed to list case notes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Create case note
+ipcMain.handle('create-case-note', async (event, casePath: string, fileName: string, content: string) => {
+  try {
+    if (!isSafePath(casePath)) {
+      throw new Error('Invalid case path');
+    }
+    
+    const notesPath = await getCaseNotesPath(casePath);
+    const filePath = path.join(notesPath, fileName);
+    
+    if (!isSafePath(filePath)) {
+      throw new Error('Invalid file name');
+    }
+    
+    await fs.writeFile(filePath, content, 'utf8');
+    return filePath;
+  } catch (error) {
+    logger.error('Failed to create case note:', error);
+    throw new Error(`Failed to create case note: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 

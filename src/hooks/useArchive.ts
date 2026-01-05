@@ -1139,8 +1139,8 @@ export function useArchive() {
     // Exclude system folders (safety check - backend should already filter these)
     filtered = filtered.filter(caseItem => {
       const caseName = caseItem.name.toLowerCase();
-      // Exclude .bookmark-thumbnails folder
-      if (caseName === '.bookmark-thumbnails') {
+      // Exclude .bookmark-thumbnails folder and TextLibrary
+      if (caseName === '.bookmark-thumbnails' || caseName === 'textlibrary') {
         return false;
       }
       return true;

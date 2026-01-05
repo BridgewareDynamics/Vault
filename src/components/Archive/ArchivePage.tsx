@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Home, FolderPlus, Upload, ArrowLeft, FolderOpen } from 'lucide-react';
 import { useArchive } from '../../hooks/useArchive';
@@ -25,7 +25,8 @@ import { ProgressBar } from '../ProgressBar';
 import { SecurityCheckerModal } from '../SecurityCheckerModal';
 import { ActionToolbar } from '../ActionToolbar';
 import { logger } from '../../utils/logger';
-import { useWordEditor } from '../../contexts/WordEditorContext';
+// import { useWordEditor } from '../../contexts/WordEditorContext'; // Unused for now
+import { useArchiveContext } from '../../contexts/ArchiveContext';
 
 interface ArchivePageProps {
   onBack: () => void;
@@ -70,7 +71,50 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
   const { extractPDF, isExtracting, progress, statusMessage, extractingCasePath, extractingFolderPath } = useArchiveExtraction();
   const toast = useToast();
-  const { isOpen: isWordEditorOpen } = useWordEditor();
+  // const { isOpen: isWordEditorOpen } = useWordEditor(); // Unused for now
+  const { currentCase: archiveContextCase, setCurrentCase: setArchiveContextCase } = useArchiveContext();
+  
+  // Track if we've attempted to restore case from context (prevents multiple restorations)
+  const hasRestoredCaseRef = useRef(false);
+
+  // Restore currentCase from ArchiveContext on mount if local state is null
+  // This fixes the issue where ArchivePage remounts (due to layout changes) and loses case selection
+  useEffect(() => {
+    // Only restore if:
+    // 1. We haven't already attempted restoration
+    // 2. Cases are loaded (we need the list to validate)
+    // 3. Local currentCase is null (we just mounted/remounted)
+    // 4. ArchiveContext has a case (there was a previous selection)
+    if (!hasRestoredCaseRef.current && cases.length > 0 && currentCase === null && archiveContextCase !== null) {
+      // Verify the case still exists in our cases list
+      const caseExists = cases.some(c => c.path === archiveContextCase.path);
+      if (caseExists) {
+        setCurrentCase(archiveContextCase);
+        hasRestoredCaseRef.current = true;
+      } else {
+        // Case doesn't exist anymore, mark as restored to prevent retrying
+        hasRestoredCaseRef.current = true;
+      }
+    }
+  }, [cases, currentCase, archiveContextCase, setCurrentCase]);
+
+  // Update global ArchiveContext when currentCase changes
+  // Use useLayoutEffect to ensure synchronous update before browser paint
+  // This prevents race conditions when word editor opens and needs to read currentCase
+  // IMPORTANT: Don't overwrite context with null during remounts if context has a case
+  // (we'll restore from context in useEffect, then sync back)
+  useLayoutEffect(() => {
+    // Always sync non-null values
+    // For null values, only sync if context is also null (don't overwrite during remount)
+    if (currentCase !== null) {
+      setArchiveContextCase(currentCase);
+    } else if (archiveContextCase === null) {
+      // Both are null, sync to keep them in sync
+      setArchiveContextCase(null);
+    }
+    // If currentCase is null but archiveContextCase is not, skip syncing
+    // This allows the useEffect to restore from context first
+  }, [currentCase, setArchiveContextCase, archiveContextCase]);
 
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showCaseDialog, setShowCaseDialog] = useState(false);
@@ -1419,7 +1463,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   await deleteFile(item.path);
                                 }}
                                 onExtract={undefined}
-                                onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
+                                onRunAudit={undefined}
                                 onRename={() => {
                                   setFileToRename(item);
                                   setShowRenameDialog(true);
