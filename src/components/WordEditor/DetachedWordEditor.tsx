@@ -17,15 +17,19 @@ export function DetachedWordEditor() {
   const [pendingClose, setPendingClose] = useState(false);
   const [isReattaching, setIsReattaching] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [casePath, setCasePath] = useState<string | null>(null); // Store case path from detach
   const editorRef = useRef<WordEditorHandle>(null);
   const toast = useToast();
 
   useEffect(() => {
     // The main process will send data via webContents.send
     // We'll use a custom event listener
-    const handleData = (_event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }>) => {
+    const handleData = (_event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
       const data = _event.detail;
-      console.log('DetachedWordEditor: Received word-editor-data event', { viewState: data.viewState, filePath: data.filePath });
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetachedWordEditor.tsx:handleData:entry',message:'Received word-editor-data event',data:{viewState:data.viewState,filePath:data.filePath,casePath:data.casePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      console.log('DetachedWordEditor: Received word-editor-data event', { viewState: data.viewState, filePath: data.filePath, casePath: data.casePath });
 
       // Set the content in the editor by updating the DOM directly
       // The WordEditor component will handle loading the file if filePath is set
@@ -33,9 +37,19 @@ export function DetachedWordEditor() {
         setFilePath(data.filePath);
       }
 
+      // Store case path if provided
+      if (data.casePath) {
+        setCasePath(data.casePath);
+      } else {
+        setCasePath(null);
+      }
+
       // Restore view state - always set it explicitly to ensure correct state
       const viewState = data.viewState || 'editor';
       console.log('DetachedWordEditor: Setting view state to', viewState);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetachedWordEditor.tsx:handleData:beforeState',message:'About to set view state',data:{viewState,casePath:data.casePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
 
       if (viewState === 'bookmarkLibrary') {
         setShowBookmarkLibrary(true);
@@ -47,6 +61,9 @@ export function DetachedWordEditor() {
         setShowBookmarkLibrary(false);
         setShowLibrary(true);
         console.log('DetachedWordEditor: Set showBookmarkLibrary=false, showLibrary=true');
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetachedWordEditor.tsx:handleData:libraryState',message:'Set showLibrary=true',data:{casePath:data.casePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         // Clear loading immediately for library views
         setIsInitializing(false);
       } else {
@@ -185,6 +202,7 @@ export function DetachedWordEditor() {
           content,
           filePath: filePath,
           viewState,
+          casePath: casePath,
         });
         // The window will be closed by the main process
         // Reset the flag in case the window doesn't close immediately
@@ -389,6 +407,7 @@ export function DetachedWordEditor() {
               }}
               isDetached={true}
               onFileDeleted={handleFileDeleted}
+              detachedCasePath={casePath}
             />
           ) : (
             <WordEditorErrorBoundary

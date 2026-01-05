@@ -194,9 +194,31 @@ function AppContent() {
       }
     };
 
+    const handleNavigateToCaseFolder = (event: CustomEvent<{ casePath: string }>) => {
+      const { casePath } = event.detail;
+      
+      // Open archive if not already open
+      if (!showArchive) {
+        setShowArchive(true);
+        // Small delay to ensure ArchivePage is mounted before handling the event
+        setTimeout(() => {
+          // Re-dispatch the event so ArchivePage can handle it
+          window.dispatchEvent(event);
+        }, 300);
+      } else {
+        // Archive is already open, dispatch event immediately for ArchivePage to handle
+        // Small delay to ensure ArchivePage is ready
+        setTimeout(() => {
+          window.dispatchEvent(event);
+        }, 100);
+      }
+    };
+
     window.addEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
+    window.addEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
     return () => {
       window.removeEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
+      window.removeEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
     };
   }, [showArchive, isWordEditorOpen]);
 

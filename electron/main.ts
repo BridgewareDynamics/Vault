@@ -3232,7 +3232,8 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
             const data = {
               content: ${JSON.stringify(options.content)},
               filePath: ${options.filePath ? JSON.stringify(options.filePath) : 'null'},
-              viewState: ${JSON.stringify(viewState)}
+              viewState: ${JSON.stringify(viewState)},
+              casePath: ${(options as any).casePath ? JSON.stringify((options as any).casePath) : 'null'}
             };
             console.log('Main process: Dispatching word-editor-data event', data);
             // Store data in case listener isn't ready yet
@@ -3271,7 +3272,8 @@ ipcMain.handle('reattach-word-editor', async (event, options: { content: string;
             detail: {
               content: ${JSON.stringify(options.content)},
               filePath: ${options.filePath ? JSON.stringify(options.filePath) : 'null'},
-              viewState: ${JSON.stringify(viewState)}
+              viewState: ${JSON.stringify(viewState)},
+              casePath: ${(options as any).casePath ? JSON.stringify((options as any).casePath) : 'null'}
             }
           });
           window.dispatchEvent(event);

@@ -59,7 +59,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
 
   // Listen for reattach data from detached window
   useEffect(() => {
-    const handleReattach = (event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }>) => {
+    const handleReattach = (event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
       const data = event.detail;
       // Set the file path if provided
       if (data.filePath) {
@@ -83,6 +83,15 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
         }
       }
 
+      // If casePath is provided, dispatch event to navigate to case folder
+      if (data.casePath) {
+        // Dispatch event to open archive and navigate to case
+        const navigateEvent = new CustomEvent('navigate-to-case-folder', {
+          detail: { casePath: data.casePath }
+        });
+        window.dispatchEvent(navigateEvent);
+      }
+
       // Force re-render to ensure editor is ready
       setEditorKey(prev => prev + 1);
 
@@ -104,6 +113,9 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   }, []);
 
   const handleDetach = async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:entry',message:'handleDetach called',data:{showLibrary,showBookmarkLibrary,currentCasePath:currentCase?.path,currentCaseName:currentCase?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     try {
       if (!window.electronAPI) {
         toast.error('Electron API not available');
@@ -122,13 +134,20 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       }
 
       console.log('WordEditorPanel: Detaching with viewState', viewState, { showBookmarkLibrary, showLibrary });
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:beforeCreate',message:'About to create detached window',data:{viewState,currentCasePath:currentCase?.path,currentCaseName:currentCase?.name,willPassCasePath:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
 
-      // Create detached window
+      // Create detached window - pass case path if available
       await window.electronAPI.createWordEditorWindow({
         content,
         filePath: currentFilePath,
         viewState,
-      });
+        casePath: currentCase?.path || null,
+      } as Parameters<typeof window.electronAPI.createWordEditorWindow>[0]);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:afterCreate',message:'Detached window created',data:{viewState,currentCasePath:currentCase?.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
 
       // Close panel after detaching
       onClose();
@@ -136,6 +155,9 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
     } catch (error) {
       toast.error('Failed to open editor in separate window');
       console.error('Detach error:', error);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:error',message:'Detach failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
     }
   };
 

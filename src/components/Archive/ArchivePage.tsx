@@ -346,11 +346,28 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       }
     };
 
+    const handleNavigateToCaseFolder = (event: CustomEvent<{ casePath: string }>) => {
+      const { casePath } = event.detail;
+      
+      // Find the case by path
+      const targetCase = cases.find(c => c.path === casePath);
+      if (targetCase) {
+        // Set the case and navigate to case root
+        setCurrentCase(targetCase);
+        setArchiveContextCase(targetCase);
+        goBackToCase();
+      } else {
+        toast.error('Case not found in archive');
+      }
+    };
+
     window.addEventListener('open-bookmark', handleOpenBookmark as unknown as EventListener);
+    window.addEventListener('navigate-to-case-folder', handleNavigateToCaseFolder as unknown as EventListener);
     return () => {
       window.removeEventListener('open-bookmark', handleOpenBookmark as unknown as EventListener);
+      window.removeEventListener('navigate-to-case-folder', handleNavigateToCaseFolder as unknown as EventListener);
     };
-  }, [files, toast, selectedFile, findFileInArchive, currentCase, currentFolderPath, cases, setCurrentCase, navigateToFolder, openFolder, goBackToCase]);
+  }, [files, toast, selectedFile, findFileInArchive, currentCase, currentFolderPath, cases, setCurrentCase, setArchiveContextCase, navigateToFolder, openFolder, goBackToCase]);
 
   // Handle drag and drop
   useEffect(() => {

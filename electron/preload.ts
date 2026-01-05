@@ -93,16 +93,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     format: 'pdf' | 'docx' | 'rtf';
     filePath?: string;
   }) => ipcRenderer.invoke('export-text-file', options),
-  createWordEditorWindow: (options: {
-    content: string;
-    filePath?: string | null;
-    viewState?: 'editor' | 'library' | 'bookmarkLibrary';
-  }) => ipcRenderer.invoke('create-word-editor-window', options),
-  reattachWordEditor: (options: {
-    content: string;
-    filePath?: string | null;
-    viewState?: 'editor' | 'library' | 'bookmarkLibrary';
-  }) => ipcRenderer.invoke('reattach-word-editor', options),
+      createWordEditorWindow: (options: {
+        content: string;
+        filePath?: string | null;
+        viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
+      }) => ipcRenderer.invoke('create-word-editor-window', options),
+      reattachWordEditor: (options: {
+        content: string;
+        filePath?: string | null;
+        viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
+      }) => ipcRenderer.invoke('reattach-word-editor', options),
   createPdfAuditWindow: (options: {
     pdfPath: string | null;
     settings: {
@@ -299,11 +301,13 @@ declare global {
         content: string;
         filePath?: string | null;
         viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
       }) => Promise<{ success: boolean }>;
       reattachWordEditor: (options: {
         content: string;
         filePath?: string | null;
         viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
       }) => Promise<{ success: boolean }>;
       createPdfAuditWindow: (options: {
         pdfPath: string | null;

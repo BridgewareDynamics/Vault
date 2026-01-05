@@ -103,9 +103,10 @@ interface TextLibraryProps {
   onClose: () => void;
   isDetached?: boolean;
   onFileDeleted?: (filePath: string) => void;
+  detachedCasePath?: string | null; // Case path passed from detached window
 }
 
-export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false, onFileDeleted }: TextLibraryProps) {
+export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false, onFileDeleted, detachedCasePath }: TextLibraryProps) {
   // #region agent log
   useEffect(() => {
     if (window.electronAPI?.debugLog) {
@@ -243,12 +244,19 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
 
   // Determine if we should show the gallery:
   // - If user explicitly clicked "View Case Notes" (showGallery === true), show gallery
-  // - If not in a case (currentCase === null) and no case selected, show gallery
-  // - CRITICAL: If currentCase exists, NEVER show gallery by default - always show that case's notes
+  // - If not in a case (currentCase === null) and no case selected and no detachedCasePath, show gallery
+  // - CRITICAL: If currentCase exists OR detachedCasePath is provided, NEVER show gallery by default - always show that case's notes
   // - CRITICAL: Wait for context to stabilize before showing gallery to avoid race condition
   // This ensures that when user opens Text Library while in a case, they see that case's notes, not the gallery
   // We check currentCase directly - if it exists, we're in a case and should show notes, not gallery
-  const shouldShowGallery = showGallery || (contextStabilized && currentCase === null && selectedCaseForNotes === null);
+  // In detached mode, use detachedCasePath if provided
+  const effectiveCasePath = detachedCasePath || currentCase?.path;
+  const shouldShowGallery = showGallery || (contextStabilized && effectiveCasePath === null && selectedCaseForNotes === null);
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:shouldShowGallery',message:'shouldShowGallery calculated',data:{shouldShowGallery,showGallery,contextStabilized,currentCasePath:currentCase?.path,currentCaseName:currentCase?.name,selectedCasePath:selectedCaseForNotes?.path,isDetached},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  }, [shouldShowGallery, showGallery, contextStabilized, currentCase, selectedCaseForNotes, isDetached]);
+  // #endregion
 
   useEffect(() => {
     // Wait for context to stabilize before loading files
@@ -273,6 +281,9 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   }, [selectedCaseForNotes?.path, currentCase?.path, showGallery, contextStabilized]);
 
   const loadFiles = async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFiles:entry',message:'loadFiles called',data:{selectedCasePath:selectedCaseForNotes?.path,currentCasePath:currentCase?.path,isDetached},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     if (!window.electronAPI) {
       setLoading(false);
       return;
@@ -280,21 +291,33 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
 
     try {
       setLoading(true);
-      // Priority: selectedCaseForNotes > currentCase > global
-      const casePath = selectedCaseForNotes?.path || currentCase?.path;
+      // Priority: selectedCaseForNotes > detachedCasePath > currentCase > global
+      const casePath = selectedCaseForNotes?.path || detachedCasePath || currentCase?.path;
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFiles:casePath',message:'Determined casePath',data:{casePath,selectedCasePath:selectedCaseForNotes?.path,currentCasePath:currentCase?.path,willLoadCaseNotes:!!casePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       
       if (casePath) {
         // Load case notes
         const fileList = await window.electronAPI.listCaseNotes(casePath);
         setFiles(fileList);
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFiles:loadedCaseNotes',message:'Loaded case notes',data:{casePath,fileCount:fileList.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
       } else {
         // Load global notes
         const fileList = await window.electronAPI.listTextFiles();
         setFiles(fileList);
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFiles:loadedGlobalNotes',message:'Loaded global notes',data:{fileCount:fileList.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
       }
     } catch (error) {
       toast.error('Failed to load notes');
       console.error('Load files error:', error);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFiles:error',message:'Load files failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
     } finally {
       setLoading(false);
     }
