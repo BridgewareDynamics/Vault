@@ -195,8 +195,6 @@ function AppContent() {
     };
 
     const handleNavigateToCaseFolder = (event: CustomEvent<{ casePath: string }>) => {
-      const { casePath } = event.detail;
-      
       // Open archive if not already open
       if (!showArchive) {
         setShowArchive(true);
