@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileText, ChevronDown, Plus } from 'lucide-react';
 import { useToast } from '../Toast/ToastContext';
+import { useArchiveContext } from '../../contexts/ArchiveContext';
 import { isValidFileName } from '../../utils/pathValidator';
 
 interface TextFile {
@@ -28,12 +29,13 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
+  const { currentCase } = useArchiveContext();
 
   useEffect(() => {
     if (isOpen) {
       loadRecentFiles();
     }
-  }, [isOpen]);
+  }, [isOpen, currentCase?.path]);
 
   const loadRecentFiles = async () => {
     if (!window.electronAPI) {
@@ -42,7 +44,10 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
 
     try {
       setLoading(true);
-      const fileList = await window.electronAPI.listTextFiles();
+      // If we have a current case, load case notes; otherwise load global files
+      const fileList = currentCase?.path 
+        ? await window.electronAPI.listCaseNotes(currentCase.path)
+        : await window.electronAPI.listTextFiles();
       // Sort by modified date, most recent first, limit to 10
       const sorted = fileList
         .sort((a, b) => b.modified - a.modified)

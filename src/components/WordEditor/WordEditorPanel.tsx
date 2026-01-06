@@ -6,6 +6,7 @@ import { TextLibrary } from './TextLibrary';
 import { BookmarkLibrary } from '../Bookmarks/BookmarkLibrary';
 import { useToast } from '../Toast/ToastContext';
 import { useWordEditor } from '../../contexts/WordEditorContext';
+import { useArchiveContext } from '../../contexts/ArchiveContext';
 import { debugLog } from '../../utils/debugLogger';
 import { WordEditorErrorBoundary } from './WordEditorErrorBoundary';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
@@ -32,8 +33,10 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   const editorRef = useRef<WordEditorHandle>(null);
   const toast = useToast();
   const { setIsOpen: setContextOpen, panelWidth, setPanelWidth } = useWordEditor();
+  const { currentCase } = useArchiveContext();
   const resizeStartXRef = useRef<number>(0);
   const resizeStartWidthRef = useRef<number>(500);
+  const hasAutoOpenedLibraryRef = useRef(false); // Track if we've auto-opened library for this panel session
 
   // Update file path when initialFilePath changes
   useEffect(() => {
@@ -42,12 +45,38 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
     }
   }, [initialFilePath]);
 
-  // Open library if requested
+  // Open library if requested and set panel to minimum width
   useEffect(() => {
     if (openLibrary && isOpen) {
       setShowLibrary(true);
+      // Set panel width to minimum when opening with library
+      setPanelWidth(MIN_WIDTH);
     }
-  }, [openLibrary, isOpen]);
+  }, [openLibrary, isOpen, setPanelWidth]);
+
+  // Auto-show case notes library when opening panel from case gallery
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:autoOpenLibrary:entry',message:'Auto-open library effect running',data:{isOpen,currentCase:currentCase?.name,showLibrary,showBookmarkLibrary,currentFilePath,hasAutoOpened:hasAutoOpenedLibraryRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    // Reset flag when panel closes
+    if (!isOpen) {
+      hasAutoOpenedLibraryRef.current = false;
+      return;
+    }
+
+    // Auto-open library only once when panel opens from case gallery
+    if (isOpen && !currentCase && !showLibrary && !showBookmarkLibrary && !currentFilePath && !hasAutoOpenedLibraryRef.current) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:autoOpenLibrary:setting',message:'Setting showLibrary to true',data:{isOpen,currentCase:null,showLibrary:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      // If we're in the case gallery (no currentCase) and panel just opened,
+      // automatically show the library (which will show the case notes gallery)
+      setShowLibrary(true);
+      setPanelWidth(MIN_WIDTH);
+      hasAutoOpenedLibraryRef.current = true;
+    }
+  }, [isOpen, currentCase, showLibrary, showBookmarkLibrary, currentFilePath, setPanelWidth]);
 
   useEffect(() => {
     setContextOpen(isOpen);
@@ -55,7 +84,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
 
   // Listen for reattach data from detached window
   useEffect(() => {
-    const handleReattach = (event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }>) => {
+    const handleReattach = (event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
       const data = event.detail;
       // Set the file path if provided
       if (data.filePath) {
@@ -79,6 +108,15 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
         }
       }
 
+      // If casePath is provided, dispatch event to navigate to case folder
+      if (data.casePath) {
+        // Dispatch event to open archive and navigate to case
+        const navigateEvent = new CustomEvent('navigate-to-case-folder', {
+          detail: { casePath: data.casePath }
+        });
+        window.dispatchEvent(navigateEvent);
+      }
+
       // Force re-render to ensure editor is ready
       setEditorKey(prev => prev + 1);
 
@@ -100,6 +138,9 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   }, []);
 
   const handleDetach = async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:entry',message:'handleDetach called',data:{showLibrary,showBookmarkLibrary,currentCasePath:currentCase?.path,currentCaseName:currentCase?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     try {
       if (!window.electronAPI) {
         toast.error('Electron API not available');
@@ -118,13 +159,20 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       }
 
       console.log('WordEditorPanel: Detaching with viewState', viewState, { showBookmarkLibrary, showLibrary });
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:beforeCreate',message:'About to create detached window',data:{viewState,currentCasePath:currentCase?.path,currentCaseName:currentCase?.name,willPassCasePath:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
 
-      // Create detached window
+      // Create detached window - pass case path if available
       await window.electronAPI.createWordEditorWindow({
         content,
         filePath: currentFilePath,
         viewState,
-      });
+        casePath: currentCase?.path || null,
+      } as Parameters<typeof window.electronAPI.createWordEditorWindow>[0]);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:afterCreate',message:'Detached window created',data:{viewState,currentCasePath:currentCase?.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
 
       // Close panel after detaching
       onClose();
@@ -132,6 +180,9 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
     } catch (error) {
       toast.error('Failed to open editor in separate window');
       console.error('Detach error:', error);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:error',message:'Detach failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
     }
   };
 
@@ -155,13 +206,19 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
     }
 
     try {
-      // Create empty file with the provided name
-      const newFilePath = await window.electronAPI.createTextFile(fileName, '');
+      let newFilePath: string;
+      // If we have a current case, create case note; otherwise create global file
+      if (currentCase?.path) {
+        newFilePath = await window.electronAPI.createCaseNote(currentCase.path, fileName, '');
+        toast.success('Note created');
+      } else {
+        newFilePath = await window.electronAPI.createTextFile(fileName, '');
+        toast.success('New file created');
+      }
       setCurrentFilePath(newFilePath);
       setShowLibrary(false);
       // Force a re-render by incrementing editorKey
       setEditorKey(prev => prev + 1);
-      toast.success('New file created');
     } catch (error) {
       toast.error('Failed to create file');
       console.error('Create file error:', error);
@@ -320,8 +377,13 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
                 {/* Library button */}
                 <button
                   onClick={() => {
-                    setShowLibrary(!showLibrary);
+                    const willShowLibrary = !showLibrary;
+                    setShowLibrary(willShowLibrary);
                     setShowBookmarkLibrary(false);
+                    // Set panel to minimum width when opening library
+                    if (willShowLibrary) {
+                      setPanelWidth(MIN_WIDTH);
+                    }
                   }}
                   className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
                   aria-label="Open text library"

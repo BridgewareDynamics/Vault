@@ -18,10 +18,10 @@ import { getUserFriendlyError } from './utils/errorMessages';
 import { SettingsProvider, useSettingsContext } from './utils/settingsContext';
 import { getMemoryManager } from './utils/memoryManager';
 import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext';
+import { ArchiveContextProvider } from './contexts/ArchiveContext';
 import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
 import { DetachedSecurityChecker } from './components/DetachedSecurityChecker';
 import { ResizableDivider } from './components/ResizableDivider';
-import { WordEditorPanel } from './components/WordEditor/WordEditorPanel';
 import './App.css';
 
 function AppContent() {
@@ -50,7 +50,7 @@ function AppContent() {
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
   const { settings } = useSettingsContext();
-  const { isOpen: isWordEditorOpen, panelWidth, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
+  const { isOpen: isWordEditorOpen, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
 
   // Check if we're in detached editor mode
   // In dev mode, it's a query param: ?editor=detached
@@ -147,7 +147,7 @@ function AppContent() {
     let lastProcessedBookmark: string | null = null;
     
     const handleOpenBookmark = (event: CustomEvent<{ pdfPath: string; pageNumber: number; keepPanelOpen?: boolean }>) => {
-      const { pdfPath, pageNumber, keepPanelOpen } = event.detail;
+      const { pdfPath, pageNumber } = event.detail;
       
       // Create a unique key for this bookmark
       const bookmarkKey = `${pdfPath}:${pageNumber}`;
@@ -168,14 +168,8 @@ function AppContent() {
       // Always store bookmark info in sessionStorage for ArchivePage to pick up
       sessionStorage.setItem('pending-bookmark-open', JSON.stringify({ pdfPath, pageNumber }));
       
-      // Close word editor if open - but only if not opened from within the panel
-      // If keepPanelOpen is true, the bookmark was opened from the Word Editor panel's bookmark library
-      if (isWordEditorOpen && !keepPanelOpen) {
-        // Dispatch a custom event to close the word editor
-        // The SettingsPanel will handle this via the WordEditorContext
-        const closeEvent = new CustomEvent('close-word-editor-for-bookmark');
-        window.dispatchEvent(closeEvent);
-      }
+      // Don't close the word editor when opening bookmarks - keep it open so users can access typing/notes
+      // The panel should remain open regardless of where the bookmark is opened from
       
       // Open archive if not already open
       if (!showArchive) {
@@ -194,9 +188,29 @@ function AppContent() {
       }
     };
 
+    const handleNavigateToCaseFolder = (event: CustomEvent<{ casePath: string }>) => {
+      // Open archive if not already open
+      if (!showArchive) {
+        setShowArchive(true);
+        // Small delay to ensure ArchivePage is mounted before handling the event
+        setTimeout(() => {
+          // Re-dispatch the event so ArchivePage can handle it
+          window.dispatchEvent(event);
+        }, 300);
+      } else {
+        // Archive is already open, dispatch event immediately for ArchivePage to handle
+        // Small delay to ensure ArchivePage is ready
+        setTimeout(() => {
+          window.dispatchEvent(event);
+        }, 100);
+      }
+    };
+
     window.addEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
+    window.addEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
     return () => {
       window.removeEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
+      window.removeEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
     };
   }, [showArchive, isWordEditorOpen]);
 
@@ -511,9 +525,11 @@ function App() {
     <ToastProvider>
       <SettingsProvider>
         <WordEditorProvider>
-          <ErrorBoundary>
-            <AppContent />
-          </ErrorBoundary>
+          <ArchiveContextProvider>
+            <ErrorBoundary>
+              <AppContent />
+            </ErrorBoundary>
+          </ArchiveContextProvider>
         </WordEditorProvider>
       </SettingsProvider>
     </ToastProvider>

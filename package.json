@@ -13,7 +13,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "build:electron": "tsc -p tsconfig.node.json && node electron-build.config.js",
-    "build:all": "npm run build && npm run build:electron",
+    "build:all": "npm run build:electron && npm run build",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run build:electron\" \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build:clean": "node scripts/clean-release.js",
