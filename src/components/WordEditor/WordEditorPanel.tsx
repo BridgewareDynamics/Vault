@@ -56,9 +56,6 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
 
   // Auto-show case notes library when opening panel from case gallery
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:autoOpenLibrary:entry',message:'Auto-open library effect running',data:{isOpen,currentCase:currentCase?.name,showLibrary,showBookmarkLibrary,currentFilePath,hasAutoOpened:hasAutoOpenedLibraryRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     // Reset flag when panel closes
     if (!isOpen) {
       hasAutoOpenedLibraryRef.current = false;
@@ -67,9 +64,6 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
 
     // Auto-open library only once when panel opens from case gallery
     if (isOpen && !currentCase && !showLibrary && !showBookmarkLibrary && !currentFilePath && !hasAutoOpenedLibraryRef.current) {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:autoOpenLibrary:setting',message:'Setting showLibrary to true',data:{isOpen,currentCase:null,showLibrary:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       // If we're in the case gallery (no currentCase) and panel just opened,
       // automatically show the library (which will show the case notes gallery)
       setShowLibrary(true);
@@ -138,9 +132,6 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   }, []);
 
   const handleDetach = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:entry',message:'handleDetach called',data:{showLibrary,showBookmarkLibrary,currentCasePath:currentCase?.path,currentCaseName:currentCase?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     try {
       if (!window.electronAPI) {
         toast.error('Electron API not available');
@@ -159,9 +150,6 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       }
 
       console.log('WordEditorPanel: Detaching with viewState', viewState, { showBookmarkLibrary, showLibrary });
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:beforeCreate',message:'About to create detached window',data:{viewState,currentCasePath:currentCase?.path,currentCaseName:currentCase?.name,willPassCasePath:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
 
       // Create detached window - pass case path if available
       await window.electronAPI.createWordEditorWindow({
@@ -170,9 +158,6 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
         viewState,
         casePath: currentCase?.path || null,
       } as Parameters<typeof window.electronAPI.createWordEditorWindow>[0]);
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:afterCreate',message:'Detached window created',data:{viewState,currentCasePath:currentCase?.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
 
       // Close panel after detaching
       onClose();
@@ -180,9 +165,6 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
     } catch (error) {
       toast.error('Failed to open editor in separate window');
       console.error('Detach error:', error);
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:handleDetach:error',message:'Detach failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
     }
   };
 

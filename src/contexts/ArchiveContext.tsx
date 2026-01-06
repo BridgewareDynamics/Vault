@@ -20,6 +20,9 @@ export function ArchiveContextProvider({ children }: ArchiveContextProviderProps
 
   // Wrapped setCurrentCase that tracks state changes
   const setCurrentCaseWithTracking = useCallback((caseItem: ArchiveCase | null) => {
+    // #region agent log
+    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchiveContext.tsx:22', message: 'ArchiveContext setCurrentCase called', data: { caseItemIsNull: caseItem === null, caseItemPath: caseItem?.path, caseItemName: caseItem?.name, previousCasePath: lastCaseRef.current?.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
+    // #endregion
     // Always update the state - don't prevent legitimate clears
     // But track the last case for debugging purposes
     if (caseItem !== null) {
