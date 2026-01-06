@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FolderOpen, X, Search, Sparkles, Check, Zap } from 'lucide-react';
+import { FolderOpen, X, Search, Check, Zap } from 'lucide-react';
 import { ArchiveCase } from '../../types';
 
 interface CaseSelectionDialogProps {
@@ -295,7 +295,6 @@ export function CaseSelectionDialog({
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
               <span className="relative z-10 flex items-center justify-center gap-2">
-                <Sparkles size={16} className="opacity-70" />
                 Create Document
               </span>
             </motion.button>

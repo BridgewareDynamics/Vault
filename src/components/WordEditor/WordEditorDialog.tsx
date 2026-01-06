@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileText, ChevronDown, Plus, FolderOpen, Sparkles } from 'lucide-react';
+import { X, FileText, ChevronDown, Plus, FolderOpen } from 'lucide-react';
 import { useToast } from '../Toast/ToastContext';
 import { useArchiveContext } from '../../contexts/ArchiveContext';
 import { isValidFileName } from '../../utils/pathValidator';
@@ -309,7 +309,6 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
                     </div>
                   </div>
                   <span className="relative z-10 text-base">New Document</span>
-                  <Sparkles size={16} className="relative z-10 opacity-70" />
                 </motion.button>
 
                 {/* Text Library */}
