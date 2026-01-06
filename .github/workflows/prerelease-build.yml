@@ -3,7 +3,7 @@ name: Prerelease Build
 on:
   push:
     branches:
-      - 56-create-a-cicd-pipline-for-the-prerelease  # Change to 'prerelease' after testing
+      - prerelease
 
 permissions:
   contents: write  # Required to create releases and tags
