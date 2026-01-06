@@ -435,7 +435,7 @@ export function DetachedSecurityChecker() {
       <div className="h-screen flex flex-col">
         {/* Enhanced Header */}
         <div className="relative p-8 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
-          <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
+          <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-6">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>

@@ -82,11 +82,11 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3 }}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
+      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      whileHover={{ y: -4, scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
       className={`relative cursor-pointer group ${showDropdown ? 'mb-16' : ''}`}
       draggable={true}
       onDragStart={handleDragStart as any}
@@ -94,8 +94,10 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
     >
       <div
         onClick={onClick}
-        className="relative rounded-lg overflow-hidden border-2 border-gray-700 hover:border-cyber-purple-500 transition-colors bg-gray-800"
+        className="relative rounded-2xl overflow-hidden border-2 border-gray-700/50 hover:border-cyber-purple-500/60 transition-all duration-300 ease-out bg-gray-800/60 backdrop-blur-sm hover:bg-gray-800/80 shadow-lg hover:shadow-2xl hover:shadow-cyber-purple-500/20"
       >
+        {/* Glowing background effect */}
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10 transition-all duration-500"></div>
         {/* Thumbnail or Icon */}
         <div className="aspect-[3/4] bg-gray-900 relative overflow-hidden">
           {file.thumbnail ? (
@@ -151,7 +153,7 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
           )}
 
           {/* File type badge - positioned below tag if tag exists, otherwise normal position */}
-          <div className={`absolute top-2 z-10 bg-black/60 text-white text-xs px-2 py-1 rounded backdrop-blur-sm ${onTagClick && caseTag ? 'left-2 top-10' : 'left-2'}`}>
+          <div className={`absolute top-2 z-10 bg-gradient-to-r from-purple-600 to-cyan-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg backdrop-blur-sm shadow-lg ${onTagClick && caseTag ? 'left-2 top-10' : 'left-2'}`}>
             {file.type.toUpperCase()}
           </div>
 
@@ -174,37 +176,43 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
         </div>
 
         {/* File name */}
-        <div className="p-2 flex items-center justify-between gap-2">
-          <p className="text-white text-xs font-medium truncate flex-1">{file.name}</p>
-          <div className="flex items-center gap-1">
-            {onRename && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRename();
-                }}
-                className="flex-shrink-0 p-1 hover:bg-gray-700 rounded transition-colors"
-                aria-label="Rename file"
-                title="Rename file"
-              >
-                <Pencil className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" aria-hidden="true" />
-              </button>
-            )}
-            {file.type === 'pdf' && (onExtract || onRunAudit) && (
-              <button
-                ref={arrowRef}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowDropdown(!showDropdown);
-                }}
-                className="flex-shrink-0 p-1 hover:bg-gray-700 rounded transition-colors"
-                aria-label="PDF options"
-                title="PDF options"
-                aria-expanded={showDropdown}
-              >
-                <ChevronDown className="w-3 h-3 text-gray-400" aria-hidden="true" />
-              </button>
-            )}
+        <div className="p-5 space-y-2 bg-gray-800/40 backdrop-blur-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-base font-bold truncate mb-2 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyber-purple-400 group-hover:to-cyber-cyan-400 transition-all duration-300">
+                {file.name}
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              {onRename && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRename();
+                  }}
+                  className="flex-shrink-0 p-2 hover:bg-gray-700/60 rounded-lg transition-all"
+                  aria-label="Rename file"
+                  title="Rename file"
+                >
+                  <Pencil className="w-4 h-4 text-gray-300 hover:text-cyber-purple-400" aria-hidden="true" />
+                </button>
+              )}
+              {file.type === 'pdf' && (onExtract || onRunAudit) && (
+                <button
+                  ref={arrowRef}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDropdown(!showDropdown);
+                  }}
+                  className={`flex-shrink-0 p-2 hover:bg-gray-700/60 rounded-lg transition-all ${showDropdown ? 'bg-gray-700/60 rotate-180' : ''}`}
+                  aria-label="PDF options"
+                  title="PDF options"
+                  aria-expanded={showDropdown}
+                >
+                  <ChevronDown className={`w-4 h-4 text-gray-300 transition-transform duration-300 ${showDropdown ? 'rotate-180' : ''}`} aria-hidden="true" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -215,7 +223,7 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
               e.stopPropagation();
               onDelete();
             }}
-            className="absolute top-2 right-2 p-2 bg-red-600/80 hover:bg-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-4 right-4 p-2.5 bg-red-600/90 hover:bg-red-600 rounded-xl opacity-0 group-hover:opacity-100 transition-all z-20 shadow-lg hover:shadow-red-500/50 transform hover:scale-110"
             aria-label="Delete file"
           >
             <Trash2 className="w-4 h-4 text-white" aria-hidden="true" />

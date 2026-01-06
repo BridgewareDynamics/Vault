@@ -238,7 +238,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
           delay: 0.1,
         }}
       >
-        <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
+        <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-6">
             <motion.div
               className="relative"

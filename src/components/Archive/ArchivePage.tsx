@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, FolderPlus, Upload, ArrowLeft, FolderOpen } from 'lucide-react';
+import { Home, FolderPlus, Upload, ArrowLeft, FolderOpen, FileText } from 'lucide-react';
 import { useArchive } from '../../hooks/useArchive';
 import { useArchiveExtraction } from '../../hooks/useArchiveExtraction';
 import { useToast } from '../Toast/ToastContext';
@@ -814,170 +814,255 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 transition-all duration-300"
+      className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900 transition-all duration-300"
     >
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-6 relative flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-4 mb-2">
-              <button
-                onClick={onBack}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
-                aria-label="Return to home screen"
-              >
-                <Home size={18} aria-hidden="true" />
-                <span className="text-sm font-medium">Home</span>
-              </button>
-              {currentCase && (
-                <button
-                  onClick={() => {
-                    // #region agent log
-                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:809', message: 'Back button clicked', data: { currentCasePath: currentCase.path, currentCaseName: currentCase.name, hasRestoredCase: hasRestoredCaseRef.current, archiveContextCasePath: archiveContextCase?.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
-                    // #endregion
-                    // Clear both local state and context to prevent restoration
-                    setCurrentCase(null);
-                    setArchiveContextCase(null);
-                    // Reset restoration flag so it can restore in the future if needed
-                    hasRestoredCaseRef.current = false;
+      <div className="flex flex-col h-screen overflow-hidden">
+        {/* Enhanced Header */}
+        <motion.div 
+          className="relative p-8 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ 
+            duration: 0.9,
+            ease: [0.25, 0.1, 0.25, 1],
+            delay: 0.1,
+          }}
+        >
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>
+                <div className="relative p-5 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl shadow-2xl">
+                  <FolderOpen className="w-10 h-10 text-white" />
+                </div>
+              </div>
+              <div className="flex-1">
+                <motion.h1
+                  className="text-4xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ 
+                    duration: 0.9,
+                    ease: [0.25, 0.1, 0.25, 1],
+                    delay: 0.2,
                   }}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
-                  aria-label="Go back to cases list"
                 >
-                  <ArrowLeft size={18} aria-hidden="true" />
-                  <span className="text-sm font-medium">Back</span>
-                </button>
-              )}
+                  The Vault
+                </motion.h1>
+                <motion.p 
+                  className="text-lg text-gray-400 mt-2"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ 
+                    duration: 0.8,
+                    ease: [0.25, 0.1, 0.25, 1],
+                    delay: 0.3,
+                  }}
+                >
+                  {currentCase 
+                    ? `Case: ${currentCase.name}${currentFolderPath ? ` / ${currentFolderPath.split(/[/\\]/).pop() || currentFolderPath}` : ''}`
+                    : 'Your case file archive'}
+                </motion.p>
+                {currentCase && (
+                  <div className="flex items-center gap-2 flex-wrap mt-2">
+                    <button
+                      onClick={() => navigateToFolder(currentCase.path)}
+                      className={`text-sm ${currentFolderPath ? 'text-cyber-purple-400 hover:text-cyber-purple-300 underline' : 'text-white font-medium'}`}
+                      aria-label={`Navigate to case ${currentCase.name}`}
+                    >
+                      {currentCase.name}
+                    </button>
+                    {currentFolderPath && (
+                      <>
+                        <span className="text-gray-500">/</span>
+                        <div className="flex items-center gap-2">
+                          {folderNavigationStack.map((path) => {
+                            const folderName = path.split(/[/\\]/).pop() || path;
+                            return (
+                              <span key={path} className="flex items-center gap-2">
+                                <button
+                                  onClick={() => navigateToFolder(path)}
+                                  className="text-cyber-purple-400 hover:text-cyber-purple-300 text-sm underline"
+                                  aria-label={`Navigate to folder ${folderName}`}
+                                >
+                                  {folderName}
+                                </button>
+                                <span className="text-gray-500">/</span>
+                              </span>
+                            );
+                          })}
+                          <span className="text-white text-sm font-medium">
+                            {currentFolderPath.split(/[/\\]/).pop() || currentFolderPath}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-4">
-              <h1 className="text-4xl font-bold bg-gradient-purple bg-clip-text text-transparent mb-2">
-                The Vault
-              </h1>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onBack}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
+                  aria-label="Return to home screen"
+                >
+                  <Home size={18} aria-hidden="true" />
+                  <span className="text-sm font-medium">Home</span>
+                </button>
+                {currentCase && (
+                  <button
+                    onClick={() => {
+                      // #region agent log
+                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:809', message: 'Back button clicked', data: { currentCasePath: currentCase.path, currentCaseName: currentCase.name, hasRestoredCase: hasRestoredCaseRef.current, archiveContextCasePath: archiveContextCase?.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
+                      // #endregion
+                      // Clear both local state and context to prevent restoration
+                      setCurrentCase(null);
+                      setArchiveContextCase(null);
+                      // Reset restoration flag so it can restore in the future if needed
+                      hasRestoredCaseRef.current = false;
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
+                    aria-label="Go back to cases list"
+                  >
+                    <ArrowLeft size={18} aria-hidden="true" />
+                    <span className="text-sm font-medium">Back</span>
+                  </button>
+                )}
+                {currentCase && currentFolderPath && (
+                  <button
+                    onClick={goBackToParentFolder}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
+                    aria-label={`Go back to ${folderNavigationStack.length > 0 && folderNavigationStack[folderNavigationStack.length - 1] !== currentCase.path ? 'parent folder' : 'case'}`}
+                  >
+                    <ArrowLeft size={18} aria-hidden="true" />
+                    <span className="text-sm font-medium">
+                      Back to {folderNavigationStack.length > 0 && folderNavigationStack[folderNavigationStack.length - 1] !== currentCase.path ? 'Parent' : 'Case'}
+                    </span>
+                  </button>
+                )}
+              </div>
               <ActionToolbar />
             </div>
-            {currentCase && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={() => navigateToFolder(currentCase.path)}
-                  className={`text-sm ${currentFolderPath ? 'text-cyber-purple-400 hover:text-cyber-purple-300 underline' : 'text-white font-medium'}`}
-                  aria-label={`Navigate to case ${currentCase.name}`}
-                >
-                  {currentCase.name}
-                </button>
-                {currentFolderPath && (
-                  <>
-                    <span className="text-gray-500">/</span>
-                    <div className="flex items-center gap-2">
-                      {folderNavigationStack.map((path) => {
-                        const folderName = path.split(/[/\\]/).pop() || path;
-                        return (
-                          <span key={path} className="flex items-center gap-2">
-                            <button
-                              onClick={() => navigateToFolder(path)}
-                              className="text-cyber-purple-400 hover:text-cyber-purple-300 text-sm underline"
-                              aria-label={`Navigate to folder ${folderName}`}
-                            >
-                              {folderName}
-                            </button>
-                            <span className="text-gray-500">/</span>
-                          </span>
-                        );
-                      })}
-                      <span className="text-white text-sm font-medium">
-                        {currentFolderPath.split(/[/\\]/).pop() || currentFolderPath}
-                      </span>
+          </div>
+        </motion.div>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {/* Progress Bar */}
+          {isExtracting && progress && (
+            <div className="px-8 pt-6 pb-4">
+              <ProgressBar progress={progress} statusMessage={statusMessage} />
+            </div>
+          )}
+
+          {/* Enhanced Toolbar */}
+          <div className="relative z-50 px-6 sm:px-8 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b border-cyber-purple-400/20 bg-gray-900/30 backdrop-blur-sm">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              {/* Action Buttons Group */}
+              <div className="flex items-center gap-3 sm:gap-4">
+                {!currentCase && (
+                  <motion.button
+                    onClick={() => setShowCaseDialog(true)}
+                    whileHover={{ scale: 1.02, y: -1 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-purple-500/30 border border-purple-400/30"
+                    aria-label="Create new case file"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                    <div className="relative flex items-center gap-2.5">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-white/20 rounded-lg blur-sm"></div>
+                        <FolderPlus size={18} className="relative z-10" />
+                      </div>
+                      <span className="relative z-10 text-sm sm:text-base">Start Case File</span>
                     </div>
+                  </motion.button>
+                )}
+
+                {currentCase && (
+                  <>
+                    <motion.button
+                      onClick={handleAddFiles}
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-purple-500/30 border border-purple-400/30"
+                      aria-label="Add files to case"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                      <div className="relative flex items-center gap-2.5">
+                        <div className="relative">
+                          <div className="absolute inset-0 bg-white/20 rounded-lg blur-sm"></div>
+                          <Upload size={18} className="relative z-10" />
+                        </div>
+                        <span className="relative z-10 text-sm sm:text-base">Add Files</span>
+                      </div>
+                    </motion.button>
+                    <motion.button
+                      onClick={() => setShowCreateFolderDialog(true)}
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-purple-500/30 border border-purple-400/30"
+                      aria-label="Create new folder"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                      <div className="relative flex items-center gap-2.5">
+                        <div className="relative">
+                          <div className="absolute inset-0 bg-white/20 rounded-lg blur-sm"></div>
+                          <FolderPlus size={18} className="relative z-10" />
+                        </div>
+                        <span className="relative z-10 text-sm sm:text-base">+ Folder</span>
+                      </div>
+                    </motion.button>
                   </>
                 )}
               </div>
-            )}
-            {currentCase && currentFolderPath && (
-              <button
-                onClick={goBackToParentFolder}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors mt-2"
-                aria-label={`Go back to ${folderNavigationStack.length > 0 && folderNavigationStack[folderNavigationStack.length - 1] !== currentCase.path ? 'parent folder' : 'case'}`}
+
+              {/* Search Bar - Enhanced */}
+              <div className="flex-1 min-w-[200px] max-w-md">
+                <ArchiveSearchBar
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder={currentCase ? 'Search files...' : 'Search cases...'}
+                  tags={tags}
+                  selectedTagId={selectedTagId}
+                  onTagSelect={setSelectedTagId}
+                />
+              </div>
+
+              {/* Switch Vault Directory - Enhanced */}
+              <motion.button
+                onClick={() => setShowDriveDialog(true)}
+                whileHover={{ scale: 1.02, y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                className="relative overflow-hidden group flex items-center gap-2.5 px-4 sm:px-5 py-2.5 bg-gray-800/70 hover:bg-gray-800/90 text-white rounded-xl border-2 border-gray-700/50 hover:border-cyber-purple-400/60 transition-all duration-300 font-medium shadow-md hover:shadow-lg hover:shadow-cyber-purple-500/20 backdrop-blur-sm"
+                aria-label="Switch vault directory"
               >
-                <ArrowLeft size={18} aria-hidden="true" />
-                <span className="text-sm font-medium">
-                  Back to {folderNavigationStack.length > 0 && folderNavigationStack[folderNavigationStack.length - 1] !== currentCase.path ? 'Parent' : 'Case'}
-                </span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        {isExtracting && progress && (
-          <div className="mb-6">
-            <ProgressBar progress={progress} statusMessage={statusMessage} />
-          </div>
-        )}
-
-        {/* Toolbar */}
-        <div className="mb-6 flex flex-wrap items-center gap-4">
-          {!currentCase && (
-            <button
-              onClick={() => setShowCaseDialog(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
-              aria-label="Create new case file"
-            >
-              <FolderPlus size={20} aria-hidden="true" />
-              Start Case File
-            </button>
-          )}
-
-          {currentCase && (
-            <>
-              <button
-                onClick={handleAddFiles}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
-                aria-label="Add files to case"
-              >
-                <Upload size={20} aria-hidden="true" />
-                Add Files
-              </button>
-              <button
-                onClick={() => setShowCreateFolderDialog(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
-                aria-label="Create new folder"
-              >
-                <FolderPlus size={20} aria-hidden="true" />
-                + Folder
-              </button>
-            </>
-          )}
-
-          <div className="flex-1 max-w-md">
-            <ArchiveSearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
-              placeholder={currentCase ? 'Search files...' : 'Search cases...'}
-              tags={tags}
-              selectedTagId={selectedTagId}
-              onTagSelect={setSelectedTagId}
-            />
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5 transition-all duration-500"></div>
+                <div className="relative flex items-center gap-2.5">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <FolderOpen size={16} className="relative z-10 text-gray-300 group-hover:text-cyber-purple-400 transition-colors" />
+                  </div>
+                  <span className="relative z-10 text-sm sm:text-base text-gray-300 group-hover:text-white transition-colors">Switch Vault</span>
+                </div>
+              </motion.button>
+            </div>
           </div>
 
-          <button
-            onClick={() => setShowDriveDialog(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-lg border border-cyber-purple-500/60 transition-colors font-medium"
-            aria-label="Switch vault directory"
+          {/* Content */}
+          <div
+            ref={dropZoneRef}
+            className={`relative z-0 flex-1 overflow-y-auto px-8 pb-8 ${isDragging ? 'bg-cyber-purple-500/20 border-2 border-cyber-purple-500 border-dashed rounded-lg m-4' : ''}`}
           >
-            <FolderOpen size={18} aria-hidden="true" />
-            Switch Vault Directory
-          </button>
-        </div>
-
-        {/* Content */}
-        <div
-          ref={dropZoneRef}
-          className={`relative min-h-[400px] ${isDragging ? 'bg-cyber-purple-500/20 border-2 border-cyber-purple-500 border-dashed rounded-lg' : ''}`}
-        >
           {loading ? (
             <div className="flex items-center justify-center min-h-[400px]">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                <p className="text-gray-300">Loading...</p>
+              <div className="text-center space-y-6">
+                <div className="inline-flex p-6 bg-gradient-to-br from-cyan-900/40 to-purple-900/40 rounded-2xl border-2 border-cyber-cyan-400/30">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-cyan-400"></div>
+                </div>
+                <p className="text-gray-300 text-lg">Loading...</p>
               </div>
             </div>
           ) : currentCase ? (
@@ -1005,7 +1090,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
               {/* Unified Grid: Folders and Files in Backend Order */}
               {/* Group folders with their PDFs so folders appear above PDFs in the same column */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                 <AnimatePresence>
                   {(() => {
                     // Check if we're inside a folder
@@ -1598,7 +1683,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             </>
           ) : (
             // Cases Grid
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
               <AnimatePresence>
                 {cases.map((caseItem) => {
                   const casePath = caseItem.path;
@@ -1645,30 +1730,41 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             <>
               {!currentCase && cases.length === 0 && (
                 <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-                  <p className="text-gray-400 text-lg mb-4">No cases yet</p>
+                  <div className="inline-flex p-8 bg-gray-800/50 rounded-2xl border border-cyber-purple-400/20 mb-6">
+                    <FolderOpen className="w-20 h-20 text-cyber-purple-400/50" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-300 mb-2">No cases yet</h3>
+                  <p className="text-gray-400 text-lg mb-6">Create your first case file to get started</p>
                   <button
                     onClick={() => setShowCaseDialog(true)}
-                    className="px-6 py-3 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
+                    className="px-6 py-3 bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 rounded-lg font-semibold text-white text-base transition-all shadow-lg hover:shadow-cyan-500/50 transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group"
                     aria-label="Create your first case"
                   >
-                    Create Your First Case
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                    <span className="relative z-10">Create Your First Case</span>
                   </button>
                 </div>
               )}
               {currentCase && files.filter(f => !f.isFolder).length === 0 && (
                 <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-                  <p className="text-gray-400 text-lg mb-4">No files in this case</p>
+                  <div className="inline-flex p-8 bg-gray-800/50 rounded-2xl border border-cyber-purple-400/20 mb-6">
+                    <FileText className="w-20 h-20 text-cyber-purple-400/50" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-300 mb-2">No files in this case</h3>
+                  <p className="text-gray-400 text-lg mb-6">Add files to get started organizing your case</p>
                   <button
                     onClick={handleAddFiles}
-                    className="px-6 py-3 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
+                    className="px-6 py-3 bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 rounded-lg font-semibold text-white text-base transition-all shadow-lg hover:shadow-cyan-500/50 transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group"
                     aria-label="Add files to this case"
                   >
-                    Add Files
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                    <span className="relative z-10">Add Files</span>
                   </button>
                 </div>
               )}
             </>
           )}
+          </div>
         </div>
       </div>
 

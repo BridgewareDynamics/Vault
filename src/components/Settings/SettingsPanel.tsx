@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge, FileText } from 'lucide-react';
+import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge, FileText, Sparkles, TrendingUp } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { formatBytes } from '../../utils/memoryMonitor';
 import { useToast } from '../Toast/ToastContext';
@@ -27,24 +27,20 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
   // Listen for reattach data from detached window
   useEffect(() => {
     const handleReattach = (_event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
-      // Open the word editor panel when reattaching
       setIsWordEditorOpen(true);
       setWordEditorContextOpen(true);
     };
 
-    // Listen for bookmark open events that should close the word editor
     const handleCloseForBookmark = () => {
       setIsWordEditorOpen(false);
       setWordEditorContextOpen(false);
       setOpenLibraryOnMount(false);
     };
 
-    // Listen for settings open event from toolbar
     const handleOpenSettings = () => {
       setIsOpen(true);
     };
 
-    // Listen for word editor dialog open event from toolbar
     const handleOpenWordEditorDialog = () => {
       setShowWordEditorDialog(true);
     };
@@ -86,8 +82,6 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
           }
         }
       } catch (error) {
-        // Silently fail - memory info is not critical for app functionality
-        // Only log in development to avoid test noise
         if (import.meta.env.DEV) {
           console.error('Failed to get memory info:', error);
         }
@@ -95,7 +89,7 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
     };
 
     updateMemoryInfo();
-    const interval = setInterval(updateMemoryInfo, 2000); // Update every 2 seconds
+    const interval = setInterval(updateMemoryInfo, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -171,214 +165,345 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
 
   return (
     <>
-      {/* Word Editor Icon Button - Below Settings */}
+      {/* Enhanced Word Editor Icon Button */}
       {!hideFixedButtons && !hideWordEditorButton && (
         <motion.button
           onClick={() => setShowWordEditorDialog(true)}
-          className="fixed bottom-0 right-4 z-40 p-3 bg-gray-800/90 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-lg backdrop-blur-sm transition-colors"
-          whileHover={{ scale: 1.1 }}
+          className="fixed bottom-0 right-4 z-40 p-3.5 bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 text-white rounded-full border border-purple-400/30 shadow-lg hover:shadow-xl hover:shadow-purple-500/30 backdrop-blur-sm transition-all"
+          whileHover={{ scale: 1.1, y: -2 }}
           whileTap={{ scale: 0.95 }}
           aria-label="Open word editor"
-          style={{ marginBottom: '140px' }} // Offset above Settings button
+          style={{ marginBottom: '140px' }}
         >
-          <FileText size={24} />
+          <div className="relative">
+            <div className="absolute inset-0 bg-white/20 rounded-full blur-sm"></div>
+            <FileText size={22} className="relative z-10" />
+          </div>
         </motion.button>
       )}
 
-      {/* Settings Icon Button - Bottom Right */}
+      {/* Enhanced Settings Icon Button */}
       {!hideFixedButtons && (
         <motion.button
           onClick={() => setIsOpen(!isOpen)}
-          className="fixed bottom-0 right-4 z-40 p-3 bg-gray-800/90 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-lg backdrop-blur-sm transition-colors"
-          whileHover={{ scale: 1.1 }}
+          className="fixed bottom-0 right-4 z-40 p-3.5 bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 text-white rounded-full border border-purple-400/30 shadow-lg hover:shadow-xl hover:shadow-purple-500/30 backdrop-blur-sm transition-all"
+          whileHover={{ scale: 1.1, y: -2 }}
           whileTap={{ scale: 0.95 }}
           aria-label="Open settings"
-          style={{ marginBottom: '80px' }} // Offset above ToastContainer
+          style={{ marginBottom: '80px' }}
         >
-          <Settings size={24} />
+          <div className="relative">
+            <div className="absolute inset-0 bg-white/20 rounded-full blur-sm"></div>
+            <Settings size={22} className="relative z-10" />
+          </div>
         </motion.button>
       )}
 
-      {/* Settings Panel */}
+      {/* Enhanced Settings Panel */}
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Backdrop */}
+            {/* Enhanced Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsOpen(false)}
-              className="fixed inset-0 bg-black/50 z-40"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
             />
 
-            {/* Panel */}
+            {/* Enhanced Panel */}
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed left-0 top-0 bottom-0 w-96 bg-gray-900/95 backdrop-blur-lg border-r border-cyber-purple-500/30 shadow-2xl z-50 overflow-y-auto"
+              className="fixed left-0 top-0 bottom-0 w-96 bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 backdrop-blur-xl border-r border-cyber-purple-400/30 shadow-2xl z-50 overflow-y-auto"
             >
               <div className="p-6">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold bg-gradient-purple bg-clip-text text-transparent">
-                    Settings
-                  </h2>
-                  <button
+                {/* Enhanced Header */}
+                <div className="flex items-center justify-between mb-8 pb-6 border-b border-cyber-purple-400/20">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>
+                      <div className="relative p-4 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl shadow-2xl">
+                        <Settings className="w-8 h-8 text-white" />
+                      </div>
+                    </div>
+                    <div>
+                      <h2 className="text-3xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                        Settings
+                      </h2>
+                      <p className="text-sm text-gray-400 mt-1">Configure your experience</p>
+                    </div>
+                  </div>
+                  <motion.button
                     onClick={() => setIsOpen(false)}
-                    className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="p-2 hover:bg-gray-800/80 rounded-xl transition-colors text-gray-400 hover:text-white"
                     aria-label="Close settings"
                   >
-                    <X size={20} />
-                  </button>
+                    <X className="w-5 h-5" />
+                  </motion.button>
                 </div>
 
-                {/* Memory Usage Display */}
+                {/* Enhanced Memory Usage Display */}
                 {memoryInfo && (
-                  <div className="mb-6 p-4 bg-gray-800/50 rounded-lg border border-cyber-purple-500/20">
-                    <div className="flex items-center gap-2 mb-2">
-                      <MemoryStick size={18} className="text-cyber-purple-400" />
-                      <span className="text-sm font-medium text-gray-300">System Memory</span>
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-6 p-5 bg-gray-800/50 rounded-xl border border-cyber-purple-400/30 backdrop-blur-sm"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative">
+                          <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm"></div>
+                          <div className="relative p-2 bg-gradient-to-br from-purple-600/30 to-cyan-600/30 rounded-lg">
+                            <MemoryStick className="w-5 h-5 text-white" />
+                          </div>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-300">System Memory</span>
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/60 rounded-lg border border-cyber-purple-400/20">
+                        <TrendingUp className="w-3.5 h-3.5 text-cyber-purple-400" />
+                        <span className="text-xs font-medium text-gray-300">{memoryUsagePercent}%</span>
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-400 mb-2">
-                      {formatBytes(memoryInfo.used)} / {formatBytes(memoryInfo.total)} ({memoryUsagePercent}%)
+                    <div className="text-xs text-gray-400 mb-3 font-mono">
+                      {formatBytes(memoryInfo.used)} / {formatBytes(memoryInfo.total)}
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div
-                        className="bg-gradient-to-r from-cyber-purple-500 to-cyber-purple-600 h-2 rounded-full transition-all"
-                        style={{ width: `${memoryUsagePercent}%` }}
+                    <div className="relative w-full bg-gray-700/50 rounded-full h-2.5 overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${memoryUsagePercent}%` }}
+                        transition={{ duration: 0.5, ease: 'easeOut' }}
+                        className="absolute left-0 top-0 h-full bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 rounded-full shadow-lg"
                       />
                     </div>
-                  </div>
+                  </motion.div>
                 )}
 
-                {/* Hardware Acceleration */}
-                <div className="mb-6">
-                  <label className="flex items-center gap-2 mb-3">
-                    <Cpu size={18} className="text-cyber-purple-400" />
-                    <span className="text-sm font-medium text-gray-300">Hardware Acceleration</span>
-                  </label>
-                  <button
-                    onClick={handleHardwareAccelerationToggle}
-                    className={`w-full p-3 rounded-lg border transition-colors ${settings.hardwareAcceleration
-                        ? 'bg-cyber-purple-500/20 border-cyber-purple-500 text-white'
-                        : 'bg-gray-800 border-gray-700 text-gray-400'
+                {/* Enhanced Settings Sections */}
+                <div className="space-y-5">
+                  {/* Hardware Acceleration */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="p-5 bg-gray-800/40 rounded-xl border border-gray-700/30 hover:border-cyber-purple-400/30 transition-all backdrop-blur-sm"
+                  >
+                    <label className="flex items-center gap-3 mb-4">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm"></div>
+                        <div className="relative p-2 bg-gradient-to-br from-purple-600/30 to-cyan-600/30 rounded-lg">
+                          <Cpu className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-300">Hardware Acceleration</span>
+                    </label>
+                    <motion.button
+                      onClick={handleHardwareAccelerationToggle}
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`relative overflow-hidden group w-full p-3.5 rounded-xl border-2 transition-all font-medium ${
+                        settings.hardwareAcceleration
+                          ? 'bg-cyber-purple-500/20 border-cyber-purple-500/60 text-white shadow-lg shadow-cyber-purple-500/20'
+                          : 'bg-gray-800/50 border-gray-700/50 text-gray-400 hover:border-gray-600/50'
                       }`}
+                    >
+                      <div className={`absolute inset-0 bg-gradient-to-br transition-all duration-500 ${
+                        settings.hardwareAcceleration
+                          ? 'from-purple-600/10 via-purple-600/5 to-cyan-600/10'
+                          : 'from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5'
+                      }`}></div>
+                      <span className="relative z-10">{settings.hardwareAcceleration ? 'Enabled' : 'Disabled'}</span>
+                    </motion.button>
+                    <p className="text-xs text-gray-500 mt-3 leading-relaxed">
+                      Boosts performance for PDF extraction and rendering. Requires restart.
+                    </p>
+                  </motion.div>
+
+                  {/* RAM Limit */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.15 }}
+                    className="p-5 bg-gray-800/40 rounded-xl border border-gray-700/30 hover:border-cyber-purple-400/30 transition-all backdrop-blur-sm"
                   >
-                    {settings.hardwareAcceleration ? 'Enabled' : 'Disabled'}
-                  </button>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Boosts performance for PDF extraction and rendering. Requires restart.
-                  </p>
-                </div>
+                    <label className="flex items-center gap-3 mb-4">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm"></div>
+                        <div className="relative p-2 bg-gradient-to-br from-purple-600/30 to-cyan-600/30 rounded-lg">
+                          <MemoryStick className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-300">
+                        RAM Limit: <span className="text-cyber-purple-400">{settings.ramLimitMB}MB</span>
+                      </span>
+                    </label>
+                    <div className="relative mb-2">
+                      <input
+                        type="range"
+                        min="512"
+                        max="8192"
+                        step="256"
+                        value={settings.ramLimitMB}
+                        onChange={(e) => handleRamLimitChange(parseInt(e.target.value, 10))}
+                        className="w-full h-2 bg-gray-700/50 rounded-lg appearance-none cursor-pointer accent-cyber-purple-500"
+                        style={{
+                          background: `linear-gradient(to right, rgb(139, 92, 246) 0%, rgb(139, 92, 246) ${((settings.ramLimitMB - 512) / (8192 - 512)) * 100}%, rgb(55, 65, 81) ${((settings.ramLimitMB - 512) / (8192 - 512)) * 100}%, rgb(55, 65, 81) 100%)`
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500 mb-3">
+                      <span>512MB</span>
+                      <span>8192MB</span>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      Memory threshold for automatic cleanup triggers.
+                    </p>
+                  </motion.div>
 
-                {/* RAM Limit */}
-                <div className="mb-6">
-                  <label className="flex items-center gap-2 mb-3">
-                    <MemoryStick size={18} className="text-cyber-purple-400" />
-                    <span className="text-sm font-medium text-gray-300">
-                      RAM Limit: {settings.ramLimitMB}MB
-                    </span>
-                  </label>
-                  <input
-                    type="range"
-                    min="512"
-                    max="8192"
-                    step="256"
-                    value={settings.ramLimitMB}
-                    onChange={(e) => handleRamLimitChange(parseInt(e.target.value, 10))}
-                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyber-purple-500"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>512MB</span>
-                    <span>8192MB</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Memory threshold for automatic cleanup triggers.
-                  </p>
-                </div>
-
-                {/* Fullscreen */}
-                <div className="mb-6">
-                  <label className="flex items-center gap-2 mb-3">
-                    <Monitor size={18} className="text-cyber-purple-400" />
-                    <span className="text-sm font-medium text-gray-300">Fullscreen</span>
-                  </label>
-                  <button
-                    onClick={handleFullscreenToggle}
-                    className={`w-full p-3 rounded-lg border transition-colors ${settings.fullscreen
-                        ? 'bg-cyber-purple-500/20 border-cyber-purple-500 text-white'
-                        : 'bg-gray-800 border-gray-700 text-gray-400'
+                  {/* Fullscreen */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="p-5 bg-gray-800/40 rounded-xl border border-gray-700/30 hover:border-cyber-purple-400/30 transition-all backdrop-blur-sm"
+                  >
+                    <label className="flex items-center gap-3 mb-4">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm"></div>
+                        <div className="relative p-2 bg-gradient-to-br from-purple-600/30 to-cyan-600/30 rounded-lg">
+                          <Monitor className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-300">Fullscreen</span>
+                    </label>
+                    <motion.button
+                      onClick={handleFullscreenToggle}
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`relative overflow-hidden group w-full p-3.5 rounded-xl border-2 transition-all font-medium ${
+                        settings.fullscreen
+                          ? 'bg-cyber-purple-500/20 border-cyber-purple-500/60 text-white shadow-lg shadow-cyber-purple-500/20'
+                          : 'bg-gray-800/50 border-gray-700/50 text-gray-400 hover:border-gray-600/50'
                       }`}
-                  >
-                    {settings.fullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-                  </button>
-                </div>
+                    >
+                      <div className={`absolute inset-0 bg-gradient-to-br transition-all duration-500 ${
+                        settings.fullscreen
+                          ? 'from-purple-600/10 via-purple-600/5 to-cyan-600/10'
+                          : 'from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5'
+                      }`}></div>
+                      <span className="relative z-10">{settings.fullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}</span>
+                    </motion.button>
+                  </motion.div>
 
-                {/* Extraction Quality */}
-                <div className="mb-6">
-                  <label className="flex items-center gap-2 mb-3">
-                    <Zap size={18} className="text-cyber-purple-400" />
-                    <span className="text-sm font-medium text-gray-300">Extraction Quality</span>
-                  </label>
-                  <select
-                    value={settings.extractionQuality}
-                    onChange={(e) => handleExtractionQualityChange(e.target.value as 'high' | 'medium' | 'low')}
-                    className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyber-purple-500"
+                  {/* Extraction Quality */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.25 }}
+                    className="p-5 bg-gray-800/40 rounded-xl border border-gray-700/30 hover:border-cyber-purple-400/30 transition-all backdrop-blur-sm"
                   >
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Higher quality uses more memory but produces better results.
-                  </p>
-                </div>
+                    <label className="flex items-center gap-3 mb-4">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm"></div>
+                        <div className="relative p-2 bg-gradient-to-br from-purple-600/30 to-cyan-600/30 rounded-lg">
+                          <Zap className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-300">Extraction Quality</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 to-cyan-600/10 rounded-xl blur-sm"></div>
+                      <select
+                        value={settings.extractionQuality}
+                        onChange={(e) => handleExtractionQualityChange(e.target.value as 'high' | 'medium' | 'low')}
+                        className="relative w-full p-3.5 bg-gray-800/70 hover:bg-gray-800/80 border-2 border-gray-700/50 focus:border-cyber-purple-500/60 focus:ring-2 focus:ring-cyber-purple-500/20 rounded-xl text-white focus:outline-none transition-all duration-300 backdrop-blur-sm"
+                      >
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                      </select>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-3 leading-relaxed">
+                      Higher quality uses more memory but produces better results.
+                    </p>
+                  </motion.div>
 
-                {/* Thumbnail Size */}
-                <div className="mb-6">
-                  <label className="flex items-center gap-2 mb-3">
-                    <Image size={18} className="text-cyber-purple-400" />
-                    <span className="text-sm font-medium text-gray-300">
-                      Thumbnail Size: {settings.thumbnailSize}px
-                    </span>
-                  </label>
-                  <input
-                    type="range"
-                    min="100"
-                    max="400"
-                    step="50"
-                    value={settings.thumbnailSize}
-                    onChange={(e) => handleThumbnailSizeChange(parseInt(e.target.value, 10))}
-                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyber-purple-500"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>100px</span>
-                    <span>400px</span>
-                  </div>
-                </div>
-
-                {/* Performance Mode */}
-                <div className="mb-6">
-                  <label className="flex items-center gap-2 mb-3">
-                    <Gauge size={18} className="text-cyber-purple-400" />
-                    <span className="text-sm font-medium text-gray-300">Performance Mode</span>
-                  </label>
-                  <select
-                    value={settings.performanceMode}
-                    onChange={(e) => handlePerformanceModeChange(e.target.value as 'auto' | 'high' | 'balanced' | 'low')}
-                    className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyber-purple-500"
+                  {/* Thumbnail Size */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="p-5 bg-gray-800/40 rounded-xl border border-gray-700/30 hover:border-cyber-purple-400/30 transition-all backdrop-blur-sm"
                   >
-                    <option value="auto">Auto</option>
-                    <option value="high">High</option>
-                    <option value="balanced">Balanced</option>
-                    <option value="low">Low</option>
-                  </select>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Automatically adjusts settings based on system capabilities.
-                  </p>
+                    <label className="flex items-center gap-3 mb-4">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm"></div>
+                        <div className="relative p-2 bg-gradient-to-br from-purple-600/30 to-cyan-600/30 rounded-lg">
+                          <Image className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-300">
+                        Thumbnail Size: <span className="text-cyber-purple-400">{settings.thumbnailSize}px</span>
+                      </span>
+                    </label>
+                    <div className="relative mb-2">
+                      <input
+                        type="range"
+                        min="100"
+                        max="400"
+                        step="50"
+                        value={settings.thumbnailSize}
+                        onChange={(e) => handleThumbnailSizeChange(parseInt(e.target.value, 10))}
+                        className="w-full h-2 bg-gray-700/50 rounded-lg appearance-none cursor-pointer accent-cyber-purple-500"
+                        style={{
+                          background: `linear-gradient(to right, rgb(139, 92, 246) 0%, rgb(139, 92, 246) ${((settings.thumbnailSize - 100) / (400 - 100)) * 100}%, rgb(55, 65, 81) ${((settings.thumbnailSize - 100) / (400 - 100)) * 100}%, rgb(55, 65, 81) 100%)`
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>100px</span>
+                      <span>400px</span>
+                    </div>
+                  </motion.div>
+
+                  {/* Performance Mode */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.35 }}
+                    className="p-5 bg-gray-800/40 rounded-xl border border-gray-700/30 hover:border-cyber-purple-400/30 transition-all backdrop-blur-sm"
+                  >
+                    <label className="flex items-center gap-3 mb-4">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm"></div>
+                        <div className="relative p-2 bg-gradient-to-br from-purple-600/30 to-cyan-600/30 rounded-lg">
+                          <Gauge className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-300">Performance Mode</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 to-cyan-600/10 rounded-xl blur-sm"></div>
+                      <select
+                        value={settings.performanceMode}
+                        onChange={(e) => handlePerformanceModeChange(e.target.value as 'auto' | 'high' | 'balanced' | 'low')}
+                        className="relative w-full p-3.5 bg-gray-800/70 hover:bg-gray-800/80 border-2 border-gray-700/50 focus:border-cyber-purple-500/60 focus:ring-2 focus:ring-cyber-purple-500/20 rounded-xl text-white focus:outline-none transition-all duration-300 backdrop-blur-sm"
+                      >
+                        <option value="auto">Auto</option>
+                        <option value="high">High</option>
+                        <option value="balanced">Balanced</option>
+                        <option value="low">Low</option>
+                      </select>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-3 leading-relaxed">
+                      Automatically adjusts settings based on system capabilities.
+                    </p>
+                  </motion.div>
                 </div>
               </div>
             </motion.div>
@@ -402,7 +527,6 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
               toast.error('Electron API not available');
               return;
             }
-            // Create case note with the provided case path
             const filePath = await window.electronAPI.createCaseNote(casePath, fileName, '');
             setCurrentFilePath(filePath);
             setIsWordEditorOpen(true);
@@ -424,12 +548,9 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
 
       {/* Word Editor Panel */}
       {isArchiveVisible && isWordEditorOpen ? (
-        // Render in inline container using portal
         (() => {
-          // Use useEffect to ensure container exists, but for now try immediate render
           const container = document.getElementById('word-editor-inline-container');
           if (!container) {
-            // Container doesn't exist yet, render in overlay mode as fallback
             return (
               <WordEditorPanel
                 isOpen={isWordEditorOpen}
@@ -460,7 +581,6 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
           );
         })()
       ) : (
-        // Render in overlay mode (normal)
         <WordEditorPanel
           isOpen={isWordEditorOpen}
           onClose={() => {
@@ -476,4 +596,3 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
     </>
   );
 }
-
