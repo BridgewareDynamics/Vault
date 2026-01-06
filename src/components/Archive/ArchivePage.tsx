@@ -1600,33 +1600,42 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             // Cases Grid
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               <AnimatePresence>
-                {cases.map((caseItem) => (
-                  <CaseFolder
-                    key={caseItem.path}
-                    caseItem={caseItem}
-                    isExtracting={isExtracting && extractingCasePath === caseItem.path}
-                    onClick={() => {
-                      // #region agent log
-                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:1574', message: 'Case clicked', data: { casePath: caseItem.path, caseName: caseItem.name, currentCasePath: currentCase?.path, hasRestoredCase: hasRestoredCaseRef.current, archiveContextCasePath: archiveContextCase?.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }).catch(() => { });
-                      // #endregion
-                      setCurrentCase(caseItem);
-                    }}
-                    onDelete={() => deleteCase(caseItem.path)}
-                    onRename={() => {
-                      setFileToRename({
-                        name: caseItem.name,
-                        path: caseItem.path,
-                        size: 0,
-                        modified: 0,
-                        type: 'other',
-                        isFolder: true
-                      });
-                      setShowRenameDialog(true);
-                    }}
-                    onEditBackground={() => updateCaseBackgroundImage(caseItem.path)}
-                    onTagClick={() => handleTagClick(caseItem.path)}
-                  />
-                ))}
+                {cases.map((caseItem) => {
+                  const casePath = caseItem.path;
+                  const caseName = caseItem.name;
+                  // Capture values for debug log to avoid type inference issues
+                  const currentCasePathValue = currentCase ? (currentCase as { path: string }).path : null;
+                  const archiveContextCasePathValue = archiveContextCase ? (archiveContextCase as { path: string }).path : null;
+                  return (
+                    <CaseFolder
+                      key={casePath}
+                      caseItem={caseItem}
+                      isExtracting={isExtracting && extractingCasePath === casePath}
+                      onClick={() => {
+                        // #region agent log
+                        if (window.electronAPI?.debugLog) {
+                          window.electronAPI.debugLog({ location: 'ArchivePage.tsx:1574', message: 'Case clicked', data: { casePath, caseName, currentCasePath: currentCasePathValue, hasRestoredCase: hasRestoredCaseRef.current, archiveContextCasePath: archiveContextCasePathValue }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }).catch(() => { });
+                        }
+                        // #endregion
+                        setCurrentCase(caseItem);
+                      }}
+                      onDelete={() => deleteCase(casePath)}
+                      onRename={() => {
+                        setFileToRename({
+                          name: caseName,
+                          path: casePath,
+                          size: 0,
+                          modified: 0,
+                          type: 'other',
+                          isFolder: true
+                        });
+                        setShowRenameDialog(true);
+                      }}
+                      onEditBackground={() => updateCaseBackgroundImage(casePath)}
+                      onTagClick={() => handleTagClick(casePath)}
+                    />
+                  );
+                })}
               </AnimatePresence>
             </div>
           )}
