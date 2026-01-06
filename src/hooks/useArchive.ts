@@ -664,6 +664,11 @@ export function useArchive() {
           return false;
         }
         
+        // Exclude .notes folder (used for case notes, should be hidden from file listing)
+        if (item.isFolder && itemName === '.notes') {
+          return false;
+        }
+        
         // Exclude .parent-pdf metadata files
         if (!item.isFolder) {
           const fileName = itemName;
@@ -1139,8 +1144,8 @@ export function useArchive() {
     // Exclude system folders (safety check - backend should already filter these)
     filtered = filtered.filter(caseItem => {
       const caseName = caseItem.name.toLowerCase();
-      // Exclude .bookmark-thumbnails folder
-      if (caseName === '.bookmark-thumbnails') {
+      // Exclude .bookmark-thumbnails folder and TextLibrary
+      if (caseName === '.bookmark-thumbnails' || caseName === 'textlibrary') {
         return false;
       }
       return true;

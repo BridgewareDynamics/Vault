@@ -85,21 +85,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createTextFile: (fileName: string, content: string) => ipcRenderer.invoke('create-text-file', fileName, content),
   saveTextFile: (filePath: string, content: string) => ipcRenderer.invoke('save-text-file', filePath, content),
   deleteTextFile: (filePath: string) => ipcRenderer.invoke('delete-text-file', filePath),
+  // Case Notes API
+  listCaseNotes: (casePath: string) => ipcRenderer.invoke('list-case-notes', casePath),
+  createCaseNote: (casePath: string, fileName: string, content: string) => ipcRenderer.invoke('create-case-note', casePath, fileName, content),
   exportTextFile: (options: {
     content: string;
     format: 'pdf' | 'docx' | 'rtf';
     filePath?: string;
   }) => ipcRenderer.invoke('export-text-file', options),
-  createWordEditorWindow: (options: {
-    content: string;
-    filePath?: string | null;
-    viewState?: 'editor' | 'library' | 'bookmarkLibrary';
-  }) => ipcRenderer.invoke('create-word-editor-window', options),
-  reattachWordEditor: (options: {
-    content: string;
-    filePath?: string | null;
-    viewState?: 'editor' | 'library' | 'bookmarkLibrary';
-  }) => ipcRenderer.invoke('reattach-word-editor', options),
+      createWordEditorWindow: (options: {
+        content: string;
+        filePath?: string | null;
+        viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
+      }) => ipcRenderer.invoke('create-word-editor-window', options),
+      reattachWordEditor: (options: {
+        content: string;
+        filePath?: string | null;
+        viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
+      }) => ipcRenderer.invoke('reattach-word-editor', options),
   createPdfAuditWindow: (options: {
     pdfPath: string | null;
     settings: {
@@ -278,6 +283,15 @@ declare global {
       createTextFile: (fileName: string, content: string) => Promise<string>;
       saveTextFile: (filePath: string, content: string) => Promise<{ success: boolean }>;
       deleteTextFile: (filePath: string) => Promise<{ success: boolean }>;
+      // Case Notes API
+      listCaseNotes: (casePath: string) => Promise<Array<{
+        name: string;
+        path: string;
+        size: number;
+        modified: number;
+        preview?: string;
+      }>>;
+      createCaseNote: (casePath: string, fileName: string, content: string) => Promise<string>;
       exportTextFile: (options: {
         content: string;
         format: 'pdf' | 'docx' | 'rtf';
@@ -287,11 +301,13 @@ declare global {
         content: string;
         filePath?: string | null;
         viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
       }) => Promise<{ success: boolean }>;
       reattachWordEditor: (options: {
         content: string;
         filePath?: string | null;
         viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
       }) => Promise<{ success: boolean }>;
       createPdfAuditWindow: (options: {
         pdfPath: string | null;

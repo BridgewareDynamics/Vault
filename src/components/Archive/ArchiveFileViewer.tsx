@@ -21,10 +21,33 @@ interface ArchiveFileViewerProps {
 }
 
 export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, initialPage, onInitialPageApplied }: ArchiveFileViewerProps) {
-  const { isOpen: isWordEditorOpen, setIsOpen: setWordEditorOpen } = useWordEditor();
+  const { isOpen: isWordEditorOpen, setIsOpen: setWordEditorOpen, panelWidth, dividerPosition } = useWordEditor();
   const toast = useToast();
+  const [isInlineMode, setIsInlineMode] = useState(false);
   const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
+  
+  // Detect if editor is in inline mode (check for inline container)
+  useEffect(() => {
+    const checkInlineMode = () => {
+      const inlineContainer = document.getElementById('word-editor-inline-container');
+      setIsInlineMode(!!inlineContainer && isWordEditorOpen);
+    };
+    
+    checkInlineMode();
+    
+    // Check periodically in case container is added/removed
+    const interval = setInterval(checkInlineMode, 100);
+    
+    // Also check on mutations
+    const observer = new MutationObserver(checkInlineMode);
+    observer.observe(document.body, { childList: true, subtree: true });
+    
+    return () => {
+      clearInterval(interval);
+      observer.disconnect();
+    };
+  }, [isWordEditorOpen]);
   const [loading, setLoading] = useState(false);
   const [showBookmarkCreator, setShowBookmarkCreator] = useState(false);
   const [currentPageBookmarks, setCurrentPageBookmarks] = useState<Array<{ id: string; name: string }>>([]);
@@ -888,8 +911,15 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
         }}
         className="fixed inset-y-0 left-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-0 transition-all duration-300"
         style={{
-          width: isWordEditorOpen ? 'calc(100vw - 500px)' : '100vw',
-          right: isWordEditorOpen ? '500px' : '0',
+          // When editor is open in inline mode (archive visible), constrain to archive section width
+          // When editor is open in overlay mode (archive not visible), leave space for panel on right
+          width: isWordEditorOpen 
+            ? (isInlineMode
+                ? `${dividerPosition}%` // Inline mode: archive section width
+                : `calc(100vw - ${panelWidth}px)`) // Overlay mode: viewport width minus panel width
+            : '100vw',
+          // Only set right in overlay mode to ensure proper positioning
+          ...(isWordEditorOpen && !isInlineMode ? { right: `${panelWidth}px` } : {}),
         }}
       >
         <motion.div
