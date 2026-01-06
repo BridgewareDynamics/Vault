@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, X, FileText, AlertTriangle, CheckCircle, Loader2, Upload, Settings, Download, Maximize2, Zap, Lock, FolderOpen } from 'lucide-react';
 import { useRedactionAudit, RedactionAuditResult } from '../hooks/useRedactionAudit';
@@ -334,9 +335,10 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
+        <React.Fragment key="security-checker-modal">
           {/* Backdrop */}
           <motion.div
+            key="backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -346,6 +348,7 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
 
           {/* Modal */}
           <motion.div
+            key="modal"
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -1033,15 +1036,18 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
               </div>
             </div>
           </motion.div>
-        </>
+        </React.Fragment>
       )}
 
       {/* Case Selection Dialog */}
-      <CaseSelectionDialog
-        isOpen={showCaseSelectionDialog}
-        onClose={() => setShowCaseSelectionDialog(false)}
-        onSelectCase={handleCaseSelected}
-      />
+      {showCaseSelectionDialog && (
+        <CaseSelectionDialog
+          key="case-selection-dialog"
+          isOpen={showCaseSelectionDialog}
+          onClose={() => setShowCaseSelectionDialog(false)}
+          onSelectCase={handleCaseSelected}
+        />
+      )}
     </AnimatePresence>
   );
 }

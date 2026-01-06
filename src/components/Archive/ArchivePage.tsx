@@ -861,10 +861,12 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               <button
                 onClick={goBackToParentFolder}
                 className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors mt-2"
-                aria-label={`Go back to ${folderNavigationStack.length > 0 ? 'parent folder' : 'case'}`}
+                aria-label={`Go back to ${folderNavigationStack.length > 0 && folderNavigationStack[folderNavigationStack.length - 1] !== currentCase.path ? 'parent folder' : 'case'}`}
               >
                 <ArrowLeft size={18} aria-hidden="true" />
-                <span className="text-sm font-medium">Back to {folderNavigationStack.length > 0 ? 'Parent' : 'Case'}</span>
+                <span className="text-sm font-medium">
+                  Back to {folderNavigationStack.length > 0 && folderNavigationStack[folderNavigationStack.length - 1] !== currentCase.path ? 'Parent' : 'Case'}
+                </span>
               </button>
             )}
           </div>
