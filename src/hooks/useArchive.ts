@@ -1289,8 +1289,12 @@ export function useArchive() {
     if (!currentCase) return;
     
     // Add current folder to navigation stack if we're already in a folder
+    // If we're at case root (currentFolderPath is null), add the case path to track that we came from root
     if (currentFolderPath) {
       setFolderNavigationStack(prev => [...prev, currentFolderPath]);
+    } else {
+      // We're at case root, add case path to stack so we can navigate back
+      setFolderNavigationStack(prev => [...prev, currentCase.path]);
     }
     setCurrentFolderPath(folderPath);
   }, [currentCase, currentFolderPath]);
@@ -1304,12 +1308,17 @@ export function useArchive() {
     if (folderNavigationStack.length > 0) {
       const parentPath = folderNavigationStack[folderNavigationStack.length - 1];
       setFolderNavigationStack(prev => prev.slice(0, -1));
-      setCurrentFolderPath(parentPath);
+      // If parent path is the case path, we're going back to case root
+      if (currentCase && parentPath === currentCase.path) {
+        setCurrentFolderPath(null);
+      } else {
+        setCurrentFolderPath(parentPath);
+      }
     } else {
       // If no parent in stack, go back to case root
       setCurrentFolderPath(null);
     }
-  }, [folderNavigationStack]);
+  }, [folderNavigationStack, currentCase]);
 
   const navigateToFolder = useCallback((targetPath: string) => {
     // If navigating to case root

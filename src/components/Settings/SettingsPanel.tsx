@@ -27,15 +27,9 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
   // Listen for reattach data from detached window
   useEffect(() => {
     const handleReattach = (_event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SettingsPanel.tsx:handleReattach:entry',message:'Reattach event received',data:{viewState:_event.detail.viewState,casePath:_event.detail.casePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       // Open the word editor panel when reattaching
       setIsWordEditorOpen(true);
       setWordEditorContextOpen(true);
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SettingsPanel.tsx:handleReattach:afterOpen',message:'Word editor opened',data:{willNavigateToCase:false,casePath:_event.detail.casePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
     };
 
     // Listen for bookmark open events that should close the word editor
