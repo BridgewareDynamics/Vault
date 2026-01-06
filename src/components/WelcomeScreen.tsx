@@ -54,7 +54,16 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
   return (
     <div className="relative flex flex-col min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 overflow-hidden">
       {/* Animated Background Grid */}
-      <div className="absolute inset-0 opacity-20">
+      <motion.div 
+        className="absolute inset-0"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 0.2 }}
+        transition={{ 
+          duration: 1,
+          ease: [0.25, 0.1, 0.25, 1],
+          delay: 0.15,
+        }}
+      >
         <div 
           className="absolute inset-0"
           style={{
@@ -66,7 +75,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
             maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
           }}
         />
-      </div>
+      </motion.div>
 
       {/* Animated Particles Background */}
       <div className="absolute inset-0 overflow-hidden">
@@ -81,17 +90,38 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
               top: `${particle.top}%`,
               boxShadow: `0 0 ${particle.size * 4}px rgba(34, 211, 238, 0.6)`,
             }}
+            initial={{ opacity: 0 }}
             animate={{
-              y: [0, -100, 0],
-              x: [0, Math.sin(particle.id) * 50, 0],
-              opacity: [0.3, 0.8, 0.3],
-              scale: [1, 1.5, 1],
+              y: [0, -80, 0],
+              x: [0, Math.sin(particle.id) * 30, 0],
+              opacity: [0, 0.3, 0.7, 0.3],
+              scale: [1, 1.3, 1],
             }}
             transition={{
-              duration: particle.duration,
-              repeat: Infinity,
-              delay: particle.delay,
-              ease: "easeInOut",
+              opacity: {
+                duration: 1.2,
+                ease: [0.25, 0.1, 0.25, 1],
+                delay: 0.3 + (particle.delay * 0.1),
+                times: [0, 0.3, 0.7, 1],
+              },
+              y: {
+                duration: particle.duration,
+                repeat: Infinity,
+                delay: 1.2 + particle.delay,
+                ease: [0.4, 0, 0.6, 1],
+              },
+              x: {
+                duration: particle.duration,
+                repeat: Infinity,
+                delay: 1.2 + particle.delay,
+                ease: [0.4, 0, 0.6, 1],
+              },
+              scale: {
+                duration: particle.duration,
+                repeat: Infinity,
+                delay: 1.2 + particle.delay,
+                ease: [0.4, 0, 0.6, 1],
+              },
             }}
           />
         ))}
@@ -109,15 +139,26 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
               background: 'linear-gradient(to bottom, rgba(139, 92, 246, 0.3), transparent)',
               boxShadow: '0 0 20px rgba(139, 92, 246, 0.5)',
             }}
+            initial={{ opacity: 0, scaleY: 0.3 }}
             animate={{
-              opacity: [0.2, 0.6, 0.2],
-              scaleY: [0.5, 1, 0.5],
+              opacity: [0, 0.2, 0.5, 0.2],
+              scaleY: [0.3, 0.6, 1, 0.6],
             }}
             transition={{
-              duration: 4,
-              repeat: Infinity,
-              delay: ray.delay,
-              ease: "easeInOut",
+              opacity: {
+                duration: 1,
+                ease: [0.25, 0.1, 0.25, 1],
+                delay: 0.4 + (ray.delay * 0.1),
+                times: [0, 0.2, 0.5, 1],
+                repeat: Infinity,
+                repeatDelay: 0.5,
+              },
+              scaleY: {
+                duration: 5,
+                repeat: Infinity,
+                delay: 1.4 + ray.delay,
+                ease: [0.4, 0, 0.6, 1],
+              },
             }}
           />
         ))}
@@ -132,18 +173,28 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
           top: mousePosition.y - 192,
           filter: 'blur(60px)',
         }}
+        initial={{ opacity: 0 }}
         animate={{
-          scale: [1, 1.2, 1],
+          opacity: 1,
+          scale: [1, 1.15, 1],
         }}
         transition={{
-          duration: 2,
-          repeat: Infinity,
-          ease: "easeInOut",
+          opacity: {
+            duration: 0.8,
+            ease: [0.25, 0.1, 0.25, 1],
+            delay: 0.5,
+          },
+          scale: {
+            duration: 3,
+            repeat: Infinity,
+            ease: [0.4, 0, 0.6, 1],
+            delay: 1.3,
+          },
         }}
       />
 
-      {/* Horizontal Beam Line - Static beam through center of all buttons, limited to outer button edges */}
-      <div
+      {/* Horizontal Beam Line - Animated beam through center of all buttons, limited to outer button edges */}
+      <motion.div
         className="absolute pointer-events-none z-0"
         style={{
           background: 'linear-gradient(to right, transparent 0%, rgba(139, 92, 246, 0.6) 20%, rgba(139, 92, 246, 0.8) 50%, rgba(139, 92, 246, 0.6) 80%, transparent 100%)',
@@ -152,8 +203,26 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
           left: '50%',
           width: 'calc(min(100% - 4rem, 80rem) - 2rem)', // Match button container width minus some padding to align with button edges
           maxWidth: 'calc(80rem - 2rem)',
-          transform: 'translate(-50%, -50%)',
           boxShadow: '0 0 10px rgba(139, 92, 246, 0.9), 0 0 20px rgba(139, 92, 246, 0.5), 0 0 30px rgba(139, 92, 246, 0.3)',
+        }}
+        initial={{ 
+          opacity: 0, 
+          scaleX: 0,
+          filter: 'blur(10px)',
+          x: '-50%',
+          y: '-50%',
+        }}
+        animate={{ 
+          opacity: 1, 
+          scaleX: 1,
+          filter: 'blur(0px)',
+          x: '-50%',
+          y: '-50%',
+        }}
+        transition={{ 
+          duration: 0.8,
+          ease: [0.25, 0.1, 0.25, 1],
+          delay: 0.65, // Appears just before cards for continuity
         }}
       />
 
@@ -161,22 +230,22 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
       {/* Enhanced Header */}
       <motion.div 
         className="relative z-10 w-full px-8 pt-8 pb-6 border-b border-cyber-purple-400/20 bg-gradient-to-r from-gray-900/80 via-purple-900/30 to-gray-900/80 backdrop-blur-2xl"
-        initial={{ opacity: 0, y: -30 }}
+        initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ 
-          duration: 1,
-          ease: [0.16, 1, 0.3, 1], // Custom smooth easing
+          duration: 0.9,
+          ease: [0.25, 0.1, 0.25, 1], // Smooth, natural easing
+          delay: 0.1,
         }}
       >
         <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
           <div className="flex items-center gap-6">
             <motion.div
               className="relative"
-              initial={{ opacity: 0, scale: 0.9, x: -20 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ 
                 opacity: 1, 
-                scale: 1, 
-                x: 0,
+                scale: 1,
                 boxShadow: [
                   '0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(34, 211, 238, 0.3)',
                   '0 0 30px rgba(139, 92, 246, 0.8), 0 0 60px rgba(34, 211, 238, 0.5)',
@@ -184,13 +253,12 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                 ],
               }}
               transition={{
-                opacity: { duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 },
-                scale: { duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 },
-                x: { duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 },
+                opacity: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.15 },
+                scale: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.15 },
                 boxShadow: {
-                  duration: 3,
+                  duration: 4,
                   repeat: Infinity,
-                  ease: "easeInOut",
+                  ease: [0.4, 0, 0.6, 1],
                 },
               }}
             >
@@ -200,12 +268,12 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
               </div>
             </motion.div>
             <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
               transition={{ 
                 duration: 0.9,
-                ease: [0.16, 1, 0.3, 1],
-                delay: 0.15,
+                ease: [0.25, 0.1, 0.25, 1],
+                delay: 0.2,
               }}
             >
               <motion.h1
@@ -220,11 +288,11 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                   ],
                 }}
                 transition={{
-                  opacity: { duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.2 },
+                  opacity: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
                   textShadow: {
-                    duration: 3,
+                    duration: 4,
                     repeat: Infinity,
-                    ease: "easeInOut",
+                    ease: [0.4, 0, 0.6, 1],
                   },
                 }}
               >
@@ -232,12 +300,12 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
               </motion.h1>
               <motion.p 
                 className="text-base text-gray-300 mt-1 font-medium"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 transition={{ 
-                  duration: 0.7,
-                  ease: [0.16, 1, 0.3, 1],
-                  delay: 0.3,
+                  duration: 0.8,
+                  ease: [0.25, 0.1, 0.25, 1],
+                  delay: 0.35,
                 }}
               >
                 A Research Organization System
@@ -245,12 +313,12 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
             </motion.div>
           </div>
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ 
               duration: 0.9,
-              ease: [0.16, 1, 0.3, 1],
-              delay: 0.2,
+              ease: [0.25, 0.1, 0.25, 1],
+              delay: 0.25,
             }}
           >
             <ActionToolbar hideWordEditorButton={true} />
@@ -264,19 +332,20 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ 
-            duration: 1.2,
-            ease: [0.16, 1, 0.3, 1],
+            duration: 0.8,
+            ease: [0.25, 0.1, 0.25, 1],
+            delay: 0.2,
           }}
           className="text-center space-y-16 max-w-7xl w-full"
         >
           {/* Enhanced Floating Logo */}
           <motion.div
-            initial={{ scale: 0.85, opacity: 0, y: -40 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
+            initial={{ scale: 0.96, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
             transition={{ 
-              duration: 1.1,
-              ease: [0.16, 1, 0.3, 1],
-              delay: 0.3,
+              duration: 1,
+              ease: [0.25, 0.1, 0.25, 1],
+              delay: 0.35,
             }}
             className="flex justify-center mb-8"
           >
@@ -284,34 +353,34 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
               {/* Outer Glow Rings */}
               <motion.div
                 className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full"
-                initial={{ opacity: 0, scale: 0.9 }}
+                initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ 
                   opacity: 1, 
                   scale: 1,
                   rotate: 360,
                 }}
-                transition={{ 
-                  opacity: { duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.4 },
-                  scale: { duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.4 },
-                  rotate: { duration: 25, repeat: Infinity, ease: "linear", delay: 1.4 },
-                }}
+              transition={{ 
+                opacity: { duration: 1, ease: [0.25, 0.1, 0.25, 1], delay: 0.45 },
+                scale: { duration: 1, ease: [0.25, 0.1, 0.25, 1], delay: 0.45 },
+                rotate: { duration: 30, repeat: Infinity, ease: "linear", delay: 1.4 },
+              }}
                 style={{
                   boxShadow: '0 0 30px rgba(139, 92, 246, 0.6), inset 0 0 30px rgba(139, 92, 246, 0.2)',
                 }}
               />
               <motion.div
                 className="absolute inset-8 border-2 border-cyber-cyan-400/50 rounded-full"
-                initial={{ opacity: 0, scale: 0.9 }}
+                initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ 
                   opacity: 1, 
                   scale: 1,
                   rotate: -360,
                 }}
-                transition={{ 
-                  opacity: { duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.45 },
-                  scale: { duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.45 },
-                  rotate: { duration: 18, repeat: Infinity, ease: "linear", delay: 1.45 },
-                }}
+              transition={{ 
+                opacity: { duration: 1, ease: [0.25, 0.1, 0.25, 1], delay: 0.5 },
+                scale: { duration: 1, ease: [0.25, 0.1, 0.25, 1], delay: 0.5 },
+                rotate: { duration: 24, repeat: Infinity, ease: "linear", delay: 1.45 },
+              }}
                 style={{
                   boxShadow: '0 0 20px rgba(34, 211, 238, 0.6), inset 0 0 20px rgba(34, 211, 238, 0.2)',
                 }}
@@ -320,21 +389,21 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
               {/* Pulsing Glow Effects */}
               <motion.div
                 className="absolute inset-0 bg-gradient-purple blur-3xl rounded-full"
-                initial={{ opacity: 0, scale: 0.8 }}
+                initial={{ opacity: 0, scale: 0.95 }}
                 animate={{
                   opacity: [0.4, 0.7, 0.4],
-                  scale: [1, 1.3, 1],
+                  scale: [1, 1.25, 1],
                 }}
                 transition={{
                   opacity: {
-                    duration: 1,
-                    ease: [0.16, 1, 0.3, 1],
-                    delay: 0.5,
+                    duration: 1.2,
+                    ease: [0.25, 0.1, 0.25, 1],
+                    delay: 0.55,
                   },
                   scale: {
-                    duration: 4,
+                    duration: 5,
                     repeat: Infinity,
-                    ease: "easeInOut",
+                    ease: [0.4, 0, 0.6, 1],
                     delay: 1.5,
                   },
                 }}
@@ -345,21 +414,21 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
               
               <motion.div
                 className="absolute inset-0 bg-cyber-cyan-400/40 blur-2xl rounded-full"
-                initial={{ opacity: 0, scale: 0.8 }}
+                initial={{ opacity: 0, scale: 0.95 }}
                 animate={{
                   opacity: [0.3, 0.6, 0.3],
-                  scale: [1.1, 1.4, 1.1],
+                  scale: [1.05, 1.3, 1.05],
                 }}
                 transition={{
                   opacity: {
-                    duration: 1,
-                    ease: [0.16, 1, 0.3, 1],
-                    delay: 0.55,
+                    duration: 1.2,
+                    ease: [0.25, 0.1, 0.25, 1],
+                    delay: 0.6,
                   },
                   scale: {
-                    duration: 5,
+                    duration: 6,
                     repeat: Infinity,
-                    ease: "easeInOut",
+                    ease: [0.4, 0, 0.6, 1],
                     delay: 2,
                   },
                 }}
@@ -370,11 +439,11 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                 src={getAssetPath('vault-icon.png')}
                 alt="Vault"
                 className="w-52 h-52 relative z-10"
-                initial={{ opacity: 0, scale: 0.85, y: 20 }}
+                initial={{ opacity: 0, scale: 0.96 }}
                 animate={{
                   opacity: 1,
                   scale: 1,
-                  y: [0, -15, 0],
+                  y: [0, -12, 0],
                   filter: [
                     'drop-shadow(0 0 20px rgba(139, 92, 246, 0.8)) drop-shadow(0 0 40px rgba(34, 211, 238, 0.6))',
                     'drop-shadow(0 0 30px rgba(139, 92, 246, 1)) drop-shadow(0 0 60px rgba(34, 211, 238, 0.8))',
@@ -383,26 +452,26 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                 }}
                 transition={{
                   opacity: { 
-                    duration: 1,
-                    ease: [0.16, 1, 0.3, 1],
-                    delay: 0.5,
+                    duration: 1.1,
+                    ease: [0.25, 0.1, 0.25, 1],
+                    delay: 0.55,
                   },
                   scale: { 
-                    duration: 1,
-                    ease: [0.16, 1, 0.3, 1],
-                    delay: 0.5,
+                    duration: 1.1,
+                    ease: [0.25, 0.1, 0.25, 1],
+                    delay: 0.55,
                   },
                   y: {
-                    duration: 4,
+                    duration: 5,
                     repeat: Infinity,
-                    ease: "easeInOut",
-                    delay: 1.5, // Start floating after entrance
+                    ease: [0.4, 0, 0.6, 1],
+                    delay: 1.5,
                   },
                   filter: {
-                    duration: 3,
+                    duration: 4,
                     repeat: Infinity,
-                    ease: "easeInOut",
-                    delay: 0.8,
+                    ease: [0.4, 0, 0.6, 1],
+                    delay: 0.95,
                   },
                 }}
               />
@@ -421,15 +490,15 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                     boxShadow: '0 0 10px rgba(34, 211, 238, 0.8), 0 0 20px rgba(34, 211, 238, 0.4)',
                   }}
                   animate={{
-                    scale: [0, 1.5, 0],
-                    opacity: [0, 1, 0],
+                    scale: [0, 1.3, 0],
+                    opacity: [0, 0.9, 0],
                     rotate: [0, 180, 360],
                   }}
                   transition={{
-                    duration: 2.5,
+                    duration: 3,
                     repeat: Infinity,
-                    delay: i * 0.2,
-                    ease: "easeInOut",
+                    delay: i * 0.25,
+                    ease: [0.4, 0, 0.6, 1],
                   }}
                 />
               ))}
@@ -440,12 +509,12 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {/* PDF to PNG Card */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 50, rotateX: -15 }}
-              animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+              initial={{ opacity: 0, scale: 0.96, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ 
-                duration: 1,
-                ease: [0.16, 1, 0.3, 1],
-                delay: 0.5,
+                duration: 0.9,
+                ease: [0.25, 0.1, 0.25, 1],
+                delay: 0.7,
               }}
               className="relative group"
             >
@@ -564,12 +633,12 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
 
             {/* The Vault Card */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 50, rotateX: -15 }}
-              animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+              initial={{ opacity: 0, scale: 0.96, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ 
-                duration: 1,
-                ease: [0.16, 1, 0.3, 1],
-                delay: 0.6,
+                duration: 0.9,
+                ease: [0.25, 0.1, 0.25, 1],
+                delay: 0.75,
               }}
               className="relative group"
             >
@@ -685,12 +754,12 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
 
             {/* PDF Audit Card */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 50, rotateX: -15 }}
-              animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+              initial={{ opacity: 0, scale: 0.96, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ 
-                duration: 1,
-                ease: [0.16, 1, 0.3, 1],
-                delay: 0.7,
+                duration: 0.9,
+                ease: [0.25, 0.1, 0.25, 1],
+                delay: 0.8,
               }}
               className="relative group"
             >
