@@ -504,7 +504,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
       return (
         <div className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900">
           <div className="relative p-8 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
-            <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
+            <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-6">
                 <div className="relative">
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>
@@ -546,7 +546,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
       <div ref={containerRef} className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900">
         {/* Enhanced Header - Detached Mode */}
         <div className="relative p-8 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
-          <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
+          <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-6">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>

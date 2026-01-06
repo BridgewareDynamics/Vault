@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Library, Maximize2, Bookmark } from 'lucide-react';
+import { X, Library, Maximize2, Bookmark, FileText } from 'lucide-react';
 import { WordEditor, WordEditorHandle } from './WordEditor';
 import { TextLibrary } from './TextLibrary';
 import { BookmarkLibrary } from '../Bookmarks/BookmarkLibrary';
@@ -296,98 +296,144 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
             })}
             className={`${
               isInline 
-                ? 'h-full bg-gray-900/95 backdrop-blur-lg border-l border-cyber-purple-500/30 flex flex-col'
-                : 'fixed right-0 top-0 bottom-0 bg-gray-900/95 backdrop-blur-lg border-l border-cyber-purple-500/30 shadow-2xl z-50 flex flex-col'
+                ? 'h-full bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 backdrop-blur-xl border-l border-cyber-purple-400/30 flex flex-col'
+                : 'fixed right-0 top-0 bottom-0 bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 backdrop-blur-xl border-l border-cyber-purple-400/30 shadow-2xl z-50 flex flex-col'
             }`}
             style={isInline ? undefined : {
               width: panelWidth,
               transition: isResizing ? 'none' : 'width 0.2s ease-out'
             }}
           >
-            {/* Resize Handle - only show in overlay mode */}
+            {/* Enhanced Resize Handle - only show in overlay mode */}
             {!isInline && (
               <div
                 onMouseDown={handleResizeStart}
                 className="absolute left-0 top-0 bottom-0 cursor-col-resize z-10 group"
                 style={{
                   cursor: isResizing ? 'col-resize' : 'col-resize',
-                  // Extend the hit area beyond the visible handle for easier grabbing
                   marginLeft: '-2px',
                   paddingLeft: '2px',
                   paddingRight: '2px',
                   width: '5px'
                 }}
               >
-                {/* Visual indicator - shows on hover and during resize */}
+                {/* Enhanced Visual indicator */}
                 <div
-                  className={`absolute left-0 top-0 bottom-0 w-0.5 transition-colors ${isResizing
-                    ? 'bg-cyber-purple-500/80'
-                    : 'bg-cyber-purple-500/0 group-hover:bg-cyber-purple-500/60'
-                    }`}
+                  className={`absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-300 ${
+                    isResizing
+                      ? 'bg-gradient-to-b from-purple-600 via-purple-500 to-cyan-600 shadow-lg shadow-purple-500/50'
+                      : 'bg-cyber-purple-500/0 group-hover:bg-gradient-to-b group-hover:from-purple-600/60 group-hover:via-purple-500/60 group-hover:to-cyan-600/60'
+                  }`}
                 />
               </div>
             )}
-            {/* Header */}
-            <div className="p-4 border-b border-gray-700/50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold bg-gradient-purple bg-clip-text text-transparent">
-                  Word Editor
-                </h2>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Detach button - left corner */}
-                <button
-                  onClick={handleDetach}
-                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-                  aria-label="Detach editor to separate window"
-                  title="Open in separate window"
-                >
-                  <Maximize2 size={18} className="text-cyber-purple-400" />
-                </button>
-                {/* Bookmark Library button */}
-                <button
-                  onClick={() => {
-                    setShowBookmarkLibrary(!showBookmarkLibrary);
-                    setShowLibrary(false);
-                  }}
-                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-                  aria-label="Open bookmark library"
-                  title="Bookmark Library"
-                >
-                  <Bookmark size={18} className={showBookmarkLibrary ? 'text-cyber-purple-400' : 'text-gray-400'} />
-                </button>
-                {/* Library button */}
-                <button
-                  onClick={() => {
-                    const willShowLibrary = !showLibrary;
-                    setShowLibrary(willShowLibrary);
-                    setShowBookmarkLibrary(false);
-                    // Set panel to minimum width when opening library
-                    if (willShowLibrary) {
-                      setPanelWidth(MIN_WIDTH);
-                    }
-                  }}
-                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-                  aria-label="Open text library"
-                  title="Text Library"
-                >
-                  <Library size={18} className={showLibrary ? 'text-cyber-purple-400' : 'text-gray-400'} />
-                </button>
-                {/* Close button */}
-                <button
-                  onClick={() => {
-                    if (editorRef.current?.hasUnsavedChanges()) {
-                      setShowUnsavedDialog(true);
-                      setPendingClose(true);
-                    } else {
-                      onClose();
-                    }
-                  }}
-                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-                  aria-label="Close editor"
-                >
-                  <X size={20} />
-                </button>
+            {/* Enhanced Header */}
+            <div className="relative p-4 sm:p-5 border-b border-cyber-purple-400/20 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl sm:rounded-2xl blur-xl opacity-50"></div>
+                    <div className="relative p-2.5 sm:p-3 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl sm:rounded-2xl shadow-2xl">
+                      <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                    </div>
+                  </div>
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                      Word Editor
+                    </h2>
+                    <p className="text-xs sm:text-sm text-gray-400 mt-0.5 hidden sm:block">Create and edit documents</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Enhanced Detach button */}
+                  <motion.button
+                    onClick={handleDetach}
+                    whileHover={{ scale: 1.1, y: -1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="relative overflow-hidden group p-2 hover:bg-gray-800/80 rounded-xl transition-all"
+                    aria-label="Detach editor to separate window"
+                    title="Open in separate window"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10 transition-all duration-500"></div>
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <Maximize2 size={18} className="relative z-10 text-gray-400 group-hover:text-cyber-purple-400 transition-colors" />
+                    </div>
+                  </motion.button>
+                  {/* Enhanced Bookmark Library button */}
+                  <motion.button
+                    onClick={() => {
+                      setShowBookmarkLibrary(!showBookmarkLibrary);
+                      setShowLibrary(false);
+                    }}
+                    whileHover={{ scale: 1.1, y: -1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className={`relative overflow-hidden group p-2 rounded-xl transition-all ${
+                      showBookmarkLibrary 
+                        ? 'bg-cyber-purple-500/20 border border-cyber-purple-400/40' 
+                        : 'hover:bg-gray-800/80'
+                    }`}
+                    aria-label="Open bookmark library"
+                    title="Bookmark Library"
+                  >
+                    <div className={`absolute inset-0 bg-gradient-to-br transition-all duration-500 ${
+                      showBookmarkLibrary
+                        ? 'from-purple-600/10 via-purple-600/5 to-cyan-600/10'
+                        : 'from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5'
+                    }`}></div>
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <Bookmark size={18} className={`relative z-10 transition-colors ${showBookmarkLibrary ? 'text-cyber-purple-400' : 'text-gray-400 group-hover:text-cyber-purple-400'}`} />
+                    </div>
+                  </motion.button>
+                  {/* Enhanced Library button */}
+                  <motion.button
+                    onClick={() => {
+                      const willShowLibrary = !showLibrary;
+                      setShowLibrary(willShowLibrary);
+                      setShowBookmarkLibrary(false);
+                      if (willShowLibrary) {
+                        setPanelWidth(MIN_WIDTH);
+                      }
+                    }}
+                    whileHover={{ scale: 1.1, y: -1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className={`relative overflow-hidden group p-2 rounded-xl transition-all ${
+                      showLibrary 
+                        ? 'bg-cyber-purple-500/20 border border-cyber-purple-400/40' 
+                        : 'hover:bg-gray-800/80'
+                    }`}
+                    aria-label="Open text library"
+                    title="Text Library"
+                  >
+                    <div className={`absolute inset-0 bg-gradient-to-br transition-all duration-500 ${
+                      showLibrary
+                        ? 'from-purple-600/10 via-purple-600/5 to-cyan-600/10'
+                        : 'from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5'
+                    }`}></div>
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <Library size={18} className={`relative z-10 transition-colors ${showLibrary ? 'text-cyber-purple-400' : 'text-gray-400 group-hover:text-cyber-purple-400'}`} />
+                    </div>
+                  </motion.button>
+                  {/* Enhanced Close button */}
+                  <motion.button
+                    onClick={() => {
+                      if (editorRef.current?.hasUnsavedChanges()) {
+                        setShowUnsavedDialog(true);
+                        setPendingClose(true);
+                      } else {
+                        onClose();
+                      }
+                    }}
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="p-2 hover:bg-gray-800/80 rounded-xl transition-colors text-gray-400 hover:text-white"
+                    aria-label="Close editor"
+                  >
+                    <X size={20} />
+                  </motion.button>
+                </div>
               </div>
             </div>
 
