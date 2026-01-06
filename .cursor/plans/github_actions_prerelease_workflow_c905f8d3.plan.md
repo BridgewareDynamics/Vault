@@ -4,18 +4,18 @@ overview: Create a GitHub Actions workflow that triggers on merge to a branch, b
 todos:
   - id: create-workflow-dir
     content: Create .github/workflows directory structure
-    status: pending
+    status: completed
   - id: create-version-script
     content: Create scripts/update-version.py to handle automatic versioning with git commit hash
-    status: pending
+    status: completed
   - id: create-workflow-file
     content: Create .github/workflows/prerelease-build.yml with build steps, version update, and release creation
-    status: pending
+    status: completed
     dependencies:
       - create-version-script
   - id: test-workflow
     content: Test workflow on current branch to verify build and release creation works
-    status: pending
+    status: completed
     dependencies:
       - create-workflow-file
 ---
@@ -114,7 +114,7 @@ The existing configuration already disables signing:
 
 The workflow will execute:
 
-```bash
+````bash
 npm ci
 python scripts/update-version.py
 npm run electron:build
@@ -145,4 +145,5 @@ The `electron:build` script already:
 ## Notes
 
 - No code signing certificates needed (already configured)
-- Windows-only build (as requested)
+
+````

@@ -1,0 +1,93 @@
+name: Prerelease Build
+
+on:
+  push:
+    branches:
+      - 56-create-a-cicd-pipline-for-the-prerelease  # Change to 'prerelease' after testing
+
+permissions:
+  contents: write  # Required to create releases and tags
+  actions: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for git commit hash
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Update version with commit hash
+        id: version
+        run: |
+          python scripts/update-version.py
+          # Read the updated version from package.json
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "Version set to: $version"
+
+      - name: Build Electron app
+        run: npm run electron:build
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          SKIP_NOTARIZATION: 'true'
+
+      - name: Find installer
+        id: find-installer
+        run: |
+          $installer = Get-ChildItem -Path release -Filter "*.exe" | Select-Object -First 1
+          if ($installer) {
+            echo "installer_path=$($installer.FullName)" >> $env:GITHUB_OUTPUT
+            echo "installer_name=$($installer.Name)" >> $env:GITHUB_OUTPUT
+            echo "Found installer: $($installer.Name)"
+          } else {
+            Write-Error "No installer found in release directory"
+            exit 1
+          }
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Prerelease ${{ steps.version.outputs.version }}
+          body: |
+            ## Prerelease Build
+            
+            **Version:** ${{ steps.version.outputs.version }}
+            **Commit:** ${{ github.sha }}
+            **Branch:** ${{ github.ref_name }}
+            
+            This is an automated prerelease build.
+            
+            ### Changes
+            ${{ github.event.head_commit.message }}
+          prerelease: true
+          files: |
+            release/*.exe
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ steps.version.outputs.version }}
+          path: release/*.exe
+          retention-days: 30
+
