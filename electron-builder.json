@@ -5,6 +5,10 @@
     "output": "release",
     "buildResources": "build"
   },
+  "npmRebuild": false,
+  "buildDependenciesFromSource": false,
+  "nodeGypRebuild": false,
+  "publish": null,
   "files": [
     "dist/**/*",
     "dist-electron/**/*",
