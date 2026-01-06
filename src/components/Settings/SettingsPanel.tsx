@@ -396,20 +396,21 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
           setWordEditorContextOpen(true);
           setShowWordEditorDialog(false);
         }}
-        onNewFile={async (fileName) => {
+        onNewFile={async (fileName, casePath) => {
           try {
             if (!window.electronAPI) {
               toast.error('Electron API not available');
               return;
             }
-            // Create empty file
-            const filePath = await window.electronAPI.createTextFile(fileName, '');
+            // Create case note with the provided case path
+            const filePath = await window.electronAPI.createCaseNote(casePath, fileName, '');
             setCurrentFilePath(filePath);
             setIsWordEditorOpen(true);
             setWordEditorContextOpen(true);
             setShowWordEditorDialog(false);
+            toast.success('Document created');
           } catch (error) {
-            toast.error('Failed to create file');
+            toast.error('Failed to create document');
             console.error('Create file error:', error);
           }
         }}
