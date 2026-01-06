@@ -47,6 +47,8 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           SKIP_NOTARIZATION: 'true'
+          npm_config_build_from_source: 'false'
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '0'
 
       - name: Find installer
         id: find-installer

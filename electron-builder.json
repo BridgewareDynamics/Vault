@@ -5,6 +5,9 @@
     "output": "release",
     "buildResources": "build"
   },
+  "npmRebuild": false,
+  "buildDependenciesFromSource": false,
+  "electronRebuild": false,
   "files": [
     "dist/**/*",
     "dist-electron/**/*",
