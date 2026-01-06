@@ -7,7 +7,7 @@
   },
   "npmRebuild": false,
   "buildDependenciesFromSource": false,
-  "electronRebuild": false,
+  "nodeGypRebuild": false,
   "files": [
     "dist/**/*",
     "dist-electron/**/*",
