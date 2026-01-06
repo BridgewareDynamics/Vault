@@ -1880,6 +1880,12 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
             return false;
           }
           
+          // Exclude .notes folder (used for case notes, should be hidden from file listing)
+          if (folderName === '.notes') {
+            logger.log('[Main] Filtering out .notes folder:', entry.name);
+            return false;
+          }
+          
           return true;
         })
         .map(async (entry) => {

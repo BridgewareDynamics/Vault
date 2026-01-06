@@ -664,6 +664,11 @@ export function useArchive() {
           return false;
         }
         
+        // Exclude .notes folder (used for case notes, should be hidden from file listing)
+        if (item.isFolder && itemName === '.notes') {
+          return false;
+        }
+        
         // Exclude .parent-pdf metadata files
         if (!item.isFolder) {
           const fileName = itemName;
