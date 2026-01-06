@@ -45,16 +45,16 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
   return (
     <div className="flex flex-col gap-3">
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        initial={{ opacity: 0, y: 8, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+        whileHover={{ y: -4, scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         className="relative cursor-pointer group"
       >
         <div
           onClick={onClick}
-          className="relative rounded-lg overflow-hidden border-2 border-gray-700 hover:border-cyber-purple-500 transition-colors bg-gray-800/50 p-6"
+          className="relative rounded-2xl overflow-hidden border-2 border-gray-700/50 hover:border-cyber-purple-500/60 transition-all duration-300 ease-out bg-gray-800/60 backdrop-blur-sm hover:bg-gray-800/80 shadow-lg hover:shadow-2xl hover:shadow-cyber-purple-500/20 p-6"
           style={{
             backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined,
             backgroundSize: 'cover',
@@ -62,6 +62,9 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
             backgroundRepeat: 'no-repeat',
           }}
         >
+          {/* Glowing background effect */}
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10 transition-all duration-500"></div>
+          
           {/* Background overlay to ensure readability */}
           {backgroundImageUrl && (
             <div className="absolute inset-0 bg-gray-800/50" />
@@ -105,15 +108,32 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
 
           {/* Folder Icon */}
           <div className="flex flex-col items-center gap-3 relative z-10">
-            <div className="relative">
-              <Folder className="w-16 h-16 text-cyber-purple-400" />
+            <motion.div 
+              className="relative"
+              animate={{
+                filter: [
+                  'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                  'drop-shadow(0 0 25px rgba(139, 92, 246, 0.9))',
+                  'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                ],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-2xl blur-xl"></div>
+              <div className="relative p-4 bg-gradient-to-br from-purple-600/30 to-cyan-600/30 rounded-2xl">
+                <Folder className="w-12 h-12 text-white" />
+              </div>
               {isExtracting && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full">
                   <Loader2 className="w-8 h-8 text-cyber-purple-400 animate-spin" />
                 </div>
               )}
-            </div>
-            <span className="text-white font-medium text-sm text-center truncate w-full">
+            </motion.div>
+            <span className="text-white font-medium text-sm text-center truncate w-full group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyber-purple-400 group-hover:to-cyber-cyan-400 transition-all duration-300">
               {caseItem.name}
             </span>
           </div>
@@ -183,7 +203,7 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
-          className="w-full p-4 bg-gray-800/40 border border-cyber-purple-500/20 rounded-lg backdrop-blur-sm"
+          className="w-full p-4 bg-gray-800/40 border border-cyber-purple-500/20 rounded-2xl backdrop-blur-sm"
         >
           <p className="text-gray-300 text-xs leading-relaxed break-words text-center">
             {caseItem.description}

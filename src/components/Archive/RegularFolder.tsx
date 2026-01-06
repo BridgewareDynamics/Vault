@@ -56,11 +56,11 @@ export function RegularFolder({
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3 }}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
+      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      whileHover={{ y: -4, scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
       className={`relative ${onClick ? 'cursor-pointer' : ''} group`}
     >
       <div
@@ -80,11 +80,11 @@ export function RegularFolder({
           e.stopPropagation();
           if (onDrop) onDrop(e);
         }}
-        className={`relative rounded-lg overflow-hidden border-2 ${
+        className={`relative rounded-2xl overflow-hidden border-2 ${
           isDragOver
             ? 'border-cyber-purple-500 bg-cyber-purple-500/20'
-            : 'border-gray-700 hover:border-cyber-purple-500 bg-gray-800'
-        } transition-colors`}
+            : 'border-gray-700/50 hover:border-cyber-purple-500/60 bg-gray-800/60 backdrop-blur-sm hover:bg-gray-800/80'
+        } transition-all duration-300 ease-out shadow-lg hover:shadow-2xl hover:shadow-cyber-purple-500/20`}
         style={{
           backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined,
           backgroundSize: 'cover',
@@ -92,19 +92,39 @@ export function RegularFolder({
           backgroundRepeat: 'no-repeat',
         }}
       >
+        {/* Glowing background effect */}
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10 transition-all duration-500"></div>
+        
         {/* Background overlay to ensure readability */}
         {backgroundImageUrl && (
           <div className="absolute inset-0 bg-gray-800/50" />
         )}
 
         {/* Container with aspect ratio matching PDF containers (aspect-[3/4]) */}
-        <div className={`aspect-[3/4] flex flex-col items-center justify-center p-6 relative ${backgroundImageUrl ? 'bg-transparent' : 'bg-gray-900'}`}>
+        <div className={`aspect-[3/4] flex flex-col items-center justify-center p-6 relative z-10 ${backgroundImageUrl ? 'bg-transparent' : 'bg-gray-900'}`}>
           {/* Folder Icon */}
           <div className="flex flex-col items-center gap-3 flex-1 justify-center">
-            <div className="relative">
-              <Folder className={`w-16 h-16 ${isDragOver ? 'text-cyber-purple-400' : 'text-cyber-purple-400'}`} />
-            </div>
-            <span className="font-medium text-sm text-center truncate w-full px-2 text-white">
+            <motion.div 
+              className="relative"
+              animate={{
+                filter: [
+                  'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                  'drop-shadow(0 0 25px rgba(139, 92, 246, 0.9))',
+                  'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                ],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-2xl blur-xl"></div>
+              <div className="relative p-4 bg-gradient-to-br from-purple-600/30 to-cyan-600/30 rounded-2xl">
+                <Folder className={`w-12 h-12 ${isDragOver ? 'text-white' : 'text-white'}`} />
+              </div>
+            </motion.div>
+            <span className="font-medium text-sm text-center truncate w-full px-2 text-white group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyber-purple-400 group-hover:to-cyber-cyan-400 transition-all duration-300">
               {folder.name}
             </span>
           </div>
