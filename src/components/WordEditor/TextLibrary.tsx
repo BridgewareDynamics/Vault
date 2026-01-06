@@ -121,7 +121,6 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   // #endregion
   
   const [files, setFiles] = useState<TextFile[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showNewFileDialog, setShowNewFileDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<{ path: string; name: string } | null>(null);
@@ -130,7 +129,16 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   
   // Get current case context - returns null if not available
   const { currentCase } = useArchiveContext();
-  const [showGallery, setShowGallery] = useState(false);
+  
+  // Initialize loading state - will be updated based on whether we should show gallery
+  // Start with true, will be set to false if we should show gallery
+  const [loading, setLoading] = useState(true);
+  // Initialize showGallery based on context - if we're in case gallery, show gallery by default
+  const [showGallery, setShowGallery] = useState(() => {
+    // If we're not in a case and no detached case path, we should show the gallery
+    // This will be refined once context stabilizes
+    return false; // Start false, will be set by shouldShowGallery logic
+  });
   
   // Track if we've given ArchiveContext time to stabilize after mount
   // This prevents showing gallery when currentCase is temporarily null during initial render
@@ -242,6 +250,18 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
     }
   }, []);
 
+  // Update loading state based on whether we should show gallery
+  // If we're in case gallery, don't show loading - show gallery instead
+  useEffect(() => {
+    const effectiveCasePath = detachedCasePath || currentCase?.path;
+    // Check for both null and undefined since currentCase?.path can be undefined
+    const shouldShowGalleryCalc = (effectiveCasePath === null || effectiveCasePath === undefined) && selectedCaseForNotes === null;
+    // If we should show gallery, don't show loading state
+    if (shouldShowGalleryCalc) {
+      setLoading(false);
+    }
+  }, [currentCase, detachedCasePath, selectedCaseForNotes]);
+
   // Determine if we should show the gallery:
   // - If user explicitly clicked "View Case Notes" (showGallery === true), show gallery
   // - If not in a case (currentCase === null) and no case selected and no detachedCasePath, show gallery
@@ -251,38 +271,80 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   // We check currentCase directly - if it exists, we're in a case and should show notes, not gallery
   // In detached mode, use detachedCasePath if provided
   const effectiveCasePath = detachedCasePath || currentCase?.path;
-  const shouldShowGallery = showGallery || (contextStabilized && effectiveCasePath === null && selectedCaseForNotes === null);
+  // Show gallery if: user explicitly requested it, OR we're in case gallery (no currentCase) 
+  // For case gallery, show immediately - don't wait for contextStabilized to avoid showing files first
+  // Check for both null and undefined since currentCase?.path can be undefined
+  const shouldShowGallery = showGallery || ((effectiveCasePath === null || effectiveCasePath === undefined) && selectedCaseForNotes === null);
   // #region agent log
   useEffect(() => {
-    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:shouldShowGallery',message:'shouldShowGallery calculated',data:{shouldShowGallery,showGallery,contextStabilized,currentCasePath:currentCase?.path,currentCaseName:currentCase?.name,selectedCasePath:selectedCaseForNotes?.path,isDetached},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:shouldShowGallery:calc',message:'shouldShowGallery calculated',data:{shouldShowGallery,showGallery,effectiveCasePath,currentCasePath:currentCase?.path,currentCaseName:currentCase?.name,selectedCasePath:selectedCaseForNotes?.path,detachedCasePath,contextStabilized},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  }, [shouldShowGallery, showGallery, effectiveCasePath, currentCase, selectedCaseForNotes, detachedCasePath, contextStabilized]);
+  // #endregion
+  // #region agent log
+  useEffect(() => {
+    if (window.electronAPI?.debugLog) {
+      window.electronAPI.debugLog({location:'TextLibrary.tsx:shouldShowGallery',message:'shouldShowGallery calculated',data:{shouldShowGallery,showGallery,contextStabilized,currentCasePath:currentCase?.path,currentCaseName:currentCase?.name,selectedCasePath:selectedCaseForNotes?.path,isDetached},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+    }
   }, [shouldShowGallery, showGallery, contextStabilized, currentCase, selectedCaseForNotes, isDetached]);
   // #endregion
 
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFilesEffect:entry',message:'Load files effect running',data:{contextStabilized,selectedCasePath:selectedCaseForNotes?.path,currentCasePath:currentCase?.path,showGallery,detachedCasePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     // Wait for context to stabilize before loading files
     if (!contextStabilized) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFilesEffect:earlyReturn',message:'Context not stabilized, returning early',data:{contextStabilized},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
       return;
     }
+    
+    // Calculate shouldShowGallery here to use in the condition
+    const effectiveCasePath = detachedCasePath || currentCase?.path;
+    // Check for both null and undefined since currentCase?.path can be undefined
+    const shouldShowGalleryCalc = showGallery || ((effectiveCasePath === null || effectiveCasePath === undefined) && selectedCaseForNotes === null);
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFilesEffect:calc',message:'Calculated shouldShowGalleryCalc',data:{shouldShowGalleryCalc,showGallery,effectiveCasePath,selectedCasePath:selectedCaseForNotes?.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     
     // Load files when:
     // 1. A case is selected from gallery
     // 2. We're in a case context (show that case's notes by default)
     // 3. Not in a case and not showing gallery (show global notes)
+    // IMPORTANT: Don't load files if we should show the gallery - let the gallery render instead
     // IMPORTANT: Always prioritize showing case notes if currentCase exists
     if (selectedCaseForNotes?.path) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFilesEffect:branch1',message:'Loading files for selectedCaseForNotes',data:{selectedCasePath:selectedCaseForNotes?.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       loadFiles();
     } else if (currentCase?.path && !showGallery) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFilesEffect:branch2',message:'Loading files for currentCase',data:{currentCasePath:currentCase?.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       // When in a case, show that case's notes by default - this is the most important case
       loadFiles();
-    } else if (!currentCase && !showGallery) {
-      // Load global files if not in a case and not showing gallery
+    } else if (!currentCase && !shouldShowGalleryCalc) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFilesEffect:branch3',message:'Loading global files',data:{currentCase:null,shouldShowGalleryCalc},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      // Load global files if not in a case and NOT showing gallery
+      // If shouldShowGalleryCalc is true, we should show the gallery instead, so don't load files
       loadFiles();
+    } else {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFilesEffect:branch4',message:'Not loading files, should show gallery',data:{shouldShowGalleryCalc,currentCase:currentCase?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
     }
-  }, [selectedCaseForNotes?.path, currentCase?.path, showGallery, contextStabilized]);
+    // If shouldShowGalleryCalc is true, we don't load files - the gallery will be shown instead
+  }, [selectedCaseForNotes?.path, currentCase?.path, showGallery, contextStabilized, detachedCasePath]);
 
   const loadFiles = async () => {
     // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFiles:entry',message:'loadFiles called',data:{selectedCasePath:selectedCaseForNotes?.path,currentCasePath:currentCase?.path,isDetached},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    if (window.electronAPI?.debugLog) {
+      window.electronAPI.debugLog({location:'TextLibrary.tsx:loadFiles:entry',message:'loadFiles called',data:{selectedCasePath:selectedCaseForNotes?.path,currentCasePath:currentCase?.path,isDetached},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+    }
     // #endregion
     if (!window.electronAPI) {
       setLoading(false);
@@ -294,7 +356,9 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
       // Priority: selectedCaseForNotes > detachedCasePath > currentCase > global
       const casePath = selectedCaseForNotes?.path || detachedCasePath || currentCase?.path;
       // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFiles:casePath',message:'Determined casePath',data:{casePath,selectedCasePath:selectedCaseForNotes?.path,currentCasePath:currentCase?.path,willLoadCaseNotes:!!casePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      if (window.electronAPI?.debugLog) {
+        window.electronAPI.debugLog({location:'TextLibrary.tsx:loadFiles:casePath',message:'Determined casePath',data:{casePath,selectedCasePath:selectedCaseForNotes?.path,currentCasePath:currentCase?.path,willLoadCaseNotes:!!casePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+      }
       // #endregion
       
       if (casePath) {
@@ -302,21 +366,27 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
         const fileList = await window.electronAPI.listCaseNotes(casePath);
         setFiles(fileList);
         // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFiles:loadedCaseNotes',message:'Loaded case notes',data:{casePath,fileCount:fileList.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        if (window.electronAPI?.debugLog) {
+          window.electronAPI.debugLog({location:'TextLibrary.tsx:loadFiles:loadedCaseNotes',message:'Loaded case notes',data:{casePath,fileCount:fileList.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+        }
         // #endregion
       } else {
         // Load global notes
         const fileList = await window.electronAPI.listTextFiles();
         setFiles(fileList);
         // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFiles:loadedGlobalNotes',message:'Loaded global notes',data:{fileCount:fileList.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        if (window.electronAPI?.debugLog) {
+          window.electronAPI.debugLog({location:'TextLibrary.tsx:loadFiles:loadedGlobalNotes',message:'Loaded global notes',data:{fileCount:fileList.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+        }
         // #endregion
       }
     } catch (error) {
       toast.error('Failed to load notes');
       console.error('Load files error:', error);
       // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:loadFiles:error',message:'Load files failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      if (window.electronAPI?.debugLog) {
+        window.electronAPI.debugLog({location:'TextLibrary.tsx:loadFiles:error',message:'Load files failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
+      }
       // #endregion
     } finally {
       setLoading(false);
@@ -389,7 +459,15 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   // CRITICAL: Wait for context to stabilize before showing gallery to avoid race condition
   // This prevents the gallery from showing when user opens Text Library while in a case
   // Double-check: even if shouldShowGallery is true, if currentCase exists and user didn't explicitly request it, don't show gallery
-  if (shouldShowGallery && contextStabilized && (!currentCase || showGallery)) {
+  // When in case gallery (currentCase === null), show gallery immediately
+  // When in a case, wait for context to stabilize to avoid race conditions
+  // #region agent log
+  const willShowGallery = shouldShowGallery && (!currentCase || contextStabilized);
+  useEffect(() => {
+    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TextLibrary.tsx:galleryCheck',message:'Gallery display check',data:{willShowGallery,shouldShowGallery,currentCase:currentCase?.name,contextStabilized,showGallery},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  }, [willShowGallery, shouldShowGallery, currentCase, contextStabilized, showGallery]);
+  // #endregion
+  if (willShowGallery) {
     // Enhanced gallery for detached mode
     if (isDetached) {
       return (

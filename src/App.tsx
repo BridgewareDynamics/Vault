@@ -147,7 +147,7 @@ function AppContent() {
     let lastProcessedBookmark: string | null = null;
     
     const handleOpenBookmark = (event: CustomEvent<{ pdfPath: string; pageNumber: number; keepPanelOpen?: boolean }>) => {
-      const { pdfPath, pageNumber, keepPanelOpen } = event.detail;
+      const { pdfPath, pageNumber } = event.detail;
       
       // Create a unique key for this bookmark
       const bookmarkKey = `${pdfPath}:${pageNumber}`;
@@ -168,14 +168,8 @@ function AppContent() {
       // Always store bookmark info in sessionStorage for ArchivePage to pick up
       sessionStorage.setItem('pending-bookmark-open', JSON.stringify({ pdfPath, pageNumber }));
       
-      // Close word editor if open - but only if not opened from within the panel
-      // If keepPanelOpen is true, the bookmark was opened from the Word Editor panel's bookmark library
-      if (isWordEditorOpen && !keepPanelOpen) {
-        // Dispatch a custom event to close the word editor
-        // The SettingsPanel will handle this via the WordEditorContext
-        const closeEvent = new CustomEvent('close-word-editor-for-bookmark');
-        window.dispatchEvent(closeEvent);
-      }
+      // Don't close the word editor when opening bookmarks - keep it open so users can access typing/notes
+      // The panel should remain open regardless of where the bookmark is opened from
       
       // Open archive if not already open
       if (!showArchive) {

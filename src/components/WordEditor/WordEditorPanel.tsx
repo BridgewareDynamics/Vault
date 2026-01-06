@@ -36,6 +36,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   const { currentCase } = useArchiveContext();
   const resizeStartXRef = useRef<number>(0);
   const resizeStartWidthRef = useRef<number>(500);
+  const hasAutoOpenedLibraryRef = useRef(false); // Track if we've auto-opened library for this panel session
 
   // Update file path when initialFilePath changes
   useEffect(() => {
@@ -52,6 +53,30 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       setPanelWidth(MIN_WIDTH);
     }
   }, [openLibrary, isOpen, setPanelWidth]);
+
+  // Auto-show case notes library when opening panel from case gallery
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:autoOpenLibrary:entry',message:'Auto-open library effect running',data:{isOpen,currentCase:currentCase?.name,showLibrary,showBookmarkLibrary,currentFilePath,hasAutoOpened:hasAutoOpenedLibraryRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    // Reset flag when panel closes
+    if (!isOpen) {
+      hasAutoOpenedLibraryRef.current = false;
+      return;
+    }
+
+    // Auto-open library only once when panel opens from case gallery
+    if (isOpen && !currentCase && !showLibrary && !showBookmarkLibrary && !currentFilePath && !hasAutoOpenedLibraryRef.current) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/04b3394c-36fd-4b4f-81b5-5b895f23f78b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WordEditorPanel.tsx:autoOpenLibrary:setting',message:'Setting showLibrary to true',data:{isOpen,currentCase:null,showLibrary:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      // If we're in the case gallery (no currentCase) and panel just opened,
+      // automatically show the library (which will show the case notes gallery)
+      setShowLibrary(true);
+      setPanelWidth(MIN_WIDTH);
+      hasAutoOpenedLibraryRef.current = true;
+    }
+  }, [isOpen, currentCase, showLibrary, showBookmarkLibrary, currentFilePath, setPanelWidth]);
 
   useEffect(() => {
     setContextOpen(isOpen);
