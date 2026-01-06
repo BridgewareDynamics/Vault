@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge, FileText, Sparkles, TrendingUp } from 'lucide-react';
+import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge, FileText, TrendingUp } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { formatBytes } from '../../utils/memoryMonitor';
 import { useToast } from '../Toast/ToastContext';

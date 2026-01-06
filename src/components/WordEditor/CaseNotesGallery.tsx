@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Search, FileText, Folder, Sparkles, Zap, TrendingUp, Plus } from 'lucide-react';
+import { ArrowLeft, Search, FileText, Folder, Sparkles, TrendingUp, Plus } from 'lucide-react';
 import { useToast } from '../Toast/ToastContext';
 import { useCategoryTags } from '../../hooks/useCategoryTags';
 import { CategoryTag } from '../Archive/CategoryTag';
