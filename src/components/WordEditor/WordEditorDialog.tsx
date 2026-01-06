@@ -4,6 +4,7 @@ import { X, FileText, ChevronDown, Plus } from 'lucide-react';
 import { useToast } from '../Toast/ToastContext';
 import { useArchiveContext } from '../../contexts/ArchiveContext';
 import { isValidFileName } from '../../utils/pathValidator';
+import { CaseSelectionDialog } from './CaseSelectionDialog';
 
 interface TextFile {
   name: string;
@@ -17,7 +18,7 @@ interface WordEditorDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenFile: (filePath: string) => void;
-  onNewFile: (fileName: string) => void;
+  onNewFile: (fileName: string, casePath: string) => void;
   onOpenLibrary: () => void;
 }
 
@@ -25,8 +26,10 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
   const [showRecent, setShowRecent] = useState(false);
   const [recentFiles, setRecentFiles] = useState<TextFile[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showCaseSelectionDialog, setShowCaseSelectionDialog] = useState(false);
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [selectedCasePath, setSelectedCasePath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
   const { currentCase } = useArchiveContext();
@@ -67,8 +70,20 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
   };
 
   const handleNewDocument = () => {
-    setShowNameDialog(true);
+    // If we're already in a case, use it directly; otherwise show case selection
+    if (currentCase?.path) {
+      setSelectedCasePath(currentCase.path);
+      setShowNameDialog(true);
+    } else {
+      setShowCaseSelectionDialog(true);
+    }
     setError(null);
+  };
+
+  const handleCaseSelected = (casePath: string) => {
+    setSelectedCasePath(casePath);
+    setShowCaseSelectionDialog(false);
+    setShowNameDialog(true);
   };
 
   useEffect(() => {
@@ -103,6 +118,11 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
       return;
     }
 
+    if (!selectedCasePath) {
+      toast.error('Please select a case');
+      return;
+    }
+
     // Ensure .txt extension
     const finalFileName = fileName.endsWith('.txt') ? fileName : `${fileName}.txt`;
     
@@ -112,10 +132,12 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
       return;
     }
 
-    onNewFile(finalFileName);
+    onNewFile(finalFileName, selectedCasePath);
     onClose();
     setShowNameDialog(false);
+    setShowCaseSelectionDialog(false);
     setFileName('');
+    setSelectedCasePath(null);
     setError(null);
   };
 
@@ -257,6 +279,16 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
         )}
       </AnimatePresence>
 
+      {/* Case Selection Dialog */}
+      <CaseSelectionDialog
+        isOpen={showCaseSelectionDialog}
+        onClose={() => {
+          setShowCaseSelectionDialog(false);
+          setSelectedCasePath(null);
+        }}
+        onSelectCase={handleCaseSelected}
+      />
+
       {/* Name File Dialog */}
       <AnimatePresence>
         {showNameDialog && (
@@ -267,7 +299,9 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
             className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70"
             onClick={() => {
               setShowNameDialog(false);
+              setShowCaseSelectionDialog(false);
               setFileName('');
+              setSelectedCasePath(null);
               setError(null);
             }}
           >
@@ -288,7 +322,9 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
                     handleCreateNew();
                   } else if (e.key === 'Escape') {
                     setShowNameDialog(false);
+                    setShowCaseSelectionDialog(false);
                     setFileName('');
+                    setSelectedCasePath(null);
                     setError(null);
                   }
                 }}
@@ -307,7 +343,9 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
                 <button
                   onClick={() => {
                     setShowNameDialog(false);
+                    setShowCaseSelectionDialog(false);
                     setFileName('');
+                    setSelectedCasePath(null);
                     setError(null);
                   }}
                   className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
