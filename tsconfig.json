@@ -22,8 +22,8 @@
     },
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "electron"],
-  "exclude": ["src/test-utils", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+  "include": ["src"],
+  "exclude": ["src/test-utils", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "electron", "dist-electron"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
 
