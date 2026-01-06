@@ -1,12 +1,11 @@
 import { motion } from 'framer-motion';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { ActionToolbar } from './ActionToolbar';
+import { FileText, Shield, FolderOpen, Zap, Sparkles } from 'lucide-react';
 
 // Get base URL for assets (works in both dev and production)
 const getAssetPath = (path: string) => {
-  // Remove leading slash if present
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-  // Use import.meta.env.BASE_URL which Vite provides (usually './' for Electron)
   return `${import.meta.env.BASE_URL}${cleanPath}`;
 };
 
@@ -16,438 +15,797 @@ interface WelcomeScreenProps {
   onOpenSecurityChecker: () => void;
 }
 
-// Generate stable star positions
-const generateStars = (count: number) => {
+// Generate particles for background
+const generateParticles = (count: number) => {
   return Array.from({ length: count }, (_, i) => {
-    const seed = i * 0.618; // Golden ratio for better distribution
     return {
       id: i,
-      size: (Math.sin(seed * 100) * 0.5 + 1.5).toFixed(1),
-      left: (Math.sin(seed * 50) * 0.5 + 0.5) * 100,
-      top: (Math.cos(seed * 50) * 0.5 + 0.5) * 100,
-      duration: (Math.sin(seed * 30) * 0.5 + 2).toFixed(1),
-      delay: (Math.sin(seed * 20) * 0.5 + 0.5) * 2,
+      size: Math.random() * 3 + 1,
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      delay: Math.random() * 20,
+      duration: Math.random() * 10 + 15,
     };
   });
 };
 
+// Generate light rays
+const generateLightRays = (count: number) => {
+  return Array.from({ length: count }, (_, i) => ({
+    id: i,
+    angle: (360 / count) * i,
+    delay: i * 0.5,
+  }));
+};
+
 export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityChecker }: WelcomeScreenProps) {
-  const selectFileStars = useMemo(() => generateStars(12), []);
-  const vaultStars = useMemo(() => generateStars(12), []);
-  const securityStars = useMemo(() => generateStars(12), []);
+  const particles = useMemo(() => generateParticles(50), []);
+  const lightRays = useMemo(() => generateLightRays(8), []);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-      {/* Header with Toolbar */}
-      <div className="w-full px-8 pt-8 pb-4 flex items-center justify-between">
-        <h1 className="text-4xl font-bold bg-gradient-purple bg-clip-text text-transparent">
-          The Vault
-        </h1>
-        <ActionToolbar hideWordEditorButton={true} />
+    <div className="relative flex flex-col min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 overflow-hidden">
+      {/* Animated Background Grid */}
+      <div className="absolute inset-0 opacity-20">
+        <div 
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+            `,
+            backgroundSize: '50px 50px',
+            maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
+          }}
+        />
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-center space-y-8"
-        >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="flex justify-center mb-4"
-        >
-          <div className="relative w-48 h-48 flex items-center justify-center">
-            {/* Rotating outer ring */}
+      {/* Animated Particles Background */}
+      <div className="absolute inset-0 overflow-hidden">
+        {particles.map((particle) => (
+          <motion.div
+            key={particle.id}
+            className="absolute rounded-full bg-cyber-cyan-400"
+            style={{
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
+              left: `${particle.left}%`,
+              top: `${particle.top}%`,
+              boxShadow: `0 0 ${particle.size * 4}px rgba(34, 211, 238, 0.6)`,
+            }}
+            animate={{
+              y: [0, -100, 0],
+              x: [0, Math.sin(particle.id) * 50, 0],
+              opacity: [0.3, 0.8, 0.3],
+              scale: [1, 1.5, 1],
+            }}
+            transition={{
+              duration: particle.duration,
+              repeat: Infinity,
+              delay: particle.delay,
+              ease: "easeInOut",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Light Rays from Center */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {lightRays.map((ray) => (
+          <motion.div
+            key={ray.id}
+            className="absolute top-1/2 left-1/2 w-1 h-1/2 origin-top"
+            style={{
+              transform: `rotate(${ray.angle}deg)`,
+              transformOrigin: 'top center',
+              background: 'linear-gradient(to bottom, rgba(139, 92, 246, 0.3), transparent)',
+              boxShadow: '0 0 20px rgba(139, 92, 246, 0.5)',
+            }}
+            animate={{
+              opacity: [0.2, 0.6, 0.2],
+              scaleY: [0.5, 1, 0.5],
+            }}
+            transition={{
+              duration: 4,
+              repeat: Infinity,
+              delay: ray.delay,
+              ease: "easeInOut",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Mouse Follow Glow */}
+      <motion.div
+        className="absolute w-96 h-96 rounded-full pointer-events-none"
+        style={{
+          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
+          left: mousePosition.x - 192,
+          top: mousePosition.y - 192,
+          filter: 'blur(60px)',
+        }}
+        animate={{
+          scale: [1, 1.2, 1],
+        }}
+        transition={{
+          duration: 2,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+      />
+
+      {/* Horizontal Beam Line - Static beam through center of all buttons, limited to outer button edges */}
+      <div
+        className="absolute pointer-events-none z-0"
+        style={{
+          background: 'linear-gradient(to right, transparent 0%, rgba(139, 92, 246, 0.6) 20%, rgba(139, 92, 246, 0.8) 50%, rgba(139, 92, 246, 0.6) 80%, transparent 100%)',
+          height: '2px',
+          top: 'calc(50% + 180px)', // Positioned to go through center of button cards
+          left: '50%',
+          width: 'calc(min(100% - 4rem, 80rem) - 2rem)', // Match button container width minus some padding to align with button edges
+          maxWidth: 'calc(80rem - 2rem)',
+          transform: 'translate(-50%, -50%)',
+          boxShadow: '0 0 10px rgba(139, 92, 246, 0.9), 0 0 20px rgba(139, 92, 246, 0.5), 0 0 30px rgba(139, 92, 246, 0.3)',
+        }}
+      />
+
+
+      {/* Enhanced Header */}
+      <motion.div 
+        className="relative z-10 w-full px-8 pt-8 pb-6 border-b border-cyber-purple-400/20 bg-gradient-to-r from-gray-900/80 via-purple-900/30 to-gray-900/80 backdrop-blur-2xl"
+        initial={{ opacity: 0, y: -30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ 
+          duration: 1,
+          ease: [0.16, 1, 0.3, 1], // Custom smooth easing
+        }}
+      >
+        <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
+          <div className="flex items-center gap-6">
             <motion.div
-              className="absolute inset-0 border-4 border-cyber-purple-400/30 rounded-full"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-            />
-            
-            {/* Rotating inner ring */}
-            <motion.div
-              className="absolute inset-4 border-2 border-cyber-cyan-400/40 rounded-full"
-              animate={{ rotate: -360 }}
-              transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-            />
-            
-            {/* Pulsing glow effect */}
-            <motion.div
-              className="absolute inset-0 bg-gradient-purple blur-3xl opacity-60 rounded-full"
-              animate={{
-                scale: [1, 1.2, 1],
-                opacity: [0.6, 0.8, 0.6],
+              className="relative"
+              initial={{ opacity: 0, scale: 0.9, x: -20 }}
+              animate={{ 
+                opacity: 1, 
+                scale: 1, 
+                x: 0,
+                boxShadow: [
+                  '0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(34, 211, 238, 0.3)',
+                  '0 0 30px rgba(139, 92, 246, 0.8), 0 0 60px rgba(34, 211, 238, 0.5)',
+                  '0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(34, 211, 238, 0.3)',
+                ],
               }}
               transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-            />
-            
-            {/* Secondary pulsing glow */}
-            <motion.div
-              className="absolute inset-0 bg-cyber-cyan-400/30 blur-2xl rounded-full"
-              animate={{
-                scale: [1.1, 1.3, 1.1],
-                opacity: [0.3, 0.5, 0.3],
-              }}
-              transition={{
-                duration: 4,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: 0.5,
-              }}
-            />
-            
-            {/* Floating vault icon */}
-            <motion.img
-              src={getAssetPath('vault-icon.png')}
-              alt="The Vault"
-              className="w-40 h-40 relative z-10 drop-shadow-2xl"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{
-                opacity: 1,
-                scale: 1,
-                y: [0, -10, 0],
-              }}
-              transition={{
-                opacity: { duration: 0.5, delay: 0.3 },
-                scale: { duration: 0.5, delay: 0.3 },
-                y: {
+                opacity: { duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 },
+                scale: { duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 },
+                x: { duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 },
+                boxShadow: {
                   duration: 3,
                   repeat: Infinity,
                   ease: "easeInOut",
                 },
               }}
-            />
-            
-            {/* Sparkle particles */}
-            {[...Array(6)].map((_, i) => (
-              <motion.div
-                key={i}
-                className="absolute w-2 h-2 bg-cyber-cyan-400 rounded-full"
-                style={{
-                  top: `${20 + (i * 15)}%`,
-                  left: `${20 + (i * 15)}%`,
-                }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-2xl opacity-60"></div>
+              <div className="relative p-4 bg-gradient-to-br from-purple-600/90 to-cyan-600/90 rounded-2xl shadow-2xl border border-cyber-purple-400/50">
+                <FolderOpen className="w-8 h-8 text-white drop-shadow-lg" />
+              </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ 
+                duration: 0.9,
+                ease: [0.16, 1, 0.3, 1],
+                delay: 0.15,
+              }}
+            >
+              <motion.h1
+                className="text-5xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-shimmer"
+                initial={{ opacity: 0 }}
                 animate={{
-                  scale: [0, 1, 0],
-                  opacity: [0, 1, 0],
+                  opacity: 1,
+                  textShadow: [
+                    '0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(34, 211, 238, 0.3)',
+                    '0 0 30px rgba(139, 92, 246, 0.8), 0 0 60px rgba(34, 211, 238, 0.5)',
+                    '0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(34, 211, 238, 0.3)',
+                  ],
                 }}
                 transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  delay: i * 0.3,
-                  ease: "easeInOut",
+                  opacity: { duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.2 },
+                  textShadow: {
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  },
                 }}
-              />
-            ))}
+              >
+                Welcome to Vault
+              </motion.h1>
+              <motion.p 
+                className="text-base text-gray-300 mt-1 font-medium"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ 
+                  duration: 0.7,
+                  ease: [0.16, 1, 0.3, 1],
+                  delay: 0.3,
+                }}
+              >
+                A Research Organization System
+              </motion.p>
+            </motion.div>
           </div>
-        </motion.div>
-
-        <motion.h1
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="text-6xl font-bold bg-gradient-purple bg-clip-text text-transparent mb-4"
-        >
-          Welcome to Vault
-        </motion.h1>
-
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.5 }}
-          className="text-xl text-gray-400 mb-8"
-        >
-          A Research Organization System
-        </motion.p>
-
-        <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-            className="relative"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ 
+              duration: 0.9,
+              ease: [0.16, 1, 0.3, 1],
+              delay: 0.2,
+            }}
           >
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onSelectFile}
-              className="
-                px-8 py-4 rounded-full
-                text-white font-semibold text-lg
-                relative overflow-hidden
-                group
-                border-2 border-cyber-purple-400/40
-                backdrop-blur-sm
-                transition-all duration-500 ease-out
-              "
-              aria-label="Select PDF file to extract"
-            >
-              {/* Dark galaxy base */}
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-purple-900/80 to-gray-900" />
-              
-              {/* Rotating nebula gradient - refined */}
-              <motion.div
-                className="absolute inset-0 opacity-15 blur-sm"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-                style={{
-                  background: 'conic-gradient(from 0deg, transparent 0%, transparent 20%, rgba(139, 92, 246, 0.3) 30%, rgba(34, 211, 238, 0.2) 50%, rgba(139, 92, 246, 0.3) 70%, transparent 80%, transparent 100%)',
-                }}
-              />
-              
-              {/* Secondary subtle rotating layer */}
-              <motion.div
-                className="absolute inset-0 opacity-10 blur-[2px]"
-                animate={{ rotate: -360 }}
-                transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
-                style={{
-                  background: 'conic-gradient(from 180deg, transparent 0%, rgba(168, 85, 247, 0.2) 25%, transparent 50%, rgba(34, 211, 238, 0.15) 75%, transparent 100%)',
-                }}
-              />
-              
-              {/* Animated starfield */}
-              {selectFileStars.map((star) => (
-                <motion.div
-                  key={star.id}
-                  className="absolute rounded-full bg-white"
-                  style={{
-                    width: `${star.size}px`,
-                    height: `${star.size}px`,
-                    left: `${star.left}%`,
-                    top: `${star.top}%`,
-                  }}
-                  animate={{
-                    opacity: [0.2, 1, 0.2],
-                    scale: [0.8, 1.2, 0.8],
-                  }}
-                  transition={{
-                    duration: parseFloat(star.duration),
-                    repeat: Infinity,
-                    delay: star.delay,
-                    ease: "easeInOut",
-                  }}
-                />
-              ))}
-              
-              {/* Subtle pulsing glow */}
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-cyber-purple-500/20 via-cyber-cyan-400/20 to-cyber-purple-500/20"
-                animate={{
-                  opacity: [0.3, 0.5, 0.3],
-                }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              />
-              
-              {/* Glowing border on hover */}
-              <div className="absolute inset-0 rounded-full border-2 border-cyber-cyan-400/0 pointer-events-none transition-all duration-500 ease-out group-hover:border-cyber-cyan-400/70 group-hover:shadow-[0_0_20px_rgba(34,211,238,0.5),0_0_40px_rgba(168,85,247,0.4)]" />
-              
-              {/* Content */}
-              <span className="relative z-10 flex items-center gap-2">
-                <img src={getAssetPath('Select File Button.png')} alt="" className="w-16 h-16 drop-shadow-lg" aria-hidden="true" />
-                Select file
-              </span>
-            </motion.button>
-            <p className="text-gray-400 text-sm text-center absolute left-1/2 transform -translate-x-1/2 top-full mt-2 w-full pointer-events-none whitespace-nowrap">PDF to PNG</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className="relative"
-          >
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onOpenArchive}
-              className="
-                px-8 py-4 rounded-full
-                text-white font-semibold text-lg
-                relative overflow-hidden
-                group
-                border-2 border-cyber-purple-400/40
-                backdrop-blur-sm
-                transition-all duration-500 ease-out
-              "
-              aria-label="Open The Vault archive"
-            >
-              {/* Dark galaxy base */}
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-purple-900/80 to-gray-900" />
-              
-              {/* Rotating nebula gradient - refined */}
-              <motion.div
-                className="absolute inset-0 opacity-15 blur-sm"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-                style={{
-                  background: 'conic-gradient(from 0deg, transparent 0%, transparent 20%, rgba(139, 92, 246, 0.3) 30%, rgba(34, 211, 238, 0.2) 50%, rgba(139, 92, 246, 0.3) 70%, transparent 80%, transparent 100%)',
-                }}
-              />
-              
-              {/* Secondary subtle rotating layer */}
-              <motion.div
-                className="absolute inset-0 opacity-10 blur-[2px]"
-                animate={{ rotate: -360 }}
-                transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
-                style={{
-                  background: 'conic-gradient(from 180deg, transparent 0%, rgba(168, 85, 247, 0.2) 25%, transparent 50%, rgba(34, 211, 238, 0.15) 75%, transparent 100%)',
-                }}
-              />
-              
-              {/* Animated starfield */}
-              {vaultStars.map((star) => (
-                <motion.div
-                  key={star.id}
-                  className="absolute rounded-full bg-white"
-                  style={{
-                    width: `${star.size}px`,
-                    height: `${star.size}px`,
-                    left: `${star.left}%`,
-                    top: `${star.top}%`,
-                  }}
-                  animate={{
-                    opacity: [0.2, 1, 0.2],
-                    scale: [0.8, 1.2, 0.8],
-                  }}
-                  transition={{
-                    duration: parseFloat(star.duration),
-                    repeat: Infinity,
-                    delay: star.delay,
-                    ease: "easeInOut",
-                  }}
-                />
-              ))}
-              
-              {/* Subtle pulsing glow */}
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-cyber-purple-500/20 via-cyber-cyan-400/20 to-cyber-purple-500/20"
-                animate={{
-                  opacity: [0.3, 0.5, 0.3],
-                }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              />
-              
-              {/* Glowing border on hover */}
-              <div className="absolute inset-0 rounded-full border-2 border-cyber-cyan-400/0 pointer-events-none transition-all duration-500 ease-out group-hover:border-cyber-cyan-400/70 group-hover:shadow-[0_0_20px_rgba(34,211,238,0.5),0_0_40px_rgba(168,85,247,0.4)]" />
-              
-              {/* Content */}
-              <span className="relative z-10 flex items-center gap-2">
-                <img src={getAssetPath('The Vault Button.png')} alt="" className="w-16 h-16 drop-shadow-lg" aria-hidden="true" />
-                The Vault
-              </span>
-            </motion.button>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.7 }}
-            className="relative"
-          >
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onOpenSecurityChecker}
-              className="
-                px-8 py-4 rounded-full
-                text-white font-semibold text-lg
-                relative overflow-hidden
-                group
-                border-2 border-cyber-purple-400/40
-                backdrop-blur-sm
-                transition-all duration-500 ease-out
-              "
-              aria-label="Open PDF Audit"
-            >
-              {/* Dark galaxy base */}
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-purple-900/80 to-gray-900" />
-              
-              {/* Rotating nebula gradient - refined */}
-              <motion.div
-                className="absolute inset-0 opacity-15 blur-sm"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-                style={{
-                  background: 'conic-gradient(from 0deg, transparent 0%, transparent 20%, rgba(139, 92, 246, 0.3) 30%, rgba(34, 211, 238, 0.2) 50%, rgba(139, 92, 246, 0.3) 70%, transparent 80%, transparent 100%)',
-                }}
-              />
-              
-              {/* Secondary subtle rotating layer */}
-              <motion.div
-                className="absolute inset-0 opacity-10 blur-[2px]"
-                animate={{ rotate: -360 }}
-                transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
-                style={{
-                  background: 'conic-gradient(from 180deg, transparent 0%, rgba(168, 85, 247, 0.2) 25%, transparent 50%, rgba(34, 211, 238, 0.15) 75%, transparent 100%)',
-                }}
-              />
-              
-              {/* Animated starfield */}
-              {securityStars.map((star) => (
-                <motion.div
-                  key={star.id}
-                  className="absolute rounded-full bg-white"
-                  style={{
-                    width: `${star.size}px`,
-                    height: `${star.size}px`,
-                    left: `${star.left}%`,
-                    top: `${star.top}%`,
-                  }}
-                  animate={{
-                    opacity: [0.2, 1, 0.2],
-                    scale: [0.8, 1.2, 0.8],
-                  }}
-                  transition={{
-                    duration: parseFloat(star.duration),
-                    repeat: Infinity,
-                    delay: star.delay,
-                    ease: "easeInOut",
-                  }}
-                />
-              ))}
-              
-              {/* Subtle pulsing glow */}
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-cyber-purple-500/20 via-cyber-cyan-400/20 to-cyber-purple-500/20"
-                animate={{
-                  opacity: [0.3, 0.5, 0.3],
-                }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              />
-              
-              {/* Glowing border on hover */}
-              <div className="absolute inset-0 rounded-full border-2 border-cyber-cyan-400/0 pointer-events-none transition-all duration-500 ease-out group-hover:border-cyber-cyan-400/70 group-hover:shadow-[0_0_20px_rgba(34,211,238,0.5),0_0_40px_rgba(168,85,247,0.4)]" />
-              
-              {/* Content */}
-              <span className="relative z-10 flex items-center gap-2">
-                <img src={getAssetPath('PDF Audit Button.png')} alt="" className="w-16 h-16 drop-shadow-lg" aria-hidden="true" />
-                PDF Audit
-              </span>
-            </motion.button>
+            <ActionToolbar hideWordEditorButton={true} />
           </motion.div>
         </div>
       </motion.div>
+
+      {/* Main Content */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 py-12">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ 
+            duration: 1.2,
+            ease: [0.16, 1, 0.3, 1],
+          }}
+          className="text-center space-y-16 max-w-7xl w-full"
+        >
+          {/* Enhanced Floating Logo */}
+          <motion.div
+            initial={{ scale: 0.85, opacity: 0, y: -40 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ 
+              duration: 1.1,
+              ease: [0.16, 1, 0.3, 1],
+              delay: 0.3,
+            }}
+            className="flex justify-center mb-8"
+          >
+            <div className="relative w-64 h-64 flex items-center justify-center">
+              {/* Outer Glow Rings */}
+              <motion.div
+                className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ 
+                  opacity: 1, 
+                  scale: 1,
+                  rotate: 360,
+                }}
+                transition={{ 
+                  opacity: { duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.4 },
+                  scale: { duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.4 },
+                  rotate: { duration: 25, repeat: Infinity, ease: "linear", delay: 1.4 },
+                }}
+                style={{
+                  boxShadow: '0 0 30px rgba(139, 92, 246, 0.6), inset 0 0 30px rgba(139, 92, 246, 0.2)',
+                }}
+              />
+              <motion.div
+                className="absolute inset-8 border-2 border-cyber-cyan-400/50 rounded-full"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ 
+                  opacity: 1, 
+                  scale: 1,
+                  rotate: -360,
+                }}
+                transition={{ 
+                  opacity: { duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.45 },
+                  scale: { duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.45 },
+                  rotate: { duration: 18, repeat: Infinity, ease: "linear", delay: 1.45 },
+                }}
+                style={{
+                  boxShadow: '0 0 20px rgba(34, 211, 238, 0.6), inset 0 0 20px rgba(34, 211, 238, 0.2)',
+                }}
+              />
+              
+              {/* Pulsing Glow Effects */}
+              <motion.div
+                className="absolute inset-0 bg-gradient-purple blur-3xl rounded-full"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{
+                  opacity: [0.4, 0.7, 0.4],
+                  scale: [1, 1.3, 1],
+                }}
+                transition={{
+                  opacity: {
+                    duration: 1,
+                    ease: [0.16, 1, 0.3, 1],
+                    delay: 0.5,
+                  },
+                  scale: {
+                    duration: 4,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 1.5,
+                  },
+                }}
+                style={{
+                  filter: 'drop-shadow(0 0 40px rgba(139, 92, 246, 0.8))',
+                }}
+              />
+              
+              <motion.div
+                className="absolute inset-0 bg-cyber-cyan-400/40 blur-2xl rounded-full"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{
+                  opacity: [0.3, 0.6, 0.3],
+                  scale: [1.1, 1.4, 1.1],
+                }}
+                transition={{
+                  opacity: {
+                    duration: 1,
+                    ease: [0.16, 1, 0.3, 1],
+                    delay: 0.55,
+                  },
+                  scale: {
+                    duration: 5,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 2,
+                  },
+                }}
+              />
+
+              {/* Floating Vault Icon */}
+              <motion.img
+                src={getAssetPath('vault-icon.png')}
+                alt="Vault"
+                className="w-52 h-52 relative z-10"
+                initial={{ opacity: 0, scale: 0.85, y: 20 }}
+                animate={{
+                  opacity: 1,
+                  scale: 1,
+                  y: [0, -15, 0],
+                  filter: [
+                    'drop-shadow(0 0 20px rgba(139, 92, 246, 0.8)) drop-shadow(0 0 40px rgba(34, 211, 238, 0.6))',
+                    'drop-shadow(0 0 30px rgba(139, 92, 246, 1)) drop-shadow(0 0 60px rgba(34, 211, 238, 0.8))',
+                    'drop-shadow(0 0 20px rgba(139, 92, 246, 0.8)) drop-shadow(0 0 40px rgba(34, 211, 238, 0.6))',
+                  ],
+                }}
+                transition={{
+                  opacity: { 
+                    duration: 1,
+                    ease: [0.16, 1, 0.3, 1],
+                    delay: 0.5,
+                  },
+                  scale: { 
+                    duration: 1,
+                    ease: [0.16, 1, 0.3, 1],
+                    delay: 0.5,
+                  },
+                  y: {
+                    duration: 4,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 1.5, // Start floating after entrance
+                  },
+                  filter: {
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 0.8,
+                  },
+                }}
+              />
+              
+              {/* Enhanced Sparkle Particles */}
+              {[...Array(12)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute rounded-full"
+                  style={{
+                    width: '4px',
+                    height: '4px',
+                    top: `${15 + (i * 7)}%`,
+                    left: `${15 + (i * 7)}%`,
+                    background: 'radial-gradient(circle, rgba(34, 211, 238, 1), transparent)',
+                    boxShadow: '0 0 10px rgba(34, 211, 238, 0.8), 0 0 20px rgba(34, 211, 238, 0.4)',
+                  }}
+                  animate={{
+                    scale: [0, 1.5, 0],
+                    opacity: [0, 1, 0],
+                    rotate: [0, 180, 360],
+                  }}
+                  transition={{
+                    duration: 2.5,
+                    repeat: Infinity,
+                    delay: i * 0.2,
+                    ease: "easeInOut",
+                  }}
+                />
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Enhanced Action Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* PDF to PNG Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 50, rotateX: -15 }}
+              animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+              transition={{ 
+                duration: 1,
+                ease: [0.16, 1, 0.3, 1],
+                delay: 0.5,
+              }}
+              className="relative group"
+            >
+              {/* Transparent Beam Border - Matching horizontal beam style */}
+              <div
+                className="absolute -inset-[2px] pointer-events-none z-0 rounded-3xl"
+                style={{
+                  background: 'linear-gradient(to right, transparent 0%, rgba(139, 92, 246, 0.6) 20%, rgba(139, 92, 246, 0.8) 50%, rgba(139, 92, 246, 0.6) 80%, transparent 100%)',
+                  padding: '2px',
+                  WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  WebkitMaskComposite: 'xor',
+                  mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  maskComposite: 'exclude',
+                  boxShadow: '0 0 10px rgba(139, 92, 246, 0.9), 0 0 20px rgba(139, 92, 246, 0.5), 0 0 30px rgba(139, 92, 246, 0.3)',
+                }}
+              />
+              {/* Animated Border Wrapper */}
+              <motion.div
+                className="rounded-3xl p-[3px]"
+                style={{
+                  background: 'linear-gradient(45deg, rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.9), rgba(139, 92, 246, 0.9))',
+                  backgroundSize: '200% 200%',
+                }}
+                animate={{
+                  backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "linear",
+                }}
+              >
+                <motion.button
+                  whileHover={{ 
+                    scale: 1.04, 
+                    y: -4,
+                    transition: { 
+                      duration: 0.2, 
+                      ease: [0.4, 0, 0.2, 1] // Smooth material design easing
+                    }
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={onSelectFile}
+                  className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10"
+                  style={{
+                    boxShadow: '0 0 30px rgba(139, 92, 246, 0.3), inset 0 0 30px rgba(139, 92, 246, 0.1)',
+                  }}
+                >
+                {/* Enhanced Glow on Hover */}
+                <motion.div 
+                  className="absolute inset-0 rounded-3xl pointer-events-none"
+                  initial={{ opacity: 0 }}
+                  whileHover={{ 
+                    opacity: 1,
+                    transition: { duration: 0.2 }
+                  }}
+                  style={{
+                    background: 'radial-gradient(circle at center, rgba(139, 92, 246, 0.2) 0%, transparent 70%)',
+                    boxShadow: '0 0 40px rgba(139, 92, 246, 0.6), 0 0 60px rgba(34, 211, 238, 0.4)',
+                  }}
+                />
+                {/* Holographic Overlay */}
+                <motion.div 
+                  className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-transparent"
+                  initial={{ opacity: 0 }}
+                  whileHover={{ opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                />
+
+                {/* Card Content */}
+                <div className="relative z-10 p-10 flex flex-col items-center gap-6">
+                  <motion.div
+                    className="relative"
+                    animate={{
+                      filter: [
+                        'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                        'drop-shadow(0 0 25px rgba(139, 92, 246, 0.9))',
+                        'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                      ],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-3xl blur-2xl opacity-60"></div>
+                    <motion.div 
+                      className="relative p-6 bg-gradient-to-br from-purple-600/90 to-cyan-600/90 rounded-3xl shadow-2xl border border-cyber-purple-400/50"
+                      whileHover={{ 
+                        scale: 1.1,
+                        rotate: [0, -2, 2, -2, 2, 0],
+                        transition: { duration: 0.3, ease: "easeOut" }
+                      }}
+                    >
+                      <FileText className="w-12 h-12 text-white" />
+                    </motion.div>
+                  </motion.div>
+                  <div className="text-center">
+                    <h3 className="text-2xl font-bold text-white mb-2 bg-gradient-to-r from-cyber-purple-400 to-cyber-cyan-400 bg-clip-text text-transparent">
+                      PDF to PNG
+                    </h3>
+                    <p className="text-sm text-gray-300">Extract pages from PDF files</p>
+                  </div>
+                  <motion.div
+                    className="flex items-center gap-3 text-white font-semibold text-lg"
+                    whileHover={{ scale: 1.1 }}
+                  >
+                    <Sparkles className="w-5 h-5 text-cyber-cyan-400" />
+                    <span>Select file</span>
+                  </motion.div>
+                </div>
+                </motion.button>
+              </motion.div>
+            </motion.div>
+
+            {/* The Vault Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 50, rotateX: -15 }}
+              animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+              transition={{ 
+                duration: 1,
+                ease: [0.16, 1, 0.3, 1],
+                delay: 0.6,
+              }}
+              className="relative group"
+            >
+              {/* Transparent Beam Border - Matching horizontal beam style */}
+              <div
+                className="absolute -inset-[2px] pointer-events-none z-0 rounded-3xl"
+                style={{
+                  background: 'linear-gradient(to right, transparent 0%, rgba(139, 92, 246, 0.6) 20%, rgba(139, 92, 246, 0.8) 50%, rgba(139, 92, 246, 0.6) 80%, transparent 100%)',
+                  padding: '2px',
+                  WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  WebkitMaskComposite: 'xor',
+                  mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  maskComposite: 'exclude',
+                  boxShadow: '0 0 10px rgba(139, 92, 246, 0.9), 0 0 20px rgba(139, 92, 246, 0.5), 0 0 30px rgba(139, 92, 246, 0.3)',
+                }}
+              />
+              {/* Animated Border Wrapper */}
+              <motion.div
+                className="rounded-3xl p-[3px]"
+                style={{
+                  background: 'linear-gradient(45deg, rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.9), rgba(139, 92, 246, 0.9))',
+                  backgroundSize: '200% 200%',
+                }}
+                animate={{
+                  backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "linear",
+                }}
+              >
+                <motion.button
+                  whileHover={{ 
+                    scale: 1.04, 
+                    y: -4,
+                    transition: { 
+                      duration: 0.2, 
+                      ease: [0.4, 0, 0.2, 1] // Smooth material design easing
+                    }
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={onOpenArchive}
+                  className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10"
+                  style={{
+                    boxShadow: '0 0 30px rgba(139, 92, 246, 0.3), inset 0 0 30px rgba(139, 92, 246, 0.1)',
+                  }}
+                >
+                {/* Enhanced Glow on Hover */}
+                <motion.div 
+                  className="absolute inset-0 rounded-3xl pointer-events-none"
+                  initial={{ opacity: 0 }}
+                  whileHover={{ 
+                    opacity: 1,
+                    transition: { duration: 0.2 }
+                  }}
+                  style={{
+                    background: 'radial-gradient(circle at center, rgba(139, 92, 246, 0.2) 0%, transparent 70%)',
+                    boxShadow: '0 0 40px rgba(139, 92, 246, 0.6), 0 0 60px rgba(34, 211, 238, 0.4)',
+                  }}
+                />
+                <motion.div 
+                  className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-transparent"
+                  initial={{ opacity: 0 }}
+                  whileHover={{ opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                />
+                <div className="relative z-10 p-10 flex flex-col items-center gap-6">
+                  <motion.div
+                    className="relative"
+                    animate={{
+                      filter: [
+                        'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                        'drop-shadow(0 0 25px rgba(139, 92, 246, 0.9))',
+                        'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                      ],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-3xl blur-2xl opacity-60"></div>
+                    <motion.div 
+                      className="relative p-6 bg-gradient-to-br from-purple-600/90 to-cyan-600/90 rounded-3xl shadow-2xl border border-cyber-purple-400/50"
+                      whileHover={{ 
+                        scale: 1.1,
+                        rotate: [0, -2, 2, -2, 2, 0],
+                        transition: { duration: 0.3, ease: "easeOut" }
+                      }}
+                    >
+                      <FolderOpen className="w-12 h-12 text-white" />
+                    </motion.div>
+                  </motion.div>
+                  <div className="text-center">
+                    <h3 className="text-2xl font-bold text-white mb-2 bg-gradient-to-r from-cyber-purple-400 to-cyber-cyan-400 bg-clip-text text-transparent">
+                      The Vault
+                    </h3>
+                    <p className="text-sm text-gray-300">Access your case archive</p>
+                  </div>
+                  <motion.div
+                    className="flex items-center gap-3 text-white font-semibold text-lg"
+                    whileHover={{ scale: 1.1 }}
+                  >
+                    <Zap className="w-5 h-5 text-cyber-cyan-400" />
+                    <span>Open Archive</span>
+                  </motion.div>
+                </div>
+                </motion.button>
+              </motion.div>
+            </motion.div>
+
+            {/* PDF Audit Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 50, rotateX: -15 }}
+              animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+              transition={{ 
+                duration: 1,
+                ease: [0.16, 1, 0.3, 1],
+                delay: 0.7,
+              }}
+              className="relative group"
+            >
+              {/* Transparent Beam Border - Matching horizontal beam style */}
+              <div
+                className="absolute -inset-[2px] pointer-events-none z-0 rounded-3xl"
+                style={{
+                  background: 'linear-gradient(to right, transparent 0%, rgba(139, 92, 246, 0.6) 20%, rgba(139, 92, 246, 0.8) 50%, rgba(139, 92, 246, 0.6) 80%, transparent 100%)',
+                  padding: '2px',
+                  WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  WebkitMaskComposite: 'xor',
+                  mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  maskComposite: 'exclude',
+                  boxShadow: '0 0 10px rgba(139, 92, 246, 0.9), 0 0 20px rgba(139, 92, 246, 0.5), 0 0 30px rgba(139, 92, 246, 0.3)',
+                }}
+              />
+              {/* Animated Border Wrapper */}
+              <motion.div
+                className="rounded-3xl p-[3px]"
+                style={{
+                  background: 'linear-gradient(45deg, rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.9), rgba(139, 92, 246, 0.9))',
+                  backgroundSize: '200% 200%',
+                }}
+                animate={{
+                  backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "linear",
+                }}
+              >
+                <motion.button
+                  whileHover={{ 
+                    scale: 1.04, 
+                    y: -4,
+                    transition: { 
+                      duration: 0.2, 
+                      ease: [0.4, 0, 0.2, 1] // Smooth material design easing
+                    }
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={onOpenSecurityChecker}
+                  className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200"
+                  style={{
+                    boxShadow: '0 0 30px rgba(139, 92, 246, 0.3), inset 0 0 30px rgba(139, 92, 246, 0.1)',
+                  }}
+                >
+                {/* Enhanced Glow on Hover */}
+                <motion.div 
+                  className="absolute inset-0 rounded-3xl pointer-events-none"
+                  initial={{ opacity: 0 }}
+                  whileHover={{ 
+                    opacity: 1,
+                    transition: { duration: 0.2 }
+                  }}
+                  style={{
+                    background: 'radial-gradient(circle at center, rgba(139, 92, 246, 0.2) 0%, transparent 70%)',
+                    boxShadow: '0 0 40px rgba(139, 92, 246, 0.6), 0 0 60px rgba(34, 211, 238, 0.4)',
+                  }}
+                />
+                <motion.div 
+                  className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-transparent"
+                  initial={{ opacity: 0 }}
+                  whileHover={{ opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                />
+                <div className="relative z-10 p-10 flex flex-col items-center gap-6">
+                  <motion.div
+                    className="relative"
+                    animate={{
+                      filter: [
+                        'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                        'drop-shadow(0 0 25px rgba(139, 92, 246, 0.9))',
+                        'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                      ],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-3xl blur-2xl opacity-60"></div>
+                    <motion.div 
+                      className="relative p-6 bg-gradient-to-br from-purple-600/90 to-cyan-600/90 rounded-3xl shadow-2xl border border-cyber-purple-400/50"
+                      whileHover={{ 
+                        scale: 1.1,
+                        rotate: [0, -2, 2, -2, 2, 0],
+                        transition: { duration: 0.3, ease: "easeOut" }
+                      }}
+                    >
+                      <Shield className="w-12 h-12 text-white" />
+                    </motion.div>
+                  </motion.div>
+                  <div className="text-center">
+                    <h3 className="text-2xl font-bold text-white mb-2 bg-gradient-to-r from-cyber-purple-400 to-cyber-cyan-400 bg-clip-text text-transparent">
+                      PDF Audit
+                    </h3>
+                    <p className="text-sm text-gray-300">Security & redaction analysis</p>
+                  </div>
+                  <motion.div
+                    className="flex items-center gap-3 text-white font-semibold text-lg"
+                    whileHover={{ scale: 1.1 }}
+                  >
+                    <Shield className="w-5 h-5 text-cyber-cyan-400" />
+                    <span>Run Audit</span>
+                  </motion.div>
+                </div>
+              </motion.button>
+              </motion.div>
+            </motion.div>
+          </div>
+        </motion.div>
       </div>
     </div>
   );
 }
-
