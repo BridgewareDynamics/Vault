@@ -27,6 +27,8 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
   const isOpeningWordEditorRef = useRef(false);
+  const isReattachingRef = useRef(false);
+  const reattachTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Detect if editor is in inline mode (check for inline container)
   useEffect(() => {
@@ -53,7 +55,51 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   // Keep ref in sync with word editor state to prevent closing when editor is open
   useEffect(() => {
     isOpeningWordEditorRef.current = isWordEditorOpen;
+    // Clear reattaching flag when word editor is confirmed open
+    if (isWordEditorOpen && isReattachingRef.current) {
+      isReattachingRef.current = false;
+      // Clear any pending timeout
+      if (reattachTimeoutRef.current) {
+        clearTimeout(reattachTimeoutRef.current);
+        reattachTimeoutRef.current = null;
+      }
+    }
   }, [isWordEditorOpen]);
+
+  // Listen for events that open the word editor to prevent closing during opening/reattaching
+  useEffect(() => {
+    const handleOpenEditor = () => {
+      // Immediately set refs to prevent closing during opening/reattaching
+      isOpeningWordEditorRef.current = true;
+      isReattachingRef.current = true;
+      
+      // Clear any existing timeout
+      if (reattachTimeoutRef.current) {
+        clearTimeout(reattachTimeoutRef.current);
+      }
+      
+      // Fallback: Clear the reattaching flag after a delay as a safety net
+      // The flag should be cleared when isWordEditorOpen becomes true, but this ensures
+      // we don't get stuck if something goes wrong
+      reattachTimeoutRef.current = setTimeout(() => {
+        isReattachingRef.current = false;
+        reattachTimeoutRef.current = null;
+      }, 2000);
+    };
+
+    // Listen to both the reattach event and the open-from-viewer event
+    // Both should prevent closing during the opening process
+    window.addEventListener('reattach-word-editor-data' as any, handleOpenEditor as EventListener);
+    window.addEventListener('open-word-editor-from-viewer' as any, handleOpenEditor as EventListener);
+    return () => {
+      window.removeEventListener('reattach-word-editor-data' as any, handleOpenEditor as EventListener);
+      window.removeEventListener('open-word-editor-from-viewer' as any, handleOpenEditor as EventListener);
+      if (reattachTimeoutRef.current) {
+        clearTimeout(reattachTimeoutRef.current);
+        reattachTimeoutRef.current = null;
+      }
+    };
+  }, []);
   const [loading, setLoading] = useState(false);
   const [showBookmarkCreator, setShowBookmarkCreator] = useState(false);
   const [currentPageBookmarks, setCurrentPageBookmarks] = useState<Array<{ id: string; name: string }>>([]);
@@ -82,7 +128,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   const imageRef = useRef<HTMLImageElement>(null);
   const isDraggingRef = useRef(false);
   const isPdfDraggingRef = useRef(false);
-  const dragConstraintsRef = useRef<{ left: number; right: number; top: number; bottom: number } | null>(null);
+  const dragConstraintsRef = useRef<{ left: number; right: number; top: number; bottom: number } | false | null>(null);
   
   // Warning dialog state
   const [showWarningDialog, setShowWarningDialog] = useState(false);
@@ -996,8 +1042,8 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
         exit={{ opacity: 0 }}
         onClick={(e) => {
           // Only close if clicking directly on the backdrop, not on child elements
-          // Also don't close if word editor is open or we're in the process of opening it
-          if (e.target === e.currentTarget && !isWordEditorOpen && !isOpeningWordEditorRef.current) {
+          // Also don't close if word editor is open, we're in the process of opening it, or reattaching
+          if (e.target === e.currentTarget && !isWordEditorOpen && !isOpeningWordEditorRef.current && !isReattachingRef.current) {
             handleClose();
           }
         }}
@@ -1022,7 +1068,8 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
           className={`relative ${file?.type === 'pdf' ? 'w-full h-full' : 'w-full h-full flex items-center justify-center'}`}
           onClick={(e) => {
             // Close on backdrop click only when not zoomed and word editor is not open
-            if (e.target === e.currentTarget && !isWordEditorOpen && !isOpeningWordEditorRef.current) {
+            // Also don't close if we're reattaching
+            if (e.target === e.currentTarget && !isWordEditorOpen && !isOpeningWordEditorRef.current && !isReattachingRef.current) {
               if (file?.type === 'image' && imageScale <= 1) {
                 handleClose();
               } else if (file?.type !== 'image' && file?.type !== 'pdf') {
@@ -1275,7 +1322,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                     {/* Canvas wrapper for drag functionality */}
                     <motion.div
                       drag={isPdfZoomed && pageScale >= 1.0}
-                      dragConstraints={dragConstraintsRef.current !== null && dragConstraintsRef.current !== false ? dragConstraintsRef.current : pdfContainerRef}
+                      dragConstraints={typeof dragConstraintsRef.current === 'object' && dragConstraintsRef.current !== null ? dragConstraintsRef.current : pdfContainerRef}
                       dragElastic={0.1}
                       dragMomentum={false}
                       dragPropagation={false}
