@@ -80,7 +80,10 @@ export function BookmarkFolderCard({ folder, onOpen, onDelete, isDetached = fals
       <div className="relative w-full h-32 bg-gray-900 overflow-hidden">
         {loading ? (
           <div className="w-full h-full flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyber-purple-400"></div>
+            <div className="relative w-8 h-8">
+              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+              <div className="absolute inset-1 rounded-full border border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+            </div>
           </div>
         ) : thumbnail ? (
           <img

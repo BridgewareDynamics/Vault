@@ -129,6 +129,8 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   const isDraggingRef = useRef(false);
   const isPdfDraggingRef = useRef(false);
   const dragConstraintsRef = useRef<{ left: number; right: number; top: number; bottom: number } | false | null>(null);
+  // Stable constraints state that only updates when not dragging
+  const [stableDragConstraints, setStableDragConstraints] = useState<{ left: number; right: number; top: number; bottom: number } | false | React.RefObject<HTMLElement>>(false);
   
   // Warning dialog state
   const [showWarningDialog, setShowWarningDialog] = useState(false);
@@ -501,9 +503,22 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   // Update drag constraints when page scale or panel width changes
   useEffect(() => {
     if (pdfDoc && pageScale >= 1.0 && isPdfZoomed) {
+      let resizeTimeout: NodeJS.Timeout | null = null;
+      
       const updateConstraints = () => {
+        // Don't update constraints during active drag to prevent jitter
+        if (isPdfDraggingRef.current) {
+          return;
+        }
         const constraints = calculateDragConstraints();
         dragConstraintsRef.current = constraints;
+        // Update stable constraints state only when not dragging
+        // This ensures the dragConstraints prop doesn't change during drag
+        if (typeof constraints === 'object' && constraints !== null) {
+          setStableDragConstraints(constraints);
+        } else {
+          setStableDragConstraints(pdfContainerRef);
+        }
       };
       
       // Immediate update attempt
@@ -516,9 +531,18 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       const timeout4 = setTimeout(updateConstraints, 100); // After potential animations
       
       // Also listen for resize events to recalculate constraints
+      // Debounce resize updates to prevent excessive recalculations
       const resizeObserver = new ResizeObserver(() => {
-        // Use requestAnimationFrame for smooth updates during resize
-        requestAnimationFrame(updateConstraints);
+        // Clear any pending resize update
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout);
+        }
+        // Debounce resize updates - only update if not dragging
+        resizeTimeout = setTimeout(() => {
+          if (!isPdfDraggingRef.current) {
+            requestAnimationFrame(updateConstraints);
+          }
+        }, 100); // 100ms debounce
       });
       
       if (pdfContainerRef.current) {
@@ -534,6 +558,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
         clearTimeout(timeout2);
         clearTimeout(timeout3);
         clearTimeout(timeout4);
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout);
+        }
         resizeObserver.disconnect();
       };
     } else {
@@ -629,9 +656,18 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       setPageRendering(false);
       
       // Recalculate drag constraints after render using requestAnimationFrame for smooth update
+      // Only update if not currently dragging to prevent jitter
       requestAnimationFrame(() => {
-        const constraints = calculateDragConstraints();
-        dragConstraintsRef.current = constraints;
+        if (!isPdfDraggingRef.current) {
+          const constraints = calculateDragConstraints();
+          dragConstraintsRef.current = constraints;
+          // Update stable constraints state
+          if (typeof constraints === 'object' && constraints !== null) {
+            setStableDragConstraints(constraints);
+          } else {
+            setStableDragConstraints(pdfContainerRef);
+          }
+        }
       });
     } catch (error: unknown) {
       // Ignore cancellation errors
@@ -1166,10 +1202,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
           {file.type === 'pdf' ? (
             <>
               {pdfLoading ? (
-                <div className="flex flex-col items-center justify-center w-full h-full bg-gray-900 rounded-lg">
-                  <div className="text-center mb-4">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                    <p className="text-gray-300 mb-2">
+                <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950 rounded-lg">
+                  <div className="text-center mb-4 space-y-4">
+                    <div className="inline-flex items-center justify-center">
+                      <div className="relative">
+                        <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                        <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                        <div className="relative w-12 h-12">
+                          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                          <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-gray-300 font-medium bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent">
                       {pdfLoadingProgress < 90 ? 'Reading file...' : 'Parsing PDF...'}
                     </p>
                     {pdfLoadingProgress > 0 && (
@@ -1312,17 +1357,22 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                     }}
                   >
                     {pageRendering && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm rounded z-10">
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyber-purple-400 mx-auto mb-2"></div>
-                          <p className="text-gray-300 text-sm">Loading page...</p>
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 backdrop-blur-sm rounded z-10">
+                        <div className="text-center space-y-2">
+                          <div className="inline-flex items-center justify-center">
+                            <div className="relative w-8 h-8">
+                              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                              <div className="absolute inset-1 rounded-full border border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                            </div>
+                          </div>
+                          <p className="text-gray-300 text-sm font-medium">Loading page...</p>
                         </div>
                       </div>
                     )}
                     {/* Canvas wrapper for drag functionality */}
                     <motion.div
                       drag={isPdfZoomed && pageScale >= 1.0}
-                      dragConstraints={typeof dragConstraintsRef.current === 'object' && dragConstraintsRef.current !== null ? dragConstraintsRef.current : pdfContainerRef}
+                      dragConstraints={stableDragConstraints}
                       dragElastic={0.1}
                       dragMomentum={false}
                       dragPropagation={false}
@@ -1331,11 +1381,21 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                         // Prevent text selection during drag
                         document.body.style.userSelect = 'none';
                         document.body.style.cursor = 'grabbing';
+                        // Ensure constraints are set before drag starts
                         // Recalculate constraints at drag start in case panel just opened/resized
-                        requestAnimationFrame(() => {
-                          const constraints = calculateDragConstraints();
-                          dragConstraintsRef.current = constraints;
-                        });
+                        if (!dragConstraintsRef.current) {
+                          requestAnimationFrame(() => {
+                            if (!isPdfDraggingRef.current) return; // Double check we're still starting drag
+                            const constraints = calculateDragConstraints();
+                            dragConstraintsRef.current = constraints;
+                            // Update stable constraints if we just calculated them
+                            if (typeof constraints === 'object' && constraints !== null) {
+                              setStableDragConstraints(constraints);
+                            } else {
+                              setStableDragConstraints(pdfContainerRef);
+                            }
+                          });
+                        }
                       }}
                       onDragEnd={() => {
                         isPdfDraggingRef.current = false;
@@ -1345,10 +1405,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                           document.body.style.cursor = '';
                         }, 50);
                         // Recalculate constraints after drag ends to ensure accuracy
-                        requestAnimationFrame(() => {
-                          const constraints = calculateDragConstraints();
-                          dragConstraintsRef.current = constraints;
-                        });
+                        // Use a small delay to ensure drag has fully completed
+                        setTimeout(() => {
+                          requestAnimationFrame(() => {
+                            const constraints = calculateDragConstraints();
+                            dragConstraintsRef.current = constraints;
+                            // Update stable constraints after drag ends
+                            if (typeof constraints === 'object' && constraints !== null) {
+                              setStableDragConstraints(constraints);
+                            } else {
+                              setStableDragConstraints(pdfContainerRef);
+                            }
+                          });
+                        }, 10);
                       }}
                       whileDrag={{ cursor: 'grabbing' }}
                       style={{
@@ -1390,10 +1459,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
               )}
             </>
           ) : loading ? (
-            <div className="flex items-center justify-center w-full h-96 bg-gray-900 rounded-lg">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                <p className="text-gray-300">Loading...</p>
+            <div className="flex items-center justify-center w-full h-96 bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950 rounded-lg">
+              <div className="text-center space-y-4">
+                <div className="inline-flex items-center justify-center">
+                  <div className="relative">
+                    <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                    <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                    <div className="relative w-12 h-12">
+                      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                      <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-gray-300 font-medium">Loading...</p>
               </div>
             </div>
           ) : fileData ? (

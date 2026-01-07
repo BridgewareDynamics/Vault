@@ -352,10 +352,47 @@ function AppContent() {
             >
               <Suspense
                 fallback={
-                  <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                      <p className="text-gray-300">Loading Archive...</p>
+                  <div className="relative min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 flex items-center justify-center overflow-hidden">
+                    {/* Animated Background Grid */}
+                    <div 
+                      className="absolute inset-0 opacity-20"
+                      style={{
+                        backgroundImage: `
+                          linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+                        `,
+                        backgroundSize: '50px 50px',
+                        maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
+                      }}
+                    />
+                    
+                    {/* Content */}
+                    <div className="relative z-10 text-center space-y-6">
+                      {/* Modern Spinner with Gradient */}
+                      <div className="inline-flex items-center justify-center">
+                        <div className="relative">
+                          {/* Outer Glow Ring */}
+                          <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                          <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                          
+                          {/* Main Spinner */}
+                          <div className="relative w-16 h-16">
+                            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                            <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                          </div>
+                          
+                          {/* Center Glow */}
+                          <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
+                        </div>
+                      </div>
+                      
+                      {/* Loading Text */}
+                      <div className="space-y-2">
+                        <p className="text-xl font-semibold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                          Loading Archive...
+                        </p>
+                        <p className="text-sm text-gray-400 font-medium">Initializing vault systems</p>
+                      </div>
                     </div>
                   </div>
                 }
@@ -393,10 +430,47 @@ function AppContent() {
         >
           <Suspense
             fallback={
-              <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                  <p className="text-gray-300">Loading Archive...</p>
+              <div className="relative min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 flex items-center justify-center overflow-hidden">
+                {/* Animated Background Grid */}
+                <div 
+                  className="absolute inset-0 opacity-20"
+                  style={{
+                    backgroundImage: `
+                      linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+                    `,
+                    backgroundSize: '50px 50px',
+                    maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
+                  }}
+                />
+                
+                {/* Content */}
+                <div className="relative z-10 text-center space-y-6">
+                  {/* Modern Spinner with Gradient */}
+                  <div className="inline-flex items-center justify-center">
+                    <div className="relative">
+                      {/* Outer Glow Ring */}
+                      <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                      <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                      
+                      {/* Main Spinner */}
+                      <div className="relative w-16 h-16">
+                        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                        <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                      </div>
+                      
+                      {/* Center Glow */}
+                      <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
+                    </div>
+                  </div>
+                  
+                  {/* Loading Text */}
+                  <div className="space-y-2">
+                    <p className="text-xl font-semibold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                      Loading Archive...
+                    </p>
+                    <p className="text-sm text-gray-400 font-medium">Initializing vault systems</p>
+                  </div>
                 </div>
               </div>
             }
@@ -438,10 +512,47 @@ function AppContent() {
     // This shouldn't happen, but just in case
     return (
       <>
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-            <p className="text-gray-300">Preparing...</p>
+        <div className="relative min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 flex items-center justify-center overflow-hidden">
+          {/* Animated Background Grid */}
+          <div 
+            className="absolute inset-0 opacity-20"
+            style={{
+              backgroundImage: `
+                linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+              `,
+              backgroundSize: '50px 50px',
+              maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
+            }}
+          />
+          
+          {/* Content */}
+          <div className="relative z-10 text-center space-y-6">
+            {/* Modern Spinner with Gradient */}
+            <div className="inline-flex items-center justify-center">
+              <div className="relative">
+                {/* Outer Glow Ring */}
+                <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                
+                {/* Main Spinner */}
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                </div>
+                
+                {/* Center Glow */}
+                <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
+              </div>
+            </div>
+            
+            {/* Loading Text */}
+            <div className="space-y-2">
+              <p className="text-xl font-semibold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                Preparing...
+              </p>
+              <p className="text-sm text-gray-400 font-medium">Initializing extraction systems</p>
+            </div>
           </div>
         </div>
         <SettingsPanel isArchiveVisible={false} hideFixedButtons={true} />
