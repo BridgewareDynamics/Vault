@@ -26,6 +26,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   const [isInlineMode, setIsInlineMode] = useState(false);
   const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
+  const isOpeningWordEditorRef = useRef(false);
   
   // Detect if editor is in inline mode (check for inline container)
   useEffect(() => {
@@ -47,6 +48,11 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       clearInterval(interval);
       observer.disconnect();
     };
+  }, [isWordEditorOpen]);
+
+  // Keep ref in sync with word editor state to prevent closing when editor is open
+  useEffect(() => {
+    isOpeningWordEditorRef.current = isWordEditorOpen;
   }, [isWordEditorOpen]);
   const [loading, setLoading] = useState(false);
   const [showBookmarkCreator, setShowBookmarkCreator] = useState(false);
@@ -75,6 +81,8 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   const imageY = useMotionValue(0);
   const imageRef = useRef<HTMLImageElement>(null);
   const isDraggingRef = useRef(false);
+  const isPdfDraggingRef = useRef(false);
+  const dragConstraintsRef = useRef<{ left: number; right: number; top: number; bottom: number } | null>(null);
   
   // Warning dialog state
   const [showWarningDialog, setShowWarningDialog] = useState(false);
@@ -411,6 +419,82 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
     }
   };
 
+  // Calculate drag constraints based on canvas and container sizes
+  const calculateDragConstraints = useCallback(() => {
+    if (!canvasRef.current || !pdfContainerRef.current) {
+      return false; // Return false instead of null for framer-motion
+    }
+
+    const canvas = canvasRef.current;
+    const container = pdfContainerRef.current;
+    
+    // Use actual canvas dimensions
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    // Only enable constraints if canvas is larger than container
+    if (canvasWidth <= containerWidth && canvasHeight <= containerHeight) {
+      return false; // No constraints needed
+    }
+    
+    // Calculate overflow (how much canvas extends beyond container)
+    const overflowX = Math.max(0, (canvasWidth - containerWidth) / 2);
+    const overflowY = Math.max(0, (canvasHeight - containerHeight) / 2);
+    
+    // Return constraints relative to center (0, 0)
+    return {
+      left: -overflowX,
+      right: overflowX,
+      top: -overflowY,
+      bottom: overflowY,
+    };
+  }, []);
+
+  // Update drag constraints when page scale or panel width changes
+  useEffect(() => {
+    if (pdfDoc && pageScale >= 1.0 && isPdfZoomed) {
+      const updateConstraints = () => {
+        const constraints = calculateDragConstraints();
+        dragConstraintsRef.current = constraints;
+      };
+      
+      // Immediate update attempt
+      requestAnimationFrame(updateConstraints);
+      
+      // Also update after multiple checkpoints to catch layout changes when panel opens
+      const timeout1 = setTimeout(updateConstraints, 0); // Next tick
+      const timeout2 = setTimeout(updateConstraints, 16); // One frame
+      const timeout3 = setTimeout(updateConstraints, 50); // After brief delay
+      const timeout4 = setTimeout(updateConstraints, 100); // After potential animations
+      
+      // Also listen for resize events to recalculate constraints
+      const resizeObserver = new ResizeObserver(() => {
+        // Use requestAnimationFrame for smooth updates during resize
+        requestAnimationFrame(updateConstraints);
+      });
+      
+      if (pdfContainerRef.current) {
+        resizeObserver.observe(pdfContainerRef.current);
+      }
+      
+      if (canvasRef.current) {
+        resizeObserver.observe(canvasRef.current);
+      }
+      
+      return () => {
+        clearTimeout(timeout1);
+        clearTimeout(timeout2);
+        clearTimeout(timeout3);
+        clearTimeout(timeout4);
+        resizeObserver.disconnect();
+      };
+    } else {
+      dragConstraintsRef.current = false;
+    }
+  }, [pdfDoc, pageScale, isPdfZoomed, panelWidth, isWordEditorOpen, calculateDragConstraints]);
+
   const renderPDFPage = async (pageNum: number) => {
     if (!pdfDoc) return;
 
@@ -497,6 +581,12 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       }
       
       setPageRendering(false);
+      
+      // Recalculate drag constraints after render using requestAnimationFrame for smooth update
+      requestAnimationFrame(() => {
+        const constraints = calculateDragConstraints();
+        dragConstraintsRef.current = constraints;
+      });
     } catch (error: unknown) {
       // Ignore cancellation errors
       const errorName = error && typeof error === 'object' && 'name' in error ? String(error.name) : undefined;
@@ -905,7 +995,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={(e) => {
-          if (e.target === e.currentTarget) {
+          // Only close if clicking directly on the backdrop, not on child elements
+          // Also don't close if word editor is open or we're in the process of opening it
+          if (e.target === e.currentTarget && !isWordEditorOpen && !isOpeningWordEditorRef.current) {
             handleClose();
           }
         }}
@@ -929,11 +1021,13 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
           transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
           className={`relative ${file?.type === 'pdf' ? 'w-full h-full' : 'w-full h-full flex items-center justify-center'}`}
           onClick={(e) => {
-            // Close on backdrop click only when not zoomed
-            if (e.target === e.currentTarget && file?.type === 'image' && imageScale <= 1) {
-              handleClose();
-            } else if (e.target === e.currentTarget && file?.type !== 'image' && file?.type !== 'pdf') {
-              handleClose();
+            // Close on backdrop click only when not zoomed and word editor is not open
+            if (e.target === e.currentTarget && !isWordEditorOpen && !isOpeningWordEditorRef.current) {
+              if (file?.type === 'image' && imageScale <= 1) {
+                handleClose();
+              } else if (file?.type !== 'image' && file?.type !== 'pdf') {
+                handleClose();
+              }
             }
           }}
         >
@@ -1116,7 +1210,12 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          e.preventDefault();
+                          // Open word editor via context and dispatch event to ensure SettingsPanel opens it
+                          // The useEffect will sync the ref with the state
                           setWordEditorOpen(true);
+                          // Dispatch event to ensure SettingsPanel opens the word editor panel
+                          window.dispatchEvent(new CustomEvent('open-word-editor-from-viewer'));
                         }}
                         className="p-2 text-white hover:text-cyber-purple-400 transition-colors rounded hover:bg-gray-700"
                         aria-label="Open word editor"
@@ -1176,19 +1275,46 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                     {/* Canvas wrapper for drag functionality */}
                     <motion.div
                       drag={isPdfZoomed && pageScale >= 1.0}
-                      dragConstraints={(isPdfZoomed && pageScale >= 1.0) ? pdfContainerRef : false}
-                      dragElastic={0}
+                      dragConstraints={dragConstraintsRef.current !== null && dragConstraintsRef.current !== false ? dragConstraintsRef.current : pdfContainerRef}
+                      dragElastic={0.1}
                       dragMomentum={false}
+                      dragPropagation={false}
+                      onDragStart={() => {
+                        isPdfDraggingRef.current = true;
+                        // Prevent text selection during drag
+                        document.body.style.userSelect = 'none';
+                        document.body.style.cursor = 'grabbing';
+                        // Recalculate constraints at drag start in case panel just opened/resized
+                        requestAnimationFrame(() => {
+                          const constraints = calculateDragConstraints();
+                          dragConstraintsRef.current = constraints;
+                        });
+                      }}
+                      onDragEnd={() => {
+                        isPdfDraggingRef.current = false;
+                        // Small delay to prevent click events after drag
+                        setTimeout(() => {
+                          document.body.style.userSelect = '';
+                          document.body.style.cursor = '';
+                        }, 50);
+                        // Recalculate constraints after drag ends to ensure accuracy
+                        requestAnimationFrame(() => {
+                          const constraints = calculateDragConstraints();
+                          dragConstraintsRef.current = constraints;
+                        });
+                      }}
                       whileDrag={{ cursor: 'grabbing' }}
                       style={{
-                        cursor: (isPdfZoomed && pageScale >= 1.0) ? 'grab' : 'default',
+                        cursor: (isPdfZoomed && pageScale >= 1.0 && !isPdfDraggingRef.current) ? 'grab' : 'default',
                         display: 'inline-block',
                         touchAction: 'none',
+                        willChange: 'transform',
                         x: canvasX,
                         y: canvasY,
                       }}
                       onClick={(e) => {
-                        if (isPdfZoomed && pageScale >= 1.0) {
+                        // Only stop propagation if we're not dragging
+                        if (isPdfZoomed && pageScale >= 1.0 && !isPdfDraggingRef.current) {
                           e.stopPropagation();
                         }
                       }}

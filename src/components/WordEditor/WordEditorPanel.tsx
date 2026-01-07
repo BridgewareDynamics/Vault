@@ -37,6 +37,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   const resizeStartXRef = useRef<number>(0);
   const resizeStartWidthRef = useRef<number>(500);
   const hasAutoOpenedLibraryRef = useRef(false); // Track if we've auto-opened library for this panel session
+  const hasSetWidthFromOpenLibraryRef = useRef(false); // Track if we've set width from openLibrary prop
 
   // Update file path when initialFilePath changes
   useEffect(() => {
@@ -45,12 +46,17 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
     }
   }, [initialFilePath]);
 
-  // Open library if requested and set panel to minimum width
+  // Open library if requested and set panel to minimum width (only on initial open)
   useEffect(() => {
-    if (openLibrary && isOpen) {
+    if (openLibrary && isOpen && !hasSetWidthFromOpenLibraryRef.current) {
       setShowLibrary(true);
-      // Set panel width to minimum when opening with library
+      // Set panel width to minimum when opening with library (only once)
       setPanelWidth(MIN_WIDTH);
+      hasSetWidthFromOpenLibraryRef.current = true;
+    }
+    // Reset flag when panel closes
+    if (!isOpen) {
+      hasSetWidthFromOpenLibraryRef.current = false;
     }
   }, [openLibrary, isOpen, setPanelWidth]);
 
@@ -389,12 +395,9 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
                   {/* Enhanced Library button */}
                   <motion.button
                     onClick={() => {
-                      const willShowLibrary = !showLibrary;
-                      setShowLibrary(willShowLibrary);
+                      setShowLibrary(!showLibrary);
                       setShowBookmarkLibrary(false);
-                      if (willShowLibrary) {
-                        setPanelWidth(MIN_WIDTH);
-                      }
+                      // Don't reset panel width - preserve user's manual resize
                     }}
                     whileHover={{ scale: 1.1, y: -1 }}
                     whileTap={{ scale: 0.9 }}
