@@ -1,5 +1,5 @@
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText, BookmarkPlus, Bookmark } from 'lucide-react';
 import { ArchiveFile, PDFDocument, PDFRenderTask } from '../../types';
 import { logger } from '../../utils/logger';
@@ -1383,7 +1383,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                         document.body.style.cursor = 'grabbing';
                         // Ensure constraints are set before drag starts
                         // Recalculate constraints at drag start in case panel just opened/resized
-                        if (!dragConstraintsRef.current || dragConstraintsRef.current === false) {
+                        if (!dragConstraintsRef.current) {
                           requestAnimationFrame(() => {
                             if (!isPdfDraggingRef.current) return; // Double check we're still starting drag
                             const constraints = calculateDragConstraints();
