@@ -27,6 +27,9 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
   // Listen for reattach data from detached window
   useEffect(() => {
     const handleReattach = (_event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
+      // Use the same event that opening from viewer uses to ensure consistent behavior
+      // This ensures the PDF viewer's ref is set immediately
+      window.dispatchEvent(new CustomEvent('open-word-editor-from-viewer'));
       setIsWordEditorOpen(true);
       setWordEditorContextOpen(true);
     };
