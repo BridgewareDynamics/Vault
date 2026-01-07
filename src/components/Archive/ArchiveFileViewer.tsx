@@ -1166,10 +1166,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
           {file.type === 'pdf' ? (
             <>
               {pdfLoading ? (
-                <div className="flex flex-col items-center justify-center w-full h-full bg-gray-900 rounded-lg">
-                  <div className="text-center mb-4">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                    <p className="text-gray-300 mb-2">
+                <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950 rounded-lg">
+                  <div className="text-center mb-4 space-y-4">
+                    <div className="inline-flex items-center justify-center">
+                      <div className="relative">
+                        <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                        <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                        <div className="relative w-12 h-12">
+                          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                          <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-gray-300 font-medium bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent">
                       {pdfLoadingProgress < 90 ? 'Reading file...' : 'Parsing PDF...'}
                     </p>
                     {pdfLoadingProgress > 0 && (
@@ -1312,10 +1321,15 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                     }}
                   >
                     {pageRendering && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm rounded z-10">
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyber-purple-400 mx-auto mb-2"></div>
-                          <p className="text-gray-300 text-sm">Loading page...</p>
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 backdrop-blur-sm rounded z-10">
+                        <div className="text-center space-y-2">
+                          <div className="inline-flex items-center justify-center">
+                            <div className="relative w-8 h-8">
+                              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                              <div className="absolute inset-1 rounded-full border border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                            </div>
+                          </div>
+                          <p className="text-gray-300 text-sm font-medium">Loading page...</p>
                         </div>
                       </div>
                     )}
@@ -1390,10 +1404,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
               )}
             </>
           ) : loading ? (
-            <div className="flex items-center justify-center w-full h-96 bg-gray-900 rounded-lg">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                <p className="text-gray-300">Loading...</p>
+            <div className="flex items-center justify-center w-full h-96 bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950 rounded-lg">
+              <div className="text-center space-y-4">
+                <div className="inline-flex items-center justify-center">
+                  <div className="relative">
+                    <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                    <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                    <div className="relative w-12 h-12">
+                      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                      <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-gray-300 font-medium">Loading...</p>
               </div>
             </div>
           ) : fileData ? (

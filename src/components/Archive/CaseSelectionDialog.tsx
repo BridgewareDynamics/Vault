@@ -86,9 +86,14 @@ export function CaseSelectionDialog({
           <div className="flex-1 overflow-y-auto min-h-0">
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                  <p className="text-gray-400">Loading cases...</p>
+                <div className="text-center space-y-4">
+                  <div className="inline-flex p-4 bg-gradient-to-br from-cyan-900/40 to-purple-900/40 rounded-2xl border-2 border-cyber-cyan-400/30">
+                    <div className="relative w-8 h-8">
+                      <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                      <div className="absolute inset-1 rounded-full border border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                    </div>
+                  </div>
+                  <p className="text-gray-300 text-sm font-medium">Loading cases...</p>
                 </div>
               </div>
             ) : cases.length === 0 ? (

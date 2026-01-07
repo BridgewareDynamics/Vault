@@ -680,10 +680,19 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       <div className="flex-1 overflow-auto p-4 relative">
         {/* Loading overlay */}
         {isLoading && (
-          <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-              <p className="text-gray-300">Loading file...</p>
+          <div className="absolute inset-0 bg-gray-900/90 backdrop-blur-xl flex items-center justify-center z-10 rounded-lg">
+            <div className="text-center space-y-4">
+              <div className="inline-flex items-center justify-center">
+                <div className="relative">
+                  <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                  <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                  <div className="relative w-12 h-12">
+                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                    <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                  </div>
+                </div>
+              </div>
+              <p className="text-gray-300 font-medium">Loading file...</p>
             </div>
           </div>
         )}
@@ -758,7 +767,9 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           {/* Saving indicator */}
           {isSaving && (
             <div className="flex items-center gap-2 text-cyber-purple-400 text-xs">
-              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-cyber-purple-400"></div>
+              <div className="relative w-3 h-3">
+                <div className="absolute inset-0 rounded-full border border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+              </div>
               <span>Saving...</span>
             </div>
           )}
