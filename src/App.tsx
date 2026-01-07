@@ -51,6 +51,7 @@ function AppContent() {
   const toast = useToast();
   const { settings } = useSettingsContext();
   const { isOpen: isWordEditorOpen, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
+  const [shouldUseOverlayMode, setShouldUseOverlayMode] = useState(false);
 
   // Check if we're in detached editor mode
   // In dev mode, it's a query param: ?editor=detached
@@ -206,11 +207,25 @@ function AppContent() {
       }
     };
 
+    const handleOpenWordEditorFromViewer = () => {
+      // When word editor is opened from PDF viewer, use overlay mode to preserve viewer state
+      setShouldUseOverlayMode(true);
+    };
+
+    const handleCloseWordEditor = () => {
+      // Reset overlay mode flag when word editor closes
+      setShouldUseOverlayMode(false);
+    };
+
     window.addEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
     window.addEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
+    window.addEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
+    window.addEventListener('close-word-editor' as any, handleCloseWordEditor as EventListener);
     return () => {
       window.removeEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
       window.removeEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
+      window.removeEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
+      window.removeEventListener('close-word-editor' as any, handleCloseWordEditor as EventListener);
     };
   }, [showArchive, isWordEditorOpen]);
 
@@ -221,6 +236,13 @@ function AppContent() {
       memoryManager.updateSettings(settings);
     }
   }, [settings]);
+
+  // Reset overlay mode flag when word editor closes
+  useEffect(() => {
+    if (!isWordEditorOpen) {
+      setShouldUseOverlayMode(false);
+    }
+  }, [isWordEditorOpen]);
 
   // Handle PDF file selection
   const handleSelectFile = async () => {
@@ -317,7 +339,9 @@ function AppContent() {
   // Show archive if requested
   if (showArchive) {
     // If Editor is open, show side-by-side layout
-    if (isWordEditorOpen) {
+    // BUT: Only use side-by-side if we're not in overlay mode (e.g., when PDF viewer is open)
+    // When PDF viewer is open, keep overlay mode to preserve viewer state
+    if (isWordEditorOpen && !shouldUseOverlayMode) {
       return (
         <>
           <div className="flex h-screen overflow-hidden">
@@ -336,7 +360,7 @@ function AppContent() {
                   </div>
                 }
               >
-                <ArchivePage onBack={() => setShowArchive(false)} />
+                <ArchivePage key="archive-page" onBack={() => setShowArchive(false)} />
               </Suspense>
             </div>
             
@@ -361,7 +385,7 @@ function AppContent() {
       );
     }
     
-    // Editor not open, show full-width Archive
+    // Editor not open OR PDF viewer is open (use overlay mode), show full-width Archive
     return (
       <>
         <div 
@@ -377,7 +401,7 @@ function AppContent() {
               </div>
             }
           >
-            <ArchivePage onBack={() => setShowArchive(false)} />
+            <ArchivePage key="archive-page" onBack={() => setShowArchive(false)} />
           </Suspense>
         </div>
         <SettingsPanel isArchiveVisible={true} hideFixedButtons={true} />
