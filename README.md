@@ -760,9 +760,20 @@ For commercial use inquiries or license questions, contact: **Bridgeware Dynamic
 
 ## Testing
 
-The Vault includes a comprehensive test suite using Vitest and Testing Library:
+The Vault includes a comprehensive test suite using Vitest and Testing Library.
 
-### Running Tests
+### 📖 Testing Documentation
+
+For complete testing procedures, see **[TESTING_PROCEDURES.md](TESTING_PROCEDURES.md)**.
+
+This comprehensive guide includes:
+- **Manual Testing Procedures**: Step-by-step test cases for all features
+- **Automated Testing**: How to run and interpret automated tests
+- **Performance Testing**: Benchmarks and performance test procedures
+- **Build Testing**: Verification of production builds and installers
+- **Test Checklists**: Quick reference checklists for common testing scenarios
+
+### Running Automated Tests
 
 ```bash
 # Run all tests once
