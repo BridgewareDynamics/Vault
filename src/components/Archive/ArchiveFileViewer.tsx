@@ -1,5 +1,5 @@
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText, BookmarkPlus, Bookmark } from 'lucide-react';
 import { ArchiveFile, PDFDocument, PDFRenderTask } from '../../types';
 import { logger } from '../../utils/logger';
@@ -129,6 +129,8 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   const isDraggingRef = useRef(false);
   const isPdfDraggingRef = useRef(false);
   const dragConstraintsRef = useRef<{ left: number; right: number; top: number; bottom: number } | false | null>(null);
+  // Stable constraints state that only updates when not dragging
+  const [stableDragConstraints, setStableDragConstraints] = useState<{ left: number; right: number; top: number; bottom: number } | false | React.RefObject<HTMLElement>>(false);
   
   // Warning dialog state
   const [showWarningDialog, setShowWarningDialog] = useState(false);
@@ -501,9 +503,22 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   // Update drag constraints when page scale or panel width changes
   useEffect(() => {
     if (pdfDoc && pageScale >= 1.0 && isPdfZoomed) {
+      let resizeTimeout: NodeJS.Timeout | null = null;
+      
       const updateConstraints = () => {
+        // Don't update constraints during active drag to prevent jitter
+        if (isPdfDraggingRef.current) {
+          return;
+        }
         const constraints = calculateDragConstraints();
         dragConstraintsRef.current = constraints;
+        // Update stable constraints state only when not dragging
+        // This ensures the dragConstraints prop doesn't change during drag
+        if (typeof constraints === 'object' && constraints !== null) {
+          setStableDragConstraints(constraints);
+        } else {
+          setStableDragConstraints(pdfContainerRef);
+        }
       };
       
       // Immediate update attempt
@@ -516,9 +531,18 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       const timeout4 = setTimeout(updateConstraints, 100); // After potential animations
       
       // Also listen for resize events to recalculate constraints
+      // Debounce resize updates to prevent excessive recalculations
       const resizeObserver = new ResizeObserver(() => {
-        // Use requestAnimationFrame for smooth updates during resize
-        requestAnimationFrame(updateConstraints);
+        // Clear any pending resize update
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout);
+        }
+        // Debounce resize updates - only update if not dragging
+        resizeTimeout = setTimeout(() => {
+          if (!isPdfDraggingRef.current) {
+            requestAnimationFrame(updateConstraints);
+          }
+        }, 100); // 100ms debounce
       });
       
       if (pdfContainerRef.current) {
@@ -534,6 +558,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
         clearTimeout(timeout2);
         clearTimeout(timeout3);
         clearTimeout(timeout4);
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout);
+        }
         resizeObserver.disconnect();
       };
     } else {
@@ -629,9 +656,18 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       setPageRendering(false);
       
       // Recalculate drag constraints after render using requestAnimationFrame for smooth update
+      // Only update if not currently dragging to prevent jitter
       requestAnimationFrame(() => {
-        const constraints = calculateDragConstraints();
-        dragConstraintsRef.current = constraints;
+        if (!isPdfDraggingRef.current) {
+          const constraints = calculateDragConstraints();
+          dragConstraintsRef.current = constraints;
+          // Update stable constraints state
+          if (typeof constraints === 'object' && constraints !== null) {
+            setStableDragConstraints(constraints);
+          } else {
+            setStableDragConstraints(pdfContainerRef);
+          }
+        }
       });
     } catch (error: unknown) {
       // Ignore cancellation errors
@@ -1336,7 +1372,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                     {/* Canvas wrapper for drag functionality */}
                     <motion.div
                       drag={isPdfZoomed && pageScale >= 1.0}
-                      dragConstraints={typeof dragConstraintsRef.current === 'object' && dragConstraintsRef.current !== null ? dragConstraintsRef.current : pdfContainerRef}
+                      dragConstraints={stableDragConstraints}
                       dragElastic={0.1}
                       dragMomentum={false}
                       dragPropagation={false}
@@ -1345,11 +1381,21 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                         // Prevent text selection during drag
                         document.body.style.userSelect = 'none';
                         document.body.style.cursor = 'grabbing';
+                        // Ensure constraints are set before drag starts
                         // Recalculate constraints at drag start in case panel just opened/resized
-                        requestAnimationFrame(() => {
-                          const constraints = calculateDragConstraints();
-                          dragConstraintsRef.current = constraints;
-                        });
+                        if (!dragConstraintsRef.current || dragConstraintsRef.current === false) {
+                          requestAnimationFrame(() => {
+                            if (!isPdfDraggingRef.current) return; // Double check we're still starting drag
+                            const constraints = calculateDragConstraints();
+                            dragConstraintsRef.current = constraints;
+                            // Update stable constraints if we just calculated them
+                            if (typeof constraints === 'object' && constraints !== null) {
+                              setStableDragConstraints(constraints);
+                            } else {
+                              setStableDragConstraints(pdfContainerRef);
+                            }
+                          });
+                        }
                       }}
                       onDragEnd={() => {
                         isPdfDraggingRef.current = false;
@@ -1359,10 +1405,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                           document.body.style.cursor = '';
                         }, 50);
                         // Recalculate constraints after drag ends to ensure accuracy
-                        requestAnimationFrame(() => {
-                          const constraints = calculateDragConstraints();
-                          dragConstraintsRef.current = constraints;
-                        });
+                        // Use a small delay to ensure drag has fully completed
+                        setTimeout(() => {
+                          requestAnimationFrame(() => {
+                            const constraints = calculateDragConstraints();
+                            dragConstraintsRef.current = constraints;
+                            // Update stable constraints after drag ends
+                            if (typeof constraints === 'object' && constraints !== null) {
+                              setStableDragConstraints(constraints);
+                            } else {
+                              setStableDragConstraints(pdfContainerRef);
+                            }
+                          });
+                        }, 10);
                       }}
                       whileDrag={{ cursor: 'grabbing' }}
                       style={{
