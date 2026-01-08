@@ -338,145 +338,87 @@ function AppContent() {
 
   // Show archive if requested
   if (showArchive) {
-    // If Editor is open, show side-by-side layout
-    // BUT: Only use side-by-side if we're not in overlay mode (e.g., when PDF viewer is open)
-    // When PDF viewer is open, keep overlay mode to preserve viewer state
-    if (isWordEditorOpen && !shouldUseOverlayMode) {
-      return (
-        <>
-          <div className="flex h-screen overflow-hidden">
-            {/* Archive on the left */}
-            <div 
-              className={`overflow-auto ${isDividerDragging ? '' : 'transition-all duration-300'}`}
-              style={{ width: `${dividerPosition}%` }}
-            >
-              <Suspense
-                fallback={
-                  <div className="relative min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 flex items-center justify-center overflow-hidden">
-                    {/* Animated Background Grid */}
-                    <div 
-                      className="absolute inset-0 opacity-20"
-                      style={{
-                        backgroundImage: `
-                          linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
-                          linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
-                        `,
-                        backgroundSize: '50px 50px',
-                        maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
-                      }}
-                    />
-                    
-                    {/* Content */}
-                    <div className="relative z-10 text-center space-y-6">
-                      {/* Modern Spinner with Gradient */}
-                      <div className="inline-flex items-center justify-center">
-                        <div className="relative">
-                          {/* Outer Glow Ring */}
-                          <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
-                          <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
-                          
-                          {/* Main Spinner */}
-                          <div className="relative w-16 h-16">
-                            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
-                            <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
-                          </div>
-                          
-                          {/* Center Glow */}
-                          <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
+    // Always render the same structure to prevent ArchivePage from remounting
+    // Just adjust the layout based on whether word editor is open
+    const useSideBySideLayout = isWordEditorOpen && !shouldUseOverlayMode;
+    
+    return (
+      <>
+        <div className={`h-screen overflow-hidden ${useSideBySideLayout ? 'flex' : ''}`}>
+          {/* Archive container - always rendered in same position, just width changes */}
+          <div 
+            className={`overflow-auto ${isDividerDragging ? '' : 'transition-all duration-300'}`}
+            style={useSideBySideLayout ? { width: `${dividerPosition}%` } : { width: '100%' }}
+          >
+            <Suspense
+              fallback={
+                <div className="relative min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 flex items-center justify-center overflow-hidden">
+                  {/* Animated Background Grid */}
+                  <div 
+                    className="absolute inset-0 opacity-20"
+                    style={{
+                      backgroundImage: `
+                        linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+                      `,
+                      backgroundSize: '50px 50px',
+                      maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
+                    }}
+                  />
+                  
+                  {/* Content */}
+                  <div className="relative z-10 text-center space-y-6">
+                    {/* Modern Spinner with Gradient */}
+                    <div className="inline-flex items-center justify-center">
+                      <div className="relative">
+                        {/* Outer Glow Ring */}
+                        <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                        <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                        
+                        {/* Main Spinner */}
+                        <div className="relative w-16 h-16">
+                          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                          <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
                         </div>
-                      </div>
-                      
-                      {/* Loading Text */}
-                      <div className="space-y-2">
-                        <p className="text-xl font-semibold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
-                          Loading Archive...
-                        </p>
-                        <p className="text-sm text-gray-400 font-medium">Initializing vault systems</p>
+                        
+                        {/* Center Glow */}
+                        <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
                       </div>
                     </div>
+                    
+                    {/* Loading Text */}
+                    <div className="space-y-2">
+                      <p className="text-xl font-semibold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                        Loading Archive...
+                      </p>
+                      <p className="text-sm text-gray-400 font-medium">Initializing vault systems</p>
+                    </div>
                   </div>
-                }
-              >
-                <ArchivePage key="archive-page" onBack={() => setShowArchive(false)} />
-              </Suspense>
-            </div>
-            
-            {/* Resizable Divider */}
+                </div>
+              }
+            >
+              <ArchivePage key="archive-page" onBack={() => setShowArchive(false)} />
+            </Suspense>
+          </div>
+          
+          {/* Resizable Divider - only shown in side-by-side layout */}
+          {useSideBySideLayout && (
             <ResizableDivider
               position={dividerPosition}
               onResize={setDividerPosition}
               minLeft={20}
               minRight={30}
             />
-            
-            {/* Editor on the right - rendered by SettingsPanel with inline mode */}
+          )}
+          
+          {/* Editor container - only shown in side-by-side layout */}
+          {useSideBySideLayout && (
             <div 
               id="word-editor-inline-container"
               className={`overflow-hidden h-full ${isDividerDragging ? '' : 'transition-all duration-300'}`}
               style={{ width: `${100 - dividerPosition}%` }}
             />
-          </div>
-          <SettingsPanel isArchiveVisible={true} hideFixedButtons={true} />
-          <ToastContainer />
-        </>
-      );
-    }
-    
-    // Editor not open OR PDF viewer is open (use overlay mode), show full-width Archive
-    return (
-      <>
-        <div 
-          className="transition-all duration-300"
-        >
-          <Suspense
-            fallback={
-              <div className="relative min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 flex items-center justify-center overflow-hidden">
-                {/* Animated Background Grid */}
-                <div 
-                  className="absolute inset-0 opacity-20"
-                  style={{
-                    backgroundImage: `
-                      linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
-                    `,
-                    backgroundSize: '50px 50px',
-                    maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
-                  }}
-                />
-                
-                {/* Content */}
-                <div className="relative z-10 text-center space-y-6">
-                  {/* Modern Spinner with Gradient */}
-                  <div className="inline-flex items-center justify-center">
-                    <div className="relative">
-                      {/* Outer Glow Ring */}
-                      <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
-                      <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
-                      
-                      {/* Main Spinner */}
-                      <div className="relative w-16 h-16">
-                        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
-                        <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
-                      </div>
-                      
-                      {/* Center Glow */}
-                      <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
-                    </div>
-                  </div>
-                  
-                  {/* Loading Text */}
-                  <div className="space-y-2">
-                    <p className="text-xl font-semibold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
-                      Loading Archive...
-                    </p>
-                    <p className="text-sm text-gray-400 font-medium">Initializing vault systems</p>
-                  </div>
-                </div>
-              </div>
-            }
-          >
-            <ArchivePage key="archive-page" onBack={() => setShowArchive(false)} />
-          </Suspense>
+          )}
         </div>
         <SettingsPanel isArchiveVisible={true} hideFixedButtons={true} />
         <ToastContainer />
