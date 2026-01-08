@@ -78,19 +78,53 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const hasRestoredCaseRef = useRef(false);
   // Track if we've processed the sessionStorage bookmark (prevents re-processing)
   const hasProcessedSessionBookmarkRef = useRef(false);
+  // Track the last restored case path to detect remount scenarios
+  const lastRestoredCasePathRef = useRef<string | null>(null);
 
   // Restore currentCase from ArchiveContext on mount if local state is null
   // This fixes the issue where ArchivePage remounts (due to layout changes) and loses case selection
+  // OPTIMIZED: Use useLayoutEffect for immediate restoration to prevent visual refresh
+  useLayoutEffect(() => {
+    // Fast path: If we're remounting and context has the same case we just restored, restore immediately
+    // This prevents the menu from showing null state before restoration
+    if (currentCase === null && 
+        archiveContextCase !== null && 
+        lastRestoredCasePathRef.current === archiveContextCase.path &&
+        cases.length > 0) {
+      // Verify the case still exists
+      const caseExists = cases.some(c => c.path === archiveContextCase.path);
+      if (caseExists) {
+        // Immediate restoration to prevent visual refresh
+        setCurrentCase(archiveContextCase);
+        return;
+      }
+    }
+  }, [currentCase, archiveContextCase, cases, setCurrentCase]);
+
+  // Full restoration logic for initial mount or case changes
   useEffect(() => {
     // #region agent log
-    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:84', message: 'Restoration useEffect: Entry', data: { hasRestoredCase: hasRestoredCaseRef.current, casesLength: cases.length, currentCaseIsNull: currentCase === null, archiveContextCaseIsNull: archiveContextCase === null, archiveContextCasePath: archiveContextCase?.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
+    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:84', message: 'Restoration useEffect: Entry', data: { hasRestoredCase: hasRestoredCaseRef.current, casesLength: cases.length, currentCaseIsNull: currentCase === null, archiveContextCaseIsNull: archiveContextCase === null, archiveContextCasePath: archiveContextCase?.path, lastRestoredPath: lastRestoredCasePathRef.current }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
     // #endregion
+    
+    // Update last restored path if we have a current case
+    if (currentCase?.path) {
+      lastRestoredCasePathRef.current = currentCase.path;
+    }
+    
     // Only restore if:
-    // 1. We haven't already attempted restoration
+    // 1. We haven't already restored this case (or it's a different case)
     // 2. Cases are loaded (we need the list to validate)
     // 3. Local currentCase is null (we just mounted/remounted)
     // 4. ArchiveContext has a case (there was a previous selection)
-    if (!hasRestoredCaseRef.current && cases.length > 0 && currentCase === null && archiveContextCase !== null) {
+    // 5. We haven't already restored this exact case (prevents refresh on remount)
+    const isSameCase = lastRestoredCasePathRef.current === archiveContextCase?.path;
+    const shouldRestore = cases.length > 0 && 
+                          currentCase === null && 
+                          archiveContextCase !== null &&
+                          (!hasRestoredCaseRef.current || !isSameCase);
+    
+    if (shouldRestore) {
       // #region agent log
       if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:90', message: 'Restoration useEffect: Conditions met, checking case existence', data: { archiveContextCasePath: archiveContextCase.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
       // #endregion
@@ -102,45 +136,53 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         // #endregion
         setCurrentCase(archiveContextCase);
         hasRestoredCaseRef.current = true;
+        lastRestoredCasePathRef.current = archiveContextCase.path;
       } else {
         // #region agent log
         if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:97', message: 'Restoration useEffect: Case not found, marking as restored', data: { archiveContextCasePath: archiveContextCase.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
         // #endregion
         // Case doesn't exist anymore, mark as restored to prevent retrying
         hasRestoredCaseRef.current = true;
+        lastRestoredCasePathRef.current = null;
       }
+    } else if (currentCase === null && archiveContextCase === null) {
+      // Both are null - reset flags to allow future restoration
+      // This happens when user navigates back to case gallery
+      hasRestoredCaseRef.current = false;
+      lastRestoredCasePathRef.current = null;
     }
   }, [cases, currentCase, archiveContextCase, setCurrentCase]);
 
   // Update global ArchiveContext when currentCase changes
   // Use useLayoutEffect to ensure synchronous update before browser paint
   // This prevents race conditions when word editor opens and needs to read currentCase
-  // IMPORTANT: Don't overwrite context with null during remounts if context has a case
-  // (we'll restore from context in useEffect, then sync back)
+  // OPTIMIZED: Only sync if values actually changed to prevent unnecessary re-renders
   useLayoutEffect(() => {
     // #region agent log
     if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:108', message: 'Sync useLayoutEffect: Entry', data: { currentCaseIsNull: currentCase === null, currentCasePath: currentCase?.path, archiveContextCaseIsNull: archiveContextCase === null, archiveContextCasePath: archiveContextCase?.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
     // #endregion
-    // Always sync non-null values
-    // For null values, only sync if context is also null (don't overwrite during remount)
+    
+    // Only sync if values actually differ to prevent unnecessary updates
     if (currentCase !== null) {
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:111', message: 'Sync useLayoutEffect: Syncing non-null case to context', data: { casePath: currentCase.path, caseName: currentCase.name }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
-      // #endregion
-      setArchiveContextCase(currentCase);
+      // Only sync if context doesn't already have the same case (by path comparison)
+      if (archiveContextCase?.path !== currentCase.path) {
+        // #region agent log
+        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:111', message: 'Sync useLayoutEffect: Syncing non-null case to context', data: { casePath: currentCase.path, caseName: currentCase.name }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
+        // #endregion
+        setArchiveContextCase(currentCase);
+      }
     } else if (archiveContextCase === null) {
+      // Both are null - no need to sync (already in sync)
       // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:113', message: 'Sync useLayoutEffect: Both null, syncing null to context', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
+      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:113', message: 'Sync useLayoutEffect: Both null, already in sync', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
       // #endregion
-      // Both are null, sync to keep them in sync
-      setArchiveContextCase(null);
     } else {
+      // currentCase is null but archiveContextCase is not - skip syncing
+      // This allows the useEffect to restore from context first
       // #region agent log
       if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:117', message: 'Sync useLayoutEffect: Skipping sync - currentCase null but context has case', data: { archiveContextCasePath: archiveContextCase.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
       // #endregion
     }
-    // If currentCase is null but archiveContextCase is not, skip syncing
-    // This allows the useEffect to restore from context first
   }, [currentCase, setArchiveContextCase, archiveContextCase]);
 
   const [showDriveDialog, setShowDriveDialog] = useState(false);

@@ -22,11 +22,14 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
   const [openLibraryOnMount, setOpenLibraryOnMount] = useState(false);
   const [memoryInfo, setMemoryInfo] = useState<{ used: number; total: number } | null>(null);
-  const { setIsOpen: setWordEditorContextOpen } = useWordEditor();
+  const { isOpen: isWordEditorContextOpen, setIsOpen: setWordEditorContextOpen } = useWordEditor();
 
   // Listen for reattach data from detached window
   useEffect(() => {
     const handleReattach = (_event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
+      // Use the same event that opening from viewer uses to ensure consistent behavior
+      // This ensures the PDF viewer's ref is set immediately
+      window.dispatchEvent(new CustomEvent('open-word-editor-from-viewer'));
       setIsWordEditorOpen(true);
       setWordEditorContextOpen(true);
     };
@@ -45,17 +48,33 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
       setShowWordEditorDialog(true);
     };
 
+    const handleOpenWordEditorFromViewer = () => {
+      // Open word editor panel when triggered from PDF viewer
+      setIsWordEditorOpen(true);
+      setWordEditorContextOpen(true);
+    };
+
     window.addEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
     window.addEventListener('close-word-editor-for-bookmark' as any, handleCloseForBookmark as EventListener);
     window.addEventListener('open-settings' as any, handleOpenSettings as EventListener);
     window.addEventListener('open-word-editor-dialog' as any, handleOpenWordEditorDialog as EventListener);
+    window.addEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
     return () => {
       window.removeEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
       window.removeEventListener('close-word-editor-for-bookmark' as any, handleCloseForBookmark as EventListener);
       window.removeEventListener('open-settings' as any, handleOpenSettings as EventListener);
       window.removeEventListener('open-word-editor-dialog' as any, handleOpenWordEditorDialog as EventListener);
+      window.removeEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
     };
   }, [setWordEditorContextOpen]);
+
+  // Sync local state with context state - when context opens, open local state too
+  useEffect(() => {
+    if (isWordEditorContextOpen && !isWordEditorOpen) {
+      setIsWordEditorOpen(true);
+    }
+  }, [isWordEditorContextOpen, isWordEditorOpen]);
+
   const {
     settings,
     loading,
@@ -558,6 +577,8 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
                   setIsWordEditorOpen(false);
                   setWordEditorContextOpen(false);
                   setOpenLibraryOnMount(false);
+                  // Dispatch event to reset overlay mode flag
+                  window.dispatchEvent(new CustomEvent('close-word-editor'));
                 }}
                 initialFilePath={currentFilePath}
                 openLibrary={openLibraryOnMount}
@@ -572,6 +593,8 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
                 setIsWordEditorOpen(false);
                 setWordEditorContextOpen(false);
                 setOpenLibraryOnMount(false);
+                // Dispatch event to reset overlay mode flag
+                window.dispatchEvent(new CustomEvent('close-word-editor'));
               }}
               initialFilePath={currentFilePath}
               openLibrary={openLibraryOnMount}
@@ -587,6 +610,8 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
             setIsWordEditorOpen(false);
             setWordEditorContextOpen(false);
             setOpenLibraryOnMount(false);
+            // Dispatch event to reset overlay mode flag
+            window.dispatchEvent(new CustomEvent('close-word-editor'));
           }}
           initialFilePath={currentFilePath}
           openLibrary={openLibraryOnMount}

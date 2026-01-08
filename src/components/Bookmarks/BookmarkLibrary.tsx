@@ -138,9 +138,18 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-          <p className="text-gray-300">Loading bookmarks...</p>
+        <div className="text-center space-y-6">
+          <div className="inline-flex p-6 bg-gradient-to-br from-cyan-900/40 to-purple-900/40 rounded-2xl border-2 border-cyber-cyan-400/30">
+            <div className="relative">
+              <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+              <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+              <div className="relative w-12 h-12">
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+              </div>
+            </div>
+          </div>
+          <p className="text-gray-300 text-lg">Loading bookmarks...</p>
         </div>
       </div>
     );

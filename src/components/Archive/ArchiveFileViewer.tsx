@@ -26,6 +26,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   const [isInlineMode, setIsInlineMode] = useState(false);
   const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
+  const isOpeningWordEditorRef = useRef(false);
+  const isReattachingRef = useRef(false);
+  const reattachTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Detect if editor is in inline mode (check for inline container)
   useEffect(() => {
@@ -48,6 +51,55 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       observer.disconnect();
     };
   }, [isWordEditorOpen]);
+
+  // Keep ref in sync with word editor state to prevent closing when editor is open
+  useEffect(() => {
+    isOpeningWordEditorRef.current = isWordEditorOpen;
+    // Clear reattaching flag when word editor is confirmed open
+    if (isWordEditorOpen && isReattachingRef.current) {
+      isReattachingRef.current = false;
+      // Clear any pending timeout
+      if (reattachTimeoutRef.current) {
+        clearTimeout(reattachTimeoutRef.current);
+        reattachTimeoutRef.current = null;
+      }
+    }
+  }, [isWordEditorOpen]);
+
+  // Listen for events that open the word editor to prevent closing during opening/reattaching
+  useEffect(() => {
+    const handleOpenEditor = () => {
+      // Immediately set refs to prevent closing during opening/reattaching
+      isOpeningWordEditorRef.current = true;
+      isReattachingRef.current = true;
+      
+      // Clear any existing timeout
+      if (reattachTimeoutRef.current) {
+        clearTimeout(reattachTimeoutRef.current);
+      }
+      
+      // Fallback: Clear the reattaching flag after a delay as a safety net
+      // The flag should be cleared when isWordEditorOpen becomes true, but this ensures
+      // we don't get stuck if something goes wrong
+      reattachTimeoutRef.current = setTimeout(() => {
+        isReattachingRef.current = false;
+        reattachTimeoutRef.current = null;
+      }, 2000);
+    };
+
+    // Listen to both the reattach event and the open-from-viewer event
+    // Both should prevent closing during the opening process
+    window.addEventListener('reattach-word-editor-data' as any, handleOpenEditor as EventListener);
+    window.addEventListener('open-word-editor-from-viewer' as any, handleOpenEditor as EventListener);
+    return () => {
+      window.removeEventListener('reattach-word-editor-data' as any, handleOpenEditor as EventListener);
+      window.removeEventListener('open-word-editor-from-viewer' as any, handleOpenEditor as EventListener);
+      if (reattachTimeoutRef.current) {
+        clearTimeout(reattachTimeoutRef.current);
+        reattachTimeoutRef.current = null;
+      }
+    };
+  }, []);
   const [loading, setLoading] = useState(false);
   const [showBookmarkCreator, setShowBookmarkCreator] = useState(false);
   const [currentPageBookmarks, setCurrentPageBookmarks] = useState<Array<{ id: string; name: string }>>([]);
@@ -75,6 +127,10 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   const imageY = useMotionValue(0);
   const imageRef = useRef<HTMLImageElement>(null);
   const isDraggingRef = useRef(false);
+  const isPdfDraggingRef = useRef(false);
+  const dragConstraintsRef = useRef<{ left: number; right: number; top: number; bottom: number } | false | null>(null);
+  // Stable constraints state that only updates when not dragging
+  const [stableDragConstraints, setStableDragConstraints] = useState<{ left: number; right: number; top: number; bottom: number } | false | React.RefObject<HTMLElement>>(false);
   
   // Warning dialog state
   const [showWarningDialog, setShowWarningDialog] = useState(false);
@@ -411,6 +467,107 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
     }
   };
 
+  // Calculate drag constraints based on canvas and container sizes
+  const calculateDragConstraints = useCallback(() => {
+    if (!canvasRef.current || !pdfContainerRef.current) {
+      return false; // Return false instead of null for framer-motion
+    }
+
+    const canvas = canvasRef.current;
+    const container = pdfContainerRef.current;
+    
+    // Use actual canvas dimensions
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    // Only enable constraints if canvas is larger than container
+    if (canvasWidth <= containerWidth && canvasHeight <= containerHeight) {
+      return false; // No constraints needed
+    }
+    
+    // Calculate overflow (how much canvas extends beyond container)
+    const overflowX = Math.max(0, (canvasWidth - containerWidth) / 2);
+    const overflowY = Math.max(0, (canvasHeight - containerHeight) / 2);
+    
+    // Return constraints relative to center (0, 0)
+    return {
+      left: -overflowX,
+      right: overflowX,
+      top: -overflowY,
+      bottom: overflowY,
+    };
+  }, []);
+
+  // Update drag constraints when page scale or panel width changes
+  useEffect(() => {
+    if (pdfDoc && pageScale >= 1.0 && isPdfZoomed) {
+      let resizeTimeout: NodeJS.Timeout | null = null;
+      
+      const updateConstraints = () => {
+        // Don't update constraints during active drag to prevent jitter
+        if (isPdfDraggingRef.current) {
+          return;
+        }
+        const constraints = calculateDragConstraints();
+        dragConstraintsRef.current = constraints;
+        // Update stable constraints state only when not dragging
+        // This ensures the dragConstraints prop doesn't change during drag
+        if (typeof constraints === 'object' && constraints !== null) {
+          setStableDragConstraints(constraints);
+        } else {
+          setStableDragConstraints(pdfContainerRef);
+        }
+      };
+      
+      // Immediate update attempt
+      requestAnimationFrame(updateConstraints);
+      
+      // Also update after multiple checkpoints to catch layout changes when panel opens
+      const timeout1 = setTimeout(updateConstraints, 0); // Next tick
+      const timeout2 = setTimeout(updateConstraints, 16); // One frame
+      const timeout3 = setTimeout(updateConstraints, 50); // After brief delay
+      const timeout4 = setTimeout(updateConstraints, 100); // After potential animations
+      
+      // Also listen for resize events to recalculate constraints
+      // Debounce resize updates to prevent excessive recalculations
+      const resizeObserver = new ResizeObserver(() => {
+        // Clear any pending resize update
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout);
+        }
+        // Debounce resize updates - only update if not dragging
+        resizeTimeout = setTimeout(() => {
+          if (!isPdfDraggingRef.current) {
+            requestAnimationFrame(updateConstraints);
+          }
+        }, 100); // 100ms debounce
+      });
+      
+      if (pdfContainerRef.current) {
+        resizeObserver.observe(pdfContainerRef.current);
+      }
+      
+      if (canvasRef.current) {
+        resizeObserver.observe(canvasRef.current);
+      }
+      
+      return () => {
+        clearTimeout(timeout1);
+        clearTimeout(timeout2);
+        clearTimeout(timeout3);
+        clearTimeout(timeout4);
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout);
+        }
+        resizeObserver.disconnect();
+      };
+    } else {
+      dragConstraintsRef.current = false;
+    }
+  }, [pdfDoc, pageScale, isPdfZoomed, panelWidth, isWordEditorOpen, calculateDragConstraints]);
+
   const renderPDFPage = async (pageNum: number) => {
     if (!pdfDoc) return;
 
@@ -497,6 +654,21 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       }
       
       setPageRendering(false);
+      
+      // Recalculate drag constraints after render using requestAnimationFrame for smooth update
+      // Only update if not currently dragging to prevent jitter
+      requestAnimationFrame(() => {
+        if (!isPdfDraggingRef.current) {
+          const constraints = calculateDragConstraints();
+          dragConstraintsRef.current = constraints;
+          // Update stable constraints state
+          if (typeof constraints === 'object' && constraints !== null) {
+            setStableDragConstraints(constraints);
+          } else {
+            setStableDragConstraints(pdfContainerRef);
+          }
+        }
+      });
     } catch (error: unknown) {
       // Ignore cancellation errors
       const errorName = error && typeof error === 'object' && 'name' in error ? String(error.name) : undefined;
@@ -905,7 +1077,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={(e) => {
-          if (e.target === e.currentTarget) {
+          // Only close if clicking directly on the backdrop, not on child elements
+          // Also don't close if word editor is open, we're in the process of opening it, or reattaching
+          if (e.target === e.currentTarget && !isWordEditorOpen && !isOpeningWordEditorRef.current && !isReattachingRef.current) {
             handleClose();
           }
         }}
@@ -929,11 +1103,14 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
           transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
           className={`relative ${file?.type === 'pdf' ? 'w-full h-full' : 'w-full h-full flex items-center justify-center'}`}
           onClick={(e) => {
-            // Close on backdrop click only when not zoomed
-            if (e.target === e.currentTarget && file?.type === 'image' && imageScale <= 1) {
-              handleClose();
-            } else if (e.target === e.currentTarget && file?.type !== 'image' && file?.type !== 'pdf') {
-              handleClose();
+            // Close on backdrop click only when not zoomed and word editor is not open
+            // Also don't close if we're reattaching
+            if (e.target === e.currentTarget && !isWordEditorOpen && !isOpeningWordEditorRef.current && !isReattachingRef.current) {
+              if (file?.type === 'image' && imageScale <= 1) {
+                handleClose();
+              } else if (file?.type !== 'image' && file?.type !== 'pdf') {
+                handleClose();
+              }
             }
           }}
         >
@@ -1025,10 +1202,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
           {file.type === 'pdf' ? (
             <>
               {pdfLoading ? (
-                <div className="flex flex-col items-center justify-center w-full h-full bg-gray-900 rounded-lg">
-                  <div className="text-center mb-4">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                    <p className="text-gray-300 mb-2">
+                <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950 rounded-lg">
+                  <div className="text-center mb-4 space-y-4">
+                    <div className="inline-flex items-center justify-center">
+                      <div className="relative">
+                        <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                        <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                        <div className="relative w-12 h-12">
+                          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                          <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-gray-300 font-medium bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent">
                       {pdfLoadingProgress < 90 ? 'Reading file...' : 'Parsing PDF...'}
                     </p>
                     {pdfLoadingProgress > 0 && (
@@ -1116,7 +1302,12 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          e.preventDefault();
+                          // Open word editor via context and dispatch event to ensure SettingsPanel opens it
+                          // The useEffect will sync the ref with the state
                           setWordEditorOpen(true);
+                          // Dispatch event to ensure SettingsPanel opens the word editor panel
+                          window.dispatchEvent(new CustomEvent('open-word-editor-from-viewer'));
                         }}
                         className="p-2 text-white hover:text-cyber-purple-400 transition-colors rounded hover:bg-gray-700"
                         aria-label="Open word editor"
@@ -1166,29 +1357,80 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                     }}
                   >
                     {pageRendering && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm rounded z-10">
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyber-purple-400 mx-auto mb-2"></div>
-                          <p className="text-gray-300 text-sm">Loading page...</p>
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 backdrop-blur-sm rounded z-10">
+                        <div className="text-center space-y-2">
+                          <div className="inline-flex items-center justify-center">
+                            <div className="relative w-8 h-8">
+                              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                              <div className="absolute inset-1 rounded-full border border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                            </div>
+                          </div>
+                          <p className="text-gray-300 text-sm font-medium">Loading page...</p>
                         </div>
                       </div>
                     )}
                     {/* Canvas wrapper for drag functionality */}
                     <motion.div
                       drag={isPdfZoomed && pageScale >= 1.0}
-                      dragConstraints={(isPdfZoomed && pageScale >= 1.0) ? pdfContainerRef : false}
-                      dragElastic={0}
+                      dragConstraints={stableDragConstraints}
+                      dragElastic={0.1}
                       dragMomentum={false}
+                      dragPropagation={false}
+                      onDragStart={() => {
+                        isPdfDraggingRef.current = true;
+                        // Prevent text selection during drag
+                        document.body.style.userSelect = 'none';
+                        document.body.style.cursor = 'grabbing';
+                        // Ensure constraints are set before drag starts
+                        // Recalculate constraints at drag start in case panel just opened/resized
+                        if (!dragConstraintsRef.current) {
+                          requestAnimationFrame(() => {
+                            if (!isPdfDraggingRef.current) return; // Double check we're still starting drag
+                            const constraints = calculateDragConstraints();
+                            dragConstraintsRef.current = constraints;
+                            // Update stable constraints if we just calculated them
+                            if (typeof constraints === 'object' && constraints !== null) {
+                              setStableDragConstraints(constraints);
+                            } else {
+                              setStableDragConstraints(pdfContainerRef);
+                            }
+                          });
+                        }
+                      }}
+                      onDragEnd={() => {
+                        isPdfDraggingRef.current = false;
+                        // Small delay to prevent click events after drag
+                        setTimeout(() => {
+                          document.body.style.userSelect = '';
+                          document.body.style.cursor = '';
+                        }, 50);
+                        // Recalculate constraints after drag ends to ensure accuracy
+                        // Use a small delay to ensure drag has fully completed
+                        setTimeout(() => {
+                          requestAnimationFrame(() => {
+                            const constraints = calculateDragConstraints();
+                            dragConstraintsRef.current = constraints;
+                            // Update stable constraints after drag ends
+                            if (typeof constraints === 'object' && constraints !== null) {
+                              setStableDragConstraints(constraints);
+                            } else {
+                              setStableDragConstraints(pdfContainerRef);
+                            }
+                          });
+                        }, 10);
+                      }}
                       whileDrag={{ cursor: 'grabbing' }}
                       style={{
-                        cursor: (isPdfZoomed && pageScale >= 1.0) ? 'grab' : 'default',
+                        cursor: (isPdfZoomed && pageScale >= 1.0 && !isPdfDraggingRef.current) ? 'grab' : 'default',
                         display: 'inline-block',
                         touchAction: 'none',
+                        willChange: 'transform',
                         x: canvasX,
                         y: canvasY,
                       }}
                       onClick={(e) => {
-                        if (isPdfZoomed && pageScale >= 1.0) {
+                        // Only stop propagation if we're not dragging
+                        if (isPdfZoomed && pageScale >= 1.0 && !isPdfDraggingRef.current) {
                           e.stopPropagation();
                         }
                       }}
@@ -1217,10 +1459,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
               )}
             </>
           ) : loading ? (
-            <div className="flex items-center justify-center w-full h-96 bg-gray-900 rounded-lg">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                <p className="text-gray-300">Loading...</p>
+            <div className="flex items-center justify-center w-full h-96 bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950 rounded-lg">
+              <div className="text-center space-y-4">
+                <div className="inline-flex items-center justify-center">
+                  <div className="relative">
+                    <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                    <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                    <div className="relative w-12 h-12">
+                      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                      <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-gray-300 font-medium">Loading...</p>
               </div>
             </div>
           ) : fileData ? (
