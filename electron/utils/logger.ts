@@ -5,7 +5,8 @@ import { app } from 'electron';
 type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
 type LogArgs = Parameters<typeof console.log>;
 
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+// More robust dev detection - prioritize !app.isPackaged
+const isDev = !app.isPackaged || process.env.NODE_ENV === 'development';
 
 // Configure electron-log
 if (!isDev) {

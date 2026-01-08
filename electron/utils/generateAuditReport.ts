@@ -60,7 +60,8 @@ export async function generateAuditReport(
   }
 
   // Locate Python script - handle both dev and production
-  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+  // More robust dev detection - prioritize !app.isPackaged
+  const isDev = !app.isPackaged || process.env.NODE_ENV === 'development';
   let scriptPath: string;
 
   if (isDev) {

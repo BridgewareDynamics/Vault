@@ -1,9 +1,9 @@
-import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, nativeImage, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, nativeImage, Menu, session } from 'electron';
 import { join } from 'path';
 import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath } from './utils/pathValidator';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { existsSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import * as os from 'os';
 import JSZip from 'jszip';
 import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive } from './utils/archiveConfig';
@@ -15,7 +15,16 @@ import * as bookmarkStorage from './utils/bookmarkStorage';
 import { auditPDFRedaction } from './utils/pdfRedactionAudit';
 import { generateAuditReport } from './utils/generateAuditReport';
 
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+// More robust dev detection - prioritize !app.isPackaged for development
+// This ensures dev tools work even if NODE_ENV isn't set
+const isDev = !app.isPackaged || process.env.NODE_ENV === 'development';
+
+// Add logging to help debug if dev tools still don't work
+if (isDev) {
+  logger.info(`[Dev Mode] NODE_ENV=${process.env.NODE_ENV || 'not set'}, isPackaged=${app.isPackaged}`);
+} else {
+  logger.info(`[Production Mode] NODE_ENV=${process.env.NODE_ENV || 'not set'}, isPackaged=${app.isPackaged}`);
+}
 
 // Enable hardware acceleration command line switches
 // These must be set before app is ready
@@ -89,6 +98,95 @@ function registerVideoProtocol() {
       callback({ error: -2 }); // FAILED
     }
   });
+}
+
+// Load DevTools extensions in development mode
+// Based on: https://www.electronjs.org/docs/latest/tutorial/devtools-extension
+async function loadDevToolsExtensions() {
+  if (!isDev) {
+    return; // Only load extensions in development
+  }
+
+  try {
+    // React Developer Tools extension ID
+    const reactDevToolsId = 'fmkadmapgofadopljbjfkapdkoienihi';
+    
+    // Determine Chrome extensions directory based on platform
+    let extensionsBasePath: string;
+    const platform = process.platform;
+    
+    if (platform === 'win32') {
+      // Windows: %LOCALAPPDATA%\Google\Chrome\User Data\Default\Extensions
+      const localAppData = process.env.LOCALAPPDATA || '';
+      extensionsBasePath = path.join(localAppData, 'Google', 'Chrome', 'User Data', 'Default', 'Extensions');
+    } else if (platform === 'darwin') {
+      // macOS: ~/Library/Application Support/Google/Chrome/Default/Extensions
+      extensionsBasePath = path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'Default', 'Extensions');
+    } else {
+      // Linux: ~/.config/google-chrome/Default/Extensions
+      // Try multiple possible locations
+      const possiblePaths = [
+        path.join(os.homedir(), '.config', 'google-chrome', 'Default', 'Extensions'),
+        path.join(os.homedir(), '.config', 'google-chrome-beta', 'Default', 'Extensions'),
+        path.join(os.homedir(), '.config', 'google-chrome-canary', 'Default', 'Extensions'),
+        path.join(os.homedir(), '.config', 'chromium', 'Default', 'Extensions'),
+      ];
+      
+      // Find the first existing path
+      extensionsBasePath = '';
+      for (const testPath of possiblePaths) {
+        if (existsSync(testPath)) {
+          extensionsBasePath = testPath;
+          break;
+        }
+      }
+      
+      if (!extensionsBasePath) {
+        logger.warn('[DevTools Extensions] Chrome extensions directory not found on Linux');
+        return;
+      }
+    }
+
+    const extensionPath = path.join(extensionsBasePath, reactDevToolsId);
+    
+    if (!existsSync(extensionPath)) {
+      logger.warn(`[DevTools Extensions] React Developer Tools not found at ${extensionPath}`);
+      logger.info('[DevTools Extensions] To install: Install React Developer Tools in Chrome, then restart the app');
+      return;
+    }
+
+    // Find the versioned subdirectory (e.g., 4.9.0_0)
+    // The extension directory contains version folders
+    try {
+      const entries = await fs.readdir(extensionPath);
+      const versionDirs = entries.filter(entry => {
+        const fullPath = path.join(extensionPath, entry);
+        const stat = statSync(fullPath);
+        return stat.isDirectory();
+      });
+
+      if (versionDirs.length === 0) {
+        logger.warn(`[DevTools Extensions] No version directory found in ${extensionPath}`);
+        return;
+      }
+
+      // Use the latest version (usually the highest version number)
+      // Sort and take the last one
+      versionDirs.sort();
+      const latestVersion = versionDirs[versionDirs.length - 1];
+      const fullExtensionPath = path.join(extensionPath, latestVersion);
+
+      // Load the extension
+      const extension = await session.defaultSession.loadExtension(fullExtensionPath);
+      logger.info(`[DevTools Extensions] Loaded React Developer Tools: ${extension.name} v${extension.version}`);
+    } catch (error) {
+      logger.warn(`[DevTools Extensions] Failed to load React Developer Tools: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      logger.info('[DevTools Extensions] Make sure React Developer Tools is installed in Chrome');
+    }
+  } catch (error) {
+    // Don't fail the app if extensions can't be loaded
+    logger.warn(`[DevTools Extensions] Error loading extensions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 async function createWindow() {
@@ -213,6 +311,9 @@ async function createWindow() {
     settings = null;
   }
 
+  // Log DevTools configuration for debugging
+  logger.info(`[DevTools Config] isDev=${isDev}, devTools enabled=${isDev}, NODE_ENV=${process.env.NODE_ENV || 'not set'}, isPackaged=${app.isPackaged}`);
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -235,13 +336,69 @@ async function createWindow() {
     fullscreen: settings?.fullscreen === true, // Apply fullscreen from settings
   });
 
+  // Aggressively open DevTools in development - try multiple approaches
+  if (isDev) {
+    logger.info('[Dev] Setting up DevTools opening mechanisms...');
+    
+    // Method 1: Open immediately after window creation (before content loads)
+    const tryOpenDevTools = (source: string) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try {
+          if (!mainWindow.webContents.isDevToolsOpened()) {
+            mainWindow.webContents.openDevTools();
+            logger.info(`[Dev] DevTools opened (${source})`);
+          } else {
+            logger.info(`[Dev] DevTools already open (${source})`);
+          }
+        } catch (error) {
+          logger.warn(`[Dev] Failed to open DevTools (${source}):`, error);
+        }
+      }
+    };
+    
+    // Try immediately after window creation
+    setTimeout(() => tryOpenDevTools('immediate'), 100);
+    
+    // Try when window is ready to show
+    mainWindow.once('ready-to-show', () => {
+      setTimeout(() => tryOpenDevTools('ready-to-show'), 50);
+    });
+    
+    // Try when DOM is ready
+    mainWindow.webContents.once('dom-ready', () => {
+      setTimeout(() => tryOpenDevTools('dom-ready'), 100);
+    });
+  } else {
+    logger.warn('[DevTools] DevTools disabled - running in production mode');
+  }
+
   // Remove menu bar in production for a clean app experience
   if (!isDev) {
     Menu.setApplicationMenu(null);
   }
 
-  // Prevent DevTools from opening in production via keyboard shortcuts
-  if (!isDev) {
+  // Handle DevTools shortcuts
+  if (isDev) {
+    // In development: Allow and help with DevTools shortcuts
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      // Allow F12 and Ctrl+Shift+I to open DevTools
+      const isDevToolsShortcut = 
+        (input.key === 'F12') ||
+        (input.key === 'I' && input.control && input.shift) ||
+        (input.key === 'J' && input.control && input.shift);
+      
+      if (isDevToolsShortcut && !mainWindow?.webContents.isDevToolsOpened()) {
+        // Don't prevent default - let it open, but also try programmatically
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDevToolsOpened()) {
+            mainWindow.webContents.openDevTools();
+            logger.info('[Dev] DevTools opened via keyboard shortcut');
+          }
+        }, 10);
+      }
+    });
+  } else {
+    // Prevent DevTools from opening in production via keyboard shortcuts
     mainWindow.webContents.on('before-input-event', (event, input) => {
       // Block common DevTools keyboard shortcuts
       const isDevToolsShortcut = 
@@ -332,10 +489,25 @@ async function createWindow() {
         // Open DevTools after page loads (only in development)
         if (isDev) {
           setTimeout(() => {
-            mainWindow?.webContents.openDevTools();
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.openDevTools();
+              logger.info('[Dev] DevTools opened');
+            }
           }, 100);
         }
       });
+      
+      // Also add a fallback in case the first attempt fails
+      if (isDev) {
+        mainWindow.webContents.once('dom-ready', () => {
+          setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDevToolsOpened()) {
+              mainWindow.webContents.openDevTools();
+              logger.info('[Dev] DevTools opened (fallback)');
+            }
+          }, 500);
+        });
+      }
     }
   } else {
     // In production, use app.getAppPath() which points to app.asar
@@ -358,6 +530,10 @@ app.whenReady().then(async () => {
   
   // Register custom protocols before creating window
   registerVideoProtocol();
+  
+  // Load DevTools extensions (React Developer Tools, etc.) in development
+  // Must be called before creating windows
+  await loadDevToolsExtensions();
   
   await createWindow();
 

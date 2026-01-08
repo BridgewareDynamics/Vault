@@ -6,7 +6,7 @@
   "main": "dist-electron/electron/main.cjs",
   "type": "module",
   "engines": {
-    "node": ">=20.0.0 <21.0.0",
+    "node": ">=20.0.0 <25.0.0",
     "npm": ">=9.0.0"
   },
   "scripts": {
@@ -15,7 +15,7 @@
     "build:electron": "tsc -p tsconfig.node.json && node electron-build.config.js",
     "build:all": "npm run build:electron && npm run build",
     "preview": "vite preview",
-    "electron:dev": "concurrently \"npm run build:electron\" \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:dev": "cross-env NODE_ENV=development concurrently \"npm run build:electron\" \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
     "electron:build:clean": "node scripts/clean-release.js",
     "electron:build": "npm run electron:build:clean && npm run build:all && node scripts/electron-build.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
