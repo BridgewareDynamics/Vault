@@ -483,10 +483,20 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       // Find the case by path
       const targetCase = cases.find(c => c.path === casePath);
       if (targetCase) {
-        // Set the case and navigate to case root
-        setCurrentCase(targetCase);
-        setArchiveContextCase(targetCase);
-        goBackToCase();
+        // Only navigate if we're not already in this case
+        // This prevents UI refresh and back button issues when reattaching
+        if (currentCase?.path !== casePath) {
+          // Set the case and navigate to case root
+          setCurrentCase(targetCase);
+          setArchiveContextCase(targetCase);
+          goBackToCase();
+        } else {
+          // Already in the target case - just ensure context is synced
+          // Don't call goBackToCase() as it resets navigation stack unnecessarily
+          if (archiveContextCase?.path !== casePath) {
+            setArchiveContextCase(targetCase);
+          }
+        }
       } else {
         toast.error('Case not found in archive');
       }
