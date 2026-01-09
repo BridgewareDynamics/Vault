@@ -23,6 +23,7 @@ import { CategoryTagSelector } from './CategoryTagSelector';
 import { ArchiveFile } from '../../types';
 import { ProgressBar } from '../ProgressBar';
 import { SecurityCheckerModal } from '../SecurityCheckerModal';
+import { PDFExtractionModal } from '../PDFExtractionModal';
 import { ActionToolbar } from '../ActionToolbar';
 import { logger } from '../../utils/logger';
 // import { useWordEditor } from '../../contexts/WordEditorContext'; // Unused for now
@@ -206,6 +207,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const [targetFolderPath, setTargetFolderPath] = useState<string | null>(null);
   const [showSecurityChecker, setShowSecurityChecker] = useState(false);
   const [pdfPathForAudit, setPdfPathForAudit] = useState<string | null>(null);
+  const [showPDFExtraction, setShowPDFExtraction] = useState(false);
+  const [pdfPathForExtraction, setPdfPathForExtraction] = useState<string | null>(null);
 
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -726,8 +729,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   };
 
   const handleExtractPDF = (file: ArchiveFile) => {
-    setSelectedFileForExtraction(file);
-    setShowFolderSelectionDialog(true);
+    setPdfPathForExtraction(file.path);
+    setShowPDFExtraction(true);
   };
 
   const handleRunPDFAudit = (file: ArchiveFile) => {
@@ -1956,6 +1959,21 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         initialPdfPath={pdfPathForAudit}
         caseFolderPath={currentCase?.path || null}
         onReportSaved={handleReportSaved}
+      />
+
+      <PDFExtractionModal
+        isOpen={showPDFExtraction}
+        onClose={() => {
+          setShowPDFExtraction(false);
+          setPdfPathForExtraction(null);
+        }}
+        initialPdfPath={pdfPathForExtraction}
+        caseFolderPath={currentCase?.path || null}
+        onExtractionComplete={() => {
+          if (currentCase) {
+            refreshFiles();
+          }
+        }}
       />
     </div>
   );

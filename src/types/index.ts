@@ -8,6 +8,19 @@ export interface ExtractionProgress {
   currentPage: number;
   totalPages: number;
   percentage: number;
+  currentPageProgress?: number; // 0-100 for current page
+  estimatedTimeRemaining?: number; // seconds
+  memoryUsage?: number; // MB
+  statusMessage?: string;
+}
+
+export interface ConversionSettings {
+  dpi: number; // 72, 150, 300, 600
+  quality: number; // 1-100 (for JPEG)
+  format: 'png' | 'jpeg';
+  pageRange?: { start: number; end: number } | number[]; // Custom range or specific pages
+  colorSpace: 'rgb' | 'grayscale';
+  compressionLevel?: number; // PNG compression (0-9)
 }
 
 export interface SaveOptions {

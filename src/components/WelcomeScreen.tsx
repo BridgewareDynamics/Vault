@@ -13,6 +13,7 @@ interface WelcomeScreenProps {
   onSelectFile: () => void;
   onOpenArchive: () => void;
   onOpenSecurityChecker: () => void;
+  onOpenPDFExtraction?: () => void;
 }
 
 // Generate particles for background
@@ -38,7 +39,7 @@ const generateLightRays = (count: number) => {
   }));
 };
 
-export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityChecker }: WelcomeScreenProps) {
+export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityChecker, onOpenPDFExtraction }: WelcomeScreenProps) {
   const particles = useMemo(() => generateParticles(50), []);
   const lightRays = useMemo(() => generateLightRays(8), []);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -557,7 +558,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                     }
                   }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={onSelectFile}
+                  onClick={onOpenPDFExtraction || onSelectFile}
                   className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10"
                   style={{
                     boxShadow: '0 0 30px rgba(139, 92, 246, 0.3), inset 0 0 30px rgba(139, 92, 246, 0.1)',

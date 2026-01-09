@@ -4,6 +4,7 @@ import { ToastContainer } from './components/Toast/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { SecurityCheckerModal } from './components/SecurityCheckerModal';
+import { PDFExtractionModal } from './components/PDFExtractionModal';
 import { ProgressBar } from './components/ProgressBar';
 import { Gallery } from './components/Gallery';
 import { ImageViewer } from './components/ImageViewer';
@@ -33,6 +34,7 @@ function AppContent() {
   const [, setFolderName] = useState<string | undefined>(undefined);
   const [showArchive, setShowArchive] = useState(false);
   const [showSecurityChecker, setShowSecurityChecker] = useState(false);
+  const [showPDFExtraction, setShowPDFExtraction] = useState(false);
 
   // Listen for reattach data from detached PDF audit window
   useEffect(() => {
@@ -437,6 +439,7 @@ function AppContent() {
             onSelectFile={handleSelectFile}
             onOpenArchive={() => setShowArchive(true)}
             onOpenSecurityChecker={() => setShowSecurityChecker(true)}
+            onOpenPDFExtraction={() => setShowPDFExtraction(true)}
           />
         </div>
         <ToastContainer />
@@ -444,6 +447,10 @@ function AppContent() {
         <SecurityCheckerModal
           isOpen={showSecurityChecker}
           onClose={() => setShowSecurityChecker(false)}
+        />
+        <PDFExtractionModal
+          isOpen={showPDFExtraction}
+          onClose={() => setShowPDFExtraction(false)}
         />
       </>
     );
