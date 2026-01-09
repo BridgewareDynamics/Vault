@@ -131,7 +131,7 @@ export function PDFExtractionProgress({ progress, onCancel }: PDFExtractionProgr
               const pageNum = i + 1;
               const isCompleted = pageNum < progress.currentPage;
               const isCurrent = pageNum === progress.currentPage;
-              const isPending = pageNum > progress.currentPage;
+              // const isPending = pageNum > progress.currentPage;
 
               return (
                 <div

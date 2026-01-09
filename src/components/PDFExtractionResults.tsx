@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ExtractedPage } from '../types';
 import { CheckSquare, Square, Eye } from 'lucide-react';

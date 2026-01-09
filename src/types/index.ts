@@ -18,7 +18,8 @@ export interface ConversionSettings {
   dpi: number; // 72, 150, 300, 600
   quality: number; // 1-100 (for JPEG)
   format: 'png' | 'jpeg';
-  pageRange?: { start: number; end: number } | number[]; // Custom range or specific pages
+  pageRange?: 'all' | 'custom' | 'selected'; // All pages, custom range, or selected pages
+  customPageRange?: string; // e.g., "1-5, 8, 10-12"
   colorSpace: 'rgb' | 'grayscale';
   compressionLevel?: number; // PNG compression (0-9)
 }

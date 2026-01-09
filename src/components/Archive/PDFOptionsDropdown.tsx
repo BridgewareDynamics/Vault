@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { FileText, Shield, Image as ImageIcon } from 'lucide-react';
+import { Shield, Image as ImageIcon } from 'lucide-react';
 
 interface PDFOptionsDropdownProps {
   onStartExtraction?: () => void;

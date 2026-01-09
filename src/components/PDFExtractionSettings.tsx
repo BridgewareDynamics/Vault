@@ -20,25 +20,26 @@ const PRESETS = {
 export function PDFExtractionSettings({
   settings,
   onSettingsChange,
-  totalPages,
+  totalPages: _totalPages,
   isOpen,
   onToggle,
 }: PDFExtractionSettingsProps) {
-  const applyPreset = (preset: typeof PRESETS.highQuality) => {
+  const applyPreset = (preset: { dpi: number; quality: number; format: 'png' | 'jpeg'; colorSpace: 'rgb' | 'grayscale' }) => {
     onSettingsChange({
       ...settings,
       ...preset,
+      pageRange: 'all',
       compressionLevel: preset.format === 'png' ? 6 : undefined,
     });
   };
 
-  const handlePageRangeChange = (type: 'all' | 'range' | 'custom', value?: { start: number; end: number } | number[]) => {
+  const handlePageRangeChange = (type: 'all' | 'custom' | 'selected', customRange?: string) => {
     if (type === 'all') {
-      const newSettings = { ...settings };
-      delete newSettings.pageRange;
-      onSettingsChange(newSettings);
-    } else if (value) {
-      onSettingsChange({ ...settings, pageRange: value });
+      onSettingsChange({ ...settings, pageRange: 'all', customPageRange: '' });
+    } else if (type === 'custom' && customRange !== undefined) {
+      onSettingsChange({ ...settings, pageRange: 'custom', customPageRange: customRange });
+    } else if (type === 'selected') {
+      onSettingsChange({ ...settings, pageRange: 'selected', customPageRange: '' });
     }
   };
 
@@ -199,62 +200,44 @@ export function PDFExtractionSettings({
             <div>
               <label className="block text-sm font-semibold text-gray-400 mb-3">Page Range</label>
               <div className="space-y-3">
-                <button
-                  onClick={() => handlePageRangeChange('all')}
-                  className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-all text-left ${
-                    !settings.pageRange
-                      ? 'bg-gradient-to-r from-purple-600 to-cyan-600 text-white border-2 border-cyber-purple-400'
-                      : 'bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white'
-                  }`}
-                >
-                  All Pages ({totalPages} pages)
-                </button>
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="number"
-                    min="1"
-                    max={totalPages}
-                    placeholder="Start page"
-                    value={
-                      settings.pageRange && 'start' in settings.pageRange
-                        ? settings.pageRange.start
-                        : ''
-                    }
-                    onChange={(e) => {
-                      const start = parseInt(e.target.value);
-                      if (!isNaN(start) && start >= 1 && start <= totalPages) {
-                        const end =
-                          settings.pageRange && 'end' in settings.pageRange
-                            ? settings.pageRange.end
-                            : totalPages;
-                        handlePageRangeChange('range', { start, end: Math.max(start, end) });
-                      }
-                    }}
-                    className="px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max={totalPages}
-                    placeholder="End page"
-                    value={
-                      settings.pageRange && 'end' in settings.pageRange
-                        ? settings.pageRange.end
-                        : ''
-                    }
-                    onChange={(e) => {
-                      const end = parseInt(e.target.value);
-                      if (!isNaN(end) && end >= 1 && end <= totalPages) {
-                        const start =
-                          settings.pageRange && 'start' in settings.pageRange
-                            ? settings.pageRange.start
-                            : 1;
-                        handlePageRangeChange('range', { start: Math.min(start, end), end });
-                      }
-                    }}
-                    className="px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
-                  />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handlePageRangeChange('all')}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      settings.pageRange === 'all' || !settings.pageRange
+                        ? 'bg-cyber-purple-500 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => handlePageRangeChange('custom', settings.customPageRange || '')}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      settings.pageRange === 'custom'
+                        ? 'bg-cyber-purple-500 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    Custom
+                  </button>
                 </div>
+                {settings.pageRange === 'custom' && (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="e.g., 1-5, 8, 10-12"
+                      value={settings.customPageRange || ''}
+                      onChange={(e) => {
+                        handlePageRangeChange('custom', e.target.value);
+                      }}
+                      className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Enter page numbers or ranges (e.g., 1-5, 8, 10-12)
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 

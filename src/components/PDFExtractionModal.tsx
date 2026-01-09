@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
   X,
   Upload,
-  Settings,
   Zap,
   Maximize2,
   Save,
@@ -31,6 +30,7 @@ const DEFAULT_SETTINGS: ConversionSettings = {
   dpi: 150,
   quality: 85,
   format: 'jpeg',
+  pageRange: 'all',
   colorSpace: 'rgb',
   compressionLevel: 6,
 };
@@ -49,6 +49,7 @@ export function PDFExtractionModal({
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const [previewPage, setPreviewPage] = useState<ExtractedPage | null>(null);
   const [totalPages, setTotalPages] = useState(0);
+  const [restoredExtractedPages, setRestoredExtractedPages] = useState<ExtractedPage[]>([]);
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, cancel, reset } =
     usePDFExtraction();
@@ -69,7 +70,7 @@ export function PDFExtractionModal({
         handleSelectFile();
       }
       // Ctrl/Cmd + S to save (when pages are extracted)
-      if ((e.ctrlKey || e.metaKey) && e.key === 's' && extractedPages.length > 0) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && (extractedPages.length > 0 || restoredExtractedPages.length > 0)) {
         e.preventDefault();
         setShowSaveDialog(true);
       }
@@ -96,9 +97,58 @@ export function PDFExtractionModal({
       setSelectedPages(new Set());
       setPreviewPage(null);
       setTotalPages(0);
+      setRestoredExtractedPages([]);
       reset();
     }
   }, [isOpen, initialPdfPath, reset]);
+
+  // Listen for reattach data from detached window
+  useEffect(() => {
+    const handleReattach = (event: CustomEvent<{
+      pdfPath: string | null;
+      settings: ConversionSettings;
+      showSettings: boolean;
+      extractedPages: ExtractedPage[];
+      selectedPages: number[];
+      isExtracting: boolean;
+      progress: any | null;
+      error: string | null;
+      statusMessage: string;
+    }>) => {
+      const data = event.detail;
+      
+      console.log('PDFExtractionModal: Received reattach data', {
+        hasPdfPath: !!data.pdfPath,
+        hasExtractedPages: data.extractedPages?.length || 0,
+        extractedPagesCount: data.extractedPages?.length || 0,
+      });
+      
+      // Restore state
+      if (data.pdfPath) {
+        setPdfPath(data.pdfPath);
+      }
+      if (data.settings) {
+        setSettings(data.settings);
+      }
+      if (data.showSettings !== undefined) {
+        setShowSettings(data.showSettings);
+      }
+      // Always restore extracted pages, even if empty array
+      if (data.extractedPages) {
+        setRestoredExtractedPages(data.extractedPages);
+        setSelectedPages(new Set(data.selectedPages || []));
+        console.log('PDFExtractionModal: Restored extracted pages', data.extractedPages.length);
+      } else {
+        setRestoredExtractedPages([]);
+        setSelectedPages(new Set());
+      }
+    };
+
+    window.addEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+    return () => {
+      window.removeEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+    };
+  }, [isOpen]);
 
   // Load PDF to get total pages
   useEffect(() => {
@@ -168,9 +218,11 @@ export function PDFExtractionModal({
     }
 
     try {
-      await extractPDF(pdfPath, settings, (progress) => {
-        // Progress callback handled by hook
-      });
+      await extractPDF(pdfPath, settings);
+      
+      // Clear restored pages since we have fresh extraction
+      setRestoredExtractedPages([]);
+      
       toast.success(`Successfully extracted ${extractedPages.length} page${extractedPages.length !== 1 ? 's' : ''}`);
       
       // Auto-select all pages
@@ -296,8 +348,50 @@ export function PDFExtractionModal({
   };
 
   const handleDetach = async () => {
-    // TODO: Implement detachable window support
-    toast.info('Detachable window support coming soon');
+    try {
+      if (!window.electronAPI) {
+        toast.error('Electron API not available');
+        return;
+      }
+
+      // Prepare state to transfer
+      const allPages = extractedPages.length > 0 ? extractedPages : restoredExtractedPages;
+      const state = {
+        pdfPath,
+        settings: {
+          ...settings,
+          pageRange: settings.pageRange || 'all',
+          customPageRange: settings.customPageRange || '',
+          compressionLevel: settings.compressionLevel ?? 6,
+        },
+        showSettings,
+        extractedPages: allPages,
+        selectedPages: Array.from(selectedPages),
+        isExtracting,
+        progress: progress || null,
+        error: error || null,
+        statusMessage,
+      };
+
+      console.log('PDFExtractionModal: Detaching with state', {
+        hasExtractedPages: allPages.length > 0,
+        isExtracting,
+        pdfPath,
+      });
+
+      // Create detached window
+      if (window.electronAPI.createPdfExtractionWindow) {
+        await window.electronAPI.createPdfExtractionWindow(state);
+        // Close modal after detaching
+        onClose();
+        toast.info('Extraction opened in separate window');
+      } else {
+        toast.error('Detach functionality not available');
+      }
+    } catch (error) {
+      toast.error('Failed to open extraction in separate window');
+      console.error('Detach error:', error);
+    }
   };
 
   if (!isOpen) return null;
@@ -436,7 +530,7 @@ export function PDFExtractionModal({
                     )}
 
                     {/* Save Button */}
-                    {extractedPages.length > 0 && !isExtracting && (
+                    {(extractedPages.length > 0 || restoredExtractedPages.length > 0) && !isExtracting && (
                       <button
                         onClick={() => setShowSaveDialog(true)}
                         disabled={selectedPages.size === 0}
@@ -455,12 +549,12 @@ export function PDFExtractionModal({
 
               {/* Right Column - Results Gallery and Preview */}
               <div className="space-y-6">
-                {extractedPages.length > 0 ? (
+                {(extractedPages.length > 0 || restoredExtractedPages.length > 0) ? (
                   <>
                     {/* Gallery - Limited to 3 rows with scrolling */}
                     <div className="bg-gray-800/60 backdrop-blur-sm border border-cyber-purple-400/20 rounded-2xl p-6 shadow-2xl">
                       <PDFExtractionResults
-                        pages={extractedPages}
+                        pages={extractedPages.length > 0 ? extractedPages : restoredExtractedPages}
                         selectedPages={selectedPages}
                         onPageClick={handlePageClick}
                         onPageSelect={handlePageSelect}

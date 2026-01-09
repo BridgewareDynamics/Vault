@@ -12,6 +12,7 @@ import { Toolbar } from './components/Toolbar';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
 import { usePDFExtraction } from './hooks/usePDFExtraction';
+import { ConversionSettings } from './types';
 import { ExtractedPage } from './types';
 import { Home } from 'lucide-react';
 import { logger } from './utils/logger';
@@ -22,6 +23,7 @@ import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext'
 import { ArchiveContextProvider } from './contexts/ArchiveContext';
 import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
 import { DetachedSecurityChecker } from './components/DetachedSecurityChecker';
+import { DetachedPDFExtraction } from './components/DetachedPDFExtraction';
 import { ResizableDivider } from './components/ResizableDivider';
 import './App.css';
 
@@ -46,6 +48,19 @@ function AppContent() {
     window.addEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
     return () => {
       window.removeEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+    };
+  }, []);
+
+  // Listen for reattach data from detached PDF extraction window
+  useEffect(() => {
+    const handleReattach = () => {
+      // Open the PDF extraction modal when reattaching
+      setShowPDFExtraction(true);
+    };
+
+    window.addEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+    return () => {
+      window.removeEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
     };
   }, []);
 
@@ -111,6 +126,15 @@ function AppContent() {
   
   if (shouldShowDetachedAudit) {
     return <DetachedSecurityChecker />;
+  }
+
+  // If in detached extraction mode, show only the extraction component
+  const shouldShowDetachedExtraction = 
+    window.location.search.includes('extraction=detached') || 
+    window.location.hash.includes('extraction=detached');
+  
+  if (shouldShowDetachedExtraction) {
+    return <DetachedPDFExtraction />;
   }
 
   // If in detached editor mode, show only the editor
@@ -260,9 +284,15 @@ function AppContent() {
         toast.info('PDF file selected, starting extraction...');
         
         // Start extraction immediately - progress will be shown
-        extractPDF(filePath, () => {
-          // Progress updates are handled by the hook
-        }).then((pages) => {
+        const defaultSettings: ConversionSettings = {
+          dpi: 150,
+          quality: 85,
+          format: 'jpeg',
+          pageRange: 'all',
+          colorSpace: 'rgb',
+          compressionLevel: 6,
+        };
+        extractPDF(filePath, defaultSettings).then((pages) => {
           toast.success(`Successfully extracted ${pages.length} page${pages.length !== 1 ? 's' : ''}`);
         }).catch((err) => {
           toast.error(getUserFriendlyError(err, { operation: 'PDF extraction', fileName: filePath }));

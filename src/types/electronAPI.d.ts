@@ -161,6 +161,44 @@ declare global {
         isAuditing: boolean;
         progressMessage: string;
       }) => Promise<{ success: boolean }>;
+      createPdfExtractionWindow: (options: {
+        pdfPath: string | null;
+        settings: {
+          dpi: number;
+          quality: number;
+          format: 'png' | 'jpeg';
+          pageRange: 'all' | 'custom' | 'selected';
+          customPageRange: string;
+          colorSpace: 'rgb' | 'grayscale';
+          compressionLevel: number;
+        };
+        showSettings: boolean;
+        extractedPages: any[];
+        selectedPages: number[];
+        isExtracting: boolean;
+        progress: any | null;
+        error: string | null;
+        statusMessage: string;
+      }) => Promise<{ success: boolean }>;
+      reattachPdfExtraction: (options: {
+        pdfPath: string | null;
+        settings: {
+          dpi: number;
+          quality: number;
+          format: 'png' | 'jpeg';
+          pageRange: 'all' | 'custom' | 'selected';
+          customPageRange: string;
+          colorSpace: 'rgb' | 'grayscale';
+          compressionLevel: number;
+        };
+        showSettings: boolean;
+        extractedPages: any[];
+        selectedPages: number[];
+        isExtracting: boolean;
+        progress: any | null;
+        error: string | null;
+        statusMessage: string;
+      }) => Promise<{ success: boolean }>;
       closeWindow: () => Promise<{ success: boolean }>;
       openBookmarkInMainWindow: (options: {
         pdfPath: string;

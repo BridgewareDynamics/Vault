@@ -3142,6 +3142,9 @@ let wordEditorWindow: BrowserWindow | null = null;
 // Create PDF audit window
 let pdfAuditWindow: BrowserWindow | null = null;
 
+// Create PDF extraction window
+let pdfExtractionWindow: BrowserWindow | null = null;
+
 // Track which window should receive audit progress updates
 // This allows progress to continue when detaching during an audit
 let auditProgressTarget: Electron.WebContents | null = null;
@@ -3510,6 +3513,189 @@ ipcMain.handle('reattach-pdf-audit', async (event, options: {
   } catch (error) {
     logger.error('Failed to reattach PDF audit window:', error);
     throw new Error(`Failed to reattach PDF audit window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Create PDF extraction window
+ipcMain.handle('create-pdf-extraction-window', async (event, options: {
+  pdfPath: string | null;
+  settings: {
+    dpi: number;
+    quality: number;
+    format: 'png' | 'jpeg';
+    pageRange: 'all' | 'custom' | 'selected';
+    customPageRange: string;
+    colorSpace: 'rgb' | 'grayscale';
+    compressionLevel: number;
+  };
+  showSettings: boolean;
+  extractedPages: any[];
+  selectedPages: number[];
+  isExtracting: boolean;
+  progress: any | null;
+  error: string | null;
+  statusMessage: string;
+}) => {
+  try {
+    if (pdfExtractionWindow && !pdfExtractionWindow.isDestroyed()) {
+      pdfExtractionWindow.focus();
+      return;
+    }
+    
+    // Determine preload path
+    let preloadPath: string;
+    if (isDev) {
+      preloadPath = join(__dirname, 'preload.cjs');
+    } else {
+      const appPath = app.getAppPath();
+      preloadPath = join(appPath, 'dist-electron', 'electron', 'preload.cjs');
+    }
+    
+    pdfExtractionWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      minWidth: 900,
+      minHeight: 700,
+      backgroundColor: '#0f0f1e',
+      webPreferences: {
+        preload: preloadPath,
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: true,
+        devTools: isDev,
+      },
+      titleBarStyle: 'hiddenInset',
+      frame: true,
+      show: false,
+      title: 'PDF Extraction',
+    });
+    
+    // Load the app
+    if (isDev) {
+      pdfExtractionWindow.loadURL('http://localhost:5173?extraction=detached').catch((err) => {
+        logger.error('Failed to load dev server in PDF extraction window:', err);
+      });
+    } else {
+      const appPath = app.getAppPath();
+      pdfExtractionWindow.loadFile(join(appPath, 'dist', 'index.html'), { hash: 'extraction=detached' }).catch((err) => {
+        logger.error('Failed to load file in PDF extraction window:', err);
+      });
+    }
+    
+    pdfExtractionWindow.once('ready-to-show', () => {
+      pdfExtractionWindow?.show();
+    });
+    
+    pdfExtractionWindow.on('closed', () => {
+      pdfExtractionWindow = null;
+    });
+    
+    // Send initial data to window after it loads
+    pdfExtractionWindow.webContents.once('did-finish-load', () => {
+      // Small delay to ensure React has mounted
+      setTimeout(() => {
+        logger.info('Sending pdf-extraction-data to detached window', {
+          hasPdfPath: !!options.pdfPath,
+          hasExtractedPages: options.extractedPages?.length || 0,
+          isExtracting: options.isExtracting,
+        });
+        pdfExtractionWindow?.webContents.executeJavaScript(`
+          (function() {
+            const data = {
+              pdfPath: ${options.pdfPath ? JSON.stringify(options.pdfPath) : 'null'},
+              settings: ${JSON.stringify(options.settings)},
+              showSettings: ${JSON.stringify(options.showSettings)},
+              extractedPages: ${JSON.stringify(options.extractedPages || [])},
+              selectedPages: ${JSON.stringify(options.selectedPages || [])},
+              isExtracting: ${JSON.stringify(options.isExtracting)},
+              progress: ${options.progress ? JSON.stringify(options.progress) : 'null'},
+              error: ${options.error ? JSON.stringify(options.error) : 'null'},
+              statusMessage: ${JSON.stringify(options.statusMessage || '')}
+            };
+            console.log('Main process: Dispatching pdf-extraction-data event', data);
+            // Store data in case listener isn't ready yet
+            window.__pdfExtractionInitialData = data;
+            const event = new CustomEvent('pdf-extraction-data', {
+              detail: data
+            });
+            window.dispatchEvent(event);
+          })();
+        `).catch((err) => {
+          logger.error('Failed to send data to PDF extraction window:', err);
+        });
+      }, 500);
+    });
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create PDF extraction window:', error);
+    throw new Error(`Failed to create PDF extraction window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Reattach PDF extraction window
+ipcMain.handle('reattach-pdf-extraction', async (event, options: {
+  pdfPath: string | null;
+  settings: {
+    dpi: number;
+    quality: number;
+    format: 'png' | 'jpeg';
+    pageRange: 'all' | 'custom' | 'selected';
+    customPageRange: string;
+    colorSpace: 'rgb' | 'grayscale';
+    compressionLevel: number;
+  };
+  showSettings: boolean;
+  extractedPages: any[];
+  selectedPages: number[];
+  isExtracting: boolean;
+  progress: any | null;
+  error: string | null;
+  statusMessage: string;
+}) => {
+  try {
+    // Get the window that sent the request (the detached extraction window)
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    
+    // Send data to main window to reopen the modal
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Execute JavaScript to dispatch custom event in main window
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const event = new CustomEvent('reattach-pdf-extraction-data', {
+            detail: {
+              pdfPath: ${options.pdfPath ? JSON.stringify(options.pdfPath) : 'null'},
+              settings: ${JSON.stringify(options.settings)},
+              showSettings: ${JSON.stringify(options.showSettings)},
+              extractedPages: ${JSON.stringify(options.extractedPages || [])},
+              selectedPages: ${JSON.stringify(options.selectedPages || [])},
+              isExtracting: ${JSON.stringify(options.isExtracting)},
+              progress: ${options.progress ? JSON.stringify(options.progress) : 'null'},
+              error: ${options.error ? JSON.stringify(options.error) : 'null'},
+              statusMessage: ${JSON.stringify(options.statusMessage || '')}
+            }
+          });
+          window.dispatchEvent(event);
+        })();
+      `).catch((err) => {
+        logger.error('Failed to send reattach data to main window:', err);
+      });
+    }
+
+    // Close the detached window (the one that sent the request)
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    
+    // Also clear the pdfExtractionWindow reference if it matches
+    if (pdfExtractionWindow === senderWindow) {
+      pdfExtractionWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach PDF extraction window:', error);
+    throw new Error(`Failed to reattach PDF extraction window: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 

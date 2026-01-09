@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS: ConversionSettings = {
   dpi: 150,
   quality: 85,
   format: 'jpeg',
+  pageRange: 'all',
   colorSpace: 'rgb',
   compressionLevel: 6,
 };
@@ -44,23 +45,49 @@ export function usePDFExtraction() {
     return baseScale;
   };
 
+  const parseCustomPageRange = (customRange: string, totalPages: number): number[] => {
+    const pages: number[] = [];
+    const parts = customRange.split(',').map((p) => p.trim());
+    
+    for (const part of parts) {
+      if (part.includes('-')) {
+        const [startStr, endStr] = part.split('-').map((s) => s.trim());
+        const start = parseInt(startStr, 10);
+        const end = parseInt(endStr, 10);
+        if (!isNaN(start) && !isNaN(end)) {
+          const validStart = Math.max(1, Math.min(start, totalPages));
+          const validEnd = Math.max(validStart, Math.min(end, totalPages));
+          for (let i = validStart; i <= validEnd; i++) {
+            if (!pages.includes(i)) pages.push(i);
+          }
+        }
+      } else {
+        const page = parseInt(part, 10);
+        if (!isNaN(page) && page >= 1 && page <= totalPages) {
+          if (!pages.includes(page)) pages.push(page);
+        }
+      }
+    }
+    
+    return pages.sort((a, b) => a - b);
+  };
+
   const getPagesToExtract = (
     totalPages: number,
-    pageRange?: { start: number; end: number } | number[]
+    pageRange?: 'all' | 'custom' | 'selected',
+    customPageRange?: string
   ): number[] => {
-    if (!pageRange) {
+    if (!pageRange || pageRange === 'all') {
       return Array.from({ length: totalPages }, (_, i) => i + 1);
     }
 
-    if (Array.isArray(pageRange)) {
-      // Specific pages
-      return pageRange.filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+    if (pageRange === 'custom' && customPageRange) {
+      return parseCustomPageRange(customPageRange, totalPages);
     }
 
-    // Range
-    const start = Math.max(1, Math.min(pageRange.start, totalPages));
-    const end = Math.max(start, Math.min(pageRange.end, totalPages));
-    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    // For 'selected', we'll need to get selected pages from elsewhere
+    // For now, return all pages
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
   };
 
   const estimateTimeRemaining = (
@@ -190,7 +217,11 @@ export function usePDFExtraction() {
           }
 
           const totalPages = pdf.numPages;
-          const pagesToExtract = getPagesToExtract(totalPages, finalSettings.pageRange);
+          const pagesToExtract = getPagesToExtract(
+            totalPages,
+            finalSettings.pageRange,
+            finalSettings.customPageRange
+          );
           const totalPagesToExtract = pagesToExtract.length;
 
           if (pagesToExtract.length === 0) {
