@@ -50,10 +50,41 @@ export function PDFExtractionModal({
   const [previewPage, setPreviewPage] = useState<ExtractedPage | null>(null);
   const [totalPages, setTotalPages] = useState(0);
   const [restoredExtractedPages, setRestoredExtractedPages] = useState<ExtractedPage[]>([]);
+  const [pendingPreviewPage, setPendingPreviewPage] = useState<ExtractedPage | null>(null);
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, cancel, reset } =
     usePDFExtraction();
   const toast = useToast();
+
+  // Restore preview page when extracted pages are available
+  useEffect(() => {
+    if (pendingPreviewPage) {
+      const allPages = extractedPages.length > 0 ? extractedPages : restoredExtractedPages;
+      console.log('PDFExtractionModal: Checking pending preview page', {
+        hasPendingPreview: !!pendingPreviewPage,
+        pendingPageNumber: pendingPreviewPage?.pageNumber,
+        extractedPagesCount: extractedPages.length,
+        restoredPagesCount: restoredExtractedPages.length,
+        allPagesCount: allPages.length,
+      });
+      
+      if (allPages.length > 0) {
+        const previewPageInPages = allPages.find(
+          (p) => p.pageNumber === pendingPreviewPage.pageNumber
+        );
+        if (previewPageInPages) {
+          setPreviewPage(previewPageInPages);
+          console.log('PDFExtractionModal: Restored preview page from pending', previewPageInPages.pageNumber);
+          setPendingPreviewPage(null);
+        } else {
+          // If not found, use the pending one directly
+          setPreviewPage(pendingPreviewPage);
+          console.log('PDFExtractionModal: Restored preview page (using pending directly)', pendingPreviewPage.pageNumber);
+          setPendingPreviewPage(null);
+        }
+      }
+    }
+  }, [extractedPages, restoredExtractedPages, pendingPreviewPage]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -96,6 +127,7 @@ export function PDFExtractionModal({
       setShowSaveDialog(false);
       setSelectedPages(new Set());
       setPreviewPage(null);
+      setPendingPreviewPage(null);
       setTotalPages(0);
       setRestoredExtractedPages([]);
       reset();
@@ -110,6 +142,7 @@ export function PDFExtractionModal({
       showSettings: boolean;
       extractedPages: ExtractedPage[];
       selectedPages: number[];
+      previewPage: ExtractedPage | null;
       isExtracting: boolean;
       progress: any | null;
       error: string | null;
@@ -123,6 +156,38 @@ export function PDFExtractionModal({
         extractedPagesCount: data.extractedPages?.length || 0,
       });
       
+      restoreReattachState(data);
+    };
+
+    // Check for stored reattach data when modal opens
+    const checkStoredData = () => {
+      const storedData = (window as any).__reattachPdfExtractionData;
+      if (storedData) {
+        console.log('PDFExtractionModal: Found stored reattach data');
+        restoreReattachState(storedData);
+        // Clear stored data after using it
+        delete (window as any).__reattachPdfExtractionData;
+      }
+    };
+
+    const restoreReattachState = (data: {
+      pdfPath: string | null;
+      settings: ConversionSettings;
+      showSettings: boolean;
+      extractedPages: ExtractedPage[];
+      selectedPages: number[];
+      previewPage: ExtractedPage | null;
+      isExtracting: boolean;
+      progress: any | null;
+      error: string | null;
+      statusMessage: string;
+    }) => {
+      console.log('PDFExtractionModal: restoreReattachState called', {
+        hasPreviewPage: !!data.previewPage,
+        previewPageNumber: data.previewPage?.pageNumber,
+        extractedPagesCount: data.extractedPages?.length || 0,
+      });
+
       // Restore state
       if (data.pdfPath) {
         setPdfPath(data.pdfPath);
@@ -138,11 +203,37 @@ export function PDFExtractionModal({
         setRestoredExtractedPages(data.extractedPages);
         setSelectedPages(new Set(data.selectedPages || []));
         console.log('PDFExtractionModal: Restored extracted pages', data.extractedPages.length);
+        
+        // Store preview page to be restored after extracted pages are set
+        if (data.previewPage) {
+          setPendingPreviewPage(data.previewPage);
+          console.log('PDFExtractionModal: Stored pending preview page', data.previewPage.pageNumber);
+          
+          // Also try to restore immediately if pages are already available
+          const previewPageInRestored = data.extractedPages.find(
+            (p) => p.pageNumber === data.previewPage?.pageNumber
+          );
+          if (previewPageInRestored) {
+            setPreviewPage(previewPageInRestored);
+            setPendingPreviewPage(null);
+            console.log('PDFExtractionModal: Immediately restored preview page', previewPageInRestored.pageNumber);
+          }
+        } else {
+          setPreviewPage(null);
+          setPendingPreviewPage(null);
+        }
       } else {
         setRestoredExtractedPages([]);
         setSelectedPages(new Set());
+        setPreviewPage(null);
+        setPendingPreviewPage(null);
       }
     };
+
+    // Check immediately when modal opens
+    if (isOpen) {
+      checkStoredData();
+    }
 
     window.addEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
     return () => {
@@ -354,6 +445,12 @@ export function PDFExtractionModal({
         return;
       }
 
+      if (!window.electronAPI.createPdfExtractionWindow) {
+        toast.error('Detach functionality not available. The createPdfExtractionWindow method is not registered.');
+        console.error('createPdfExtractionWindow method not found on electronAPI');
+        return;
+      }
+
       // Prepare state to transfer
       const allPages = extractedPages.length > 0 ? extractedPages : restoredExtractedPages;
       const state = {
@@ -367,6 +464,7 @@ export function PDFExtractionModal({
         showSettings,
         extractedPages: allPages,
         selectedPages: Array.from(selectedPages),
+        previewPage: previewPage || null,
         isExtracting,
         progress: progress || null,
         error: error || null,
@@ -377,20 +475,24 @@ export function PDFExtractionModal({
         hasExtractedPages: allPages.length > 0,
         isExtracting,
         pdfPath,
+        extractedPagesCount: allPages.length,
+        hasPreviewPage: !!previewPage,
+        previewPageNumber: previewPage?.pageNumber,
       });
 
       // Create detached window
-      if (window.electronAPI.createPdfExtractionWindow) {
-        await window.electronAPI.createPdfExtractionWindow(state);
-        // Close modal after detaching
-        onClose();
-        toast.info('Extraction opened in separate window');
-      } else {
-        toast.error('Detach functionality not available');
-      }
+      await window.electronAPI.createPdfExtractionWindow(state);
+      // Close modal after detaching
+      onClose();
+      toast.info('Extraction opened in separate window');
     } catch (error) {
-      toast.error('Failed to open extraction in separate window');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to open extraction in separate window: ${errorMessage}`);
       console.error('Detach error:', error);
+      
+      // Log additional debugging information
+      console.error('Electron API available:', !!window.electronAPI);
+      console.error('createPdfExtractionWindow available:', !!window.electronAPI?.createPdfExtractionWindow);
     }
   };
 

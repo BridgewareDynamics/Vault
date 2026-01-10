@@ -14,6 +14,7 @@ interface PdfExtractionState {
   showSettings: boolean;
   extractedPages: ExtractedPage[];
   selectedPages: number[];
+  previewPage: ExtractedPage | null;
   isExtracting: boolean;
   progress: any | null;
   error: string | null;
@@ -80,6 +81,23 @@ export function DetachedPDFExtraction() {
       if (data.extractedPages && data.extractedPages.length > 0) {
         setLocalExtractedPages(data.extractedPages);
         setSelectedPages(new Set(data.selectedPages || []));
+        
+        // Restore preview page if it exists
+        if (data.previewPage) {
+          // Find the preview page in the extracted pages to ensure it has the full data
+          const previewPageInExtracted = data.extractedPages.find(
+            (p) => p.pageNumber === data.previewPage?.pageNumber
+          );
+          if (previewPageInExtracted) {
+            setPreviewPage(previewPageInExtracted);
+            console.log('DetachedPDFExtraction: Restored preview page', previewPageInExtracted.pageNumber);
+          } else {
+            // If preview page not found in extracted pages, use the provided one
+            setPreviewPage(data.previewPage);
+          }
+        } else {
+          setPreviewPage(null);
+        }
       }
       if (data.isExtracting) {
         setLocalIsExtracting(true);
@@ -344,6 +362,7 @@ export function DetachedPDFExtraction() {
         showSettings,
         extractedPages: finalExtractedPages,
         selectedPages: Array.from(selectedPages),
+        previewPage: previewPage || null,
         isExtracting: finalIsExtracting,
         progress: finalProgress,
         error: finalError,
@@ -355,6 +374,8 @@ export function DetachedPDFExtraction() {
         hasExtractedPages: finalExtractedPages.length > 0,
         extractedPagesCount: finalExtractedPages.length,
         selectedPagesCount: selectedPages.size,
+        hasPreviewPage: !!previewPage,
+        previewPageNumber: previewPage?.pageNumber,
         extractedPagesSample: finalExtractedPages.slice(0, 2).map(p => ({
           pageNumber: p.pageNumber,
           hasImageData: !!p.imageData,

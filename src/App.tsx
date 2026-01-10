@@ -53,14 +53,29 @@ function AppContent() {
 
   // Listen for reattach data from detached PDF extraction window
   useEffect(() => {
-    const handleReattach = () => {
+    const handleReattach = (event: any) => {
       // Open the PDF extraction modal when reattaching
+      console.log('App: Received reattach-pdf-extraction-data event, opening modal');
       setShowPDFExtraction(true);
     };
 
     window.addEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+    
+    // Also check for stored data on mount
+    const checkStoredData = () => {
+      const storedData = (window as any).__reattachPdfExtractionData;
+      if (storedData) {
+        console.log('App: Found stored reattach data, opening modal');
+        setShowPDFExtraction(true);
+      }
+    };
+    
+    // Check after a short delay to ensure component is mounted
+    const timeoutId = setTimeout(checkStoredData, 100);
+    
     return () => {
       window.removeEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+      clearTimeout(timeoutId);
     };
   }, []);
 

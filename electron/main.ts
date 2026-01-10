@@ -3531,15 +3531,22 @@ ipcMain.handle('create-pdf-extraction-window', async (event, options: {
   showSettings: boolean;
   extractedPages: any[];
   selectedPages: number[];
+  previewPage: any | null;
   isExtracting: boolean;
   progress: any | null;
   error: string | null;
   statusMessage: string;
 }) => {
   try {
+    logger.info('create-pdf-extraction-window handler called', {
+      hasPdfPath: !!options.pdfPath,
+      extractedPagesCount: options.extractedPages?.length || 0,
+    });
+
     if (pdfExtractionWindow && !pdfExtractionWindow.isDestroyed()) {
+      logger.info('PDF extraction window already exists, focusing it');
       pdfExtractionWindow.focus();
-      return;
+      return { success: true, existing: true };
     }
     
     // Determine preload path
@@ -3607,6 +3614,7 @@ ipcMain.handle('create-pdf-extraction-window', async (event, options: {
               showSettings: ${JSON.stringify(options.showSettings)},
               extractedPages: ${JSON.stringify(options.extractedPages || [])},
               selectedPages: ${JSON.stringify(options.selectedPages || [])},
+              previewPage: ${options.previewPage ? JSON.stringify(options.previewPage) : 'null'},
               isExtracting: ${JSON.stringify(options.isExtracting)},
               progress: ${options.progress ? JSON.stringify(options.progress) : 'null'},
               error: ${options.error ? JSON.stringify(options.error) : 'null'},
@@ -3648,6 +3656,7 @@ ipcMain.handle('reattach-pdf-extraction', async (event, options: {
   showSettings: boolean;
   extractedPages: any[];
   selectedPages: number[];
+  previewPage: any | null;
   isExtracting: boolean;
   progress: any | null;
   error: string | null;
@@ -3659,21 +3668,46 @@ ipcMain.handle('reattach-pdf-extraction', async (event, options: {
     
     // Send data to main window to reopen the modal
     if (mainWindow && !mainWindow.isDestroyed()) {
-      // Execute JavaScript to dispatch custom event in main window
+      const reattachData = {
+        pdfPath: options.pdfPath,
+        settings: options.settings,
+        showSettings: options.showSettings,
+        extractedPages: options.extractedPages || [],
+        selectedPages: options.selectedPages || [],
+        previewPage: options.previewPage || null,
+        isExtracting: options.isExtracting,
+        progress: options.progress,
+        error: options.error,
+        statusMessage: options.statusMessage || ''
+      };
+
+      logger.info('Reattaching PDF extraction window', {
+        hasPdfPath: !!reattachData.pdfPath,
+        extractedPagesCount: reattachData.extractedPages.length,
+        selectedPagesCount: reattachData.selectedPages.length,
+        hasPreviewPage: !!reattachData.previewPage,
+      });
+
+      // Store data globally first so modal can access it when it mounts
       mainWindow.webContents.executeJavaScript(`
         (function() {
+          const data = {
+            pdfPath: ${reattachData.pdfPath ? JSON.stringify(reattachData.pdfPath) : 'null'},
+            settings: ${JSON.stringify(reattachData.settings)},
+            showSettings: ${JSON.stringify(reattachData.showSettings)},
+            extractedPages: ${JSON.stringify(reattachData.extractedPages)},
+            selectedPages: ${JSON.stringify(reattachData.selectedPages)},
+            previewPage: ${reattachData.previewPage ? JSON.stringify(reattachData.previewPage) : 'null'},
+            isExtracting: ${JSON.stringify(reattachData.isExtracting)},
+            progress: ${reattachData.progress ? JSON.stringify(reattachData.progress) : 'null'},
+            error: ${reattachData.error ? JSON.stringify(reattachData.error) : 'null'},
+            statusMessage: ${JSON.stringify(reattachData.statusMessage)}
+          };
+          // Store data globally for modal to access when it mounts
+          window.__reattachPdfExtractionData = data;
+          // Dispatch event for existing listeners
           const event = new CustomEvent('reattach-pdf-extraction-data', {
-            detail: {
-              pdfPath: ${options.pdfPath ? JSON.stringify(options.pdfPath) : 'null'},
-              settings: ${JSON.stringify(options.settings)},
-              showSettings: ${JSON.stringify(options.showSettings)},
-              extractedPages: ${JSON.stringify(options.extractedPages || [])},
-              selectedPages: ${JSON.stringify(options.selectedPages || [])},
-              isExtracting: ${JSON.stringify(options.isExtracting)},
-              progress: ${options.progress ? JSON.stringify(options.progress) : 'null'},
-              error: ${options.error ? JSON.stringify(options.error) : 'null'},
-              statusMessage: ${JSON.stringify(options.statusMessage || '')}
-            }
+            detail: data
           });
           window.dispatchEvent(event);
         })();

@@ -145,6 +145,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showSettings: boolean;
     extractedPages: any[];
     selectedPages: number[];
+    previewPage: any | null;
     isExtracting: boolean;
     progress: any | null;
     error: string | null;
@@ -164,6 +165,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showSettings: boolean;
     extractedPages: any[];
     selectedPages: number[];
+    previewPage: any | null;
     isExtracting: boolean;
     progress: any | null;
     error: string | null;
