@@ -2720,7 +2720,7 @@ ipcMain.handle('extract-pdf-from-archive', async (
     casePath: string;
     folderName: string;
     saveParentFile: boolean;
-    extractedPages: Array<{ pageNumber: number; imageData: string }>;
+    extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
   }
 ) => {
   const { pdfPath, casePath, folderName, saveParentFile, extractedPages } = options;
@@ -2737,12 +2737,16 @@ ipcMain.handle('extract-pdf-from-archive', async (
     const extractionFolder = path.join(casePath, folderName);
     await fs.mkdir(extractionFolder, { recursive: true });
 
+    // Store parent PDF metadata to link folder to PDF
+    const metadataPath = path.join(extractionFolder, '.parent-pdf');
+    const parentPdfName = path.basename(pdfPath);
+    await fs.writeFile(metadataPath, parentPdfName, 'utf8');
+
     const results: string[] = [];
 
     // Save parent PDF if requested
     if (saveParentFile) {
-      const parentFileName = path.basename(pdfPath);
-      const destPath = path.join(extractionFolder, parentFileName);
+      const destPath = path.join(extractionFolder, parentPdfName);
       await fs.copyFile(pdfPath, destPath);
       results.push(`Parent PDF saved: ${destPath}`);
     }
@@ -2754,22 +2758,19 @@ ipcMain.handle('extract-pdf-from-archive', async (
       const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
       
       let imageData: string;
-      let extension: string;
       
       if (pngMatch) {
         imageData = pngMatch[1];
-        extension = 'png';
       } else if (jpegMatch) {
         imageData = jpegMatch[1];
-        extension = 'jpg';
       } else {
         // Fallback: try to strip any data URL prefix
         imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
-        extension = 'png'; // Default to PNG for backward compatibility
       }
       
       const buffer = Buffer.from(imageData, 'base64');
-      const imagePath = path.join(extractionFolder, `page-${page.pageNumber}.${extension}`);
+      // Use the provided fileName from the frontend
+      const imagePath = path.join(extractionFolder, page.fileName);
       await fs.writeFile(imagePath, buffer);
       results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
     }

@@ -263,20 +263,23 @@ export function DetachedPDFExtraction() {
         fileName: `${generateFileName(page.pageNumber, saveOptions.fileNamingPattern)}.${settings.format}`,
       }));
 
-      if (saveOptions.saveToZip) {
-        if (caseFolderPath) {
-          await window.electronAPI.extractPDFFromArchive({
-            pdfPath: pdfPath!,
-            casePath: caseFolderPath,
-            folderName: saveOptions.folderName,
-            saveParentFile: saveOptions.saveParentFile,
-            extractedPages: pagesWithNames.map((p) => ({
-              pageNumber: p.pageNumber,
-              imageData: p.imageData,
-            })),
-          });
-          toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''} to archive`);
-        } else {
+      if (caseFolderPath) {
+        // Save to archive case folder (always use extractPDFFromArchive for archive)
+        await window.electronAPI.extractPDFFromArchive({
+          pdfPath: pdfPath!,
+          casePath: caseFolderPath,
+          folderName: saveOptions.folderName,
+          saveParentFile: saveOptions.saveParentFile,
+          extractedPages: pagesWithNames.map((p) => ({
+            pageNumber: p.pageNumber,
+            imageData: p.imageData,
+            fileName: p.fileName,
+          })),
+        });
+        toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''} to archive`);
+      } else {
+        // Save to regular directory
+        if (saveOptions.saveToZip) {
           await window.electronAPI.saveFiles({
             saveDirectory: saveOptions.saveDirectory,
             saveParentFile: saveOptions.saveParentFile,
@@ -290,21 +293,21 @@ export function DetachedPDFExtraction() {
             })),
           });
           toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
+        } else {
+          await window.electronAPI.saveFiles({
+            saveDirectory: saveOptions.saveDirectory,
+            saveParentFile: saveOptions.saveParentFile,
+            saveToZip: false,
+            folderName: saveOptions.folderName,
+            parentFilePath: pdfPath!,
+            extractedPages: pagesWithNames.map((p) => ({
+              pageNumber: p.pageNumber,
+              imageData: p.imageData,
+              fileName: p.fileName,
+            })),
+          });
+          toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
         }
-      } else {
-        await window.electronAPI.saveFiles({
-          saveDirectory: saveOptions.saveDirectory,
-          saveParentFile: saveOptions.saveParentFile,
-          saveToZip: false,
-          folderName: saveOptions.folderName,
-          parentFilePath: pdfPath!,
-          extractedPages: pagesWithNames.map((p) => ({
-            pageNumber: p.pageNumber,
-            imageData: p.imageData,
-            fileName: p.fileName,
-          })),
-        });
-        toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
       }
 
       setShowSaveDialog(false);

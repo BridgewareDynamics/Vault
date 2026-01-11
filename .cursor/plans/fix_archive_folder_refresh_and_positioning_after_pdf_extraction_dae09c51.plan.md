@@ -4,20 +4,20 @@ overview: "Fix two issues: (1) When saving individual image files (not ZIP) from
 todos:
   - id: update-extract-types
     content: Update electronAPI.d.ts to include fileName in extractedPages array items for extractPDFFromArchive
-    status: pending
+    status: completed
   - id: update-extract-backend
     content: Update electron/main.ts extract-pdf-from-archive handler to accept and use fileName
-    status: pending
+    status: completed
     dependencies:
       - update-extract-types
   - id: update-modal-save-logic
     content: Update PDFExtractionModal.tsx to use extractPDFFromArchive when caseFolderPath exists (for individual files), pass fileName, and call onExtractionComplete after save
-    status: pending
+    status: completed
     dependencies:
       - update-extract-types
   - id: update-detached-save-logic
     content: Update DetachedPDFExtraction.tsx to use extractPDFFromArchive when caseFolderPath exists (for individual files) and pass fileName
-    status: pending
+    status: completed
     dependencies:
       - update-extract-types
 ---
