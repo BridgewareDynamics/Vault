@@ -19,6 +19,7 @@ interface PdfExtractionState {
   progress: any | null;
   error: string | null;
   statusMessage: string;
+  caseFolderPath?: string | null;
 }
 
 const DEFAULT_SETTINGS: ConversionSettings = {
@@ -39,7 +40,7 @@ export function DetachedPDFExtraction() {
   const [previewPage, setPreviewPage] = useState<ExtractedPage | null>(null);
   const [totalPages, setTotalPages] = useState(0);
   const [isReattaching, setIsReattaching] = useState(false);
-  const [caseFolderPath] = useState<string | null>(null);
+  const [caseFolderPath, setCaseFolderPath] = useState<string | null>(null);
 
   // Local state for extraction when detaching during extraction
   const [localExtractedPages, setLocalExtractedPages] = useState<ExtractedPage[]>([]);
@@ -77,6 +78,9 @@ export function DetachedPDFExtraction() {
       }
       if (data.showSettings !== undefined) {
         setShowSettings(data.showSettings);
+      }
+      if (data.caseFolderPath !== undefined) {
+        setCaseFolderPath(data.caseFolderPath || null);
       }
       if (data.extractedPages && data.extractedPages.length > 0) {
         setLocalExtractedPages(data.extractedPages);
@@ -232,7 +236,7 @@ export function DetachedPDFExtraction() {
 
   const handleSave = async (saveOptions: {
     saveDirectory: string;
-    folderName?: string;
+    folderName: string;
     saveParentFile: boolean;
     saveToZip: boolean;
     fileNamingPattern: string;
@@ -263,20 +267,24 @@ export function DetachedPDFExtraction() {
         fileName: `${generateFileName(page.pageNumber, saveOptions.fileNamingPattern)}.${settings.format}`,
       }));
 
-      if (saveOptions.saveToZip && saveOptions.folderName) {
-        if (caseFolderPath) {
-          await window.electronAPI.extractPDFFromArchive({
-            pdfPath: pdfPath!,
-            casePath: caseFolderPath,
-            folderName: saveOptions.folderName,
-            saveParentFile: saveOptions.saveParentFile,
-            extractedPages: pagesWithNames.map((p) => ({
-              pageNumber: p.pageNumber,
-              imageData: p.imageData,
-            })),
-          });
-          toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''} to archive`);
-        } else {
+      if (caseFolderPath) {
+        // Save to archive case folder (always use extractPDFFromArchive for archive)
+        await window.electronAPI.extractPDFFromArchive({
+          pdfPath: pdfPath!,
+          casePath: caseFolderPath,
+          folderName: saveOptions.folderName,
+          saveParentFile: saveOptions.saveParentFile,
+          saveToZip: saveOptions.saveToZip,
+          extractedPages: pagesWithNames.map((p) => ({
+            pageNumber: p.pageNumber,
+            imageData: p.imageData,
+            fileName: p.fileName,
+          })),
+        });
+        toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''} to archive`);
+      } else {
+        // Save to regular directory
+        if (saveOptions.saveToZip) {
           await window.electronAPI.saveFiles({
             saveDirectory: saveOptions.saveDirectory,
             saveParentFile: saveOptions.saveParentFile,
@@ -286,22 +294,25 @@ export function DetachedPDFExtraction() {
             extractedPages: pagesWithNames.map((p) => ({
               pageNumber: p.pageNumber,
               imageData: p.imageData,
+              fileName: p.fileName,
+            })),
+          });
+          toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
+        } else {
+          await window.electronAPI.saveFiles({
+            saveDirectory: saveOptions.saveDirectory,
+            saveParentFile: saveOptions.saveParentFile,
+            saveToZip: false,
+            folderName: saveOptions.folderName,
+            parentFilePath: pdfPath!,
+            extractedPages: pagesWithNames.map((p) => ({
+              pageNumber: p.pageNumber,
+              imageData: p.imageData,
+              fileName: p.fileName,
             })),
           });
           toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
         }
-      } else {
-        await window.electronAPI.saveFiles({
-          saveDirectory: saveOptions.saveDirectory,
-          saveParentFile: saveOptions.saveParentFile,
-          saveToZip: false,
-          parentFilePath: pdfPath!,
-          extractedPages: pagesWithNames.map((p) => ({
-            pageNumber: p.pageNumber,
-            imageData: p.imageData,
-          })),
-        });
-        toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
       }
 
       setShowSaveDialog(false);
@@ -367,6 +378,7 @@ export function DetachedPDFExtraction() {
         progress: finalProgress,
         error: finalError,
         statusMessage: finalStatusMessage,
+        caseFolderPath: caseFolderPath || null,
       };
 
       console.log('DetachedPDFExtraction: Reattaching with state', {

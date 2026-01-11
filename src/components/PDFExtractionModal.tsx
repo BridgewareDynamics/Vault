@@ -332,7 +332,7 @@ export function PDFExtractionModal({
 
   const handleSave = async (saveOptions: {
     saveDirectory: string;
-    folderName?: string;
+    folderName: string;
     saveParentFile: boolean;
     saveToZip: boolean;
     fileNamingPattern: string;
@@ -364,22 +364,24 @@ export function PDFExtractionModal({
         fileName: `${generateFileName(page.pageNumber, saveOptions.fileNamingPattern)}.${settings.format}`,
       }));
 
-      if (saveOptions.saveToZip && saveOptions.folderName) {
-        // Save to ZIP folder in archive
-        if (caseFolderPath) {
-          await window.electronAPI.extractPDFFromArchive({
-            pdfPath: pdfPath!,
-            casePath: caseFolderPath,
-            folderName: saveOptions.folderName,
-            saveParentFile: saveOptions.saveParentFile,
-            extractedPages: pagesWithNames.map((p) => ({
-              pageNumber: p.pageNumber,
-              imageData: p.imageData,
-            })),
-          });
-          toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''} to archive`);
-        } else {
-          // Use regular save with ZIP
+      if (caseFolderPath) {
+        // Save to archive case folder (always use extractPDFFromArchive for archive)
+        await window.electronAPI.extractPDFFromArchive({
+          pdfPath: pdfPath!,
+          casePath: caseFolderPath,
+          folderName: saveOptions.folderName,
+          saveParentFile: saveOptions.saveParentFile,
+          saveToZip: saveOptions.saveToZip,
+          extractedPages: pagesWithNames.map((p) => ({
+            pageNumber: p.pageNumber,
+            imageData: p.imageData,
+            fileName: p.fileName,
+          })),
+        });
+        toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''} to archive`);
+      } else {
+        // Save to regular directory
+        if (saveOptions.saveToZip) {
           await window.electronAPI.saveFiles({
             saveDirectory: saveOptions.saveDirectory,
             saveParentFile: saveOptions.saveParentFile,
@@ -389,26 +391,34 @@ export function PDFExtractionModal({
             extractedPages: pagesWithNames.map((p) => ({
               pageNumber: p.pageNumber,
               imageData: p.imageData,
+              fileName: p.fileName,
+            })),
+          });
+          toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
+        } else {
+          // Save individual files
+          await window.electronAPI.saveFiles({
+            saveDirectory: saveOptions.saveDirectory,
+            saveParentFile: saveOptions.saveParentFile,
+            saveToZip: false,
+            folderName: saveOptions.folderName,
+            parentFilePath: pdfPath!,
+            extractedPages: pagesWithNames.map((p) => ({
+              pageNumber: p.pageNumber,
+              imageData: p.imageData,
+              fileName: p.fileName,
             })),
           });
           toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
         }
-      } else {
-        // Save individual files
-        await window.electronAPI.saveFiles({
-          saveDirectory: saveOptions.saveDirectory,
-          saveParentFile: saveOptions.saveParentFile,
-          saveToZip: false,
-          parentFilePath: pdfPath!,
-          extractedPages: pagesWithNames.map((p) => ({
-            pageNumber: p.pageNumber,
-            imageData: p.imageData,
-          })),
-        });
-        toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
       }
 
       setShowSaveDialog(false);
+      
+      // Refresh files list if extracting to archive
+      if (caseFolderPath && onExtractionComplete) {
+        onExtractionComplete();
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save files');
     }
@@ -469,6 +479,7 @@ export function PDFExtractionModal({
         progress: progress || null,
         error: error || null,
         statusMessage,
+        caseFolderPath: caseFolderPath || null,
       };
 
       console.log('PDFExtractionModal: Detaching with state', {
