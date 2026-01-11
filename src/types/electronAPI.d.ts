@@ -58,6 +58,7 @@ declare global {
         casePath: string;
         folderName: string;
         saveParentFile: boolean;
+        saveToZip: boolean;
         extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
       }) => Promise<{ success: boolean; messages: string[]; extractionFolder: string }>;
       logToMain: (level: LogLevel, ...args: LogArgs) => Promise<void>;

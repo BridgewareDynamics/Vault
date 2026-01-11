@@ -270,6 +270,7 @@ export function DetachedPDFExtraction() {
           casePath: caseFolderPath,
           folderName: saveOptions.folderName,
           saveParentFile: saveOptions.saveParentFile,
+          saveToZip: saveOptions.saveToZip,
           extractedPages: pagesWithNames.map((p) => ({
             pageNumber: p.pageNumber,
             imageData: p.imageData,

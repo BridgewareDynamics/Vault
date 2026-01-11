@@ -2720,10 +2720,11 @@ ipcMain.handle('extract-pdf-from-archive', async (
     casePath: string;
     folderName: string;
     saveParentFile: boolean;
+    saveToZip: boolean;
     extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
   }
 ) => {
-  const { pdfPath, casePath, folderName, saveParentFile, extractedPages } = options;
+  const { pdfPath, casePath, folderName, saveParentFile, saveToZip, extractedPages } = options;
 
   if (!isSafePath(pdfPath) || !isSafePath(casePath)) {
     throw new Error('Invalid path');
@@ -2734,48 +2735,94 @@ ipcMain.handle('extract-pdf-from-archive', async (
   }
 
   try {
-    const extractionFolder = path.join(casePath, folderName);
-    await fs.mkdir(extractionFolder, { recursive: true });
-
-    // Store parent PDF metadata to link folder to PDF
-    const metadataPath = path.join(extractionFolder, '.parent-pdf');
     const parentPdfName = path.basename(pdfPath);
-    await fs.writeFile(metadataPath, parentPdfName, 'utf8');
-
     const results: string[] = [];
 
-    // Save parent PDF if requested
-    if (saveParentFile) {
-      const destPath = path.join(extractionFolder, parentPdfName);
-      await fs.copyFile(pdfPath, destPath);
-      results.push(`Parent PDF saved: ${destPath}`);
-    }
+    if (saveToZip) {
+      // Create ZIP file in case folder
+      const zip = new JSZip();
+      const zipFolder = zip.folder(folderName);
 
-    // Save extracted pages
-    for (const page of extractedPages) {
-      // Detect image format from data URL (supports both PNG and JPEG)
-      const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
-      const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
-      
-      let imageData: string;
-      
-      if (pngMatch) {
-        imageData = pngMatch[1];
-      } else if (jpegMatch) {
-        imageData = jpegMatch[1];
-      } else {
-        // Fallback: try to strip any data URL prefix
-        imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+      if (!zipFolder) {
+        throw new Error('Failed to create ZIP folder');
       }
-      
-      const buffer = Buffer.from(imageData, 'base64');
-      // Use the provided fileName from the frontend
-      const imagePath = path.join(extractionFolder, page.fileName);
-      await fs.writeFile(imagePath, buffer);
-      results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
-    }
 
-    return { success: true, messages: results, extractionFolder };
+      // Add parent PDF to ZIP if requested
+      if (saveParentFile) {
+        const pdfBuffer = await fs.readFile(pdfPath);
+        zipFolder.file(parentPdfName, pdfBuffer);
+      }
+
+      // Add all extracted pages to ZIP
+      for (const page of extractedPages) {
+        // Detect image format from data URL (supports both PNG and JPEG)
+        const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+        const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+        
+        let imageData: string;
+        
+        if (pngMatch) {
+          imageData = pngMatch[1];
+        } else if (jpegMatch) {
+          imageData = jpegMatch[1];
+        } else {
+          // Fallback: try to strip any data URL prefix
+          imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+        }
+        
+        const buffer = Buffer.from(imageData, 'base64');
+        // Use the provided fileName from the frontend
+        zipFolder.file(page.fileName, buffer);
+      }
+
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+      const zipPath = path.join(casePath, `${folderName}.zip`);
+      await fs.writeFile(zipPath, zipBuffer);
+      results.push(`ZIP file saved: ${zipPath}`);
+
+      return { success: true, messages: results, extractionFolder: casePath };
+    } else {
+      // Save individual files to folder
+      const extractionFolder = path.join(casePath, folderName);
+      await fs.mkdir(extractionFolder, { recursive: true });
+
+      // Store parent PDF metadata to link folder to PDF
+      const metadataPath = path.join(extractionFolder, '.parent-pdf');
+      await fs.writeFile(metadataPath, parentPdfName, 'utf8');
+
+      // Save parent PDF if requested
+      if (saveParentFile) {
+        const destPath = path.join(extractionFolder, parentPdfName);
+        await fs.copyFile(pdfPath, destPath);
+        results.push(`Parent PDF saved: ${destPath}`);
+      }
+
+      // Save extracted pages
+      for (const page of extractedPages) {
+        // Detect image format from data URL (supports both PNG and JPEG)
+        const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+        const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+        
+        let imageData: string;
+        
+        if (pngMatch) {
+          imageData = pngMatch[1];
+        } else if (jpegMatch) {
+          imageData = jpegMatch[1];
+        } else {
+          // Fallback: try to strip any data URL prefix
+          imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+        }
+        
+        const buffer = Buffer.from(imageData, 'base64');
+        // Use the provided fileName from the frontend
+        const imagePath = path.join(extractionFolder, page.fileName);
+        await fs.writeFile(imagePath, buffer);
+        results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
+      }
+
+      return { success: true, messages: results, extractionFolder };
+    }
   } catch (error) {
     throw new Error(`Failed to extract PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }

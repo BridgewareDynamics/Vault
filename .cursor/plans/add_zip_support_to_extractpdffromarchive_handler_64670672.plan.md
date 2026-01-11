@@ -4,20 +4,20 @@ overview: The `extractPDFFromArchive` handler currently only saves individual fi
 todos:
   - id: update-extract-zip-types
     content: Update electronAPI.d.ts to add saveToZip parameter to extractPDFFromArchive options
-    status: pending
+    status: completed
   - id: update-extract-zip-backend
     content: Update electron/main.ts extract-pdf-from-archive handler to support ZIP creation when saveToZip is true
-    status: pending
+    status: completed
     dependencies:
       - update-extract-zip-types
   - id: update-modal-zip-option
     content: Update PDFExtractionModal.tsx to pass saveToZip option to extractPDFFromArchive
-    status: pending
+    status: completed
     dependencies:
       - update-extract-zip-types
   - id: update-detached-zip-option
     content: Update DetachedPDFExtraction.tsx to pass saveToZip option to extractPDFFromArchive
-    status: pending
+    status: completed
     dependencies:
       - update-extract-zip-types
 ---
