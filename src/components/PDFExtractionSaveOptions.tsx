@@ -36,6 +36,7 @@ export function PDFExtractionSaveOptions({
   const [saveToZip, setSaveToZip] = useState(false);
   const [fileNamingPattern, setFileNamingPattern] = useState('page-{n}');
   const [customPattern, setCustomPattern] = useState('');
+  const [folderNameError, setFolderNameError] = useState<string | null>(null);
 
   const handleSelectDirectory = async () => {
     try {
@@ -53,6 +54,12 @@ export function PDFExtractionSaveOptions({
 
   const handleConfirm = () => {
     if (!saveDirectory) {
+      return;
+    }
+
+    // Validate folder name when saveToZip is true
+    if (saveToZip && !folderName.trim()) {
+      setFolderNameError('Folder Name is required when saving to ZIP folder');
       return;
     }
 
@@ -172,7 +179,12 @@ export function PDFExtractionSaveOptions({
                 <input
                   type="checkbox"
                   checked={saveToZip}
-                  onChange={(e) => setSaveToZip(e.target.checked)}
+                  onChange={(e) => {
+                    setSaveToZip(e.target.checked);
+                    if (!e.target.checked && folderNameError) {
+                      setFolderNameError(null);
+                    }
+                  }}
                   className="w-5 h-5 rounded border-gray-600 text-cyber-purple-400 focus:ring-cyber-purple-400 focus:ring-offset-gray-900"
                 />
                 <div className="flex-1">
@@ -191,15 +203,28 @@ export function PDFExtractionSaveOptions({
             {saveToZip && (
               <div>
                 <label className="block text-sm font-semibold text-gray-400 mb-3">
-                  Folder Name
+                  Folder Name {saveToZip && <span className="text-red-400">*</span>}
                 </label>
                 <input
                   type="text"
                   value={folderName}
-                  onChange={(e) => setFolderName(e.target.value)}
+                  onChange={(e) => {
+                    setFolderName(e.target.value);
+                    if (folderNameError) {
+                      setFolderNameError(null);
+                    }
+                  }}
                   placeholder="Enter folder name..."
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
+                  aria-required="true"
+                  className={`w-full px-4 py-3 bg-gray-800 border rounded-lg text-white text-sm focus:ring-2 focus:border-transparent ${
+                    folderNameError
+                      ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500'
+                      : 'border-gray-700 focus:ring-cyber-purple-400'
+                  }`}
                 />
+                {folderNameError && (
+                  <p className="text-red-400 text-sm mt-2">{folderNameError}</p>
+                )}
               </div>
             )}
 
@@ -242,7 +267,7 @@ export function PDFExtractionSaveOptions({
             </button>
             <button
               onClick={handleConfirm}
-              disabled={!saveDirectory}
+              disabled={!saveDirectory || (saveToZip && !folderName.trim())}
               className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 text-white rounded-lg font-medium transition-all disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
