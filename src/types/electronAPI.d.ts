@@ -180,6 +180,7 @@ declare global {
         progress: any | null;
         error: string | null;
         statusMessage: string;
+        caseFolderPath?: string | null;
       }) => Promise<{ success: boolean }>;
       reattachPdfExtraction: (options: {
         pdfPath: string | null;
@@ -199,6 +200,7 @@ declare global {
         progress: any | null;
         error: string | null;
         statusMessage: string;
+        caseFolderPath?: string | null;
       }) => Promise<{ success: boolean }>;
       closeWindow: () => Promise<{ success: boolean }>;
       openBookmarkInMainWindow: (options: {

@@ -19,6 +19,7 @@ interface PdfExtractionState {
   progress: any | null;
   error: string | null;
   statusMessage: string;
+  caseFolderPath?: string | null;
 }
 
 const DEFAULT_SETTINGS: ConversionSettings = {
@@ -39,7 +40,7 @@ export function DetachedPDFExtraction() {
   const [previewPage, setPreviewPage] = useState<ExtractedPage | null>(null);
   const [totalPages, setTotalPages] = useState(0);
   const [isReattaching, setIsReattaching] = useState(false);
-  const [caseFolderPath] = useState<string | null>(null);
+  const [caseFolderPath, setCaseFolderPath] = useState<string | null>(null);
 
   // Local state for extraction when detaching during extraction
   const [localExtractedPages, setLocalExtractedPages] = useState<ExtractedPage[]>([]);
@@ -77,6 +78,9 @@ export function DetachedPDFExtraction() {
       }
       if (data.showSettings !== undefined) {
         setShowSettings(data.showSettings);
+      }
+      if (data.caseFolderPath !== undefined) {
+        setCaseFolderPath(data.caseFolderPath || null);
       }
       if (data.extractedPages && data.extractedPages.length > 0) {
         setLocalExtractedPages(data.extractedPages);
@@ -374,6 +378,7 @@ export function DetachedPDFExtraction() {
         progress: finalProgress,
         error: finalError,
         statusMessage: finalStatusMessage,
+        caseFolderPath: caseFolderPath || null,
       };
 
       console.log('DetachedPDFExtraction: Reattaching with state', {

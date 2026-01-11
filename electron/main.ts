@@ -3617,6 +3617,7 @@ ipcMain.handle('create-pdf-extraction-window', async (event, options: {
   progress: any | null;
   error: string | null;
   statusMessage: string;
+  caseFolderPath?: string | null;
 }) => {
   try {
     logger.info('create-pdf-extraction-window handler called', {
@@ -3699,7 +3700,8 @@ ipcMain.handle('create-pdf-extraction-window', async (event, options: {
               isExtracting: ${JSON.stringify(options.isExtracting)},
               progress: ${options.progress ? JSON.stringify(options.progress) : 'null'},
               error: ${options.error ? JSON.stringify(options.error) : 'null'},
-              statusMessage: ${JSON.stringify(options.statusMessage || '')}
+              statusMessage: ${JSON.stringify(options.statusMessage || '')},
+              caseFolderPath: ${options.caseFolderPath ? JSON.stringify(options.caseFolderPath) : 'null'}
             };
             console.log('Main process: Dispatching pdf-extraction-data event', data);
             // Store data in case listener isn't ready yet
@@ -3742,6 +3744,7 @@ ipcMain.handle('reattach-pdf-extraction', async (event, options: {
   progress: any | null;
   error: string | null;
   statusMessage: string;
+  caseFolderPath?: string | null;
 }) => {
   try {
     // Get the window that sent the request (the detached extraction window)
@@ -3759,7 +3762,8 @@ ipcMain.handle('reattach-pdf-extraction', async (event, options: {
         isExtracting: options.isExtracting,
         progress: options.progress,
         error: options.error,
-        statusMessage: options.statusMessage || ''
+        statusMessage: options.statusMessage || '',
+        caseFolderPath: options.caseFolderPath || null
       };
 
       logger.info('Reattaching PDF extraction window', {
@@ -3767,6 +3771,7 @@ ipcMain.handle('reattach-pdf-extraction', async (event, options: {
         extractedPagesCount: reattachData.extractedPages.length,
         selectedPagesCount: reattachData.selectedPages.length,
         hasPreviewPage: !!reattachData.previewPage,
+        hasCaseFolderPath: !!reattachData.caseFolderPath,
       });
 
       // Store data globally first so modal can access it when it mounts
@@ -3782,7 +3787,8 @@ ipcMain.handle('reattach-pdf-extraction', async (event, options: {
             isExtracting: ${JSON.stringify(reattachData.isExtracting)},
             progress: ${reattachData.progress ? JSON.stringify(reattachData.progress) : 'null'},
             error: ${reattachData.error ? JSON.stringify(reattachData.error) : 'null'},
-            statusMessage: ${JSON.stringify(reattachData.statusMessage)}
+            statusMessage: ${JSON.stringify(reattachData.statusMessage)},
+            caseFolderPath: ${reattachData.caseFolderPath ? JSON.stringify(reattachData.caseFolderPath) : 'null'}
           };
           // Store data globally for modal to access when it mounts
           window.__reattachPdfExtractionData = data;

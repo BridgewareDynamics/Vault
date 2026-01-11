@@ -479,6 +479,7 @@ export function PDFExtractionModal({
         progress: progress || null,
         error: error || null,
         statusMessage,
+        caseFolderPath: caseFolderPath || null,
       };
 
       console.log('PDFExtractionModal: Detaching with state', {
