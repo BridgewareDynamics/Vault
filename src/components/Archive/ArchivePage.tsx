@@ -510,6 +510,47 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     };
   }, [files, loading, toast, selectedFile, findFileInArchive, currentCase, currentFolderPath, cases, setCurrentCase, setArchiveContextCase, navigateToFolder, openFolder, goBackToCase]);
 
+  // Listen for reattach data from detached PDF extraction window
+  useEffect(() => {
+    const handleReattach = (event: any) => {
+      const data = event.detail;
+      
+      // Only handle reattach if caseFolderPath is present (archive usage)
+      if (data && data.caseFolderPath) {
+        console.log('ArchivePage: Received reattach-pdf-extraction-data event with caseFolderPath, opening modal');
+        // Set the PDF path from reattach data
+        if (data.pdfPath) {
+          setPdfPathForExtraction(data.pdfPath);
+        }
+        // Open the ArchivePage's PDFExtractionModal
+        // The modal will automatically restore state from window.__reattachPdfExtractionData
+        setShowPDFExtraction(true);
+      }
+    };
+
+    window.addEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+    
+    // Also check for stored data on mount
+    const checkStoredData = () => {
+      const storedData = (window as any).__reattachPdfExtractionData;
+      if (storedData && storedData.caseFolderPath) {
+        console.log('ArchivePage: Found stored reattach data with caseFolderPath, opening modal');
+        if (storedData.pdfPath) {
+          setPdfPathForExtraction(storedData.pdfPath);
+        }
+        setShowPDFExtraction(true);
+      }
+    };
+    
+    // Check after a short delay to ensure component is mounted
+    const timeoutId = setTimeout(checkStoredData, 100);
+    
+    return () => {
+      window.removeEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
   // Handle drag and drop
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
