@@ -232,7 +232,7 @@ export function DetachedPDFExtraction() {
 
   const handleSave = async (saveOptions: {
     saveDirectory: string;
-    folderName?: string;
+    folderName: string;
     saveParentFile: boolean;
     saveToZip: boolean;
     fileNamingPattern: string;
@@ -263,7 +263,7 @@ export function DetachedPDFExtraction() {
         fileName: `${generateFileName(page.pageNumber, saveOptions.fileNamingPattern)}.${settings.format}`,
       }));
 
-      if (saveOptions.saveToZip && saveOptions.folderName) {
+      if (saveOptions.saveToZip) {
         if (caseFolderPath) {
           await window.electronAPI.extractPDFFromArchive({
             pdfPath: pdfPath!,
@@ -286,6 +286,7 @@ export function DetachedPDFExtraction() {
             extractedPages: pagesWithNames.map((p) => ({
               pageNumber: p.pageNumber,
               imageData: p.imageData,
+              fileName: p.fileName,
             })),
           });
           toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
@@ -295,10 +296,12 @@ export function DetachedPDFExtraction() {
           saveDirectory: saveOptions.saveDirectory,
           saveParentFile: saveOptions.saveParentFile,
           saveToZip: false,
+          folderName: saveOptions.folderName,
           parentFilePath: pdfPath!,
           extractedPages: pagesWithNames.map((p) => ({
             pageNumber: p.pageNumber,
             imageData: p.imageData,
+            fileName: p.fileName,
           })),
         });
         toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);

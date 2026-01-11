@@ -548,7 +548,7 @@ ipcMain.handle('save-files', async (
     saveToZip: boolean;
     folderName?: string;
     parentFilePath?: string;
-    extractedPages: Array<{ pageNumber: number; imageData: string }>;
+    extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
   }
 ) => {
   const { saveDirectory, saveParentFile, saveToZip, folderName, parentFilePath, extractedPages } = options;
@@ -558,29 +558,42 @@ ipcMain.handle('save-files', async (
     throw new Error('Invalid save directory');
   }
 
-  // Validate folder name if saving to ZIP
-  if (saveToZip && folderName && !isValidFolderName(folderName)) {
+  // Always require folder name
+  if (!folderName || !folderName.trim()) {
+    throw new Error('Folder name is required');
+  }
+
+  // Validate folder name
+  if (!isValidFolderName(folderName)) {
     throw new Error('Invalid folder name');
   }
 
   const results: string[] = [];
 
   try {
-    // Save parent PDF file if requested
+    // Determine the target directory (subfolder for loose files, or root for ZIP/parent PDF)
+    const targetDirectory = saveToZip ? saveDirectory : path.join(saveDirectory, folderName);
+
+    // Create subfolder if saving individual files
+    if (!saveToZip) {
+      await fs.mkdir(targetDirectory, { recursive: true });
+    }
+
+    // Save parent PDF file if requested (save to target directory)
     if (saveParentFile && parentFilePath) {
       if (!isValidPDFFile(parentFilePath) || !isSafePath(parentFilePath)) {
         throw new Error('Invalid parent PDF file path');
       }
 
       const parentFileName = path.basename(parentFilePath);
-      const destPath = path.join(saveDirectory, parentFileName);
+      const destPath = path.join(targetDirectory, parentFileName);
 
       await fs.copyFile(parentFilePath, destPath);
       results.push(`Parent PDF saved: ${destPath}`);
     }
 
     // Save to ZIP if requested
-    if (saveToZip && folderName) {
+    if (saveToZip) {
       const zip = new JSZip();
       const folder = zip.folder(folderName);
 
@@ -595,28 +608,48 @@ ipcMain.handle('save-files', async (
         const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
         
         let imageData: string;
-        let extension: string;
         
         if (pngMatch) {
           imageData = pngMatch[1];
-          extension = 'png';
         } else if (jpegMatch) {
           imageData = jpegMatch[1];
-          extension = 'jpg';
         } else {
           // Fallback: try to strip any data URL prefix
           imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
-          extension = 'png'; // Default to PNG for backward compatibility
         }
         
         const buffer = Buffer.from(imageData, 'base64');
-        folder.file(`page-${page.pageNumber}.${extension}`, buffer);
+        // Use the provided fileName from the frontend
+        folder.file(page.fileName, buffer);
       }
 
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
       const zipPath = path.join(saveDirectory, `${folderName}.zip`);
       await fs.writeFile(zipPath, zipBuffer);
       results.push(`ZIP file saved: ${zipPath}`);
+    } else {
+      // Save individual image files to subfolder
+      for (const page of extractedPages) {
+        // Detect image format from data URL (supports both PNG and JPEG)
+        const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+        const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+        
+        let imageData: string;
+        
+        if (pngMatch) {
+          imageData = pngMatch[1];
+        } else if (jpegMatch) {
+          imageData = jpegMatch[1];
+        } else {
+          // Fallback: try to strip any data URL prefix
+          imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+        }
+        
+        const buffer = Buffer.from(imageData, 'base64');
+        const imagePath = path.join(targetDirectory, page.fileName);
+        await fs.writeFile(imagePath, buffer);
+        results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
+      }
     }
 
     return { success: true, messages: results };

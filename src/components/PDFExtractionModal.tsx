@@ -332,7 +332,7 @@ export function PDFExtractionModal({
 
   const handleSave = async (saveOptions: {
     saveDirectory: string;
-    folderName?: string;
+    folderName: string;
     saveParentFile: boolean;
     saveToZip: boolean;
     fileNamingPattern: string;
@@ -364,7 +364,7 @@ export function PDFExtractionModal({
         fileName: `${generateFileName(page.pageNumber, saveOptions.fileNamingPattern)}.${settings.format}`,
       }));
 
-      if (saveOptions.saveToZip && saveOptions.folderName) {
+      if (saveOptions.saveToZip) {
         // Save to ZIP folder in archive
         if (caseFolderPath) {
           await window.electronAPI.extractPDFFromArchive({
@@ -389,6 +389,7 @@ export function PDFExtractionModal({
             extractedPages: pagesWithNames.map((p) => ({
               pageNumber: p.pageNumber,
               imageData: p.imageData,
+              fileName: p.fileName,
             })),
           });
           toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
@@ -399,10 +400,12 @@ export function PDFExtractionModal({
           saveDirectory: saveOptions.saveDirectory,
           saveParentFile: saveOptions.saveParentFile,
           saveToZip: false,
+          folderName: saveOptions.folderName,
           parentFilePath: pdfPath!,
           extractedPages: pagesWithNames.map((p) => ({
             pageNumber: p.pageNumber,
             imageData: p.imageData,
+            fileName: p.fileName,
           })),
         });
         toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);

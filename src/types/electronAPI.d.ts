@@ -17,7 +17,7 @@ declare global {
         saveToZip: boolean;
         folderName?: string;
         parentFilePath?: string;
-        extractedPages: Array<{ pageNumber: number; imageData: string }>;
+        extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
       }) => Promise<{ success: boolean; messages: string[] }>;
       validatePath: (filePath: string) => Promise<{ isValid: boolean; isPDF: boolean }>;
       readPDFFile: (filePath: string) => Promise<{ type: 'base64'; data: string } | { type: 'file-path'; path: string } | string | number[]>;

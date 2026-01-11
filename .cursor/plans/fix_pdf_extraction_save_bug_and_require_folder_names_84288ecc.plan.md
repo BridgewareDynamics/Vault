@@ -4,23 +4,23 @@ overview: Fix the bug where saving individual image files (when both options are
 todos:
   - id: update-types
     content: Update electronAPI.d.ts to include fileName in extractedPages array items for save-files handler
-    status: pending
+    status: completed
   - id: update-backend-save
     content: Update electron/main.ts save-files handler to save individual image files when saveToZip is false, and always require folderName
-    status: pending
+    status: completed
     dependencies:
       - update-types
   - id: update-save-options-ui
     content: Update PDFExtractionSaveOptions.tsx to always show folder name field and require it for all save operations
-    status: pending
+    status: completed
   - id: update-modal-handler
     content: Update PDFExtractionModal.tsx handleSave to pass fileName in extractedPages array
-    status: pending
+    status: completed
     dependencies:
       - update-types
   - id: update-detached-handler
     content: Update DetachedPDFExtraction.tsx handleSave to pass fileName in extractedPages array
-    status: pending
+    status: completed
     dependencies:
       - update-types
 ---
