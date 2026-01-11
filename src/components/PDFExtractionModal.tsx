@@ -147,6 +147,7 @@ export function PDFExtractionModal({
       progress: any | null;
       error: string | null;
       statusMessage: string;
+      caseFolderPath?: string | null;
     }>) => {
       const data = event.detail;
       
@@ -181,6 +182,7 @@ export function PDFExtractionModal({
       progress: any | null;
       error: string | null;
       statusMessage: string;
+      caseFolderPath?: string | null;
     }) => {
       console.log('PDFExtractionModal: restoreReattachState called', {
         hasPreviewPage: !!data.previewPage,

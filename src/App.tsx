@@ -54,9 +54,15 @@ function AppContent() {
   // Listen for reattach data from detached PDF extraction window
   useEffect(() => {
     const handleReattach = (event: any) => {
-      // Open the PDF extraction modal when reattaching
-      console.log('App: Received reattach-pdf-extraction-data event, opening modal');
-      setShowPDFExtraction(true);
+      const data = event.detail;
+      
+      // Only handle reattach if caseFolderPath is absent (home menu usage)
+      // If caseFolderPath is present, ArchivePage will handle it
+      if (data && !data.caseFolderPath) {
+        // Open the PDF extraction modal when reattaching from home menu
+        console.log('App: Received reattach-pdf-extraction-data event without caseFolderPath, opening modal');
+        setShowPDFExtraction(true);
+      }
     };
 
     window.addEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
@@ -64,8 +70,8 @@ function AppContent() {
     // Also check for stored data on mount
     const checkStoredData = () => {
       const storedData = (window as any).__reattachPdfExtractionData;
-      if (storedData) {
-        console.log('App: Found stored reattach data, opening modal');
+      if (storedData && !storedData.caseFolderPath) {
+        console.log('App: Found stored reattach data without caseFolderPath, opening modal');
         setShowPDFExtraction(true);
       }
     };
