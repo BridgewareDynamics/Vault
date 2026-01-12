@@ -380,6 +380,7 @@ export function PDFExtractionSaveOptions({
                                   setFolderNameError(null);
                                 }
                               }}
+                              onFocus={(e) => e.target.select()}
                               placeholder="Enter folder name..."
                               className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white text-sm focus:ring-2 focus:border-transparent ${
                                 folderNameError
@@ -452,6 +453,7 @@ export function PDFExtractionSaveOptions({
                                   setFolderNameError(null);
                                 }
                               }}
+                              onFocus={(e) => e.target.select()}
                               placeholder="Enter folder name..."
                               className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white text-sm focus:ring-2 focus:border-transparent ${
                                 folderNameError
@@ -617,6 +619,7 @@ export function PDFExtractionSaveOptions({
                       setFolderNameError(null);
                     }
                   }}
+                  onFocus={(e) => e.target.select()}
                   placeholder="Enter folder name..."
                   aria-required={!casePath}
                   className={`w-full px-4 py-3 bg-gray-800 border rounded-lg text-white text-sm focus:ring-2 focus:border-transparent ${

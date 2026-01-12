@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, FolderOpen, Save, FileText, FolderPlus } from 'lucide-react';
 import { ArchiveFile } from '../types';
 
@@ -61,6 +61,7 @@ export function AuditSaveOptionsDialog({
   const [createNewFolderForLoose, setCreateNewFolderForLoose] = useState(false);
   const [looseFolderName, setLooseFolderName] = useState('');
   const [folderNameError, setFolderNameError] = useState<string | null>(null);
+  const hasInitializedFolderName = useRef(false);
 
   // Detect existing folders on mount or when props change
   useEffect(() => {
@@ -88,13 +89,20 @@ export function AuditSaveOptionsDialog({
     }
   }, [isOpen, pdfPath, casePath, existingFolders]);
 
-  // Generate default folder name from PDF name
+  // Generate default folder name from PDF name - only when dialog opens or pdfPath changes
   useEffect(() => {
-    if (pdfPath && !folderName) {
+    if (isOpen && pdfPath && !hasInitializedFolderName.current) {
       const pdfName = pdfPath.split(/[/\\]/).pop()?.replace(/\.pdf$/i, '') || 'audit_report';
       setFolderName(pdfName);
+      hasInitializedFolderName.current = true;
     }
-  }, [pdfPath, folderName]);
+    
+    // Reset initialization flag when dialog closes
+    if (!isOpen) {
+      hasInitializedFolderName.current = false;
+      setFolderName('');
+    }
+  }, [isOpen, pdfPath]);
 
   const hasExistingFolder = detectedFolders.length > 0;
   const firstExistingFolder = detectedFolders[0];
@@ -313,6 +321,7 @@ export function AuditSaveOptionsDialog({
                               setFolderNameError(null);
                             }
                           }}
+                          onFocus={(e) => e.target.select()}
                           placeholder="Enter folder name..."
                           className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white text-sm focus:ring-2 focus:border-transparent ${
                             folderNameError
@@ -380,6 +389,7 @@ export function AuditSaveOptionsDialog({
                           type="text"
                           value={folderName}
                           onChange={(e) => setFolderName(e.target.value)}
+                          onFocus={(e) => e.target.select()}
                           placeholder="Enter folder name..."
                           className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
                         />
