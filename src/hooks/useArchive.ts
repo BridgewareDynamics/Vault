@@ -249,6 +249,34 @@ export function useArchive() {
     }
   }, [toast, currentCase, currentFolderPath]);
 
+  const updateCaseDescription = useCallback(async (casePath: string, description: string): Promise<boolean> => {
+    try {
+      if (!window.electronAPI) {
+        toast.error('Electron API not available');
+        return false;
+      }
+
+      await window.electronAPI.updateCaseDescription(casePath, description);
+      
+      // Reload cases to update the UI
+      await loadCases();
+      
+      // If this is the current case, update it in state
+      if (currentCase?.path === casePath) {
+        setCurrentCase({
+          ...currentCase,
+          description: description.trim() || undefined,
+        });
+      }
+      
+      toast.success('Description updated');
+      return true;
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'update description', path: casePath }));
+      return false;
+    }
+  }, [toast, loadCases, currentCase]);
+
   // Generate PDF thumbnail in renderer using optimized chunk loading
   // This works for files of any size by only loading the first page
   const generatePDFThumbnailInRenderer = useCallback(async (filePath: string): Promise<string> => {
@@ -1476,6 +1504,7 @@ export function useArchive() {
     getCurrentPath,
     updateCaseBackgroundImage,
     updateFolderBackgroundImage,
+    updateCaseDescription,
     refreshCases: loadCases,
     refreshFiles: () => {
       const path = currentFolderPath || currentCase?.path;

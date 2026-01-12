@@ -1230,6 +1230,45 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
   }
 });
 
+// Update case description
+ipcMain.handle('update-case-description', async (event, casePath: string, description: string) => {
+  logger.log('[Main] update-case-description called:', { casePath, descriptionLength: description.length });
+  
+  if (!isSafePath(casePath)) {
+    logger.error('[Main] Invalid case path:', casePath);
+    throw new Error('Invalid case path');
+  }
+
+  try {
+    // Verify the case folder exists
+    await fs.access(casePath);
+    
+    const descriptionPath = path.join(casePath, '.case-description');
+    
+    if (description.trim()) {
+      // Save or update description
+      await fs.writeFile(descriptionPath, description.trim(), 'utf8');
+      logger.info('[Main] Case description updated successfully');
+    } else {
+      // Remove description file if empty
+      try {
+        await fs.unlink(descriptionPath);
+        logger.info('[Main] Case description removed');
+      } catch (unlinkError) {
+        // File doesn't exist, that's okay
+        if (isErrorWithCode(unlinkError) && unlinkError.code !== 'ENOENT') {
+          throw unlinkError;
+        }
+      }
+    }
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('[Main] Failed to update case description:', error);
+    throw new Error(`Failed to update case description: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
 // Create folder (regular folder for organizing files)
 ipcMain.handle('create-folder', async (event, folderPath: string, folderName: string) => {
   logger.log('[Main] create-folder called:', { folderPath, folderName });

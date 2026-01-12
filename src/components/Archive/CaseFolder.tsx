@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Folder, Loader2, Trash2, Pencil, Image, Tag } from 'lucide-react';
+import { Folder, Loader2, Trash2, Pencil, Image, Tag, Plus } from 'lucide-react';
 import { ArchiveCase } from '../../types';
 import { useState, useEffect } from 'react';
 import { logger } from '../../utils/logger';
@@ -14,9 +14,10 @@ interface CaseFolderProps {
   onRename?: () => void;
   onEditBackground?: () => void;
   onTagClick?: () => void;
+  onEditDescription?: () => void;
 }
 
-export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, onRename, onEditBackground, onTagClick }: CaseFolderProps) {
+export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, onRename, onEditBackground, onTagClick, onEditDescription }: CaseFolderProps) {
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | undefined>(undefined);
   const { getTagById } = useCategoryTags();
   const categoryTag = getTagById(caseItem.categoryTagId);
@@ -198,16 +199,49 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
       </motion.div>
 
       {/* Description Container - Separate from folder card */}
-      {caseItem.description && (
+      {(caseItem.description || onEditDescription) && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
-          className="w-full p-4 bg-gray-800/40 border border-cyber-purple-500/20 rounded-2xl backdrop-blur-sm"
+          className={`w-full ${caseItem.description ? 'p-4' : 'p-2 min-h-[2rem]'} bg-gray-800/40 border border-cyber-purple-500/20 rounded-2xl backdrop-blur-sm relative group/desc`}
         >
-          <p className="text-gray-300 text-xs leading-relaxed break-words text-center">
-            {caseItem.description}
-          </p>
+          {caseItem.description ? (
+            <>
+              {/* Pencil icon in left corner for editing */}
+              {onEditDescription && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditDescription();
+                  }}
+                  className="absolute top-2 left-2 p-1 hover:bg-gray-700/50 rounded transition-colors opacity-0 group-hover/desc:opacity-100 z-10"
+                  aria-label="Edit description"
+                  title="Edit description"
+                >
+                  <Pencil className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" />
+                </button>
+              )}
+              <p className="text-gray-300 text-xs leading-relaxed break-words text-center">
+                {caseItem.description}
+              </p>
+            </>
+          ) : (
+            /* + button when no description - always visible */
+            onEditDescription && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditDescription();
+                }}
+                className="absolute top-1 left-2 p-1 hover:bg-gray-700/50 rounded transition-colors z-10"
+                aria-label="Add description"
+                title="Add description"
+              >
+                <Plus className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" />
+              </button>
+            )
+          )}
         </motion.div>
       )}
     </div>
