@@ -3,7 +3,7 @@ name: Prerelease Build
 on:
   push:
     branches:
-      - 99-prerelease-broken-cici-failed-to-build-electron-app
+      - prerelease
 
 permissions:
   contents: write  # Required to create releases and tags
