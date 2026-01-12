@@ -7,7 +7,7 @@ interface PDFExtractionSaveOptionsProps {
   onClose: () => void;
   onConfirm: (options: {
     saveDirectory: string;
-    folderName?: string;
+    folderName: string;
     saveParentFile: boolean;
     saveToZip: boolean;
     fileNamingPattern: string;
@@ -36,6 +36,7 @@ export function PDFExtractionSaveOptions({
   const [saveToZip, setSaveToZip] = useState(false);
   const [fileNamingPattern, setFileNamingPattern] = useState('page-{n}');
   const [customPattern, setCustomPattern] = useState('');
+  const [folderNameError, setFolderNameError] = useState<string | null>(null);
 
   const handleSelectDirectory = async () => {
     try {
@@ -56,11 +57,17 @@ export function PDFExtractionSaveOptions({
       return;
     }
 
+    // Always validate folder name
+    if (!folderName.trim()) {
+      setFolderNameError('Folder name is required');
+      return;
+    }
+
     const finalPattern = fileNamingPattern === 'custom' ? customPattern : fileNamingPattern;
 
     onConfirm({
       saveDirectory,
-      folderName: saveToZip ? folderName : undefined,
+      folderName: folderName.trim(),
       saveParentFile,
       saveToZip,
       fileNamingPattern: finalPattern,
@@ -187,21 +194,37 @@ export function PDFExtractionSaveOptions({
               </label>
             </div>
 
-            {/* Folder Name (if ZIP) */}
-            {saveToZip && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-400 mb-3">
-                  Folder Name
-                </label>
-                <input
-                  type="text"
-                  value={folderName}
-                  onChange={(e) => setFolderName(e.target.value)}
-                  placeholder="Enter folder name..."
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
-                />
-              </div>
-            )}
+            {/* Folder Name */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-400 mb-3">
+                Folder Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={folderName}
+                onChange={(e) => {
+                  setFolderName(e.target.value);
+                  if (folderNameError) {
+                    setFolderNameError(null);
+                  }
+                }}
+                placeholder="Enter folder name..."
+                aria-required="true"
+                className={`w-full px-4 py-3 bg-gray-800 border rounded-lg text-white text-sm focus:ring-2 focus:border-transparent ${
+                  folderNameError
+                    ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500'
+                    : 'border-gray-700 focus:ring-cyber-purple-400'
+                }`}
+              />
+              {folderNameError && (
+                <p className="text-red-400 text-sm mt-2">{folderNameError}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-2">
+                {saveToZip
+                  ? 'This name will be used for the ZIP file'
+                  : 'A subfolder with this name will be created to store the extracted images'}
+              </p>
+            </div>
 
             {/* File Naming Pattern */}
             <div>
@@ -242,7 +265,7 @@ export function PDFExtractionSaveOptions({
             </button>
             <button
               onClick={handleConfirm}
-              disabled={!saveDirectory}
+              disabled={!saveDirectory || !folderName.trim()}
               className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 text-white rounded-lg font-medium transition-all disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
