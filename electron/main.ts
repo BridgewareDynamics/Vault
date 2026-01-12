@@ -2074,13 +2074,14 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     const groupedItems: Array<typeof files[0] | typeof folders[0]> = [];
     
     // Add folders and their PDFs in alphabetical PDF order
+    // CRITICAL: Folders MUST come before their PDF in the array for frontend grouping to work
     // This ensures folders always appear above their associated PDFs
     for (const pdf of pdfFiles) {
       const relatedFolders = pdfToFoldersMap.get(pdf.name) || [];
       // Add folders above the PDF (folders are already sorted alphabetically)
-      groupedItems.push(...relatedFolders);
+      groupedItems.push(...relatedFolders);  // ← Folders first
       // Add the PDF
-      groupedItems.push(pdf);
+      groupedItems.push(pdf);  // ← Then PDF
     }
     
     // Add orphaned folders (folders without a matching PDF) after all PDFs

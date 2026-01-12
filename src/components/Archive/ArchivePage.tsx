@@ -1336,17 +1336,16 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                     const groupedItems: Array<{ type: 'group' | 'single'; items: ArchiveFile[] }> = [];
                     const processedPaths = new Set<string>();
 
-                    // Build a map of PDF paths to their folders (for quick lookup)
+                    // Build complete map first (all folders for all PDFs)
                     const pdfToFoldersMap = new Map<string, ArchiveFile[]>();
                     const pdfFiles = files.filter(f => !f.isFolder && f.type === 'pdf');
 
+                    // First pass: Collect ALL folders for each PDF
                     files.forEach((item) => {
                       if (item.isFolder && item.parentPdfName) {
-                        // Find the PDF this folder belongs to (case-insensitive match)
                         const associatedPdf = pdfFiles.find(pdf =>
                           pdf.name.toLowerCase() === item.parentPdfName!.toLowerCase()
                         );
-
                         if (associatedPdf) {
                           const pdfKey = associatedPdf.path;
                           if (!pdfToFoldersMap.has(pdfKey)) {
@@ -1357,59 +1356,27 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                       }
                     });
 
-                    // Process items in backend order to maintain sorting
+                    // Second pass: Create groups in backend order
+                    // Process PDFs first (which have folders before them in backend order)
+                    // This ensures all folders for a PDF are collected before creating the group
                     files.forEach((item) => {
                       if (processedPaths.has(item.path)) return;
 
-                      if (item.isFolder && item.parentPdfName) {
-                        // Find the PDF this folder belongs to
-                        const associatedPdf = pdfFiles.find(pdf =>
-                          pdf.name.toLowerCase() === item.parentPdfName!.toLowerCase() &&
-                          !processedPaths.has(pdf.path)
-                        );
-
-                        if (associatedPdf) {
-                          // Get all folders for this PDF (maintain order from backend)
-                          const allFoldersForPdf = pdfToFoldersMap.get(associatedPdf.path) || [];
-                          // Sort folders by their position in the original array to maintain backend order
-                          const sortedFolders = allFoldersForPdf.sort((a, b) => {
-                            const indexA = files.findIndex(f => f.path === a.path);
-                            const indexB = files.findIndex(f => f.path === b.path);
-                            return indexA - indexB;
-                          });
-
-                          // Group all folders with their PDF (folders first, then PDF)
-                          groupedItems.push({
-                            type: 'group',
-                            items: [...sortedFolders, associatedPdf]
-                          });
-
-                          // Mark all as processed
-                          sortedFolders.forEach(folder => processedPaths.add(folder.path));
-                          processedPaths.add(associatedPdf.path);
-                        } else {
-                          // Folder without associated PDF found - render as single
-                          groupedItems.push({
-                            type: 'single',
-                            items: [item]
-                          });
-                          processedPaths.add(item.path);
-                        }
-                      } else if (item.type === 'pdf' && !processedPaths.has(item.path)) {
+                      if (item.type === 'pdf' && !processedPaths.has(item.path)) {
                         // Check if this PDF has unprocessed folders
                         const foldersForPdf = (pdfToFoldersMap.get(item.path) || []).filter(
                           folder => !processedPaths.has(folder.path)
                         );
 
                         if (foldersForPdf.length > 0) {
-                          // Sort folders by their position in the original array
+                          // Sort folders by backend order (their position in the original array)
                           const sortedFolders = foldersForPdf.sort((a, b) => {
                             const indexA = files.findIndex(f => f.path === a.path);
                             const indexB = files.findIndex(f => f.path === b.path);
                             return indexA - indexB;
                           });
 
-                          // Group folders with this PDF
+                          // Group: folders first, then PDF
                           groupedItems.push({
                             type: 'group',
                             items: [...sortedFolders, item]
@@ -1418,25 +1385,28 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                           processedPaths.add(item.path);
                         } else {
                           // Standalone PDF
-                          groupedItems.push({
-                            type: 'single',
-                            items: [item]
-                          });
+                          groupedItems.push({ type: 'single', items: [item] });
                           processedPaths.add(item.path);
                         }
+                      } else if (item.isFolder && item.parentPdfName) {
+                        // Folder with parentPdfName but PDF not found or already processed
+                        // This shouldn't happen if backend ordering is correct, but handle gracefully
+                        const associatedPdf = pdfFiles.find(pdf =>
+                          pdf.name.toLowerCase() === item.parentPdfName!.toLowerCase()
+                        );
+                        if (!associatedPdf || processedPaths.has(associatedPdf.path)) {
+                          // Orphaned folder or PDF already grouped - render as single
+                          groupedItems.push({ type: 'single', items: [item] });
+                          processedPaths.add(item.path);
+                        }
+                        // If PDF exists and not processed, it will be handled when we reach the PDF
+                      } else if (item.isFolder && !item.parentPdfName) {
+                        // Regular folder without parent PDF
+                        groupedItems.push({ type: 'single', items: [item] });
+                        processedPaths.add(item.path);
                       } else if (!item.isFolder && item.type !== 'pdf') {
                         // Non-PDF file
-                        groupedItems.push({
-                          type: 'single',
-                          items: [item]
-                        });
-                        processedPaths.add(item.path);
-                      } else if (item.isFolder && !item.parentPdfName) {
-                        // Folder without parentPdfName metadata
-                        groupedItems.push({
-                          type: 'single',
-                          items: [item]
-                        });
+                        groupedItems.push({ type: 'single', items: [item] });
                         processedPaths.add(item.path);
                       }
                     });
