@@ -18,12 +18,15 @@ import { PDFExtractionResults } from './PDFExtractionResults';
 import { PDFExtractionSaveOptions } from './PDFExtractionSaveOptions';
 import { ConversionSettings, ExtractedPage } from '../types';
 
+import { ArchiveFile } from '../types';
+
 interface PDFExtractionModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialPdfPath?: string | null;
   caseFolderPath?: string | null;
   onExtractionComplete?: () => void;
+  existingFolders?: ArchiveFile[];
 }
 
 const DEFAULT_SETTINGS: ConversionSettings = {
@@ -41,6 +44,7 @@ export function PDFExtractionModal({
   initialPdfPath,
   caseFolderPath,
   onExtractionComplete,
+  existingFolders,
 }: PDFExtractionModalProps) {
   const [pdfPath, setPdfPath] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -333,8 +337,11 @@ export function PDFExtractionModal({
   };
 
   const handleSave = async (saveOptions: {
+    saveOption: 'save-loose' | 'make-pdf-folder' | 'add-to-pdf-folder' | 'add-folder-to-directory';
     saveDirectory: string;
-    folderName: string;
+    folderName?: string;
+    subfolderName?: string;
+    createNewFolderForLoose?: boolean;
     saveParentFile: boolean;
     saveToZip: boolean;
     fileNamingPattern: string;
@@ -367,19 +374,160 @@ export function PDFExtractionModal({
       }));
 
       if (caseFolderPath) {
-        // Save to archive case folder (always use extractPDFFromArchive for archive)
-        await window.electronAPI.extractPDFFromArchive({
-          pdfPath: pdfPath!,
-          casePath: caseFolderPath,
-          folderName: saveOptions.folderName,
-          saveParentFile: saveOptions.saveParentFile,
-          saveToZip: saveOptions.saveToZip,
-          extractedPages: pagesWithNames.map((p) => ({
-            pageNumber: p.pageNumber,
-            imageData: p.imageData,
-            fileName: p.fileName,
-          })),
-        });
+        // Handle different save options for archive case folder
+        let targetFolderName: string = '';
+        let subfolderPath: string | null = null;
+
+        switch (saveOptions.saveOption) {
+          case 'save-loose': {
+            // For save-loose, we always need a folder name (saveFiles API requires it)
+            // If createNewFolderForLoose is true, use the provided folder name
+            // If false, use a default folder name (saveFiles will create it)
+            if (saveOptions.createNewFolderForLoose) {
+              if (!saveOptions.folderName || !saveOptions.folderName.trim()) {
+                throw new Error('Folder name is required');
+              }
+              targetFolderName = saveOptions.folderName.trim();
+            } else {
+              // Use a default folder name - saveFiles API requires it
+              // The folder will be created by saveFiles
+              targetFolderName = 'extracted_images';
+            }
+            break;
+          }
+
+          case 'make-pdf-folder': {
+            // Check if folder already exists
+            let existingFolderPath: string | null = null;
+            try {
+              const files = await window.electronAPI.listCaseFiles(caseFolderPath);
+              const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
+              const existingFolder = files.find(
+                (file: any) =>
+                  file.isFolder &&
+                  file.parentPdfName &&
+                  file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+              );
+              
+              if (existingFolder) {
+                existingFolderPath = existingFolder.path;
+                targetFolderName = existingFolder.name;
+              }
+            } catch (error) {
+              console.error('Error checking for existing folder:', error);
+            }
+
+            // Create folder if it doesn't exist
+            if (!existingFolderPath) {
+              if (!saveOptions.folderName || !saveOptions.folderName.trim()) {
+                throw new Error('Folder name is required');
+              }
+              await window.electronAPI.createExtractionFolder(
+                caseFolderPath,
+                saveOptions.folderName.trim(),
+                pdfPath || undefined
+              );
+              targetFolderName = saveOptions.folderName.trim();
+            }
+            break;
+          }
+
+          case 'add-to-pdf-folder': {
+            // Find existing folder and use it
+            const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
+            const files = await window.electronAPI.listCaseFiles(caseFolderPath);
+            const existingFolder = files.find(
+              (file: any) =>
+                file.isFolder &&
+                file.parentPdfName &&
+                file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+            );
+
+            if (!existingFolder) {
+              throw new Error('No existing folder found for this PDF');
+            }
+
+            targetFolderName = existingFolder.name;
+            break;
+          }
+
+          case 'add-folder-to-directory': {
+            // Find existing folder and create subfolder
+            const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
+            const files = await window.electronAPI.listCaseFiles(caseFolderPath);
+            const existingFolderForSubfolder = files.find(
+              (file: any) =>
+                file.isFolder &&
+                file.parentPdfName &&
+                file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+            );
+
+            if (!existingFolderForSubfolder) {
+              throw new Error('No existing folder found for this PDF');
+            }
+
+            if (!saveOptions.subfolderName || !saveOptions.subfolderName.trim()) {
+              throw new Error('Subfolder name is required');
+            }
+
+            // Store existing folder path for later use
+            subfolderPath = existingFolderForSubfolder.path;
+            targetFolderName = saveOptions.subfolderName.trim();
+            break;
+          }
+
+          default:
+            throw new Error('Invalid save option');
+        }
+
+        // Handle different save scenarios
+        if (saveOptions.saveOption === 'add-folder-to-directory' && subfolderPath) {
+          // Use saveFiles API with existing folder as base directory
+          // The folderName parameter will create the subfolder inside the saveDirectory
+          await window.electronAPI.saveFiles({
+            saveDirectory: subfolderPath, // Use existing folder path as base
+            saveParentFile: saveOptions.saveParentFile,
+            saveToZip: saveOptions.saveToZip,
+            folderName: saveOptions.subfolderName!.trim(), // This creates the subfolder inside saveDirectory
+            parentFilePath: pdfPath!,
+            extractedPages: pagesWithNames.map((p) => ({
+              pageNumber: p.pageNumber,
+              imageData: p.imageData,
+              fileName: p.fileName,
+            })),
+          });
+        } else if (saveOptions.saveOption === 'save-loose') {
+          // Save loose files - saveFiles will create the subfolder
+          // If createNewFolderForLoose is true, use the provided folder name
+          // If false, use default folder name
+          await window.electronAPI.saveFiles({
+            saveDirectory: caseFolderPath, // Base directory (case folder)
+            saveParentFile: saveOptions.saveParentFile,
+            saveToZip: saveOptions.saveToZip,
+            folderName: targetFolderName, // saveFiles will create this subfolder
+            parentFilePath: pdfPath!,
+            extractedPages: pagesWithNames.map((p) => ({
+              pageNumber: p.pageNumber,
+              imageData: p.imageData,
+              fileName: p.fileName,
+            })),
+          });
+        } else {
+          // Use extractPDFFromArchive for extraction folders (make-pdf-folder, add-to-pdf-folder)
+          await window.electronAPI.extractPDFFromArchive({
+            pdfPath: pdfPath!,
+            casePath: caseFolderPath,
+            folderName: targetFolderName,
+            saveParentFile: saveOptions.saveParentFile,
+            saveToZip: saveOptions.saveToZip,
+            extractedPages: pagesWithNames.map((p) => ({
+              pageNumber: p.pageNumber,
+              imageData: p.imageData,
+              fileName: p.fileName,
+            })),
+          });
+        }
+
         toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''} to archive`);
       } else {
         // Save to regular directory
@@ -734,6 +882,9 @@ export function PDFExtractionModal({
           onConfirm={handleSave}
           initialSaveDirectory={caseFolderPath || null}
           defaultFolderName={pdfPath ? pdfPath.split(/[/\\]/).pop()?.replace(/\.pdf$/i, '') : undefined}
+          pdfPath={pdfPath}
+          casePath={caseFolderPath || null}
+          existingFolders={existingFolders}
         />
       </motion.div>
     </AnimatePresence>

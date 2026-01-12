@@ -235,8 +235,11 @@ export function DetachedPDFExtraction() {
   };
 
   const handleSave = async (saveOptions: {
+    saveOption: 'save-loose' | 'make-pdf-folder' | 'add-to-pdf-folder' | 'add-folder-to-directory';
     saveDirectory: string;
-    folderName: string;
+    folderName?: string;
+    subfolderName?: string;
+    createNewFolderForLoose?: boolean;
     saveParentFile: boolean;
     saveToZip: boolean;
     fileNamingPattern: string;
@@ -267,12 +270,27 @@ export function DetachedPDFExtraction() {
         fileName: `${generateFileName(page.pageNumber, saveOptions.fileNamingPattern)}.${settings.format}`,
       }));
 
+      // Determine folder name based on save option
+      let targetFolderName: string;
+      if (saveOptions.saveOption === 'save-loose') {
+        // For save-loose, use provided folder name or default
+        targetFolderName = (saveOptions.createNewFolderForLoose && saveOptions.folderName) 
+          ? saveOptions.folderName 
+          : 'extracted_images';
+      } else {
+        // For other options, require folder name
+        if (!saveOptions.folderName) {
+          throw new Error('Folder name is required');
+        }
+        targetFolderName = saveOptions.folderName;
+      }
+
       if (caseFolderPath) {
         // Save to archive case folder (always use extractPDFFromArchive for archive)
         await window.electronAPI.extractPDFFromArchive({
           pdfPath: pdfPath!,
           casePath: caseFolderPath,
-          folderName: saveOptions.folderName,
+          folderName: targetFolderName,
           saveParentFile: saveOptions.saveParentFile,
           saveToZip: saveOptions.saveToZip,
           extractedPages: pagesWithNames.map((p) => ({
@@ -284,35 +302,19 @@ export function DetachedPDFExtraction() {
         toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''} to archive`);
       } else {
         // Save to regular directory
-        if (saveOptions.saveToZip) {
-          await window.electronAPI.saveFiles({
-            saveDirectory: saveOptions.saveDirectory,
-            saveParentFile: saveOptions.saveParentFile,
-            saveToZip: true,
-            folderName: saveOptions.folderName,
-            parentFilePath: pdfPath!,
-            extractedPages: pagesWithNames.map((p) => ({
-              pageNumber: p.pageNumber,
-              imageData: p.imageData,
-              fileName: p.fileName,
-            })),
-          });
-          toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
-        } else {
-          await window.electronAPI.saveFiles({
-            saveDirectory: saveOptions.saveDirectory,
-            saveParentFile: saveOptions.saveParentFile,
-            saveToZip: false,
-            folderName: saveOptions.folderName,
-            parentFilePath: pdfPath!,
-            extractedPages: pagesWithNames.map((p) => ({
-              pageNumber: p.pageNumber,
-              imageData: p.imageData,
-              fileName: p.fileName,
-            })),
-          });
-          toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
-        }
+        await window.electronAPI.saveFiles({
+          saveDirectory: saveOptions.saveDirectory,
+          saveParentFile: saveOptions.saveParentFile,
+          saveToZip: saveOptions.saveToZip,
+          folderName: targetFolderName,
+          parentFilePath: pdfPath!,
+          extractedPages: pagesWithNames.map((p) => ({
+            pageNumber: p.pageNumber,
+            imageData: p.imageData,
+            fileName: p.fileName,
+          })),
+        });
+        toast.success(`Saved ${pagesToSave.length} page${pagesToSave.length !== 1 ? 's' : ''}`);
       }
 
       setShowSaveDialog(false);
