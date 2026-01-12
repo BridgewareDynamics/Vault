@@ -764,14 +764,27 @@ The Vault includes a comprehensive test suite using Vitest and Testing Library.
 
 ### 📖 Testing Documentation
 
-For complete testing procedures, see **[TESTING_PROCEDURES.md](TESTING_PROCEDURES.md)**.
+The Vault provides comprehensive testing documentation to ensure quality:
 
-This comprehensive guide includes:
-- **Manual Testing Procedures**: Step-by-step test cases for all features
-- **Automated Testing**: How to run and interpret automated tests
-- **Performance Testing**: Benchmarks and performance test procedures
-- **Build Testing**: Verification of production builds and installers
-- **Test Checklists**: Quick reference checklists for common testing scenarios
+- **[TESTING_PROCEDURES.md](TESTING_PROCEDURES.md)** - Complete testing procedures covering all features
+  - Manual testing procedures for all features
+  - Automated testing guide
+  - Performance testing benchmarks
+  - Build and deployment testing
+  - Test checklists for common scenarios
+
+- **[MENU_TESTING_QA.md](MENU_TESTING_QA.md)** - Menu-focused Q&A testing guide (NEW!)
+  - 51 Q&A items covering all menu systems
+  - Step-by-step testing procedures
+  - Common issues and troubleshooting
+  - Quick start guide for menu testing
+
+- **[TESTING_CHECKLIST.md](TESTING_CHECKLIST.md)** - Progress tracking checklists (NEW!)
+  - Daily testing checklist (15 min smoke test)
+  - Weekly comprehensive testing (5-day plan)
+  - Pre-release testing checklist (4-6 hours)
+  - Performance and cross-platform testing
+  - Testing sign-off templates
 
 ### Running Automated Tests
 
