@@ -120,7 +120,13 @@ export function useArchiveExtraction() {
           percentage: 15,
         });
 
-        const extractedPages: Array<{ pageNumber: number; imageData: string }> = [];
+        const extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }> = [];
+
+        // Helper function to generate fileName from PDF path and page number
+        const generateFileName = (pdfPath: string, pageNumber: number): string => {
+          const pdfBasename = pdfPath.replace(/\\/g, '/').split('/').pop()?.replace(/\.pdf$/i, '') || 'page';
+          return `${pdfBasename}_page_${String(pageNumber).padStart(3, '0')}.jpg`;
+        };
 
         // Extract each page with memory management
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
@@ -169,6 +175,7 @@ export function useArchiveExtraction() {
             extractedPages.push({
               pageNumber: pageNum,
               imageData,
+              fileName: generateFileName(pdfPath, pageNum),
             });
 
             // Clean up canvas immediately to free memory
@@ -268,6 +275,7 @@ export function useArchiveExtraction() {
           casePath,
           folderName,
           saveParentFile,
+          saveToZip: false, // Archive extractions save directly to folders, not ZIP
           extractedPages,
         });
 
