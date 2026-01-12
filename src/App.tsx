@@ -361,6 +361,15 @@ function AppContent() {
         return;
       }
 
+      // Helper function to generate fileName from PDF path and page number
+      const generateFileName = (pdfPath: string, pageNumber: number, imageData: string): string => {
+        const pdfBasename = pdfPath.replace(/\\/g, '/').split('/').pop()?.replace(/\.pdf$/i, '') || 'page';
+        // Detect format from imageData (data:image/png or data:image/jpeg)
+        const isPng = imageData.startsWith('data:image/png');
+        const ext = isPng ? 'png' : 'jpg';
+        return `${pdfBasename}_page_${String(pageNumber).padStart(3, '0')}.${ext}`;
+      };
+
       const result = await window.electronAPI.saveFiles({
         saveDirectory,
         saveParentFile,
@@ -370,6 +379,7 @@ function AppContent() {
         extractedPages: extractedPages.map((page) => ({
           pageNumber: page.pageNumber,
           imageData: page.imageData,
+          fileName: generateFileName(selectedPdfPath, page.pageNumber, page.imageData),
         })),
       });
 
