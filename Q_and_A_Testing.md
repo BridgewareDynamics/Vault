@@ -778,4 +778,4 @@ Use this checklist for comprehensive manual testing:
 
 **End of Q&A Testing Guide**
 
-For additional testing procedures, refer to [TESTING_PROCEDURES.md](./TESTING_PROCEDURES.md).
+For additional testing procedures, refer to [TESTING_PROCEDURES.md](TESTING_PROCEDURES.md).
