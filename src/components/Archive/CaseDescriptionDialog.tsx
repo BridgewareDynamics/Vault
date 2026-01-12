@@ -20,7 +20,7 @@ export function CaseDescriptionDialog({ isOpen, onClose, onConfirm, initialDescr
 
   const handleConfirm = () => {
     onConfirm(description.trim());
-    setDescription('');
+    // Don't clear here - useEffect will reset when dialog reopens
   };
 
   const handleTextareaKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

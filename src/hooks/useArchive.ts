@@ -157,17 +157,19 @@ export function useArchive() {
     }
   }, [toast]);
 
-  const loadCases = useCallback(async () => {
+  const loadCases = useCallback(async (): Promise<ArchiveCase[]> => {
     if (!archiveConfig?.archiveDrive || !window.electronAPI) {
-      return;
+      return [];
     }
 
     try {
       setLoading(true);
       const casesList = await window.electronAPI.listArchiveCases();
       setCases(casesList);
+      return casesList;
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'load cases' }));
+      return [];
     } finally {
       setLoading(false);
     }
@@ -258,15 +260,16 @@ export function useArchive() {
 
       await window.electronAPI.updateCaseDescription(casePath, description);
       
-      // Reload cases to update the UI
-      await loadCases();
+      // Reload cases to update the UI and get fresh data
+      const updatedCases = await loadCases();
       
-      // If this is the current case, update it in state
+      // If this is the current case, find the updated case from the newly loaded cases
+      // This ensures we have fresh data from the backend, not stale data from closure
       if (currentCase?.path === casePath) {
-        setCurrentCase({
-          ...currentCase,
-          description: description.trim() || undefined,
-        });
+        const updatedCase = updatedCases.find(c => c.path === casePath);
+        if (updatedCase) {
+          setCurrentCase(updatedCase);
+        }
       }
       
       toast.success('Description updated');
