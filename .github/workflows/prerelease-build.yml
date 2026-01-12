@@ -3,7 +3,7 @@ name: Prerelease Build
 on:
   push:
     branches:
-      - prerelease
+      - 99-prerelease-broken-cici-failed-to-build-electron-app
 
 permissions:
   contents: write  # Required to create releases and tags
@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24.12.0'
           cache: 'npm'
 
       - name: Install dependencies
