@@ -16,6 +16,7 @@ import { ExtractionFolderDialog } from './ExtractionFolderDialog';
 import { SaveParentDialog } from './SaveParentDialog';
 import { FolderSelectionDialog } from './FolderSelectionDialog';
 import { DeleteFolderConfirmDialog } from './DeleteFolderConfirmDialog';
+import { DeletePDFConfirmDialog } from './DeletePDFConfirmDialog';
 import { RenameFileDialog } from './RenameFileDialog';
 import { CreateFolderDialog } from './CreateFolderDialog';
 import { ExtractionFolder } from './ExtractionFolder';
@@ -193,6 +194,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const [showSaveParentDialog, setShowSaveParentDialog] = useState(false);
   const [showDeleteFolderDialog, setShowDeleteFolderDialog] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<ArchiveFile | null>(null);
+  const [showDeletePDFDialog, setShowDeletePDFDialog] = useState(false);
+  const [pdfToDelete, setPdfToDelete] = useState<ArchiveFile | null>(null);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [fileToRename, setFileToRename] = useState<ArchiveFile | null>(null);
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
@@ -1531,13 +1534,20 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     file={item}
                                     onClick={() => handleFileClick(item)}
                                     onDelete={async () => {
-                                      // Close file viewer if this file is currently open
-                                      if (selectedFile?.path === item.path) {
-                                        setSelectedFile(null);
-                                        // Small delay to ensure viewer closes and releases file handle
-                                        await new Promise(resolve => setTimeout(resolve, 100));
+                                      if (item.type === 'pdf') {
+                                        // Show confirmation dialog for PDFs
+                                        setPdfToDelete(item);
+                                        setShowDeletePDFDialog(true);
+                                      } else {
+                                        // Direct deletion for non-PDF files
+                                        // Close file viewer if this file is currently open
+                                        if (selectedFile?.path === item.path) {
+                                          setSelectedFile(null);
+                                          // Small delay to ensure viewer closes and releases file handle
+                                          await new Promise(resolve => setTimeout(resolve, 100));
+                                        }
+                                        await deleteFile(item.path);
                                       }
-                                      await deleteFile(item.path);
                                     }}
                                     onExtract={item.type === 'pdf' ? () => handleExtractPDF(item) : undefined}
                                     onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
@@ -1682,13 +1692,20 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 file={item}
                                 onClick={() => handleFileClick(item)}
                                 onDelete={async () => {
-                                  // Close file viewer if this file is currently open
-                                  if (selectedFile?.path === item.path) {
-                                    setSelectedFile(null);
-                                    // Small delay to ensure viewer closes and releases file handle
-                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                  if (item.type === 'pdf') {
+                                    // Show confirmation dialog for PDFs
+                                    setPdfToDelete(item);
+                                    setShowDeletePDFDialog(true);
+                                  } else {
+                                    // Direct deletion for non-PDF files
+                                    // Close file viewer if this file is currently open
+                                    if (selectedFile?.path === item.path) {
+                                      setSelectedFile(null);
+                                      // Small delay to ensure viewer closes and releases file handle
+                                      await new Promise(resolve => setTimeout(resolve, 100));
+                                    }
+                                    await deleteFile(item.path);
                                   }
-                                  await deleteFile(item.path);
                                 }}
                                 onExtract={() => handleExtractPDF(item)}
                                 onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
@@ -1907,6 +1924,62 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         }}
       />
 
+      <DeletePDFConfirmDialog
+        isOpen={showDeletePDFDialog}
+        fileName={pdfToDelete?.name || ''}
+        hasExistingFolder={pdfToDelete ? files.some(
+          (file) =>
+            file.isFolder &&
+            file.parentPdfName &&
+            pdfToDelete.name &&
+            file.parentPdfName.toLowerCase() === pdfToDelete.name.toLowerCase()
+        ) : false}
+        onClose={() => {
+          setShowDeletePDFDialog(false);
+          setPdfToDelete(null);
+        }}
+        onConfirm={async (deleteImageFolder: boolean) => {
+          if (pdfToDelete) {
+            // Close file viewer if this PDF is currently open
+            if (selectedFile?.path === pdfToDelete.path) {
+              setSelectedFile(null);
+              // Small delay to ensure viewer closes and releases file handle
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            // Find and delete associated extraction folders if checkbox is checked
+            if (deleteImageFolder) {
+              const pdfName = pdfToDelete.name;
+              const associatedFolders = files.filter(
+                (file) =>
+                  file.isFolder &&
+                  file.parentPdfName &&
+                  file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+              );
+
+              // Delete all associated extraction folders
+              for (const folder of associatedFolders) {
+                try {
+                  // Close file viewer if we're deleting a folder we're currently viewing
+                  if (selectedFile && selectedFile.path.startsWith(folder.path)) {
+                    setSelectedFile(null);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                  }
+                  await deleteFile(folder.path, true);
+                } catch (error) {
+                  logger.error(`Failed to delete extraction folder ${folder.path}:`, error);
+                  // Continue with PDF deletion even if folder deletion fails
+                }
+              }
+            }
+
+            // Delete the PDF file
+            await deleteFile(pdfToDelete.path);
+            setPdfToDelete(null);
+          }
+        }}
+      />
+
       <RenameFileDialog
         isOpen={showRenameDialog}
         currentName={fileToRename?.name || ''}
@@ -1980,6 +2053,13 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         initialPdfPath={pdfPathForAudit}
         caseFolderPath={currentCase?.path || null}
         onReportSaved={handleReportSaved}
+        existingFolders={pdfPathForAudit ? files.filter(
+          (file) =>
+            file.isFolder &&
+            file.parentPdfName &&
+            pdfPathForAudit &&
+            file.parentPdfName.toLowerCase() === pdfPathForAudit.split(/[/\\]/).pop()?.toLowerCase()
+        ) : undefined}
       />
 
       <PDFExtractionModal
@@ -1995,6 +2075,13 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             refreshFiles();
           }
         }}
+        existingFolders={pdfPathForExtraction ? files.filter(
+          (file) =>
+            file.isFolder &&
+            file.parentPdfName &&
+            pdfPathForExtraction &&
+            file.parentPdfName.toLowerCase() === pdfPathForExtraction.split(/[/\\]/).pop()?.toLowerCase()
+        ) : undefined}
       />
     </div>
   );
