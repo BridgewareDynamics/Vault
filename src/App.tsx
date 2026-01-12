@@ -4,6 +4,7 @@ import { ToastContainer } from './components/Toast/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { SecurityCheckerModal } from './components/SecurityCheckerModal';
+import { PDFExtractionModal } from './components/PDFExtractionModal';
 import { ProgressBar } from './components/ProgressBar';
 import { Gallery } from './components/Gallery';
 import { ImageViewer } from './components/ImageViewer';
@@ -11,6 +12,7 @@ import { Toolbar } from './components/Toolbar';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
 import { usePDFExtraction } from './hooks/usePDFExtraction';
+import { ConversionSettings } from './types';
 import { ExtractedPage } from './types';
 import { Home } from 'lucide-react';
 import { logger } from './utils/logger';
@@ -21,6 +23,7 @@ import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext'
 import { ArchiveContextProvider } from './contexts/ArchiveContext';
 import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
 import { DetachedSecurityChecker } from './components/DetachedSecurityChecker';
+import { DetachedPDFExtraction } from './components/DetachedPDFExtraction';
 import { ResizableDivider } from './components/ResizableDivider';
 import './App.css';
 
@@ -33,6 +36,7 @@ function AppContent() {
   const [, setFolderName] = useState<string | undefined>(undefined);
   const [showArchive, setShowArchive] = useState(false);
   const [showSecurityChecker, setShowSecurityChecker] = useState(false);
+  const [showPDFExtraction, setShowPDFExtraction] = useState(false);
 
   // Listen for reattach data from detached PDF audit window
   useEffect(() => {
@@ -44,6 +48,40 @@ function AppContent() {
     window.addEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
     return () => {
       window.removeEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+    };
+  }, []);
+
+  // Listen for reattach data from detached PDF extraction window
+  useEffect(() => {
+    const handleReattach = (event: any) => {
+      const data = event.detail;
+      
+      // Only handle reattach if caseFolderPath is absent (home menu usage)
+      // If caseFolderPath is present, ArchivePage will handle it
+      if (data && !data.caseFolderPath) {
+        // Open the PDF extraction modal when reattaching from home menu
+        console.log('App: Received reattach-pdf-extraction-data event without caseFolderPath, opening modal');
+        setShowPDFExtraction(true);
+      }
+    };
+
+    window.addEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+    
+    // Also check for stored data on mount
+    const checkStoredData = () => {
+      const storedData = (window as any).__reattachPdfExtractionData;
+      if (storedData && !storedData.caseFolderPath) {
+        console.log('App: Found stored reattach data without caseFolderPath, opening modal');
+        setShowPDFExtraction(true);
+      }
+    };
+    
+    // Check after a short delay to ensure component is mounted
+    const timeoutId = setTimeout(checkStoredData, 100);
+    
+    return () => {
+      window.removeEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+      clearTimeout(timeoutId);
     };
   }, []);
 
@@ -109,6 +147,15 @@ function AppContent() {
   
   if (shouldShowDetachedAudit) {
     return <DetachedSecurityChecker />;
+  }
+
+  // If in detached extraction mode, show only the extraction component
+  const shouldShowDetachedExtraction = 
+    window.location.search.includes('extraction=detached') || 
+    window.location.hash.includes('extraction=detached');
+  
+  if (shouldShowDetachedExtraction) {
+    return <DetachedPDFExtraction />;
   }
 
   // If in detached editor mode, show only the editor
@@ -258,9 +305,15 @@ function AppContent() {
         toast.info('PDF file selected, starting extraction...');
         
         // Start extraction immediately - progress will be shown
-        extractPDF(filePath, () => {
-          // Progress updates are handled by the hook
-        }).then((pages) => {
+        const defaultSettings: ConversionSettings = {
+          dpi: 150,
+          quality: 85,
+          format: 'jpeg',
+          pageRange: 'all',
+          colorSpace: 'rgb',
+          compressionLevel: 6,
+        };
+        extractPDF(filePath, defaultSettings).then((pages) => {
           toast.success(`Successfully extracted ${pages.length} page${pages.length !== 1 ? 's' : ''}`);
         }).catch((err) => {
           toast.error(getUserFriendlyError(err, { operation: 'PDF extraction', fileName: filePath }));
@@ -437,6 +490,7 @@ function AppContent() {
             onSelectFile={handleSelectFile}
             onOpenArchive={() => setShowArchive(true)}
             onOpenSecurityChecker={() => setShowSecurityChecker(true)}
+            onOpenPDFExtraction={() => setShowPDFExtraction(true)}
           />
         </div>
         <ToastContainer />
@@ -444,6 +498,10 @@ function AppContent() {
         <SecurityCheckerModal
           isOpen={showSecurityChecker}
           onClose={() => setShowSecurityChecker(false)}
+        />
+        <PDFExtractionModal
+          isOpen={showPDFExtraction}
+          onClose={() => setShowPDFExtraction(false)}
         />
       </>
     );

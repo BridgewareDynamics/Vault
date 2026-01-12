@@ -109,7 +109,8 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       }
 
       // If casePath is provided, dispatch event to navigate to case folder
-      if (data.casePath) {
+      // Only navigate if we're not already in this case to prevent UI refresh and back button issues
+      if (data.casePath && currentCase?.path !== data.casePath) {
         // Dispatch event to open archive and navigate to case
         const navigateEvent = new CustomEvent('navigate-to-case-folder', {
           detail: { casePath: data.casePath }

@@ -131,6 +131,46 @@ contextBridge.exposeInMainWorld('electronAPI', {
     isAuditing: boolean;
     progressMessage: string;
   }) => ipcRenderer.invoke('reattach-pdf-audit', options),
+  createPdfExtractionWindow: (options: {
+    pdfPath: string | null;
+    settings: {
+      dpi: number;
+      quality: number;
+      format: 'png' | 'jpeg';
+      pageRange: 'all' | 'custom' | 'selected';
+      customPageRange: string;
+      colorSpace: 'rgb' | 'grayscale';
+      compressionLevel: number;
+    };
+    showSettings: boolean;
+    extractedPages: any[];
+    selectedPages: number[];
+    previewPage: any | null;
+    isExtracting: boolean;
+    progress: any | null;
+    error: string | null;
+    statusMessage: string;
+  }) => ipcRenderer.invoke('create-pdf-extraction-window', options),
+  reattachPdfExtraction: (options: {
+    pdfPath: string | null;
+    settings: {
+      dpi: number;
+      quality: number;
+      format: 'png' | 'jpeg';
+      pageRange: 'all' | 'custom' | 'selected';
+      customPageRange: string;
+      colorSpace: 'rgb' | 'grayscale';
+      compressionLevel: number;
+    };
+    showSettings: boolean;
+    extractedPages: any[];
+    selectedPages: number[];
+    previewPage: any | null;
+    isExtracting: boolean;
+    progress: any | null;
+    error: string | null;
+    statusMessage: string;
+  }) => ipcRenderer.invoke('reattach-pdf-extraction', options),
   closeWindow: () => ipcRenderer.invoke('close-window'),
   openBookmarkInMainWindow: (options: {
     pdfPath: string;

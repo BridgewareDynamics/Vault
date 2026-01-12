@@ -292,9 +292,6 @@ export function CaseNotesGallery({ onSelectCase, onClose, onOpenFile, onNewFile,
                           <div className="relative bg-gradient-to-r from-purple-600 to-cyan-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 md:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg flex items-center gap-1 sm:gap-1.5 shadow-lg">
                             <FileText className="w-2.5 h-2.5 sm:w-3 sm:h-3 opacity-90" />
                             <span>{noteCount}</span>
-                            {noteCount > 0 && (
-                              <Sparkles className="w-2 h-2 sm:w-2.5 sm:h-2.5 opacity-70 hidden sm:block" />
-                            )}
                           </div>
                         </div>
                       </motion.div>

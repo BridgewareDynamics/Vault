@@ -22,14 +22,21 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
   const [openLibraryOnMount, setOpenLibraryOnMount] = useState(false);
   const [memoryInfo, setMemoryInfo] = useState<{ used: number; total: number } | null>(null);
+  const [inlineContainerAvailable, setInlineContainerAvailable] = useState(false);
   const { isOpen: isWordEditorContextOpen, setIsOpen: setWordEditorContextOpen } = useWordEditor();
 
   // Listen for reattach data from detached window
   useEffect(() => {
     const handleReattach = (_event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
-      // Use the same event that opening from viewer uses to ensure consistent behavior
-      // This ensures the PDF viewer's ref is set immediately
-      window.dispatchEvent(new CustomEvent('open-word-editor-from-viewer'));
+      // When reattaching in archive mode, we want inline (side-by-side) layout, not overlay
+      // Only dispatch the overlay-mode event if we're NOT in archive mode
+      if (!isArchiveVisible) {
+        // Use the same event that opening from viewer uses to ensure consistent behavior
+        // This ensures the PDF viewer's ref is set immediately
+        window.dispatchEvent(new CustomEvent('open-word-editor-from-viewer'));
+      }
+      // In archive mode, we skip the overlay event so shouldUseOverlayMode stays false
+      // This ensures we get side-by-side layout when the inline container exists
       setIsWordEditorOpen(true);
       setWordEditorContextOpen(true);
     };
@@ -74,6 +81,43 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
       setIsWordEditorOpen(true);
     }
   }, [isWordEditorContextOpen, isWordEditorOpen]);
+
+  // Check for inline container availability, especially important when reattaching in archive mode
+  useEffect(() => {
+    if (!isArchiveVisible || !isWordEditorOpen) {
+      setInlineContainerAvailable(false);
+      return;
+    }
+
+    // Check if container exists
+    const checkContainer = () => {
+      const container = document.getElementById('word-editor-inline-container');
+      setInlineContainerAvailable(!!container);
+    };
+
+    // Check immediately
+    checkContainer();
+
+    // Also check after a short delay to catch cases where container is created asynchronously
+    // This is especially important when reattaching
+    const timeoutId = setTimeout(checkContainer, 50);
+    
+    // Use MutationObserver to watch for container creation
+    const observer = new MutationObserver(() => {
+      checkContainer();
+    });
+
+    // Observe the document body for changes
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      clearTimeout(timeoutId);
+      observer.disconnect();
+    };
+  }, [isArchiveVisible, isWordEditorOpen]);
 
   const {
     settings,
@@ -568,8 +612,15 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
       {/* Word Editor Panel */}
       {isArchiveVisible && isWordEditorOpen ? (
         (() => {
-          const container = document.getElementById('word-editor-inline-container');
+          // When in archive mode, try to find the inline container
+          // Use the state variable to track availability (updated by effect)
+          const container = inlineContainerAvailable 
+            ? document.getElementById('word-editor-inline-container')
+            : null;
+          
           if (!container) {
+            // Container not found - this can happen during initial render or reattach
+            // Use overlay mode as fallback, but this should be rare in archive mode
             return (
               <WordEditorPanel
                 isOpen={isWordEditorOpen}
@@ -586,6 +637,7 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
               />
             );
           }
+          // Container exists - use inline mode for side-by-side layout
           return createPortal(
             <WordEditorPanel
               isOpen={isWordEditorOpen}
