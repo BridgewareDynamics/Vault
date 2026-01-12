@@ -17,7 +17,7 @@ declare global {
         saveToZip: boolean;
         folderName?: string;
         parentFilePath?: string;
-        extractedPages: Array<{ pageNumber: number; imageData: string }>;
+        extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
       }) => Promise<{ success: boolean; messages: string[] }>;
       validatePath: (filePath: string) => Promise<{ isValid: boolean; isPDF: boolean }>;
       readPDFFile: (filePath: string) => Promise<{ type: 'base64'; data: string } | { type: 'file-path'; path: string } | string | number[]>;
@@ -58,7 +58,8 @@ declare global {
         casePath: string;
         folderName: string;
         saveParentFile: boolean;
-        extractedPages: Array<{ pageNumber: number; imageData: string }>;
+        saveToZip: boolean;
+        extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
       }) => Promise<{ success: boolean; messages: string[]; extractionFolder: string }>;
       logToMain: (level: LogLevel, ...args: LogArgs) => Promise<void>;
       debugLog: (logEntry: {
@@ -160,6 +161,46 @@ declare global {
         result: any | null;
         isAuditing: boolean;
         progressMessage: string;
+      }) => Promise<{ success: boolean }>;
+      createPdfExtractionWindow: (options: {
+        pdfPath: string | null;
+        settings: {
+          dpi: number;
+          quality: number;
+          format: 'png' | 'jpeg';
+          pageRange: 'all' | 'custom' | 'selected';
+          customPageRange: string;
+          colorSpace: 'rgb' | 'grayscale';
+          compressionLevel: number;
+        };
+        showSettings: boolean;
+        extractedPages: any[];
+        selectedPages: number[];
+        isExtracting: boolean;
+        progress: any | null;
+        error: string | null;
+        statusMessage: string;
+        caseFolderPath?: string | null;
+      }) => Promise<{ success: boolean }>;
+      reattachPdfExtraction: (options: {
+        pdfPath: string | null;
+        settings: {
+          dpi: number;
+          quality: number;
+          format: 'png' | 'jpeg';
+          pageRange: 'all' | 'custom' | 'selected';
+          customPageRange: string;
+          colorSpace: 'rgb' | 'grayscale';
+          compressionLevel: number;
+        };
+        showSettings: boolean;
+        extractedPages: any[];
+        selectedPages: number[];
+        isExtracting: boolean;
+        progress: any | null;
+        error: string | null;
+        statusMessage: string;
+        caseFolderPath?: string | null;
       }) => Promise<{ success: boolean }>;
       closeWindow: () => Promise<{ success: boolean }>;
       openBookmarkInMainWindow: (options: {

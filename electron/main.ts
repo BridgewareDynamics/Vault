@@ -548,7 +548,7 @@ ipcMain.handle('save-files', async (
     saveToZip: boolean;
     folderName?: string;
     parentFilePath?: string;
-    extractedPages: Array<{ pageNumber: number; imageData: string }>;
+    extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
   }
 ) => {
   const { saveDirectory, saveParentFile, saveToZip, folderName, parentFilePath, extractedPages } = options;
@@ -558,29 +558,42 @@ ipcMain.handle('save-files', async (
     throw new Error('Invalid save directory');
   }
 
-  // Validate folder name if saving to ZIP
-  if (saveToZip && folderName && !isValidFolderName(folderName)) {
+  // Always require folder name
+  if (!folderName || !folderName.trim()) {
+    throw new Error('Folder name is required');
+  }
+
+  // Validate folder name
+  if (!isValidFolderName(folderName)) {
     throw new Error('Invalid folder name');
   }
 
   const results: string[] = [];
 
   try {
-    // Save parent PDF file if requested
+    // Determine the target directory (subfolder for loose files, or root for ZIP/parent PDF)
+    const targetDirectory = saveToZip ? saveDirectory : path.join(saveDirectory, folderName);
+
+    // Create subfolder if saving individual files
+    if (!saveToZip) {
+      await fs.mkdir(targetDirectory, { recursive: true });
+    }
+
+    // Save parent PDF file if requested (save to target directory)
     if (saveParentFile && parentFilePath) {
       if (!isValidPDFFile(parentFilePath) || !isSafePath(parentFilePath)) {
         throw new Error('Invalid parent PDF file path');
       }
 
       const parentFileName = path.basename(parentFilePath);
-      const destPath = path.join(saveDirectory, parentFileName);
+      const destPath = path.join(targetDirectory, parentFileName);
 
       await fs.copyFile(parentFilePath, destPath);
       results.push(`Parent PDF saved: ${destPath}`);
     }
 
     // Save to ZIP if requested
-    if (saveToZip && folderName) {
+    if (saveToZip) {
       const zip = new JSZip();
       const folder = zip.folder(folderName);
 
@@ -595,28 +608,48 @@ ipcMain.handle('save-files', async (
         const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
         
         let imageData: string;
-        let extension: string;
         
         if (pngMatch) {
           imageData = pngMatch[1];
-          extension = 'png';
         } else if (jpegMatch) {
           imageData = jpegMatch[1];
-          extension = 'jpg';
         } else {
           // Fallback: try to strip any data URL prefix
           imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
-          extension = 'png'; // Default to PNG for backward compatibility
         }
         
         const buffer = Buffer.from(imageData, 'base64');
-        folder.file(`page-${page.pageNumber}.${extension}`, buffer);
+        // Use the provided fileName from the frontend
+        folder.file(page.fileName, buffer);
       }
 
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
       const zipPath = path.join(saveDirectory, `${folderName}.zip`);
       await fs.writeFile(zipPath, zipBuffer);
       results.push(`ZIP file saved: ${zipPath}`);
+    } else {
+      // Save individual image files to subfolder
+      for (const page of extractedPages) {
+        // Detect image format from data URL (supports both PNG and JPEG)
+        const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+        const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+        
+        let imageData: string;
+        
+        if (pngMatch) {
+          imageData = pngMatch[1];
+        } else if (jpegMatch) {
+          imageData = jpegMatch[1];
+        } else {
+          // Fallback: try to strip any data URL prefix
+          imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+        }
+        
+        const buffer = Buffer.from(imageData, 'base64');
+        const imagePath = path.join(targetDirectory, page.fileName);
+        await fs.writeFile(imagePath, buffer);
+        results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
+      }
     }
 
     return { success: true, messages: results };
@@ -2041,13 +2074,14 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     const groupedItems: Array<typeof files[0] | typeof folders[0]> = [];
     
     // Add folders and their PDFs in alphabetical PDF order
+    // CRITICAL: Folders MUST come before their PDF in the array for frontend grouping to work
     // This ensures folders always appear above their associated PDFs
     for (const pdf of pdfFiles) {
       const relatedFolders = pdfToFoldersMap.get(pdf.name) || [];
       // Add folders above the PDF (folders are already sorted alphabetically)
-      groupedItems.push(...relatedFolders);
+      groupedItems.push(...relatedFolders);  // ← Folders first
       // Add the PDF
-      groupedItems.push(pdf);
+      groupedItems.push(pdf);  // ← Then PDF
     }
     
     // Add orphaned folders (folders without a matching PDF) after all PDFs
@@ -2687,10 +2721,11 @@ ipcMain.handle('extract-pdf-from-archive', async (
     casePath: string;
     folderName: string;
     saveParentFile: boolean;
-    extractedPages: Array<{ pageNumber: number; imageData: string }>;
+    saveToZip: boolean;
+    extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
   }
 ) => {
-  const { pdfPath, casePath, folderName, saveParentFile, extractedPages } = options;
+  const { pdfPath, casePath, folderName, saveParentFile, saveToZip, extractedPages } = options;
 
   if (!isSafePath(pdfPath) || !isSafePath(casePath)) {
     throw new Error('Invalid path');
@@ -2701,47 +2736,94 @@ ipcMain.handle('extract-pdf-from-archive', async (
   }
 
   try {
-    const extractionFolder = path.join(casePath, folderName);
-    await fs.mkdir(extractionFolder, { recursive: true });
-
+    const parentPdfName = path.basename(pdfPath);
     const results: string[] = [];
 
-    // Save parent PDF if requested
-    if (saveParentFile) {
-      const parentFileName = path.basename(pdfPath);
-      const destPath = path.join(extractionFolder, parentFileName);
-      await fs.copyFile(pdfPath, destPath);
-      results.push(`Parent PDF saved: ${destPath}`);
-    }
+    if (saveToZip) {
+      // Create ZIP file in case folder
+      const zip = new JSZip();
+      const zipFolder = zip.folder(folderName);
 
-    // Save extracted pages
-    for (const page of extractedPages) {
-      // Detect image format from data URL (supports both PNG and JPEG)
-      const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
-      const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
-      
-      let imageData: string;
-      let extension: string;
-      
-      if (pngMatch) {
-        imageData = pngMatch[1];
-        extension = 'png';
-      } else if (jpegMatch) {
-        imageData = jpegMatch[1];
-        extension = 'jpg';
-      } else {
-        // Fallback: try to strip any data URL prefix
-        imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
-        extension = 'png'; // Default to PNG for backward compatibility
+      if (!zipFolder) {
+        throw new Error('Failed to create ZIP folder');
       }
-      
-      const buffer = Buffer.from(imageData, 'base64');
-      const imagePath = path.join(extractionFolder, `page-${page.pageNumber}.${extension}`);
-      await fs.writeFile(imagePath, buffer);
-      results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
-    }
 
-    return { success: true, messages: results, extractionFolder };
+      // Add parent PDF to ZIP if requested
+      if (saveParentFile) {
+        const pdfBuffer = await fs.readFile(pdfPath);
+        zipFolder.file(parentPdfName, pdfBuffer);
+      }
+
+      // Add all extracted pages to ZIP
+      for (const page of extractedPages) {
+        // Detect image format from data URL (supports both PNG and JPEG)
+        const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+        const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+        
+        let imageData: string;
+        
+        if (pngMatch) {
+          imageData = pngMatch[1];
+        } else if (jpegMatch) {
+          imageData = jpegMatch[1];
+        } else {
+          // Fallback: try to strip any data URL prefix
+          imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+        }
+        
+        const buffer = Buffer.from(imageData, 'base64');
+        // Use the provided fileName from the frontend
+        zipFolder.file(page.fileName, buffer);
+      }
+
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+      const zipPath = path.join(casePath, `${folderName}.zip`);
+      await fs.writeFile(zipPath, zipBuffer);
+      results.push(`ZIP file saved: ${zipPath}`);
+
+      return { success: true, messages: results, extractionFolder: casePath };
+    } else {
+      // Save individual files to folder
+      const extractionFolder = path.join(casePath, folderName);
+      await fs.mkdir(extractionFolder, { recursive: true });
+
+      // Store parent PDF metadata to link folder to PDF
+      const metadataPath = path.join(extractionFolder, '.parent-pdf');
+      await fs.writeFile(metadataPath, parentPdfName, 'utf8');
+
+      // Save parent PDF if requested
+      if (saveParentFile) {
+        const destPath = path.join(extractionFolder, parentPdfName);
+        await fs.copyFile(pdfPath, destPath);
+        results.push(`Parent PDF saved: ${destPath}`);
+      }
+
+      // Save extracted pages
+      for (const page of extractedPages) {
+        // Detect image format from data URL (supports both PNG and JPEG)
+        const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+        const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+        
+        let imageData: string;
+        
+        if (pngMatch) {
+          imageData = pngMatch[1];
+        } else if (jpegMatch) {
+          imageData = jpegMatch[1];
+        } else {
+          // Fallback: try to strip any data URL prefix
+          imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+        }
+        
+        const buffer = Buffer.from(imageData, 'base64');
+        // Use the provided fileName from the frontend
+        const imagePath = path.join(extractionFolder, page.fileName);
+        await fs.writeFile(imagePath, buffer);
+        results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
+      }
+
+      return { success: true, messages: results, extractionFolder };
+    }
   } catch (error) {
     throw new Error(`Failed to extract PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
@@ -3142,6 +3224,9 @@ let wordEditorWindow: BrowserWindow | null = null;
 // Create PDF audit window
 let pdfAuditWindow: BrowserWindow | null = null;
 
+// Create PDF extraction window
+let pdfExtractionWindow: BrowserWindow | null = null;
+
 // Track which window should receive audit progress updates
 // This allows progress to continue when detaching during an audit
 let auditProgressTarget: Electron.WebContents | null = null;
@@ -3510,6 +3595,229 @@ ipcMain.handle('reattach-pdf-audit', async (event, options: {
   } catch (error) {
     logger.error('Failed to reattach PDF audit window:', error);
     throw new Error(`Failed to reattach PDF audit window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Create PDF extraction window
+ipcMain.handle('create-pdf-extraction-window', async (event, options: {
+  pdfPath: string | null;
+  settings: {
+    dpi: number;
+    quality: number;
+    format: 'png' | 'jpeg';
+    pageRange: 'all' | 'custom' | 'selected';
+    customPageRange: string;
+    colorSpace: 'rgb' | 'grayscale';
+    compressionLevel: number;
+  };
+  showSettings: boolean;
+  extractedPages: any[];
+  selectedPages: number[];
+  previewPage: any | null;
+  isExtracting: boolean;
+  progress: any | null;
+  error: string | null;
+  statusMessage: string;
+  caseFolderPath?: string | null;
+}) => {
+  try {
+    logger.info('create-pdf-extraction-window handler called', {
+      hasPdfPath: !!options.pdfPath,
+      extractedPagesCount: options.extractedPages?.length || 0,
+    });
+
+    if (pdfExtractionWindow && !pdfExtractionWindow.isDestroyed()) {
+      logger.info('PDF extraction window already exists, focusing it');
+      pdfExtractionWindow.focus();
+      return { success: true, existing: true };
+    }
+    
+    // Determine preload path
+    let preloadPath: string;
+    if (isDev) {
+      preloadPath = join(__dirname, 'preload.cjs');
+    } else {
+      const appPath = app.getAppPath();
+      preloadPath = join(appPath, 'dist-electron', 'electron', 'preload.cjs');
+    }
+    
+    pdfExtractionWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      minWidth: 900,
+      minHeight: 700,
+      backgroundColor: '#0f0f1e',
+      webPreferences: {
+        preload: preloadPath,
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: true,
+        devTools: isDev,
+      },
+      titleBarStyle: 'hiddenInset',
+      frame: true,
+      show: false,
+      title: 'PDF Extraction',
+    });
+    
+    // Load the app
+    if (isDev) {
+      pdfExtractionWindow.loadURL('http://localhost:5173?extraction=detached').catch((err) => {
+        logger.error('Failed to load dev server in PDF extraction window:', err);
+      });
+    } else {
+      const appPath = app.getAppPath();
+      pdfExtractionWindow.loadFile(join(appPath, 'dist', 'index.html'), { hash: 'extraction=detached' }).catch((err) => {
+        logger.error('Failed to load file in PDF extraction window:', err);
+      });
+    }
+    
+    pdfExtractionWindow.once('ready-to-show', () => {
+      pdfExtractionWindow?.show();
+    });
+    
+    pdfExtractionWindow.on('closed', () => {
+      pdfExtractionWindow = null;
+    });
+    
+    // Send initial data to window after it loads
+    pdfExtractionWindow.webContents.once('did-finish-load', () => {
+      // Small delay to ensure React has mounted
+      setTimeout(() => {
+        logger.info('Sending pdf-extraction-data to detached window', {
+          hasPdfPath: !!options.pdfPath,
+          hasExtractedPages: options.extractedPages?.length || 0,
+          isExtracting: options.isExtracting,
+        });
+        pdfExtractionWindow?.webContents.executeJavaScript(`
+          (function() {
+            const data = {
+              pdfPath: ${options.pdfPath ? JSON.stringify(options.pdfPath) : 'null'},
+              settings: ${JSON.stringify(options.settings)},
+              showSettings: ${JSON.stringify(options.showSettings)},
+              extractedPages: ${JSON.stringify(options.extractedPages || [])},
+              selectedPages: ${JSON.stringify(options.selectedPages || [])},
+              previewPage: ${options.previewPage ? JSON.stringify(options.previewPage) : 'null'},
+              isExtracting: ${JSON.stringify(options.isExtracting)},
+              progress: ${options.progress ? JSON.stringify(options.progress) : 'null'},
+              error: ${options.error ? JSON.stringify(options.error) : 'null'},
+              statusMessage: ${JSON.stringify(options.statusMessage || '')},
+              caseFolderPath: ${options.caseFolderPath ? JSON.stringify(options.caseFolderPath) : 'null'}
+            };
+            console.log('Main process: Dispatching pdf-extraction-data event', data);
+            // Store data in case listener isn't ready yet
+            window.__pdfExtractionInitialData = data;
+            const event = new CustomEvent('pdf-extraction-data', {
+              detail: data
+            });
+            window.dispatchEvent(event);
+          })();
+        `).catch((err) => {
+          logger.error('Failed to send data to PDF extraction window:', err);
+        });
+      }, 500);
+    });
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create PDF extraction window:', error);
+    throw new Error(`Failed to create PDF extraction window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Reattach PDF extraction window
+ipcMain.handle('reattach-pdf-extraction', async (event, options: {
+  pdfPath: string | null;
+  settings: {
+    dpi: number;
+    quality: number;
+    format: 'png' | 'jpeg';
+    pageRange: 'all' | 'custom' | 'selected';
+    customPageRange: string;
+    colorSpace: 'rgb' | 'grayscale';
+    compressionLevel: number;
+  };
+  showSettings: boolean;
+  extractedPages: any[];
+  selectedPages: number[];
+  previewPage: any | null;
+  isExtracting: boolean;
+  progress: any | null;
+  error: string | null;
+  statusMessage: string;
+  caseFolderPath?: string | null;
+}) => {
+  try {
+    // Get the window that sent the request (the detached extraction window)
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    
+    // Send data to main window to reopen the modal
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const reattachData = {
+        pdfPath: options.pdfPath,
+        settings: options.settings,
+        showSettings: options.showSettings,
+        extractedPages: options.extractedPages || [],
+        selectedPages: options.selectedPages || [],
+        previewPage: options.previewPage || null,
+        isExtracting: options.isExtracting,
+        progress: options.progress,
+        error: options.error,
+        statusMessage: options.statusMessage || '',
+        caseFolderPath: options.caseFolderPath || null
+      };
+
+      logger.info('Reattaching PDF extraction window', {
+        hasPdfPath: !!reattachData.pdfPath,
+        extractedPagesCount: reattachData.extractedPages.length,
+        selectedPagesCount: reattachData.selectedPages.length,
+        hasPreviewPage: !!reattachData.previewPage,
+        hasCaseFolderPath: !!reattachData.caseFolderPath,
+      });
+
+      // Store data globally first so modal can access it when it mounts
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const data = {
+            pdfPath: ${reattachData.pdfPath ? JSON.stringify(reattachData.pdfPath) : 'null'},
+            settings: ${JSON.stringify(reattachData.settings)},
+            showSettings: ${JSON.stringify(reattachData.showSettings)},
+            extractedPages: ${JSON.stringify(reattachData.extractedPages)},
+            selectedPages: ${JSON.stringify(reattachData.selectedPages)},
+            previewPage: ${reattachData.previewPage ? JSON.stringify(reattachData.previewPage) : 'null'},
+            isExtracting: ${JSON.stringify(reattachData.isExtracting)},
+            progress: ${reattachData.progress ? JSON.stringify(reattachData.progress) : 'null'},
+            error: ${reattachData.error ? JSON.stringify(reattachData.error) : 'null'},
+            statusMessage: ${JSON.stringify(reattachData.statusMessage)},
+            caseFolderPath: ${reattachData.caseFolderPath ? JSON.stringify(reattachData.caseFolderPath) : 'null'}
+          };
+          // Store data globally for modal to access when it mounts
+          window.__reattachPdfExtractionData = data;
+          // Dispatch event for existing listeners
+          const event = new CustomEvent('reattach-pdf-extraction-data', {
+            detail: data
+          });
+          window.dispatchEvent(event);
+        })();
+      `).catch((err) => {
+        logger.error('Failed to send reattach data to main window:', err);
+      });
+    }
+
+    // Close the detached window (the one that sent the request)
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    
+    // Also clear the pdfExtractionWindow reference if it matches
+    if (pdfExtractionWindow === senderWindow) {
+      pdfExtractionWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach PDF extraction window:', error);
+    throw new Error(`Failed to reattach PDF extraction window: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 
