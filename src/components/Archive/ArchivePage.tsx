@@ -1153,7 +1153,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
           {/* Content */}
           <div
             ref={dropZoneRef}
-            className={`relative z-0 flex-1 overflow-y-auto px-8 pb-8 ${isDragging ? 'bg-cyber-purple-500/20 border-2 border-cyber-purple-500 border-dashed rounded-lg m-4' : ''}`}
+            className={`relative z-0 flex-1 overflow-y-auto px-8 pt-6 pb-8 ${isDragging ? 'bg-cyber-purple-500/20 border-2 border-cyber-purple-500 border-dashed rounded-lg m-4' : ''}`}
           >
           {loading ? (
             <div className="flex items-center justify-center min-h-[400px]">
