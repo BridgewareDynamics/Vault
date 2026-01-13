@@ -86,7 +86,23 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   useEffect(() => {
     const handleReattach = (event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
       const data = event.detail;
-      // Set the file path if provided
+      
+      // Ensure panel is open when reattaching
+      if (!isOpen) {
+        // Open the panel first
+        setContextOpen(true);
+        // Wait a bit for the panel to open before proceeding
+        setTimeout(() => {
+          handleReattachContent(data);
+        }, 100);
+      } else {
+        handleReattachContent(data);
+      }
+    };
+
+    const handleReattachContent = (data: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }) => {
+      // Set the file path FIRST (but this will trigger loadFile)
+      // We'll prevent loadFile from overwriting by using word-editor-data event
       if (data.filePath) {
         setCurrentFilePath(data.filePath);
       } else {
@@ -121,22 +137,48 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       // Force re-render to ensure editor is ready
       setEditorKey(prev => prev + 1);
 
-      // Set content after a short delay to ensure editor is ready
-      // Use setTimeout to allow the editor to initialize first
+      // Use word-editor-data event to set content (this bypasses file loading)
+      // This event is handled by WordEditor and sets content without triggering loadFile
       setTimeout(() => {
-        if (editorRef.current && data.content) {
-          editorRef.current.setContent(data.content);
-          // Mark as saved since it was just saved before reattaching
-          editorRef.current.markAsSaved();
-        }
-      }, 100);
+        const contentEvent = new CustomEvent('word-editor-data', {
+          detail: {
+            content: data.content,
+            filePath: data.filePath,
+          }
+        });
+        window.dispatchEvent(contentEvent);
+
+        // Also set via ref after a delay to ensure it's set
+        const setContentWithRetry = (attempt = 0) => {
+          const maxAttempts = 10;
+          const delay = 100 + (attempt * 100); // 100ms, 200ms, 300ms, etc.
+
+          setTimeout(() => {
+            if (editorRef.current && data.content) {
+              try {
+                editorRef.current.setContent(data.content);
+                editorRef.current.markAsSaved();
+              } catch (error) {
+                console.error('Failed to set content on reattach via ref:', error);
+                if (attempt < maxAttempts) {
+                  setContentWithRetry(attempt + 1);
+                }
+              }
+            } else if (attempt < maxAttempts) {
+              setContentWithRetry(attempt + 1);
+            }
+          }, delay);
+        };
+
+        setContentWithRetry();
+      }, 150);
     };
 
     window.addEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
     return () => {
       window.removeEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
     };
-  }, []);
+  }, [isOpen, currentCase, setContextOpen]);
 
   const handleDetach = async () => {
     try {

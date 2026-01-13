@@ -157,17 +157,19 @@ export function useArchive() {
     }
   }, [toast]);
 
-  const loadCases = useCallback(async () => {
+  const loadCases = useCallback(async (): Promise<ArchiveCase[]> => {
     if (!archiveConfig?.archiveDrive || !window.electronAPI) {
-      return;
+      return [];
     }
 
     try {
       setLoading(true);
       const casesList = await window.electronAPI.listArchiveCases();
       setCases(casesList);
+      return casesList;
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'load cases' }));
+      return [];
     } finally {
       setLoading(false);
     }
@@ -248,6 +250,35 @@ export function useArchive() {
       return false;
     }
   }, [toast, currentCase, currentFolderPath]);
+
+  const updateCaseDescription = useCallback(async (casePath: string, description: string): Promise<boolean> => {
+    try {
+      if (!window.electronAPI) {
+        toast.error('Electron API not available');
+        return false;
+      }
+
+      await window.electronAPI.updateCaseDescription(casePath, description);
+      
+      // Reload cases to update the UI and get fresh data
+      const updatedCases = await loadCases();
+      
+      // If this is the current case, find the updated case from the newly loaded cases
+      // This ensures we have fresh data from the backend, not stale data from closure
+      if (currentCase?.path === casePath) {
+        const updatedCase = updatedCases.find(c => c.path === casePath);
+        if (updatedCase) {
+          setCurrentCase(updatedCase);
+        }
+      }
+      
+      toast.success('Description updated');
+      return true;
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'update description', path: casePath }));
+      return false;
+    }
+  }, [toast, loadCases, currentCase]);
 
   // Generate PDF thumbnail in renderer using optimized chunk loading
   // This works for files of any size by only loading the first page
@@ -1476,6 +1507,7 @@ export function useArchive() {
     getCurrentPath,
     updateCaseBackgroundImage,
     updateFolderBackgroundImage,
+    updateCaseDescription,
     refreshCases: loadCases,
     refreshFiles: () => {
       const path = currentFolderPath || currentCase?.path;

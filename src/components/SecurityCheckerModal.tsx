@@ -5,6 +5,9 @@ import { Shield, X, FileText, AlertTriangle, CheckCircle, Loader2, Upload, Setti
 import { useRedactionAudit, RedactionAuditResult } from '../hooks/useRedactionAudit';
 import { useToast } from './Toast/ToastContext';
 import { CaseSelectionDialog } from './Archive/CaseSelectionDialog';
+import { AuditSaveOptionsDialog, AuditSaveOption } from './AuditSaveOptionsDialog';
+
+import { ArchiveFile } from '../types';
 
 interface SecurityCheckerModalProps {
   isOpen: boolean;
@@ -12,9 +15,10 @@ interface SecurityCheckerModalProps {
   initialPdfPath?: string | null;
   caseFolderPath?: string | null;
   onReportSaved?: () => void;
+  existingFolders?: ArchiveFile[];
 }
 
-export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFolderPath, onReportSaved }: SecurityCheckerModalProps) {
+export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFolderPath, onReportSaved, existingFolders }: SecurityCheckerModalProps) {
   const [pdfPath, setPdfPath] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState({
@@ -27,6 +31,7 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
   const toast = useToast();
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showCaseSelectionDialog, setShowCaseSelectionDialog] = useState(false);
+  const [showAuditSaveDialog, setShowAuditSaveDialog] = useState(false);
 
   const handleSelectFile = async () => {
     try {
@@ -290,8 +295,21 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
       return;
     }
 
+    // Show save options dialog instead of directly saving
+    setShowAuditSaveDialog(true);
+  };
+
+  const handleAuditSaveConfirm = async (
+    option: AuditSaveOption,
+    folderName?: string,
+    subfolderName?: string,
+    createNewFolderForLoose?: boolean,
+    looseFolderName?: string
+  ) => {
+    if (!result || !window.electronAPI || !caseFolderPath) return;
+
     setIsGeneratingReport(true);
-    const toastId = toast.info('Saving report to case folder...', 0);
+    const toastId = toast.info('Saving report...', 0);
 
     try {
       // Format audit result for report generation
@@ -300,17 +318,119 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
       // Generate filename
       const reportFilename = generateReportFilename(result.filename);
 
-      // Construct full path (use / as separator, main process will handle it)
-      const reportPath = `${targetCasePath}/${reportFilename}`;
+      let reportPath: string;
+
+      switch (option) {
+        case 'save-loose': {
+          // If createNewFolderForLoose is true, create a regular folder first
+          if (createNewFolderForLoose && looseFolderName && looseFolderName.trim()) {
+            // Create a regular folder (not an extraction folder, so no .parent-pdf metadata)
+            const createdFolderPath = await window.electronAPI.createFolder(
+              caseFolderPath,
+              looseFolderName.trim()
+            );
+            reportPath = `${createdFolderPath}/${reportFilename}`;
+          } else {
+            // Save directly to case folder (no subfolder)
+            reportPath = `${caseFolderPath}/${reportFilename}`;
+          }
+          break;
+        }
+
+        case 'make-pdf-folder': {
+          // Check if folder already exists by finding folders with matching parentPdfName
+          const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
+          
+          // Try to find existing folder
+          let targetFolderPath: string | null = null;
+          try {
+            const files = await window.electronAPI.listCaseFiles(caseFolderPath);
+            const existingFolder = files.find(
+              (file: any) =>
+                file.isFolder &&
+                file.parentPdfName &&
+                file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+            );
+            
+            if (existingFolder) {
+              targetFolderPath = existingFolder.path;
+            }
+          } catch (error) {
+            console.error('Error checking for existing folder:', error);
+          }
+
+          // Create folder if it doesn't exist
+          if (!targetFolderPath) {
+            if (!folderName || !folderName.trim()) {
+              throw new Error('Folder name is required');
+            }
+            targetFolderPath = await window.electronAPI.createExtractionFolder(
+              caseFolderPath,
+              folderName.trim(),
+              pdfPath || undefined
+            );
+          }
+
+          reportPath = `${targetFolderPath}/${reportFilename}`;
+          break;
+        }
+
+        case 'add-to-pdf-folder': {
+          // Find existing folder
+          const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
+          const files = await window.electronAPI.listCaseFiles(caseFolderPath);
+          const existingFolder = files.find(
+            (file: any) =>
+              file.isFolder &&
+              file.parentPdfName &&
+              file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+          );
+
+          if (!existingFolder) {
+            throw new Error('No existing folder found for this PDF');
+          }
+
+          reportPath = `${existingFolder.path}/${reportFilename}`;
+          break;
+        }
+
+        case 'add-folder-to-directory': {
+          // Find existing folder and create subfolder
+          const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
+          const files = await window.electronAPI.listCaseFiles(caseFolderPath);
+          const existingFolder = files.find(
+            (file: any) =>
+              file.isFolder &&
+              file.parentPdfName &&
+              file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+          );
+
+          if (!existingFolder) {
+            throw new Error('No existing folder found for this PDF');
+          }
+
+          if (!subfolderName || !subfolderName.trim()) {
+            throw new Error('Subfolder name is required');
+          }
+
+          // Construct subfolder path - use forward slashes, main process will normalize
+          // The generateAuditReport Python script will create the directory if it doesn't exist
+          reportPath = `${existingFolder.path}/${subfolderName.trim()}/${reportFilename}`;
+          break;
+        }
+
+        default:
+          throw new Error('Invalid save option');
+      }
 
       toast.updateToast(toastId, 'Generating PDF report...', 'info');
 
-      // Generate report directly to case folder
+      // Generate report to the determined path
       const reportResult = await window.electronAPI.generateAuditReport(auditResult, reportPath);
 
       if (reportResult.success) {
         toast.dismissToast(toastId);
-        toast.success('Report saved to case folder!', 3000);
+        toast.success('Report saved successfully!', 3000);
         
         // Notify parent component that report was saved (for refreshing file list)
         if (onReportSaved) {
@@ -579,17 +699,17 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                             <button
                               onClick={() => handleSaveToCaseFolder()}
                               disabled={isGeneratingReport}
-                              className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-sm"
+                              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-xs"
                               title={caseFolderPath ? "Save report to current case folder" : "Save report to a case"}
                             >
                               {isGeneratingReport ? (
                                 <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                   <span>Generating...</span>
                                 </>
                               ) : (
                                 <>
-                                  <FolderOpen className="w-4 h-4" />
+                                  <FolderOpen className="w-3.5 h-3.5" />
                                   <span>{caseFolderPath ? 'Save to Current Case' : 'Save to Case'}</span>
                                 </>
                               )}
@@ -597,16 +717,16 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                             <button
                               onClick={handleDownloadReport}
                               disabled={isGeneratingReport}
-                              className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-sm"
+                              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-xs"
                             >
                               {isGeneratingReport ? (
                                 <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                   <span>Generating...</span>
                                 </>
                               ) : (
                                 <>
-                                  <Download className="w-4 h-4" />
+                                  <Download className="w-3.5 h-3.5" />
                                   <span>Download Report</span>
                                 </>
                               )}
@@ -1048,6 +1168,16 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
           onSelectCase={handleCaseSelected}
         />
       )}
+
+      {/* Audit Save Options Dialog */}
+      <AuditSaveOptionsDialog
+        isOpen={showAuditSaveDialog}
+        onClose={() => setShowAuditSaveDialog(false)}
+        onConfirm={handleAuditSaveConfirm}
+        pdfPath={pdfPath}
+        casePath={caseFolderPath || null}
+        existingFolders={existingFolders}
+      />
     </AnimatePresence>
   );
 }

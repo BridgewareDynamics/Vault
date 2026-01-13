@@ -98,8 +98,27 @@ export async function generateAuditReport(
     throw new Error(`Report generator script not found at: ${scriptPath}. Please reinstall the application.`);
   }
 
-  // Create temporary JSON file with audit data
-  const tempJsonPath = path.join(path.dirname(outputPath), `audit_temp_${Date.now()}.json`);
+  // Normalize the output path first (handles forward/backward slashes correctly)
+  const normalizedOutputPath = path.normalize(outputPath);
+  
+  // Ensure output directory exists (create all parent directories recursively)
+  const outputDir = path.dirname(normalizedOutputPath);
+  try {
+    // Use recursive: true to create all parent directories if they don't exist
+    await fs.mkdir(outputDir, { recursive: true });
+    // Verify the directory was created
+    const stats = await fs.stat(outputDir);
+    if (!stats.isDirectory()) {
+      throw new Error(`Path exists but is not a directory: ${outputDir}`);
+    }
+    logger.log('Output directory created/verified:', outputDir);
+  } catch (error) {
+    logger.error('Failed to create output directory:', { outputDir, normalizedOutputPath, error });
+    throw new Error(`Failed to create output directory: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+
+  // Create temporary JSON file with audit data (in the same directory as output)
+  const tempJsonPath = path.join(outputDir, `audit_temp_${Date.now()}.json`);
   
   try {
     // Write audit result to temp JSON file
@@ -108,7 +127,7 @@ export async function generateAuditReport(
     // Normalize all paths before passing to Python
     const normalizedScriptPath = path.normalize(scriptPath);
     const normalizedTempJsonPath = path.normalize(tempJsonPath);
-    const normalizedOutputPath = path.normalize(outputPath);
+    // Use the already normalized output path
 
     return new Promise((resolve, reject) => {
       // Build arguments array with normalized paths
