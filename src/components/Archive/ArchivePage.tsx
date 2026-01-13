@@ -12,6 +12,7 @@ import { ArchiveFileViewer } from './ArchiveFileViewer';
 import { ArchiveSearchBar } from './ArchiveSearchBar';
 import { ArchiveDriveDialog } from './ArchiveDriveDialog';
 import { CaseNameDialog } from './CaseNameDialog';
+import { CaseDescriptionDialog } from './CaseDescriptionDialog';
 import { ExtractionFolderDialog } from './ExtractionFolderDialog';
 import { SaveParentDialog } from './SaveParentDialog';
 import { FolderSelectionDialog } from './FolderSelectionDialog';
@@ -21,7 +22,7 @@ import { RenameFileDialog } from './RenameFileDialog';
 import { CreateFolderDialog } from './CreateFolderDialog';
 import { ExtractionFolder } from './ExtractionFolder';
 import { CategoryTagSelector } from './CategoryTagSelector';
-import { ArchiveFile } from '../../types';
+import { ArchiveFile, ArchiveCase } from '../../types';
 import { ProgressBar } from '../ProgressBar';
 import { SecurityCheckerModal } from '../SecurityCheckerModal';
 import { PDFExtractionModal } from '../PDFExtractionModal';
@@ -60,6 +61,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     navigateToFolder,
     updateCaseBackgroundImage,
     updateFolderBackgroundImage,
+    updateCaseDescription,
     refreshFiles,
     refreshCases,
     selectedTagId,
@@ -199,6 +201,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [fileToRename, setFileToRename] = useState<ArchiveFile | null>(null);
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
+  const [showDescriptionDialog, setShowDescriptionDialog] = useState(false);
+  const [caseForDescription, setCaseForDescription] = useState<ArchiveCase | null>(null);
   const [selectedFileForExtraction, setSelectedFileForExtraction] = useState<ArchiveFile | null>(null);
   const [selectedFile, setSelectedFile] = useState<ArchiveFile | null>(null);
   const [fileViewerIndex, setFileViewerIndex] = useState(0);
@@ -1153,7 +1157,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
           {/* Content */}
           <div
             ref={dropZoneRef}
-            className={`relative z-0 flex-1 overflow-y-auto px-8 pb-8 ${isDragging ? 'bg-cyber-purple-500/20 border-2 border-cyber-purple-500 border-dashed rounded-lg m-4' : ''}`}
+            className={`relative z-0 flex-1 overflow-y-auto px-8 pt-6 pb-8 ${isDragging ? 'bg-cyber-purple-500/20 border-2 border-cyber-purple-500 border-dashed rounded-lg m-4' : ''}`}
           >
           {loading ? (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -1801,6 +1805,10 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                       }}
                       onEditBackground={() => updateCaseBackgroundImage(casePath)}
                       onTagClick={() => handleTagClick(casePath)}
+                      onEditDescription={() => {
+                        setCaseForDescription(caseItem);
+                        setShowDescriptionDialog(true);
+                      }}
                     />
                   );
                 })}
@@ -1862,6 +1870,22 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         isOpen={showCaseDialog}
         onClose={() => setShowCaseDialog(false)}
         onConfirm={handleCreateCase}
+      />
+
+      <CaseDescriptionDialog
+        isOpen={showDescriptionDialog}
+        onClose={() => {
+          setShowDescriptionDialog(false);
+          setCaseForDescription(null);
+        }}
+        onConfirm={async (description) => {
+          if (caseForDescription) {
+            await updateCaseDescription(caseForDescription.path, description);
+            setShowDescriptionDialog(false);
+            setCaseForDescription(null);
+          }
+        }}
+        initialDescription={caseForDescription?.description || ''}
       />
 
       <CreateFolderDialog

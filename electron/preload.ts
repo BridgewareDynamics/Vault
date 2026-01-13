@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getArchiveConfig: () => ipcRenderer.invoke('get-archive-config'),
   validateArchiveDirectory: (dirPath: string) => ipcRenderer.invoke('validate-archive-directory', dirPath),
       createCaseFolder: (caseName: string, description?: string, categoryTagId?: string) => ipcRenderer.invoke('create-case-folder', caseName, description, categoryTagId),
+      updateCaseDescription: (casePath: string, description: string) => ipcRenderer.invoke('update-case-description', casePath, description),
       getCategoryTags: () => ipcRenderer.invoke('get-category-tags'),
       createCategoryTag: (tag: { id: string; name: string; color: string }) => ipcRenderer.invoke('create-category-tag', tag),
       deleteCategoryTag: (tagId: string) => ipcRenderer.invoke('delete-category-tag', tagId),
@@ -243,6 +244,7 @@ declare global {
       getArchiveConfig: () => Promise<{ archiveDrive: string | null }>;
       validateArchiveDirectory: (dirPath: string) => Promise<{ isValid: boolean; marker?: { version: string; createdAt: number; lastModified: number; caseCount?: number; archiveId: string } }>;
       createCaseFolder: (caseName: string, description?: string, categoryTagId?: string) => Promise<string>;
+      updateCaseDescription: (casePath: string, description: string) => Promise<{ success: boolean }>;
       getCategoryTags: () => Promise<Array<{ id: string; name: string; color: string }>>;
       createCategoryTag: (tag: { id: string; name: string; color: string }) => Promise<{ id: string; name: string; color: string }>;
       deleteCategoryTag: (tagId: string) => Promise<boolean>;

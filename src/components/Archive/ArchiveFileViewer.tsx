@@ -1114,6 +1114,18 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
             }
           }}
         >
+          {/* Close button - Top right corner */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClose();
+            }}
+            className="absolute top-4 right-4 z-40 text-white hover:text-cyber-purple-400 transition-colors bg-black/70 backdrop-blur-sm rounded-full p-2 border border-cyber-purple-500/50 hover:bg-gray-700/50"
+            aria-label="Close viewer"
+            title="Close"
+          >
+            <X size={20} />
+          </button>
 
           {/* Image Zoom Controls */}
           {file.type === 'image' && fileData && (
