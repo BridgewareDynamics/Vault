@@ -14,6 +14,56 @@ import { loadSettings } from './utils/settings';
 import * as bookmarkStorage from './utils/bookmarkStorage';
 import { auditPDFRedaction } from './utils/pdfRedactionAudit';
 import { generateAuditReport } from './utils/generateAuditReport';
+import { LocalDatabase } from './database/localDatabase';
+import { migrateMetadataFilesToDatabase } from './database/migration';
+import { FileSystemWatcher } from './database/watcher';
+import { File } from './database/models';
+
+// Helper function to detect file type from path
+function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | 'other' {
+  const ext = path.extname(filePath).toLowerCase();
+  const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+  const videoExts = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv'];
+  
+  if (ext === '.pdf') {
+    return 'pdf';
+  } else if (imageExts.includes(ext)) {
+    return 'image';
+  } else if (videoExts.includes(ext)) {
+    return 'video';
+  } else {
+    return 'other';
+  }
+}
+
+// Helper function to safely check if database is ready
+function isDatabaseReady(): boolean {
+  return db !== null && db.isInitialized();
+}
+
+// Helper function to find case path from any file/folder path
+async function findCasePathFromPath(filePath: string): Promise<string | null> {
+  if (!isDatabaseReady()) {
+    return null;
+  }
+  
+  // Walk up the directory tree to find a case
+  let currentPath = filePath;
+  const archiveDrive = await getArchiveDrive();
+  if (!archiveDrive || !isDatabaseReady()) {
+    return null;
+  }
+  
+  while (currentPath !== archiveDrive && currentPath !== path.dirname(currentPath)) {
+    const caseRecord = db!.getCaseByPath(currentPath);
+    if (caseRecord) {
+      return currentPath;
+    }
+    currentPath = path.dirname(currentPath);
+  }
+  
+  return null;
+}
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -63,6 +113,8 @@ process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) =>
 });
 
 let mainWindow: BrowserWindow | null = null;
+let db: LocalDatabase | null = null;
+let fileWatcher: FileSystemWatcher | null = null;
 
 // Register custom protocol for video files (more efficient than data URLs)
 function registerVideoProtocol() {
@@ -356,9 +408,70 @@ app.whenReady().then(async () => {
     app.setAppUserModelId('com.vault.app');
   }
   
+  // Initialize database BEFORE creating window to ensure it's ready
+  try {
+    db = LocalDatabase.getInstance();
+    await db.initialize();
+    logger.info('Database initialized');
+    
+    // Check if migration is needed
+    const archiveDrive = await getArchiveDrive();
+    if (archiveDrive && !db.isMigrationCompleted()) {
+      logger.info(`Running database migration from: ${archiveDrive}`);
+      const migrationResult = await migrateMetadataFilesToDatabase(archiveDrive, db);
+      logger.info(`Migration completed: ${migrationResult.cases} cases, ${migrationResult.files} files`);
+      if (migrationResult.errors.length > 0) {
+        logger.warn(`Migration had ${migrationResult.errors.length} errors:`, migrationResult.errors);
+      }
+      // If migration found no data, log warning but don't mark as complete
+      if (migrationResult.cases === 0 && migrationResult.files === 0) {
+        logger.warn('Migration found no cases or files. Archive drive may be empty or migration needs to be re-run.');
+        logger.warn('You can force re-migration by calling the force-remigration IPC handler');
+      }
+    } else if (!archiveDrive) {
+      logger.warn('Archive drive not set - migration will run when archive drive is configured');
+    } else if (db.isMigrationCompleted()) {
+      logger.info('Migration already completed - skipping');
+      // Verify we actually have data in the database
+      const caseCount = db.getCases().length;
+      if (caseCount === 0 && archiveDrive) {
+        logger.warn('Migration marked as complete but database has 0 cases - migration may have failed');
+        logger.warn('You can force re-migration by calling the force-remigration IPC handler');
+      } else if (caseCount > 0 && archiveDrive) {
+        // Check if cases have files - if not, files weren't migrated
+        let totalFiles = 0;
+        for (const caseRecord of db.getCases()) {
+          const files = db.getFiles(caseRecord.path);
+          totalFiles += files.length;
+        }
+        logger.info(`Database has ${caseCount} cases with ${totalFiles} total files`);
+        if (totalFiles === 0) {
+          logger.warn('WARNING: Cases exist but have 0 files - file migration may have failed!');
+          logger.warn('Clearing migration flag to re-run file migration...');
+          db.clearMigrationFlag();
+          // Re-run migration to get files
+          logger.info('Re-running migration to migrate files...');
+          const migrationResult = await migrateMetadataFilesToDatabase(archiveDrive, db);
+          logger.info(`Re-migration completed: ${migrationResult.cases} cases, ${migrationResult.files} files`);
+        }
+      } else {
+        logger.info(`Database has ${caseCount} cases`);
+      }
+    }
+    
+    // Start file system watcher
+    fileWatcher = new FileSystemWatcher(db);
+    await fileWatcher.start();
+    logger.info('File system watcher started');
+  } catch (error) {
+    logger.error('Failed to initialize database:', error);
+    // Continue app startup even if database fails - handlers will fall back to file system
+  }
+  
   // Register custom protocols before creating window
   registerVideoProtocol();
   
+  // Create window AFTER database is initialized
   await createWindow();
 
   app.on('activate', async () => {
@@ -377,6 +490,18 @@ app.on('window-all-closed', () => {
 // Cleanup file handles on app exit
 app.on('before-quit', async () => {
   await closeAllFileHandles();
+  
+  // Stop file watcher
+  if (fileWatcher) {
+    fileWatcher.stop();
+    fileWatcher = null;
+  }
+  
+  // Close database connection
+  if (db && db.isInitialized()) {
+    db.close();
+    db = null;
+  }
 });
 
 // IPC Handlers
@@ -1150,6 +1275,36 @@ ipcMain.handle('get-archive-config', async () => {
   return config;
 });
 
+// Force re-run migration (clears migration flag and re-runs)
+ipcMain.handle('force-remigration', async () => {
+  try {
+    if (!isDatabaseReady()) {
+      throw new Error('Database not initialized');
+    }
+
+    const archiveDrive = await getArchiveDrive();
+    if (!archiveDrive) {
+      throw new Error('Archive drive not set');
+    }
+
+    logger.info('Force re-migration requested - clearing migration flag');
+    db!.clearMigrationFlag();
+
+    logger.info('Running forced migration...');
+    const migrationResult = await migrateMetadataFilesToDatabase(archiveDrive, db!);
+    
+    return {
+      success: true,
+      cases: migrationResult.cases,
+      files: migrationResult.files,
+      errors: migrationResult.errors,
+    };
+  } catch (error) {
+    logger.error('Force re-migration failed:', error);
+    throw new Error(`Failed to re-run migration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
 // Validate archive directory
 ipcMain.handle('validate-archive-directory', async (event, dirPath: string) => {
   if (!isSafePath(dirPath)) {
@@ -1210,6 +1365,21 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
         await fs.writeFile(tagPath, categoryTagId.trim(), 'utf8');
       }
       
+      // Insert case into database
+      if (isDatabaseReady()) {
+        const stats = await fs.stat(casePath);
+        const caseId = db!.generateId(casePath);
+        db!.createCase({
+          id: caseId,
+          name: caseName,
+          path: casePath,
+          description: description.trim() || null,
+          category_tag_id: categoryTagId?.trim() || null,
+          local_modified_at: stats.mtime.getTime(),
+          created_at: stats.birthtime.getTime(),
+        });
+      }
+      
       // Update archive marker metadata
       try {
         const marker = await readArchiveMarker(archiveDrive);
@@ -1244,7 +1414,17 @@ ipcMain.handle('update-case-description', async (event, casePath: string, descri
     await fs.access(casePath);
     
     const descriptionPath = path.join(casePath, '.case-description');
+    const now = Date.now();
     
+    // Dual-write: Update database (source of truth)
+    if (isDatabaseReady()) {
+      db!.updateCase(casePath, {
+        description: description.trim() || null,
+        local_modified_at: now,
+      });
+    }
+    
+    // Also write to metadata file (for backward compatibility)
     if (description.trim()) {
       // Save or update description
       await fs.writeFile(descriptionPath, description.trim(), 'utf8');
@@ -1383,85 +1563,113 @@ ipcMain.handle('list-archive-cases', async () => {
   }
 
   try {
-    const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
-    const cases = await Promise.all(
-      entries
-        .filter(entry => {
-          if (!entry.isDirectory()) {
-            return false;
-          }
-          // Exclude .bookmark-thumbnails folder from case list
-          const folderName = entry.name.toLowerCase();
-          if (folderName === '.bookmark-thumbnails' || folderName === 'textlibrary') {
-            return false;
-          }
-          return true;
-        })
-        .map(async (entry) => {
-          const casePath = path.join(archiveDrive, entry.name);
-          
-          // Try to read background image metadata
-          let backgroundImage: string | undefined = undefined;
-          try {
-            const metadataPath = path.join(casePath, '.case-background');
-            const backgroundFileName = await fs.readFile(metadataPath, 'utf8');
-            const backgroundFileNameTrimmed = backgroundFileName.trim();
-            if (backgroundFileNameTrimmed) {
-              const backgroundImagePath = path.join(casePath, backgroundFileNameTrimmed);
-              // Verify the file exists
-              try {
-                await fs.access(backgroundImagePath);
-                backgroundImage = backgroundImagePath;
-              } catch {
-                // File doesn't exist, ignore
-              }
-            }
-          } catch (metadataError) {
-            // Metadata file doesn't exist or can't be read - that's okay
-          }
-          
-          // Try to read description metadata
-          let description: string | undefined = undefined;
-          try {
-            const descriptionPath = path.join(casePath, '.case-description');
-            const descriptionContent = await fs.readFile(descriptionPath, 'utf8');
-            const descriptionTrimmed = descriptionContent.trim();
-            if (descriptionTrimmed) {
-              description = descriptionTrimmed;
-            }
-          } catch (descriptionError) {
-            // Description file doesn't exist or can't be read - that's okay
-          }
-          
-          // Try to read category tag metadata
-          let categoryTagId: string | undefined = undefined;
-          try {
-            const tagPath = path.join(casePath, '.case-category-tag');
-            const tagContent = await fs.readFile(tagPath, 'utf8');
-            const tagTrimmed = tagContent.trim();
-            if (tagTrimmed) {
-              categoryTagId = tagTrimmed;
-            }
-          } catch (tagError) {
-            // Tag file doesn't exist or can't be read - that's okay
-          }
-          
-          return {
-            name: entry.name,
-            path: casePath,
-            backgroundImage,
-            description,
-            categoryTagId,
-          };
-        })
-    );
+    // Wait for database initialization if in progress
+    if (db && !db.isInitialized()) {
+      try {
+        await db.waitForInitialization();
+      } catch {
+        // Initialization failed, fall back to file system
+        logger.warn('Database initialization failed, falling back to file system scan');
+        return await listCasesFromFileSystem(archiveDrive);
+      }
+    }
+
+    // Query database instead of scanning file system
+    if (!isDatabaseReady()) {
+      // Fallback to file system scan if database not initialized
+      logger.warn('Database not initialized, falling back to file system scan');
+      return await listCasesFromFileSystem(archiveDrive);
+    }
+
+    const cases = db!.getCases();
     
-    cases.sort((a, b) => a.name.localeCompare(b.name)); // Alphabetize
-    return cases;
+    // Convert database records to API format
+    return cases.map((caseRecord) => ({
+      name: caseRecord.name,
+      path: caseRecord.path,
+      backgroundImage: caseRecord.background_image || undefined,
+      description: caseRecord.description || undefined,
+      categoryTagId: caseRecord.category_tag_id || undefined,
+    }));
   } catch (error) {
+    logger.error('Failed to list archive cases:', error);
     throw new Error(`Failed to list archive cases: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
+
+// Fallback function for file system scanning (if database not available)
+async function listCasesFromFileSystem(archiveDrive: string) {
+  const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
+  const cases = await Promise.all(
+    entries
+      .filter(entry => {
+        if (!entry.isDirectory()) {
+          return false;
+        }
+        const folderName = entry.name.toLowerCase();
+        if (folderName === '.bookmark-thumbnails' || folderName === 'textlibrary') {
+          return false;
+        }
+        return true;
+      })
+      .map(async (entry) => {
+        const casePath = path.join(archiveDrive, entry.name);
+        
+        let backgroundImage: string | undefined = undefined;
+        try {
+          const metadataPath = path.join(casePath, '.case-background');
+          const backgroundFileName = await fs.readFile(metadataPath, 'utf8');
+          const backgroundFileNameTrimmed = backgroundFileName.trim();
+          if (backgroundFileNameTrimmed) {
+            const backgroundImagePath = path.join(casePath, backgroundFileNameTrimmed);
+            try {
+              await fs.access(backgroundImagePath);
+              backgroundImage = backgroundImagePath;
+            } catch {
+              // File doesn't exist, ignore
+            }
+          }
+        } catch {
+          // Metadata file doesn't exist
+        }
+        
+        let description: string | undefined = undefined;
+        try {
+          const descriptionPath = path.join(casePath, '.case-description');
+          const descriptionContent = await fs.readFile(descriptionPath, 'utf8');
+          const descriptionTrimmed = descriptionContent.trim();
+          if (descriptionTrimmed) {
+            description = descriptionTrimmed;
+          }
+        } catch {
+          // Description file doesn't exist
+        }
+        
+        let categoryTagId: string | undefined = undefined;
+        try {
+          const tagPath = path.join(casePath, '.case-category-tag');
+          const tagContent = await fs.readFile(tagPath, 'utf8');
+          const tagTrimmed = tagContent.trim();
+          if (tagTrimmed) {
+            categoryTagId = tagTrimmed;
+          }
+        } catch {
+          // Tag file doesn't exist
+        }
+        
+        return {
+          name: entry.name,
+          path: casePath,
+          backgroundImage,
+          description,
+          categoryTagId,
+        };
+      })
+  );
+  
+  cases.sort((a, b) => a.name.localeCompare(b.name));
+  return cases;
+}
 
 // Category Tag Handlers
 
@@ -1545,7 +1753,17 @@ ipcMain.handle('set-case-category-tag', async (event, casePath: string, category
 
   try {
     const tagPath = path.join(casePath, '.case-category-tag');
+    const now = Date.now();
     
+    // Dual-write: Update database (source of truth)
+    if (isDatabaseReady()) {
+      db!.updateCase(casePath, {
+        category_tag_id: categoryTagId?.trim() || null,
+        local_modified_at: now,
+      });
+    }
+    
+    // Also write to metadata file (for backward compatibility)
     if (categoryTagId === null || categoryTagId.trim() === '') {
       // Remove tag by deleting the file
       try {
@@ -1843,177 +2061,160 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
   }
 
   try {
-    const entries = await fs.readdir(casePath, { withFileTypes: true });
-    logger.log('[Main] list-case-files: Found entries:', entries.length, entries.map(e => ({ name: e.name, isFile: e.isFile(), isDirectory: e.isDirectory() })));
-    
-    // Process files (exclude hidden metadata files like .parent-pdf, .case-background, etc.)
-    const files = await Promise.all(
-      entries
-        .filter(entry => {
-          // Only process files
-          if (!entry.isFile()) {
-            return false;
-          }
-          const fileName = entry.name.toLowerCase();
-          
-          // Exclude .parent-pdf metadata files
-          if (fileName === '.parent-pdf' || fileName.startsWith('.parent-pdf')) {
-            logger.log('[Main] Filtering out metadata file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .case-background metadata file
-          if (fileName === '.case-background') {
-            logger.log('[Main] Filtering out case background metadata file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .case-description metadata file
-          if (fileName === '.case-description') {
-            logger.log('[Main] Filtering out case description metadata file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .case-category-tag metadata file
-          if (fileName === '.case-category-tag') {
-            logger.log('[Main] Filtering out case category tag metadata file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .vault-archive.json marker file
-          if (fileName === '.vault-archive.json') {
-            logger.log('[Main] Filtering out vault archive marker file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .case-background-image.* files
-          if (fileName.startsWith('.case-background-image.')) {
-            logger.log('[Main] Filtering out case background image file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .file-category-tag.* metadata files
-          if (fileName.startsWith('.file-category-tag.')) {
-            logger.log('[Main] Filtering out file category tag metadata file:', entry.name);
-            return false;
-          }
-          
-          return true;
-        })
-        .map(async (entry) => {
-          const filePath = path.normalize(path.join(casePath, entry.name));
-          const stats = await fs.stat(filePath);
-          
-          // Try to read file category tag metadata
-          let categoryTagId: string | undefined = undefined;
-          try {
-            const tagFileName = `.file-category-tag.${entry.name}`;
-            const tagPath = path.normalize(path.join(casePath, tagFileName));
-            logger.log('[Main] list-case-files: Reading tag for file:', { entryName: entry.name, filePath, tagFileName, tagPath });
-            const tagContent = await fs.readFile(tagPath, 'utf8');
-            const tagTrimmed = tagContent.trim();
-            if (tagTrimmed) {
-              categoryTagId = tagTrimmed;
-              logger.log('[Main] list-case-files: Found tag for file:', { entryName: entry.name, categoryTagId });
-            }
-          } catch (tagError) {
-            // Tag file doesn't exist or can't be read - that's okay
-            logger.log('[Main] list-case-files: No tag found for file:', { entryName: entry.name, error: tagError instanceof Error ? tagError.message : 'Unknown' });
-          }
-          
-          return {
-            name: entry.name,
-            path: filePath,
-            size: stats.size,
-            modified: stats.mtime.getTime(),
-            isFolder: false,
-            categoryTagId,
-          };
-        })
-    );
+    // Wait for database initialization if in progress
+    if (db && !db.isInitialized()) {
+      try {
+        await db.waitForInitialization();
+      } catch {
+        // Initialization failed, fall back to file system
+        logger.warn('Database initialization failed, falling back to file system scan');
+        return await listCaseFilesFromFileSystem(casePath);
+      }
+    }
 
-    // Process folders
-    const folders = await Promise.all(
-      entries
-        .filter(entry => {
-          if (!entry.isDirectory()) {
-            return false;
-          }
-          // Exclude .thumbnails folder
-          const folderName = entry.name.toLowerCase();
-          if (folderName === '.thumbnails') {
-            logger.log('[Main] Filtering out .thumbnails folder:', entry.name);
-            return false;
-          }
-          
-          // Exclude .bookmark-thumbnails folder
-          if (folderName === '.bookmark-thumbnails') {
-            logger.log('[Main] Filtering out .bookmark-thumbnails folder:', entry.name);
-            return false;
-          }
-          
-          // Exclude .notes folder (used for case notes, should be hidden from file listing)
-          if (folderName === '.notes') {
-            logger.log('[Main] Filtering out .notes folder:', entry.name);
-            return false;
-          }
-          
-          return true;
-        })
-        .map(async (entry) => {
-          const folderPath = path.join(casePath, entry.name);
-          const stats = await fs.stat(folderPath);
-          
-          // Try to read parent PDF metadata to determine folder type
-          let parentPdfName: string | null = null;
-          let folderType: 'extraction' | 'case' = 'case'; // Default to regular folder
-          
-          try {
-            const metadataPath = path.join(folderPath, '.parent-pdf');
-            parentPdfName = await fs.readFile(metadataPath, 'utf8');
-            parentPdfName = parentPdfName.trim();
-            // If .parent-pdf exists, it's an extraction folder
-            if (parentPdfName) {
-              folderType = 'extraction';
-            }
-          } catch (metadataError) {
-            // Metadata file doesn't exist - it's a regular case folder
-            folderType = 'case';
-            parentPdfName = null;
-          }
-          
-          // Try to read folder background image metadata
-          let backgroundImage: string | undefined = undefined;
-          try {
-            const backgroundMetadataPath = path.join(folderPath, '.folder-background');
-            const backgroundImageName = await fs.readFile(backgroundMetadataPath, 'utf8');
-            const trimmedName = backgroundImageName.trim();
-            if (trimmedName) {
-              const backgroundImagePath = path.join(folderPath, trimmedName);
-              // Verify the image file exists
-              try {
-                await fs.access(backgroundImagePath);
-                backgroundImage = backgroundImagePath;
-              } catch {
-                // Image file doesn't exist, ignore
-              }
-            }
-          } catch {
-            // No background image metadata, ignore
-          }
-          
-          return {
-            name: entry.name,
-            path: folderPath,
+    // Query database instead of scanning file system
+    if (!isDatabaseReady()) {
+      // Fallback to file system scan if database not initialized
+      logger.warn('Database not initialized, falling back to file system scan');
+      return await listCaseFilesFromFileSystem(casePath);
+    }
+
+    // Check if this is actually a folder path (not a case path)
+    const folderRecord = db!.getFileByPath(casePath);
+    if (folderRecord && folderRecord.is_folder === 1) {
+      // This is a folder, get files inside this folder
+      logger.debug(`[Main] list-case-files: Path is a folder, getting files inside: ${casePath}`);
+      const dbInstance = (db as any).db;
+      const folderFilesStmt = dbInstance.prepare(`
+        SELECT * FROM files 
+        WHERE parent_folder_id = ? AND deleted_at IS NULL
+        ORDER BY is_folder DESC, name
+      `);
+      const dbFiles = folderFilesStmt.all(folderRecord.id) as File[];
+      logger.debug(`[Main] list-case-files: Retrieved ${dbFiles.length} files from folder: ${casePath}`);
+      
+      // Process folder contents (same logic as case files)
+      const files: Array<{
+        name: string;
+        path: string;
+        size: number;
+        modified: number;
+        isFolder: false;
+        categoryTagId?: string;
+      }> = [];
+      
+      const folders: Array<{
+        name: string;
+        path: string;
+        size: number;
+        modified: number;
+        isFolder: true;
+        folderType: 'extraction' | 'case';
+        parentPdfName?: string;
+        backgroundImage?: string;
+      }> = [];
+
+      for (const fileRecord of dbFiles) {
+        // Filter out hidden/system folders
+        const fileName = fileRecord.name.toLowerCase();
+        if (fileName === '.thumbnails' || fileName === '.bookmark-thumbnails' || fileName === '.notes') {
+          continue;
+        }
+
+        if (fileRecord.is_folder === 1) {
+          // It's a folder
+          folders.push({
+            name: fileRecord.name,
+            path: fileRecord.path,
             size: 0,
-            modified: stats.mtime.getTime(),
+            modified: fileRecord.local_modified_at,
             isFolder: true,
-            folderType: folderType,
-            parentPdfName: parentPdfName || undefined,
-            backgroundImage: backgroundImage,
-          };
-        })
-    );
+            folderType: (fileRecord.folder_type || 'case') as 'extraction' | 'case',
+            parentPdfName: fileRecord.parent_pdf_name || undefined,
+            backgroundImage: fileRecord.background_image || undefined,
+          });
+        } else {
+          // It's a file
+          files.push({
+            name: fileRecord.name,
+            path: fileRecord.path,
+            size: fileRecord.size,
+            modified: fileRecord.local_modified_at,
+            isFolder: false,
+            categoryTagId: fileRecord.category_tag_id || undefined,
+          });
+        }
+      }
+
+      // Return simple sorted list (no PDF grouping for folder contents)
+      const allItems = [...folders, ...files];
+      allItems.sort((a, b) => {
+        if (a.isFolder !== b.isFolder) {
+          return a.isFolder ? -1 : 1; // Folders first
+        }
+        return a.name.localeCompare(b.name);
+      });
+
+      logger.log('[Main] list-case-files (folder): Processed - Files:', files.length, 'Folders:', folders.length);
+      return allItems;
+    }
+
+    // This is a case path, get root-level files
+    const dbFiles = db!.getFiles(casePath);
+    logger.debug(`[Main] list-case-files: Retrieved ${dbFiles.length} root-level files from database for case: ${casePath}`);
+    
+    // Separate files and folders
+    const files: Array<{
+      name: string;
+      path: string;
+      size: number;
+      modified: number;
+      isFolder: false;
+      categoryTagId?: string;
+    }> = [];
+    
+    const folders: Array<{
+      name: string;
+      path: string;
+      size: number;
+      modified: number;
+      isFolder: true;
+      folderType: 'extraction' | 'case';
+      parentPdfName?: string;
+      backgroundImage?: string;
+    }> = [];
+
+    for (const fileRecord of dbFiles) {
+      // Filter out hidden/system folders
+      const fileName = fileRecord.name.toLowerCase();
+      if (fileName === '.thumbnails' || fileName === '.bookmark-thumbnails' || fileName === '.notes') {
+        continue;
+      }
+
+      if (fileRecord.is_folder === 1) {
+        // It's a folder
+        folders.push({
+          name: fileRecord.name,
+          path: fileRecord.path,
+          size: 0,
+          modified: fileRecord.local_modified_at,
+          isFolder: true,
+          folderType: fileRecord.folder_type || 'case',
+          parentPdfName: fileRecord.parent_pdf_name || undefined,
+          backgroundImage: fileRecord.background_image || undefined,
+        });
+      } else {
+        // It's a file
+        files.push({
+          name: fileRecord.name,
+          path: fileRecord.path,
+          size: fileRecord.size,
+          modified: fileRecord.local_modified_at,
+          isFolder: false,
+          categoryTagId: fileRecord.category_tag_id || undefined,
+        });
+      }
+    }
 
     logger.log('[Main] list-case-files: Processed - Files:', files.length, 'Folders:', folders.length);
     
@@ -2139,6 +2340,187 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
   }
 });
 
+// Fallback function for file system scanning (if database not available)
+async function listCaseFilesFromFileSystem(casePath: string) {
+  const entries = await fs.readdir(casePath, { withFileTypes: true });
+  
+  const files = await Promise.all(
+    entries
+      .filter(entry => {
+        if (!entry.isFile()) return false;
+        const fileName = entry.name.toLowerCase();
+        return !fileName.startsWith('.') && !fileName.startsWith('.file-category-tag.');
+      })
+      .map(async (entry) => {
+        const filePath = path.normalize(path.join(casePath, entry.name));
+        const stats = await fs.stat(filePath);
+        
+        let categoryTagId: string | undefined = undefined;
+        try {
+          const tagFileName = `.file-category-tag.${entry.name}`;
+          const tagPath = path.normalize(path.join(casePath, tagFileName));
+          const tagContent = await fs.readFile(tagPath, 'utf8');
+          const tagTrimmed = tagContent.trim();
+          if (tagTrimmed) {
+            categoryTagId = tagTrimmed;
+          }
+        } catch {
+          // Tag file doesn't exist
+        }
+        
+        return {
+          name: entry.name,
+          path: filePath,
+          size: stats.size,
+          modified: stats.mtime.getTime(),
+          isFolder: false as const,
+          categoryTagId,
+        };
+      })
+  );
+
+  const folders = await Promise.all(
+    entries
+      .filter(entry => {
+        if (!entry.isDirectory()) return false;
+        const folderName = entry.name.toLowerCase();
+        return folderName !== '.thumbnails' && folderName !== '.bookmark-thumbnails' && folderName !== '.notes';
+      })
+      .map(async (entry) => {
+        const folderPath = path.join(casePath, entry.name);
+        const stats = await fs.stat(folderPath);
+        
+        let parentPdfName: string | null = null;
+        let folderType: 'extraction' | 'case' = 'case';
+        
+        try {
+          const metadataPath = path.join(folderPath, '.parent-pdf');
+          parentPdfName = await fs.readFile(metadataPath, 'utf8');
+          parentPdfName = parentPdfName.trim();
+          if (parentPdfName) {
+            folderType = 'extraction';
+          }
+        } catch {
+          folderType = 'case';
+          parentPdfName = null;
+        }
+        
+        let backgroundImage: string | undefined = undefined;
+        try {
+          const backgroundMetadataPath = path.join(folderPath, '.folder-background');
+          const backgroundImageName = await fs.readFile(backgroundMetadataPath, 'utf8');
+          const trimmedName = backgroundImageName.trim();
+          if (trimmedName) {
+            const backgroundImagePath = path.join(folderPath, trimmedName);
+            try {
+              await fs.access(backgroundImagePath);
+              backgroundImage = backgroundImagePath;
+            } catch {
+              // Image file doesn't exist
+            }
+          }
+        } catch {
+          // No background image metadata
+        }
+        
+        return {
+          name: entry.name,
+          path: folderPath,
+          size: 0,
+          modified: stats.mtime.getTime(),
+          isFolder: true as const,
+          folderType: folderType,
+          parentPdfName: parentPdfName || undefined,
+          backgroundImage: backgroundImage,
+        };
+      })
+  );
+
+  // Apply same grouping logic as database version
+  const pdfFiles = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+  const otherFiles = files.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
+  pdfFiles.sort((a, b) => a.name.localeCompare(b.name));
+  
+  const pdfToFoldersMap = new Map<string, typeof folders>();
+  const pdfNameLowerToActual = new Map<string, string>();
+  pdfFiles.forEach(pdf => {
+    pdfToFoldersMap.set(pdf.name, []);
+    pdfNameLowerToActual.set(pdf.name.toLowerCase(), pdf.name);
+  });
+  
+  folders.forEach(folder => {
+    const parentPdfName = folder.parentPdfName;
+    let matched = false;
+    
+    if (parentPdfName) {
+      if (pdfToFoldersMap.has(parentPdfName)) {
+        pdfToFoldersMap.get(parentPdfName)!.push(folder);
+        matched = true;
+      } else {
+        const parentPdfNameLower = parentPdfName.toLowerCase();
+        const actualPdfName = pdfNameLowerToActual.get(parentPdfNameLower);
+        if (actualPdfName) {
+          pdfToFoldersMap.get(actualPdfName)!.push(folder);
+          matched = true;
+        }
+      }
+    }
+    
+    if (!matched) {
+      const folderNameLower = folder.name.toLowerCase();
+      const folderModified = folder.modified;
+      let bestMatch: typeof pdfFiles[0] | null = null;
+      let bestMatchScore = 0;
+      
+      for (const pdf of pdfFiles) {
+        const pdfBaseName = pdf.name.replace(/\.pdf$/i, '').toLowerCase();
+        const pdfModified = pdf.modified;
+        let score = 0;
+        if (folderNameLower.includes(pdfBaseName) || pdfBaseName.includes(folderNameLower)) {
+          score += 10;
+        }
+        if (folderModified >= pdfModified && (folderModified - pdfModified) < 3600000) {
+          score += 5;
+        }
+        if (score > bestMatchScore) {
+          bestMatchScore = score;
+          bestMatch = pdf;
+        }
+      }
+      
+      if (bestMatch && bestMatchScore > 0) {
+        pdfToFoldersMap.get(bestMatch.name)!.push(folder);
+      }
+    }
+  });
+  
+  pdfToFoldersMap.forEach((folderList) => {
+    folderList.sort((a, b) => a.name.localeCompare(b.name));
+  });
+  
+  const assignedFolders = new Set<string>();
+  pdfToFoldersMap.forEach((folderList) => {
+    folderList.forEach(folder => {
+      assignedFolders.add(folder.path);
+    });
+  });
+  
+  const orphanedFolders = folders.filter(folder => !assignedFolders.has(folder.path));
+  orphanedFolders.sort((a, b) => a.name.localeCompare(b.name));
+  
+  const groupedItems: Array<typeof files[0] | typeof folders[0]> = [];
+  for (const pdf of pdfFiles) {
+    const relatedFolders = pdfToFoldersMap.get(pdf.name) || [];
+    groupedItems.push(...relatedFolders);
+    groupedItems.push(pdf);
+  }
+  groupedItems.push(...orphanedFolders);
+  otherFiles.sort((a, b) => a.name.localeCompare(b.name));
+  groupedItems.push(...otherFiles);
+  
+  return groupedItems;
+}
+
 // Add files to case
 ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: string[]) => {
   if (!isSafePath(casePath)) {
@@ -2157,6 +2539,30 @@ ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: 
         const fileName = path.basename(filePath);
         const destPath = path.join(casePath, fileName);
         await fs.copyFile(filePath, destPath);
+        
+        // Insert file into database
+        if (isDatabaseReady()) {
+          const stats = await fs.stat(destPath);
+          const fileId = db!.generateId(destPath);
+          const caseRecord = db!.getCaseByPath(casePath);
+          if (caseRecord) {
+            const fileType = detectFileTypeFromPath(destPath);
+            const checksum = await db!.calculateChecksum(destPath);
+            db!.createFile({
+              id: fileId,
+              case_id: caseRecord.id,
+              name: fileName,
+              path: destPath,
+              size: stats.size,
+              type: fileType,
+              is_folder: 0,
+              checksum,
+              local_modified_at: stats.mtime.getTime(),
+              created_at: stats.birthtime.getTime(),
+            });
+          }
+        }
+        
         results.push(destPath);
       } catch (error) {
         // Skip files that fail to copy
@@ -2188,6 +2594,30 @@ ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: 
       const fileName = path.basename(filePath);
       const destPath = path.join(casePath, fileName);
       await fs.copyFile(filePath, destPath);
+      
+      // Insert file into database
+      if (isDatabaseReady()) {
+        const stats = await fs.stat(destPath);
+        const fileId = db!.generateId(destPath);
+        const caseRecord = db!.getCaseByPath(casePath);
+        if (caseRecord) {
+          const fileType = detectFileTypeFromPath(destPath);
+          const checksum = await db!.calculateChecksum(destPath);
+          db!.createFile({
+            id: fileId,
+            case_id: caseRecord.id,
+            name: fileName,
+            path: destPath,
+            size: stats.size,
+            type: fileType,
+            is_folder: 0,
+            checksum,
+            local_modified_at: stats.mtime.getTime(),
+            created_at: stats.birthtime.getTime(),
+          });
+        }
+      }
+      
       copiedFiles.push(destPath);
     } catch (error) {
       logger.error(`Failed to copy file ${filePath}:`, error);
@@ -2204,6 +2634,12 @@ ipcMain.handle('delete-case', async (event, casePath: string) => {
   }
 
   try {
+    // Soft delete in database
+    if (isDatabaseReady()) {
+      db!.deleteCase(casePath);
+    }
+    
+    // Delete from file system
     await fs.rm(casePath, { recursive: true, force: true });
     return true;
   } catch (error) {
@@ -2252,7 +2688,15 @@ ipcMain.handle('set-case-background-image', async (event, casePath: string, imag
     // Copy the new image
     await fs.copyFile(imagePath, destPath);
 
-    // Store the filename in metadata file
+    // Dual-write: Update database (source of truth)
+    if (isDatabaseReady()) {
+      db!.updateCase(casePath, {
+        background_image: destPath,
+        local_modified_at: Date.now(),
+      });
+    }
+
+    // Also write to metadata file (for backward compatibility)
     const metadataPath = path.join(casePath, '.case-background');
     await fs.writeFile(metadataPath, backgroundImageName, 'utf8');
 
@@ -2350,6 +2794,11 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
+        // Soft delete in database
+        if (isDatabaseReady()) {
+          db!.deleteFile(filePath);
+        }
+        
         await fs.rm(filePath, { recursive: true, force: true });
         logger.log('[Main] Folder deleted successfully');
         return true;
@@ -2391,9 +2840,14 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      await fs.unlink(filePath);
-      logger.log('[Main] File deleted successfully');
-      return true;
+    // Soft delete in database
+    if (db) {
+      db.deleteFile(filePath);
+    }
+    
+    await fs.unlink(filePath);
+    logger.log('[Main] File deleted successfully');
+    return true;
     } catch (unlinkError) {
       const errorMessage = unlinkError instanceof Error ? unlinkError.message : String(unlinkError);
       const errorCode = isErrorWithCode(unlinkError) ? unlinkError.code : undefined;
@@ -2483,6 +2937,23 @@ ipcMain.handle('move-file-to-folder', async (event, filePath: string, folderPath
     // Move the file
     await fs.rename(filePath, destPath);
     logger.log('[Main] File moved successfully:', { from: filePath, to: destPath });
+    
+    // Update database
+    if (isDatabaseReady()) {
+      // Find the case that contains the destination folder
+      const casePath = await findCasePathFromPath(folderPath);
+      if (casePath) {
+        const caseRecord = db!.getCaseByPath(casePath);
+        if (caseRecord) {
+          const stats = await fs.stat(destPath);
+          db!.updateFile(filePath, {
+            case_id: caseRecord.id,
+            path: destPath,
+            local_modified_at: stats.mtime.getTime(),
+          });
+        }
+      }
+    }
 
     // If it's a PDF, also move/update thumbnail
     if (filePath.toLowerCase().endsWith('.pdf')) {
@@ -2563,6 +3034,17 @@ ipcMain.handle('rename-file', async (event, filePath: string, newName: string) =
     }
 
     await fs.rename(filePath, newPath);
+    
+    // Update database
+    if (db) {
+      const stats = await fs.stat(newPath);
+      db.updateFile(filePath, {
+        name: newName.trim(),
+        path: newPath,
+        local_modified_at: stats.mtime.getTime(),
+      });
+    }
+    
     return { success: true, newPath };
   } catch (error) {
     throw new Error(`Failed to rename: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -2823,12 +3305,66 @@ ipcMain.handle('extract-pdf-from-archive', async (
       return { success: true, messages: results, extractionFolder: casePath };
     } else {
       // Save individual files to folder
-      const extractionFolder = path.join(casePath, folderName);
-      await fs.mkdir(extractionFolder, { recursive: true });
+      // Check if folder already exists in database (from migration or previous extraction)
+      let extractionFolder: string = path.join(casePath, folderName);
+      let folderExists = false;
+      
+      if (isDatabaseReady()) {
+        // Try to find existing folder by name and parent PDF
+        const caseRecord = db!.getCaseByPath(casePath);
+        if (caseRecord) {
+          // Query database for all folders in this case (not just root-level)
+          const dbInstance = (db as any).db;
+          const allFoldersStmt = dbInstance.prepare(`
+            SELECT * FROM files 
+            WHERE case_id = ? AND deleted_at IS NULL AND is_folder = 1 AND name = ?
+          `);
+          const existingFolders = allFoldersStmt.all(caseRecord.id, folderName) as Array<File & { parent_pdf_name: string | null }>;
+          
+          // Check if any of these folders match the parent PDF
+          const matchingFolder = existingFolders.find(
+            (f: File) => f.parent_pdf_name && f.parent_pdf_name.toLowerCase() === parentPdfName.toLowerCase()
+          );
+          
+          if (matchingFolder) {
+            extractionFolder = matchingFolder.path;
+            folderExists = true;
+            logger.debug(`Using existing extraction folder: ${extractionFolder}`);
+          }
+        }
+      }
+      
+      if (!folderExists) {
+        // Folder doesn't exist, create it
+        await fs.mkdir(extractionFolder, { recursive: true });
 
-      // Store parent PDF metadata to link folder to PDF
-      const metadataPath = path.join(extractionFolder, '.parent-pdf');
-      await fs.writeFile(metadataPath, parentPdfName, 'utf8');
+        // Store parent PDF metadata to link folder to PDF
+        const metadataPath = path.join(extractionFolder, '.parent-pdf');
+        await fs.writeFile(metadataPath, parentPdfName, 'utf8');
+        
+        // Add to database if ready
+        if (isDatabaseReady()) {
+          const caseRecord = db!.getCaseByPath(casePath);
+          if (caseRecord) {
+            const stats = await fs.stat(extractionFolder);
+            const folderId = db!.generateId(extractionFolder);
+            db!.createFile({
+              id: folderId,
+              case_id: caseRecord.id,
+              name: folderName,
+              path: extractionFolder,
+              size: 0,
+              type: 'other',
+              is_folder: 1,
+              folder_type: 'extraction',
+              parent_pdf_name: parentPdfName,
+              checksum: '',
+              local_modified_at: stats.mtime.getTime(),
+              created_at: stats.birthtime.getTime(),
+            });
+          }
+        }
+      }
 
       // Save parent PDF if requested
       if (saveParentFile) {
@@ -2859,6 +3395,39 @@ ipcMain.handle('extract-pdf-from-archive', async (
         const imagePath = path.join(extractionFolder, page.fileName);
         await fs.writeFile(imagePath, buffer);
         results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
+        
+        // Add file to database if ready
+        if (isDatabaseReady()) {
+          const caseRecord = db!.getCaseByPath(casePath);
+          if (caseRecord) {
+            // Get folder ID
+            const folderRecord = db!.getFileByPath(extractionFolder);
+            if (folderRecord) {
+              const stats = await fs.stat(imagePath);
+              const fileId = db!.generateId(imagePath);
+              const fileType = detectFileTypeFromPath(imagePath);
+              const checksum = await db!.calculateChecksum(imagePath);
+              
+              // Check if file already exists in database
+              const existingFile = db!.getFileByPath(imagePath);
+              if (!existingFile) {
+                db!.createFile({
+                  id: fileId,
+                  case_id: caseRecord.id,
+                  name: page.fileName,
+                  path: imagePath,
+                  size: stats.size,
+                  type: fileType,
+                  is_folder: 0,
+                  parent_folder_id: folderRecord.id,
+                  checksum,
+                  local_modified_at: stats.mtime.getTime(),
+                  created_at: stats.birthtime.getTime(),
+                });
+              }
+            }
+          }
+        }
       }
 
       return { success: true, messages: results, extractionFolder };

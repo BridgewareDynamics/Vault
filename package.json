@@ -24,7 +24,8 @@
     "test:coverage": "vitest --coverage",
     "test:coverage:ci": "CI=true vitest --coverage",
     "test:watch": "vitest --watch",
-    "generate:icon": "node scripts/generate-icon.js"
+    "generate:icon": "node scripts/generate-icon.js",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
     "@lexical/code": "^0.19.0",
@@ -36,6 +37,7 @@
     "@lexical/selection": "^0.19.0",
     "@lexical/table": "^0.19.0",
     "@lexical/utils": "^0.19.0",
+    "better-sqlite3": "^11.6.0",
     "electron-log": "^5.0.1",
     "framer-motion": "^10.16.16",
     "jszip": "^3.10.1",
@@ -48,9 +50,11 @@
     "sharp": "^0.33.2"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.1",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.10.6",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
