@@ -57,9 +57,13 @@ server/
 │   ├── __init__.py
 │   ├── models.py         # SQLAlchemy ORM models
 │   ├── connection.py    # Database connection management
+│   ├── service.py        # Singleton Database Service class
+│   │                    # - Executes SQL CREATE TABLE scripts via SQLite driver
+│   │                    # - Manages database initialization and schema creation
+│   │                    # - Handles schema versioning and migration execution
 │   ├── migrations/       # Alembic migrations
-│   │   ├── versions/
-│   │   └── env.py
+│   │   ├── versions/     # Migration version files (alembic_version table)
+│   │   └── env.py        # Alembic environment configuration
 │   └── seed.py          # Database seeding (if needed)
 ├── sync/                 # Sync engine logic
 │   ├── __init__.py
@@ -123,21 +127,82 @@ server/
 **New Components:**
 
 - `src/components/Sync/` - Sync UI components
-- `SyncPanel.tsx` - Main sync configuration panel
-- `SyncStatusIndicator.tsx` - Visual indicator for unsynced changes
-- `CaseSyncControls.tsx` - Per-case sync controls
-- `SyncProgress.tsx` - Progress display during sync
-- `src/hooks/useSync.ts` - Sync state management hook
-- `src/services/syncService.ts` - HTTP client for sync API calls
+  - `SyncPanel.tsx` - Main sync configuration panel (uses cyberpunk theme)
+  - `SyncStatusIndicator.tsx` - Visual indicator for unsynced changes (badge with Framer Motion)
+  - `CaseSyncControls.tsx` - Per-case sync controls
+  - `SyncProgress.tsx` - Progress display during sync (with cyberpunk animations)
+  - `ConflictResolutionDialog.tsx` - Conflict resolution UI with diff view
+- `src/hooks/useSync.ts` - Main sync state management hook (follows `useArchive` patterns)
+- `src/hooks/useSyncStatus.ts` - Hook for sync status tracking
+- `src/hooks/useSyncProgress.ts` - Hook for sync progress monitoring
+- `src/hooks/useSyncConflicts.ts` - Hook for conflict management
+- `src/contexts/SyncContext.tsx` - Global sync state context (like `ToastContext`, `ArchiveContext`)
+  - Provides: `syncStatus`, `syncProgress`, `conflicts`, `syncConfig`
+  - Methods: `syncCase()`, `syncAll()`, `pauseSync()`, `resumeSync()`, `resolveConflict()`
+  - Uses `useState`, `useEffect`, `useCallback` patterns (matches existing contexts)
+- `src/services/syncService.ts` - HTTP client for sync API calls (type-safe with TypeScript)
+  - Uses `fetch` API with proper error handling
+  - Type-safe request/response types
+  - Handles authentication tokens
+  - Retry logic with exponential backoff
+- `src/types/sync.ts` - TypeScript type definitions for sync operations (extends `src/types/index.ts`)
+  - `SyncConfig`, `SyncStatus`, `SyncProgress`, `SyncConflict`, `SyncLog`
+  - Matches Pydantic models on server side
+  - Exported alongside implementations
+
+**React Hooks Patterns:**
+
+All sync hooks follow existing patterns from `useArchive.ts`:
+
+- `useSync` hook structure:
+  - Uses `useState` for local state management
+  - Uses `useEffect` for side effects (polling, cleanup)
+  - Uses `useCallback` for memoized handlers
+  - Uses `useRef` for mutable values (avoid re-renders)
+  - Integrates with `ToastContext` for user notifications
+  - Uses `logger` from `@/utils/logger` for debugging
+  - Returns object with state and methods: `{ status, progress, syncCase, ... }`
+
+- `SyncContext` provider pattern:
+  - Follows same pattern as `ToastContext`, `ArchiveContext`
+  - Uses `createContext` and `useContext`
+  - Provider component wraps app/feature area
+  - Exports custom hook: `useSync()` for consuming context
+  - State management via `useState` and `useReducer` if complex
 
 **IPC Handlers (in `electron/main.ts`):**
+
+All IPC handlers follow existing patterns:
+
+- Use kebab-case naming: `sync-get-config`, `sync-case`, etc.
+- Return `{ success: boolean, ... }` response objects
+- Use `logger` from `electron/utils/logger` for logging
+- Validate paths with `isSafePath()` before file operations
+- Use `getUserFriendlyError()` for user-facing error messages
+- Handle errors gracefully with try-catch blocks
+
+**Preload Script Integration (`electron/preload.ts`):**
+
+Add sync-related APIs to preload script following existing patterns:
+
+- Expose sync APIs via `window.electronAPI.sync.*`
+- Type-safe API definitions in `src/types/electronAPI.d.ts`
+- Context isolation: No Node.js access in renderer
+- Safe IPC: Only whitelisted sync operations exposed
+- Example: `window.electronAPI.sync.getStatus()`, `window.electronAPI.sync.syncCase(caseId)`
 
 **Configuration:**
 
 - `sync-get-config` - Get sync server configuration
+  - Returns: `{ success: boolean, config?: SyncConfig, error?: string }`
 - `sync-set-config` - Set sync server configuration
+  - Parameters: `config: SyncConfig`
+  - Returns: `{ success: boolean, error?: string }`
 - `sync-check-connection` - Test server connection
+  - Returns: `{ success: boolean, connected: boolean, error?: string }`
 - `sync-validate-ssl` - Validate SSL certificate (for HTTPS)
+  - Parameters: `certPath: string`
+  - Returns: `{ success: boolean, valid: boolean, error?: string }`
 
 **Status and Monitoring:**
 
@@ -168,7 +233,18 @@ server/
 **Logging and History:**
 
 - `sync-get-log` - Get sync operation history
+  - Parameters: `limit?: number, offset?: number`
+  - Returns: `{ success: boolean, logs?: SyncLog[], total?: number, error?: string }`
 - `sync-clear-log` - Clear sync log (admin)
+  - Returns: `{ success: boolean, error?: string }`
+
+**IPC Handler Implementation Notes:**
+
+- All handlers use existing error handling patterns from `electron/main.ts`
+- Path validation uses `isSafePath()` from `electron/utils/pathValidator`
+- File operations follow same patterns as existing IPC handlers
+- Logging uses `logger` utility (not console.log)
+- Response format matches existing IPC handlers: `{ success: boolean, ... }`
 
 ### 3. Data Models
 
@@ -379,11 +455,156 @@ CREATE INDEX idx_clients_last_seen ON clients(last_seen_at);
 
 **Migration Strategy:**
 
-- Use Alembic for database migrations
-- Initial migration creates all tables with indexes
-- Support for schema versioning and rollback
-- Migration scripts in `server/database/migrations/`
-- Automatic migration on server startup (with backup)
+**Database Service Class (Singleton Pattern):**
+
+- Implement `DatabaseService` singleton class in `server/database/service.py`
+- Responsibilities:
+  - Execute SQL CREATE TABLE scripts via SQLite driver on first initialization
+  - Manage database connection lifecycle (single connection instance)
+  - Track schema version in database metadata table
+  - Execute Alembic migration scripts in sequential order
+  - Verify schema integrity after migrations
+  - Provide rollback capability for failed migrations
+  - Handle database initialization for new installations
+
+**Initial Schema Creation:**
+
+- SQL CREATE TABLE scripts (provided in this plan) executed via SQLite driver
+- Scripts create all tables, indexes, foreign keys, and constraints
+- Executed automatically on first server startup (if database doesn't exist)
+- Schema version stored in database for tracking: `schema_version` table
+- Database Service class reads and executes SQL scripts programmatically
+
+**Migration Workflow (CRITICAL - READ CAREFULLY):**
+
+**⚠️ CRITICAL: Schema Changes Require BOTH Updates:**
+
+When adding, removing, or modifying database fields/tables, you MUST update BOTH:
+
+1. **SQL CREATE TABLE Scripts** (in this plan document)
+
+   - Required for: New installations
+   - Purpose: Fresh databases get the latest schema
+   - Location: Update the CREATE TABLE statements in this plan
+   - Impact: New users get correct schema from start
+
+2. **Alembic Migration Scripts** (in `server/database/migrations/versions/`)
+
+   - Required for: Existing databases (users who already have sync server)
+   - Purpose: Transform existing databases to new schema
+   - Location: Create new migration file with upgrade/downgrade functions
+   - Impact: Existing users' databases are updated safely
+
+**⚠️ BREAKING CHANGES WARNING:**
+
+**If you don't create migration scripts when schema changes:**
+
+- Existing databases will have outdated schema
+- Application will fail with SQL errors (missing columns, wrong types, etc.)
+- Data may become inaccessible or corrupted
+- Users will experience crashes and data loss
+- Recovery may require manual database fixes or data loss
+
+**Migration Process (Step-by-Step):**
+
+1. **Plan the Schema Change:**
+
+   - Document what fields/tables are changing
+   - Determine if change is backward compatible
+   - Plan data migration strategy (if needed)
+
+2. **Update SQL CREATE TABLE Scripts:**
+
+   - Modify CREATE TABLE statements in this plan document
+   - Update all affected tables
+   - Test scripts on fresh database
+
+3. **Create Alembic Migration:**
+
+   - Generate migration: `alembic revision -m "description"`
+   - Write upgrade function: Transform old schema → new schema
+   - Write downgrade function: Transform new schema → old schema (rollback)
+   - Test migration on sample database with real data
+
+4. **Update ORM Models:**
+
+   - Update SQLAlchemy models in `server/database/models.py`
+   - Keep models in sync with actual database schema
+   - Update Pydantic models if API contracts change
+
+5. **Version the Migration:**
+
+   - Alembic tracks version automatically
+   - Schema version incremented in database
+   - Document migration in release notes
+
+6. **Test Thoroughly:**
+
+   - Test on development database
+   - Test on production-like data volumes
+   - Test rollback (downgrade) functionality
+   - Verify data integrity after migration
+
+**Migration Execution:**
+
+- Automatic migration on server startup (via Database Service)
+- Migration runs before server accepts connections
+- Backup database before migration (automatic)
+- Sequential execution: Migrations run in version order
+- Failure handling: Rollback on error, restore from backup
+- Logging: All migration operations logged for audit
+
+**Migration Best Practices:**
+
+- **One migration per schema change** - Don't bundle multiple changes
+- **Idempotent migrations** - Safe to run multiple times (check if already applied)
+- **Data preservation** - Never lose user data during migration
+- **Backward compatibility** - When possible, support old and new schema temporarily
+- **Testing** - Always test migrations on production-like data
+- **Documentation** - Document breaking changes and migration requirements
+- **Rollback plan** - Always have a way to undo migrations
+- **Performance** - Large databases may take time; show progress
+
+**Example Migration Scenario:**
+
+If adding a new field `last_accessed_at` to `cases` table:
+
+1. Update CREATE TABLE script: Add `last_accessed_at INTEGER` column
+2. Create Alembic migration:
+   ```python
+   def upgrade():
+       op.add_column('cases', sa.Column('last_accessed_at', sa.Integer(), nullable=True))
+       # Set default value for existing rows
+       op.execute("UPDATE cases SET last_accessed_at = updated_at WHERE last_accessed_at IS NULL")
+   
+   def downgrade():
+       op.drop_column('cases', 'last_accessed_at')
+   ```
+
+3. Update SQLAlchemy model: Add `last_accessed_at` field
+4. Test migration on sample database
+5. Deploy with migration script
+
+**Database Service Implementation Notes:**
+
+- Singleton pattern ensures single database connection
+- Lazy initialization: Create connection on first use
+- Connection pooling: Reuse connections efficiently
+- Error handling: Graceful handling of connection failures
+- Logging: Log all database operations for debugging
+- Thread safety: Ensure safe concurrent access if needed
+
+**Shared Type Definitions:**
+
+To ensure type safety between client and server:
+
+- Create `src/types/sync.ts` - TypeScript types for sync operations
+  - Extends existing `src/types/index.ts` patterns
+  - Defines: `SyncConfig`, `SyncStatus`, `SyncProgress`, `SyncConflict`, etc.
+  - Matches Pydantic models on server side
+- Server uses Pydantic models that align with TypeScript types
+- Type generation: Consider generating TypeScript types from OpenAPI spec (future)
+- Type validation: Use Zod for runtime validation (optional, aligns with TypeScript-first approach)
 
 ### 4. API Endpoints (FastAPI)
 
@@ -458,6 +679,16 @@ CREATE INDEX idx_clients_last_seen ON clients(last_seen_at);
 - `POST /api/v1/word-editor-files` - Create/update word editor file
 - `DELETE /api/v1/word-editor-files/{file_id}` - Delete file
 
+**Word Editor Sync Specifics:**
+
+- Lexical content format: Store HTML content from Lexical editor (as currently done)
+- Draft sync: Sync auto-saved drafts from localStorage (optional, configurable)
+- Three-way merge: Use diff algorithms for Lexical HTML content conflicts
+- Conflict markers: Insert conflict markers in Lexical format for manual resolution
+- Export formats: Sync export preferences (TXT, PDF, DOCX, RTF) if stored
+- File associations: Sync case associations for word editor files (if applicable)
+- Unsaved changes: Handle unsaved changes detection during sync
+
 **Category Tags:**
 
 - `GET /api/v1/category-tags` - List category tags
@@ -530,18 +761,42 @@ CREATE INDEX idx_clients_last_seen ON clients(last_seen_at);
 - `server/build.py` - Build script for creating executables
 - Use PyInstaller or cx_Freeze for Windows/Linux executables
 - Include SQLite, FastAPI, and all dependencies
+- Version alignment: Sync server version tied to main app version (`package.json` version)
 
 **Installation Options:**
 
 1. **Standalone Installer**: Separate `.exe` (Windows) / `.deb`/`.rpm` (Linux)
-2. **Optional Module**: Include in main Vault installer as optional component
+
+   - Downloaded separately from repository
+   - Independent installation and updates
+   - User chooses when to install/update
+
+2. **Optional Module in Main Installer**: Include in main Vault installer as optional component
+
+   - Electron Builder configuration: Add sync server as optional component
+   - User can choose to install during main app installation
+   - Bundled with main app installer
+   - Same version as main app
+
 3. **Portable**: ZIP archive with run script
+
+   - No installation required
+   - Extract and run
+   - Useful for testing and development
 
 **Distribution Files:**
 
-- Windows: `vault-sync-server-setup.exe`
-- Linux: `vault-sync-server.deb` / `vault-sync-server.rpm`
+- Windows: `vault-sync-server-setup.exe` (standalone) or bundled in main installer
+- Linux: `vault-sync-server.deb` / `vault-sync-server.rpm` (standalone) or bundled
 - Both: `vault-sync-server-portable.zip`
+- Version naming: `vault-sync-server-{version}-setup.exe` (matches main app versioning)
+
+**Build Integration:**
+
+- Sync server build can be triggered from main app build scripts
+- Optional: Add `npm run build:sync-server` script to `package.json`
+- CI/CD: Include sync server build in GitHub Actions workflows
+- Version sync: Sync server version reads from main app `package.json` or separate version file
 
 ## Implementation Details
 
@@ -583,10 +838,12 @@ Enhanced conflict resolution with multiple strategies:
 
 2. **Three-Way Merge (For Word Editor files):**
 
-   - Attempt automatic merge for text content
+   - Attempt automatic merge for Lexical HTML content
    - Use diff algorithms to merge non-conflicting changes
-   - Create conflict markers for overlapping edits
+   - Handle Lexical-specific structures (nodes, decorators, etc.)
+   - Create conflict markers in Lexical format for overlapping edits
    - Present merge preview to user for approval
+   - Preserve Lexical editor state (cursor position, selection, etc.) when possible
 
 3. **Manual Resolution (For critical conflicts):**
 
@@ -618,6 +875,37 @@ Enhanced conflict resolution with multiple strategies:
 - Thumbnails: Separate sync endpoint
 - Metadata files: Sync alongside files
 - Background images: Include in case sync
+
+**Metadata File Sync Strategy:**
+
+The Vault uses hidden metadata files that must be synced correctly:
+
+- `.case-description` - Case description text (stored in case folder)
+- `.case-background` - Background image filename reference (stored in case folder)
+- `.case-category-tag` - Category tag ID (stored in case folder)
+- `.parent-pdf` - Parent PDF name for extraction folders (stored in folder)
+- `.folder-background` - Folder background image filename (stored in folder)
+- `.vault-archive.json` - Archive marker file (stored in archive root)
+
+**Sync Rules for Metadata Files:**
+
+1. Metadata files sync automatically with their parent entity (case/folder)
+2. Metadata conflicts resolved with parent entity (if case conflicts, metadata conflicts too)
+3. Metadata files verified for existence after sync
+4. Missing metadata files handled gracefully (optional fields)
+5. Metadata file integrity checked (file exists, readable, valid format)
+
+**Thumbnail Sync Strategy:**
+
+- `.thumbnails/` folder: Optional sync (thumbnails can be regenerated)
+  - Option 1: Sync thumbnails (faster, uses bandwidth)
+  - Option 2: Regenerate on demand (saves bandwidth, uses CPU)
+  - Configurable per client: `sync_thumbnails: boolean` in config
+- `.bookmark-thumbnails/` folder: Required sync (bookmark-specific thumbnails)
+  - Always synced (cannot be regenerated easily)
+  - Stored in archive root `.bookmark-thumbnails/` directory
+- Thumbnail verification: Use Sharp to verify thumbnail integrity on server
+- Thumbnail deduplication: Skip syncing if thumbnail already exists with same checksum
 
 **Chunked File Transfer:**
 
@@ -719,6 +1007,15 @@ Enhanced conflict resolution with multiple strategies:
 - Error categorization and reporting
 - Error notification system with severity levels
 - Automatic error recovery where possible
+
+**Error Handling Consistency with Main App:**
+
+- Use `logger` from `electron/utils/logger` (not console.log/error)
+- User-facing errors use `getUserFriendlyError()` from `src/utils/errorMessages.ts`
+- Error notifications via `ToastContext` (toast.error(), toast.warning(), etc.)
+- React ErrorBoundary for sync UI components (catch component errors)
+- IPC handlers return `{ success: boolean, error?: string }` format (matches existing patterns)
+- Server-side errors logged with structured logging, user sees friendly messages
 
 ### Performance and Scalability
 
@@ -899,6 +1196,15 @@ Enhanced conflict resolution with multiple strategies:
 - E2E tests: Critical user flows
 - Performance tests: All performance targets
 
+**Testing Integration with Main App:**
+
+- Client-side sync tests use Vitest (matches main app testing setup)
+- React component tests use Testing Library (matches existing test patterns)
+- Mock sync server in client tests (similar to Electron API mocks)
+- Test files co-located: `SyncPanel.test.tsx`, `useSync.test.ts`, etc.
+- Test setup: Use `src/test-utils/setup.ts` for shared test configuration
+- Coverage: Follow same coverage thresholds as main app (80% statements, 85% branches)
+
 ## Security Considerations
 
 **User-Configurable Security:**
@@ -933,12 +1239,48 @@ Enhanced conflict resolution with multiple strategies:
 
 **Enabling Sync on Existing Vault:**
 
+**⚠️ CRITICAL: Backup Before Migration**
+
+**Data Integrity Requirement:**
+
+Before enabling sync on an existing vault, users MUST create a complete backup of their vault. This is essential for data integrity and recovery in case of issues during the initial sync or migration process.
+
+**Backup Instructions for Users:**
+
+1. **Create Full Vault Backup:**
+
+   - Copy entire vault directory to a safe location (external drive, cloud storage, or different folder)
+   - Include all case folders, files, and hidden metadata files
+   - Verify backup is complete and accessible
+   - Recommended: Use ZIP archive for easier backup/restore
+
+2. **Backup Verification:**
+
+   - Verify backup contains all cases and files
+   - Check that backup size matches original vault size
+   - Test that backup can be accessed and files are readable
+   - Store backup in secure location separate from original vault
+
+3. **Backup Storage:**
+
+   - Keep backup until sync is verified working correctly
+   - Store backup for at least 30 days after successful migration
+   - Consider keeping backup longer for critical data
+
+**UI Implementation:**
+
+- Show backup warning dialog before enabling sync
+- Require user acknowledgment: "I have created a backup of my vault"
+- Provide backup instructions link/help text
+- Option to create backup via UI (future enhancement)
+
 1. **Initial Sync Setup:**
 
    - User configures sync server in Settings
    - Client performs initial inventory of all cases/files
    - Calculate checksums for all files (background process)
    - Create initial sync metadata in local database
+   - **Backup verification prompt**: Confirm user has created backup before proceeding
 
 2. **First Sync:**
 
@@ -957,21 +1299,57 @@ Enhanced conflict resolution with multiple strategies:
 
 4. **Data Migration:**
 
+   - **REQUIRED: User must create backup before migration** (see backup instructions above)
    - Preserve all existing metadata (descriptions, tags, etc.)
    - Maintain file structure exactly
    - Preserve timestamps where possible
-   - Create backup before first sync
+   - Verify data integrity after migration
+   - Provide rollback option if migration fails (restore from backup)
 
 **Migration Checklist:**
 
-- [ ] Backup existing vault
-- [ ] Verify vault integrity
-- [ ] Configure sync server
-- [ ] Test connection
-- [ ] Perform initial sync
-- [ ] Verify sync completion
-- [ ] Test sync from second client
-- [ ] Verify data consistency
+**Pre-Migration (CRITICAL - DO NOT SKIP):**
+
+- [ ] **Create complete backup of vault directory**
+  - Copy entire vault folder to safe location
+  - Include all cases, files, and metadata
+  - Verify backup is complete and accessible
+  - Store backup in secure location (external drive, cloud, etc.)
+- [ ] **Verify backup integrity**
+  - Check backup contains all cases and files
+  - Verify backup size matches original
+  - Test backup files are readable
+  - Document backup location for future reference
+
+**Migration Steps:**
+
+- [ ] Verify vault integrity (check for corruption)
+- [ ] Configure sync server (URL, authentication, SSL settings)
+- [ ] Test connection to sync server
+- [ ] Review sync settings (auto-sync, per-case sync, etc.)
+- [ ] Perform initial sync (full sync of all cases)
+- [ ] Monitor sync progress and verify completion
+- [ ] Verify sync completion (check all cases synced)
+- [ ] Test sync from second client (if applicable)
+- [ ] Verify data consistency (compare local vs server)
+- [ ] Test conflict resolution (if conflicts occur)
+
+**Post-Migration Verification:**
+
+- [ ] Verify all cases are accessible
+- [ ] Verify all files are present and correct
+- [ ] Verify metadata (descriptions, tags, backgrounds) preserved
+- [ ] Verify bookmarks synced correctly
+- [ ] Verify word editor files synced correctly
+- [ ] Test sync operations (upload, download, conflict resolution)
+- [ ] Keep backup for at least 30 days after successful migration
+
+**⚠️ IMPORTANT REMINDERS:**
+
+- **Never skip the backup step** - Data loss is possible without backup
+- **Verify backup before proceeding** - Ensure backup is complete and accessible
+- **Keep backup until sync is verified** - Don't delete backup immediately
+- **Test thoroughly** - Verify all data synced correctly before considering migration complete
 
 ### Backup and Disaster Recovery
 
@@ -1140,11 +1518,24 @@ Enhanced conflict resolution with multiple strategies:
 **Settings UI:**
 
 - Sync configuration panel in Vault Settings
+  - Uses cyberpunk theme: `cyber-purple-*`, `cyber-cyan-*` colors
+  - Glassmorphism effects: `backdrop-blur`, semi-transparent backgrounds
+  - Framer Motion animations for state transitions
+  - Follows existing Settings panel patterns
 - Server connection settings
 - Auto-sync toggle and interval
 - Per-case sync enable/disable
 - Sync history and logs view
 - Manual sync trigger button
+
+**UI/UX Integration:**
+
+- Sync components use TailwindCSS (matches main app styling)
+- Framer Motion for animations (matches existing animation patterns)
+- Lucide React icons (matches existing icon usage)
+- Cyberpunk theme consistency (same color palette, gradients, effects)
+- Responsive design (follows main app responsive patterns)
+- Accessibility: ARIA labels, keyboard navigation (matches main app standards)
 
 ## Implementation Phases
 
@@ -1212,3 +1603,64 @@ This comprehensive plan outlines a production-ready sync server implementation t
 10. **Delivers Excellent UX**: Clear status indicators, progress tracking, conflict resolution UI
 
 The implementation follows industry best practices for distributed systems, data synchronization, and API design, ensuring a reliable, scalable, and maintainable solution.
+
+## Code Quality and Consistency
+
+**TypeScript Standards:**
+
+- Server-side Python code uses type hints (Pydantic models provide runtime validation)
+- Client-side TypeScript follows strict mode (`strict: true`)
+- **NEVER use `any` type** - use proper types or `unknown` with type guards
+- Shared types defined in `src/types/sync.ts` (extends `src/types/index.ts`)
+- Type definitions exported alongside implementations
+
+**Code Style Alignment:**
+
+- Follow existing `.cursorrules` conventions
+- Use path aliases: `@/` for `src/`, `@electron/` for `electron/`
+- Component files: PascalCase (`SyncPanel.tsx`)
+- Hooks: camelCase starting with `use` (`useSync.ts`)
+- Utils: camelCase (`syncService.ts`)
+- Types/Interfaces: PascalCase (`SyncConfig`, `SyncStatus`)
+
+**ESLint Compliance:**
+
+- Apply same ESLint rules to sync-related code
+- No unused variables (TypeScript strict mode enforces)
+- Consistent formatting (Prettier if configured)
+- Follow `.eslintrc.cjs` rules
+
+**Import Order (Client Code):**
+
+1. React imports
+2. Third-party libraries (framer-motion, lucide-react, etc.)
+3. Internal hooks (`useSync`, `useSyncStatus`)
+4. Internal components (`SyncPanel`, `SyncStatusIndicator`)
+5. Internal utils (`syncService`, `logger`)
+6. Types (`SyncConfig`, `SyncStatus`)
+7. Styles (CSS imports last)
+
+**Error Handling Patterns:**
+
+- Use `logger` utility (never console.log/error/warn)
+- User-facing errors: `getUserFriendlyError()` from `src/utils/errorMessages.ts`
+- Error notifications: `ToastContext` (toast.error(), toast.success(), etc.)
+- React ErrorBoundary for sync UI components
+- IPC handlers: Return `{ success: boolean, error?: string }` format
+
+**Testing Standards:**
+
+- Test files co-located: `SyncPanel.test.tsx`, `useSync.test.ts`
+- Use Vitest (matches main app testing setup)
+- Use Testing Library for React components
+- Mock Electron APIs in tests (similar to existing mocks)
+- Coverage goals: 80% statements, 85% branches (matches main app)
+- Test setup: Use `src/test-utils/setup.ts`
+
+**Documentation:**
+
+- JSDoc comments for public functions
+- Type definitions are self-documenting
+- README updates for sync features
+- Inline comments for complex logic
+- API documentation (OpenAPI/Swagger spec)
