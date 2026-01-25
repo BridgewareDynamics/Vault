@@ -1,7 +1,8 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import { X, FolderOpen, Save, FileText, FolderPlus } from 'lucide-react';
-import { ArchiveFile } from '../types';
+import { ArchiveFile, Theme } from '../types';
+import { useSettingsContext } from '../utils/settingsContext';
 
 export type AuditSaveOption = 'save-loose' | 'make-pdf-folder' | 'add-to-pdf-folder' | 'add-folder-to-directory';
 
@@ -187,33 +188,63 @@ export function AuditSaveOptionsDialog({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 rounded-2xl border-2 border-cyber-purple-400/40 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col"
+          className={`rounded-2xl border-2 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col ${
+            isPastel
+              ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50 border-pink-200/40'
+              : 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 border-cyber-purple-400/40'
+          }`}
+          style={isPastel ? {
+            boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+          } : {}}
         >
           {/* Header */}
-          <div className="relative p-6 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
+          <div className={`relative p-6 border-b backdrop-blur-xl ${
+            isPastel
+              ? 'border-pink-200/40 bg-gradient-to-r from-white/95 via-pink-50/20 to-white/95'
+              : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+          }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl blur-xl opacity-50"></div>
-                  <div className="relative p-3 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl shadow-2xl">
-                    <Save className="w-6 h-6 text-white" />
-                  </div>
+                  {isPastel ? (
+                    <>
+                      <div className="absolute inset-0 bg-gradient-to-br from-pink-200 to-purple-200 rounded-xl blur-xl opacity-50"></div>
+                      <div className="relative p-3 bg-gradient-to-br from-pink-100 to-purple-100 rounded-xl shadow-lg border border-pink-200/40">
+                        <Save className="w-6 h-6 text-pink-600" />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl blur-xl opacity-50"></div>
+                      <div className="relative p-3 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl shadow-2xl">
+                        <Save className="w-6 h-6 text-white" />
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div>
-                  <h2 id="audit-save-dialog-title" className="text-2xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent">
+                  <h2 id="audit-save-dialog-title" className={`text-2xl font-bold bg-clip-text text-transparent ${
+                    isPastel
+                      ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500'
+                      : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                  }`}>
                     Save Audit Report
                   </h2>
-                  <p className="text-sm text-gray-400 mt-1">
+                  <p className={`text-sm mt-1 ${
+                    isPastel ? 'text-gray-600' : 'text-gray-400'
+                  }`}>
                     Choose where to save the audit report
                   </p>
                 </div>
               </div>
               <button
                 onClick={handleClose}
-                className="p-2 hover:bg-gray-800 rounded-xl transition-colors"
+                className={`p-2 rounded-xl transition-colors ${
+                  isPastel ? 'hover:bg-pink-100' : 'hover:bg-gray-800'
+                }`}
                 aria-label="Close"
               >
-                <X className="w-5 h-5 text-gray-400" />
+                <X className={`w-5 h-5 ${isPastel ? 'text-gray-600' : 'text-gray-400'}`} />
               </button>
             </div>
           </div>
@@ -222,12 +253,18 @@ export function AuditSaveOptionsDialog({
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {isDetecting ? (
               <div className="flex items-center justify-center py-8">
-                <div className="text-gray-400">Detecting existing folders...</div>
+                <div className={isPastel ? 'text-gray-600' : 'text-gray-400'}>
+                  Detecting existing folders...
+                </div>
               </div>
             ) : (
               <>
                 {/* Save Loose Option */}
-                <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border border-gray-700/50 cursor-pointer hover:bg-gray-800/70 transition-colors group">
+                <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors group ${
+                  isPastel
+                    ? 'bg-pink-50/50 border-pink-200/50 hover:bg-pink-100/70'
+                    : 'bg-gray-800/50 border-gray-700/50 hover:bg-gray-800/70'
+                }`}>
                   <div className="relative">
                     <input
                       type="radio"
@@ -240,8 +277,12 @@ export function AuditSaveOptionsDialog({
                     <div
                       className={`w-5 h-5 rounded-full border-2 transition-all ${
                         selectedOption === 'save-loose'
-                          ? 'bg-cyber-purple-400 border-cyber-purple-400'
-                          : 'bg-transparent border-gray-500 group-hover:border-cyber-purple-400'
+                          ? isPastel
+                            ? 'bg-pink-500 border-pink-500'
+                            : 'bg-cyber-purple-400 border-cyber-purple-400'
+                          : isPastel
+                            ? 'bg-transparent border-gray-400 group-hover:border-pink-400'
+                            : 'bg-transparent border-gray-500 group-hover:border-cyber-purple-400'
                       }`}
                     >
                       {selectedOption === 'save-loose' && (
@@ -257,10 +298,18 @@ export function AuditSaveOptionsDialog({
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-200">Save Loose</span>
+                      <FileText className={`w-4 h-4 ${
+                        isPastel ? 'text-gray-600' : 'text-gray-400'
+                      }`} />
+                      <span className={`text-sm font-medium ${
+                        isPastel ? 'text-gray-700' : 'text-gray-200'
+                      }`}>
+                        Save Loose
+                      </span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className={`text-xs mt-1 ${
+                      isPastel ? 'text-gray-600' : 'text-gray-500'
+                    }`}>
                       Save to case folder (uses default folder name if no custom folder is created)
                     </p>
                   </div>
@@ -268,8 +317,14 @@ export function AuditSaveOptionsDialog({
 
                 {/* Create New Folder option - expands when Save Loose is selected */}
                 {selectedOption === 'save-loose' && (
-                  <div className="ml-8 pl-4 border-l-2 border-cyber-purple-400/30 space-y-3">
-                    <label className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-lg border border-gray-700/30 cursor-pointer hover:bg-gray-800/50 transition-colors group">
+                  <div className={`ml-8 pl-4 border-l-2 space-y-3 ${
+                    isPastel ? 'border-pink-300/40' : 'border-cyber-purple-400/30'
+                  }`}>
+                    <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors group ${
+                      isPastel
+                        ? 'bg-pink-50/30 border-pink-200/30 hover:bg-pink-100/50'
+                        : 'bg-gray-800/30 border-gray-700/30 hover:bg-gray-800/50'
+                    }`}>
                       <div className="relative">
                         <input
                           type="checkbox"
@@ -286,8 +341,12 @@ export function AuditSaveOptionsDialog({
                         <div
                           className={`w-4 h-4 rounded border-2 transition-all ${
                             createNewFolderForLoose
-                              ? 'bg-cyber-purple-400 border-cyber-purple-400'
-                              : 'bg-transparent border-gray-500 group-hover:border-cyber-purple-400'
+                              ? isPastel
+                                ? 'bg-pink-500 border-pink-500'
+                                : 'bg-cyber-purple-400 border-cyber-purple-400'
+                              : isPastel
+                                ? 'bg-transparent border-gray-400 group-hover:border-pink-400'
+                                : 'bg-transparent border-gray-500 group-hover:border-cyber-purple-400'
                           }`}
                         >
                           {createNewFolderForLoose && (
@@ -302,14 +361,20 @@ export function AuditSaveOptionsDialog({
                         </div>
                       </div>
                       <div className="flex-1">
-                        <span className="text-sm font-medium text-gray-300">Create New Folder inside case file</span>
+                        <span className={`text-sm font-medium ${
+                          isPastel ? 'text-gray-700' : 'text-gray-300'
+                        }`}>
+                          Create New Folder inside case file
+                        </span>
                       </div>
                     </label>
 
                     {/* Folder Name Input (shown when Create New Folder is checked) */}
                     {createNewFolderForLoose && (
                       <div>
-                        <label className="block text-xs font-semibold text-gray-400 mb-2">
+                        <label className={`block text-xs font-semibold mb-2 ${
+                          isPastel ? 'text-gray-600' : 'text-gray-400'
+                        }`}>
                           Folder Name
                         </label>
                         <input
@@ -323,10 +388,12 @@ export function AuditSaveOptionsDialog({
                           }}
                           onFocus={(e) => e.target.select()}
                           placeholder="Enter folder name..."
-                          className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white text-sm focus:ring-2 focus:border-transparent ${
+                          className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:border-transparent ${
                             folderNameError
                               ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500'
-                              : 'border-gray-700 focus:ring-cyber-purple-400'
+                              : isPastel
+                                ? 'bg-white border-pink-200 text-gray-700 focus:ring-pink-400'
+                                : 'bg-gray-800 border-gray-700 text-white focus:ring-cyber-purple-400'
                           }`}
                         />
                         {folderNameError && (
@@ -340,7 +407,11 @@ export function AuditSaveOptionsDialog({
                 {/* Make PDF Folder Option - Only show if no existing folder */}
                 {!hasExistingFolder && (
                   <>
-                    <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border border-gray-700/50 cursor-pointer hover:bg-gray-800/70 transition-colors group">
+                    <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors group ${
+                      isPastel
+                        ? 'bg-pink-50/50 border-pink-200/50 hover:bg-pink-100/70'
+                        : 'bg-gray-800/50 border-gray-700/50 hover:bg-gray-800/70'
+                    }`}>
                       <div className="relative">
                         <input
                           type="radio"
@@ -353,8 +424,12 @@ export function AuditSaveOptionsDialog({
                         <div
                           className={`w-5 h-5 rounded-full border-2 transition-all ${
                             selectedOption === 'make-pdf-folder'
-                              ? 'bg-cyber-purple-400 border-cyber-purple-400'
-                              : 'bg-transparent border-gray-500 group-hover:border-cyber-purple-400'
+                              ? isPastel
+                                ? 'bg-pink-500 border-pink-500'
+                                : 'bg-cyber-purple-400 border-cyber-purple-400'
+                              : isPastel
+                                ? 'bg-transparent border-gray-400 group-hover:border-pink-400'
+                                : 'bg-transparent border-gray-500 group-hover:border-cyber-purple-400'
                           }`}
                         >
                           {selectedOption === 'make-pdf-folder' && (
@@ -370,10 +445,18 @@ export function AuditSaveOptionsDialog({
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <FolderPlus className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm font-medium text-gray-200">Make PDF Folder</span>
+                          <FolderPlus className={`w-4 h-4 ${
+                            isPastel ? 'text-gray-600' : 'text-gray-400'
+                          }`} />
+                          <span className={`text-sm font-medium ${
+                            isPastel ? 'text-gray-700' : 'text-gray-200'
+                          }`}>
+                            Make PDF Folder
+                          </span>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className={`text-xs mt-1 ${
+                          isPastel ? 'text-gray-600' : 'text-gray-500'
+                        }`}>
                           Create folder above PDF (like Convert to Images)
                         </p>
                       </div>
@@ -381,8 +464,12 @@ export function AuditSaveOptionsDialog({
 
                     {/* Folder Name Input (shown when Make PDF Folder is selected) */}
                     {selectedOption === 'make-pdf-folder' && (
-                      <div className="ml-8 pl-4 border-l-2 border-cyber-purple-400/30">
-                        <label className="block text-xs font-semibold text-gray-400 mb-2">
+                      <div className={`ml-8 pl-4 border-l-2 ${
+                        isPastel ? 'border-pink-300/40' : 'border-cyber-purple-400/30'
+                      }`}>
+                        <label className={`block text-xs font-semibold mb-2 ${
+                          isPastel ? 'text-gray-600' : 'text-gray-400'
+                        }`}>
                           Folder Name
                         </label>
                         <input
@@ -391,7 +478,11 @@ export function AuditSaveOptionsDialog({
                           onChange={(e) => setFolderName(e.target.value)}
                           onFocus={(e) => e.target.select()}
                           placeholder="Enter folder name..."
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
+                          className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:border-transparent ${
+                            isPastel
+                              ? 'bg-white border-pink-200 text-gray-700 focus:ring-pink-400'
+                              : 'bg-gray-800 border-gray-700 text-white focus:ring-cyber-purple-400'
+                          }`}
                         />
                       </div>
                     )}
@@ -402,7 +493,11 @@ export function AuditSaveOptionsDialog({
                 {hasExistingFolder && (
                   <>
                     {/* Add to PDF Folder Option */}
-                    <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border border-gray-700/50 cursor-pointer hover:bg-gray-800/70 transition-colors group">
+                    <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors group ${
+                      isPastel
+                        ? 'bg-pink-50/50 border-pink-200/50 hover:bg-pink-100/70'
+                        : 'bg-gray-800/50 border-gray-700/50 hover:bg-gray-800/70'
+                    }`}>
                       <div className="relative">
                         <input
                           type="radio"
@@ -415,8 +510,12 @@ export function AuditSaveOptionsDialog({
                         <div
                           className={`w-5 h-5 rounded-full border-2 transition-all ${
                             selectedOption === 'add-to-pdf-folder'
-                              ? 'bg-cyber-purple-400 border-cyber-purple-400'
-                              : 'bg-transparent border-gray-500 group-hover:border-cyber-purple-400'
+                              ? isPastel
+                                ? 'bg-pink-500 border-pink-500'
+                                : 'bg-cyber-purple-400 border-cyber-purple-400'
+                              : isPastel
+                                ? 'bg-transparent border-gray-400 group-hover:border-pink-400'
+                                : 'bg-transparent border-gray-500 group-hover:border-cyber-purple-400'
                           }`}
                         >
                           {selectedOption === 'add-to-pdf-folder' && (
@@ -432,20 +531,34 @@ export function AuditSaveOptionsDialog({
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <FolderOpen className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm font-medium text-gray-200">
+                          <FolderOpen className={`w-4 h-4 ${
+                            isPastel ? 'text-gray-600' : 'text-gray-400'
+                          }`} />
+                          <span className={`text-sm font-medium ${
+                            isPastel ? 'text-gray-700' : 'text-gray-200'
+                          }`}>
                             Add to PDF Folder
                           </span>
-                          <span className="text-xs text-gray-500">({firstExistingFolder.name})</span>
+                          <span className={`text-xs ${
+                            isPastel ? 'text-gray-600' : 'text-gray-500'
+                          }`}>
+                            ({firstExistingFolder.name})
+                          </span>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className={`text-xs mt-1 ${
+                          isPastel ? 'text-gray-600' : 'text-gray-500'
+                        }`}>
                           Save to existing folder: {firstExistingFolder.name}
                         </p>
                       </div>
                     </label>
 
                     {/* Add Folder to Directory Option */}
-                    <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border border-gray-700/50 cursor-pointer hover:bg-gray-800/70 transition-colors group">
+                    <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors group ${
+                      isPastel
+                        ? 'bg-pink-50/50 border-pink-200/50 hover:bg-pink-100/70'
+                        : 'bg-gray-800/50 border-gray-700/50 hover:bg-gray-800/70'
+                    }`}>
                       <div className="relative">
                         <input
                           type="radio"
@@ -458,8 +571,12 @@ export function AuditSaveOptionsDialog({
                         <div
                           className={`w-5 h-5 rounded-full border-2 transition-all ${
                             selectedOption === 'add-folder-to-directory'
-                              ? 'bg-cyber-purple-400 border-cyber-purple-400'
-                              : 'bg-transparent border-gray-500 group-hover:border-cyber-purple-400'
+                              ? isPastel
+                                ? 'bg-pink-500 border-pink-500'
+                                : 'bg-cyber-purple-400 border-cyber-purple-400'
+                              : isPastel
+                                ? 'bg-transparent border-gray-400 group-hover:border-pink-400'
+                                : 'bg-transparent border-gray-500 group-hover:border-cyber-purple-400'
                           }`}
                         >
                           {selectedOption === 'add-folder-to-directory' && (
@@ -488,8 +605,12 @@ export function AuditSaveOptionsDialog({
 
                     {/* Subfolder Name Input (shown when Add Folder to Directory is selected) */}
                     {showSubfolderInput && (
-                      <div className="ml-8 pl-4 border-l-2 border-cyber-purple-400/30">
-                        <label className="block text-xs font-semibold text-gray-400 mb-2">
+                      <div className={`ml-8 pl-4 border-l-2 ${
+                        isPastel ? 'border-pink-300/40' : 'border-cyber-purple-400/30'
+                      }`}>
+                        <label className={`block text-xs font-semibold mb-2 ${
+                          isPastel ? 'text-gray-600' : 'text-gray-400'
+                        }`}>
                           Subfolder Name
                         </label>
                         <input
@@ -497,7 +618,11 @@ export function AuditSaveOptionsDialog({
                           value={subfolderName}
                           onChange={(e) => setSubfolderName(e.target.value)}
                           placeholder="Enter subfolder name (e.g., Audit Reports)..."
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
+                          className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:border-transparent ${
+                            isPastel
+                              ? 'bg-white border-pink-200 text-gray-700 focus:ring-pink-400'
+                              : 'bg-gray-800 border-gray-700 text-white focus:ring-cyber-purple-400'
+                          }`}
                         />
                       </div>
                     )}
@@ -508,10 +633,18 @@ export function AuditSaveOptionsDialog({
           </div>
 
           {/* Footer */}
-          <div className="p-6 border-t border-cyber-purple-400/30 bg-gray-900/50 flex items-center justify-end gap-3">
+          <div className={`p-6 border-t flex items-center justify-end gap-3 ${
+            isPastel
+              ? 'border-pink-200/40 bg-pink-50/50'
+              : 'border-cyber-purple-400/30 bg-gray-900/50'
+          }`}>
             <button
               onClick={handleClose}
-              className="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+              className={`px-6 py-2.5 rounded-lg font-medium transition-colors ${
+                isPastel
+                  ? 'bg-pink-100 hover:bg-pink-200 text-gray-700'
+                  : 'bg-gray-700 hover:bg-gray-600 text-white'
+              }`}
             >
               Cancel
             </button>
@@ -523,7 +656,11 @@ export function AuditSaveOptionsDialog({
                 (selectedOption === 'make-pdf-folder' && !folderName.trim()) ||
                 (selectedOption === 'save-loose' && createNewFolderForLoose && !looseFolderName.trim())
               }
-              className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 text-white rounded-lg font-medium transition-all disabled:cursor-not-allowed flex items-center gap-2"
+              className={`px-6 py-2.5 rounded-lg font-medium transition-all disabled:cursor-not-allowed flex items-center gap-2 text-white ${
+                isPastel
+                  ? 'bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-300'
+                  : 'bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700'
+              }`}
             >
               <Save className="w-4 h-4" />
               Save

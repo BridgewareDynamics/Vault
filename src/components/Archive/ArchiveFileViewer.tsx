@@ -1,7 +1,7 @@
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText, BookmarkPlus, Bookmark } from 'lucide-react';
-import { ArchiveFile, PDFDocument, PDFRenderTask } from '../../types';
+import { ArchiveFile, PDFDocument, PDFRenderTask, Theme } from '../../types';
 import { logger } from '../../utils/logger';
 import { setupPDFWorker } from '../../utils/pdfWorker';
 import { cleanupPDFBlobUrl } from '../../utils/pdfSource';
@@ -9,6 +9,7 @@ import { LargePDFWarningDialog } from '../LargePDFWarningDialog';
 import { useWordEditor } from '../../contexts/WordEditorContext';
 import { BookmarkCreator } from '../Bookmarks/BookmarkCreator';
 import { useToast } from '../Toast/ToastContext';
+import { useSettingsContext } from '../../utils/settingsContext';
 
 interface ArchiveFileViewerProps {
   file: ArchiveFile | null;
@@ -23,6 +24,9 @@ interface ArchiveFileViewerProps {
 export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, initialPage, onInitialPageApplied }: ArchiveFileViewerProps) {
   const { isOpen: isWordEditorOpen, setIsOpen: setWordEditorOpen, panelWidth, dividerPosition } = useWordEditor();
   const toast = useToast();
+  const { settings: appSettings } = useSettingsContext();
+  const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
   const [isInlineMode, setIsInlineMode] = useState(false);
   const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
@@ -1321,7 +1325,11 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                           // Dispatch event to ensure SettingsPanel opens the word editor panel
                           window.dispatchEvent(new CustomEvent('open-word-editor-from-viewer'));
                         }}
-                        className="p-2 text-white hover:text-cyber-purple-400 transition-colors rounded hover:bg-gray-700"
+                        className={`p-2 transition-colors rounded ${
+                          isPastel
+                            ? 'text-gray-700 hover:text-pink-500 hover:bg-pink-100/50'
+                            : 'text-white hover:text-cyber-purple-400 hover:bg-gray-700'
+                        }`}
                         aria-label="Open word editor"
                         title="Open word editor"
                       >

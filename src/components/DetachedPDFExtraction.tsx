@@ -6,7 +6,8 @@ import { PDFExtractionSettings } from './PDFExtractionSettings';
 import { PDFExtractionProgress } from './PDFExtractionProgress';
 import { PDFExtractionResults } from './PDFExtractionResults';
 import { PDFExtractionSaveOptions } from './PDFExtractionSaveOptions';
-import { ConversionSettings, ExtractedPage } from '../types';
+import { ConversionSettings, ExtractedPage, Theme } from '../types';
+import { useSettingsContext } from '../utils/settingsContext';
 
 interface PdfExtractionState {
   pdfPath: string | null;
@@ -52,6 +53,9 @@ export function DetachedPDFExtraction() {
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, cancel, reset } =
     usePDFExtraction();
   const toast = useToast();
+  const { settings: appSettings } = useSettingsContext();
+  const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
 
   // Use hook state if available, otherwise use local state
   const finalIsExtracting = isExtracting || localIsExtracting;
@@ -416,22 +420,50 @@ export function DetachedPDFExtraction() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 flex flex-col">
+    <div className={`min-h-screen flex flex-col ${
+      isPastel
+        ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
+        : 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900'
+    }`}>
       {/* Header */}
-      <div className="relative p-6 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
+      <div className={`relative p-6 border-b backdrop-blur-xl ${
+        isPastel
+          ? 'border-pink-200/30 bg-gradient-to-r from-white/90 via-pink-50/50 to-white/90'
+          : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+      }`}
+      style={isPastel ? {
+        boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15)',
+      } : {}}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl blur-xl opacity-50"></div>
-              <div className="relative p-3 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl shadow-2xl">
-                <FileText className="w-6 h-6 text-white" />
-              </div>
+              {isPastel ? (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-br from-pink-200/50 via-purple-200/50 to-blue-200/50 rounded-xl blur-xl opacity-50"></div>
+                  <div className="relative p-3 bg-gradient-to-br from-pink-100/80 via-purple-100/80 to-blue-100/80 rounded-xl shadow-lg border-2 border-pink-200/40">
+                    <FileText className="w-6 h-6 text-pink-500" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl blur-xl opacity-50"></div>
+                  <div className="relative p-3 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl shadow-2xl">
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
+                </>
+              )}
             </div>
             <div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent">
+              <h2 className={`text-2xl font-bold ${
+                isPastel
+                  ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 bg-clip-text text-transparent'
+                  : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent'
+              }`}>
                 PDF to Image Conversion
               </h2>
-              <p className="text-sm text-gray-400 mt-1">
+              <p className={`text-sm mt-1 ${
+                isPastel ? 'text-gray-600' : 'text-gray-400'
+              }`}>
                 Extract pages from PDF files as high-quality images
               </p>
             </div>
@@ -440,11 +472,15 @@ export function DetachedPDFExtraction() {
             <button
               onClick={handleReattach}
               disabled={isReattaching}
-              className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 rounded-xl transition-all border border-gray-700/50 hover:border-cyber-purple-400/50 flex items-center gap-2 text-gray-300 hover:text-white text-sm disabled:opacity-50"
+              className={`px-4 py-2 rounded-xl transition-all border flex items-center gap-2 text-sm disabled:opacity-50 ${
+                isPastel
+                  ? 'bg-pink-50/80 hover:bg-pink-100/80 border-pink-200/50 hover:border-pink-300/50 text-gray-700 hover:text-gray-900'
+                  : 'bg-gray-800/80 hover:bg-gray-700/80 border-gray-700/50 hover:border-cyber-purple-400/50 text-gray-300 hover:text-white'
+              }`}
               aria-label="Reattach to main window"
               title="Reattach to main window"
             >
-              <Minimize2 size={16} className="text-cyber-purple-400" />
+              <Minimize2 size={16} className={isPastel ? 'text-pink-500' : 'text-cyber-purple-400'} />
               <span>{isReattaching ? 'Reattaching...' : 'Reattach'}</span>
             </button>
           </div>
@@ -457,14 +493,27 @@ export function DetachedPDFExtraction() {
           {/* Left Column - Controls */}
           <div className="space-y-6">
             {/* File Selection */}
-            <div className="bg-gray-800/60 backdrop-blur-sm border border-cyber-purple-400/20 rounded-2xl p-6 shadow-2xl">
+            <div className={`backdrop-blur-sm rounded-2xl p-6 shadow-2xl ${
+              isPastel
+                ? 'bg-white/80 border-pink-200/40'
+                : 'bg-gray-800/60 border-cyber-purple-400/20'
+            }`}
+            style={isPastel ? {
+              boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+            } : {}}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-lg font-bold text-gray-200 mb-4">Select PDF File</label>
+                  <label className={`block text-lg font-bold mb-4 ${
+                    isPastel ? 'text-gray-700' : 'text-gray-200'
+                  }`}>Select PDF File</label>
                   <button
                     onClick={handleSelectFile}
                     disabled={finalIsExtracting}
-                    className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white text-base transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
+                    className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl font-bold text-base transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] ${
+                      isPastel
+                        ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 disabled:from-gray-300 disabled:to-gray-300 text-white'
+                        : 'bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 text-white'
+                    }`}
                   >
                     <Upload className="w-5 h-5" />
                     <span>{pdfPath ? 'Change PDF File' : 'Select PDF File'}</span>
@@ -472,15 +521,31 @@ export function DetachedPDFExtraction() {
                 </div>
 
                 {pdfPath && (
-                  <div className="flex items-center gap-4 p-4 bg-gray-900/60 rounded-xl border border-cyber-cyan-400/30">
-                    <div className="p-2.5 bg-cyber-cyan-400/20 rounded-lg">
-                      <FileText className="w-5 h-5 text-cyber-cyan-400" />
+                  <div className={`flex items-center gap-4 p-4 rounded-xl border ${
+                    isPastel
+                      ? 'bg-pink-50/60 border-pink-300/30'
+                      : 'bg-gray-900/60 border-cyber-cyan-400/30'
+                  }`}>
+                    <div className={`p-2.5 rounded-lg ${
+                      isPastel
+                        ? 'bg-pink-200/20'
+                        : 'bg-cyber-cyan-400/20'
+                    }`}>
+                      <FileText className={`w-5 h-5 ${
+                        isPastel ? 'text-pink-500' : 'text-cyber-cyan-400'
+                      }`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-400 mb-1">Selected File</p>
-                      <p className="text-sm text-gray-200 truncate font-medium">{pdfPath}</p>
+                      <p className={`text-xs mb-1 ${
+                        isPastel ? 'text-gray-600' : 'text-gray-400'
+                      }`}>Selected File</p>
+                      <p className={`text-sm truncate font-medium ${
+                        isPastel ? 'text-gray-700' : 'text-gray-200'
+                      }`}>{pdfPath}</p>
                       {totalPages > 0 && (
-                        <p className="text-xs text-gray-500 mt-1">{totalPages} pages</p>
+                        <p className={`text-xs mt-1 ${
+                          isPastel ? 'text-gray-500' : 'text-gray-500'
+                        }`}>{totalPages} pages</p>
                       )}
                     </div>
                   </div>
@@ -494,6 +559,7 @@ export function DetachedPDFExtraction() {
                     totalPages={totalPages}
                     isOpen={showSettings}
                     onToggle={() => setShowSettings(!showSettings)}
+                    isPastel={isPastel}
                   />
                 )}
 
@@ -501,7 +567,11 @@ export function DetachedPDFExtraction() {
                 {pdfPath && !finalIsExtracting && finalExtractedPages.length === 0 && (
                   <button
                     onClick={handleStartExtraction}
-                    className="w-full flex items-center justify-center gap-3 px-6 py-5 bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 rounded-xl font-bold text-white text-lg transition-all shadow-2xl hover:shadow-cyan-500/50 transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group"
+                    className={`w-full flex items-center justify-center gap-3 px-6 py-5 rounded-xl font-bold text-white text-lg transition-all shadow-2xl transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group ${
+                      isPastel
+                        ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 hover:shadow-pink-500/50'
+                        : 'bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 hover:shadow-cyan-500/50'
+                    }`}
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                     <Zap className="w-6 h-6 relative z-10" />
@@ -511,14 +581,22 @@ export function DetachedPDFExtraction() {
 
                 {/* Progress */}
                 {finalIsExtracting && finalProgress && (
-                  <PDFExtractionProgress progress={finalProgress} onCancel={cancel} />
+                  <PDFExtractionProgress progress={finalProgress} onCancel={cancel} isPastel={isPastel} />
                 )}
 
                 {/* Error Display */}
                 {finalError && (
-                  <div className="bg-red-900/40 border-2 border-red-600/50 rounded-xl p-4">
-                    <p className="text-sm text-red-300 font-medium">Error</p>
-                    <p className="text-xs text-red-400 mt-1">{finalError}</p>
+                  <div className={`border-2 rounded-xl p-4 ${
+                    isPastel
+                      ? 'bg-red-50/80 border-red-300/50'
+                      : 'bg-red-900/40 border-red-600/50'
+                  }`}>
+                    <p className={`text-sm font-medium ${
+                      isPastel ? 'text-red-600' : 'text-red-300'
+                    }`}>Error</p>
+                    <p className={`text-xs mt-1 ${
+                      isPastel ? 'text-red-500' : 'text-red-400'
+                    }`}>{finalError}</p>
                   </div>
                 )}
 
@@ -527,7 +605,11 @@ export function DetachedPDFExtraction() {
                   <button
                     onClick={() => setShowSaveDialog(true)}
                     disabled={selectedPages.size === 0}
-                    className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 text-white rounded-xl font-bold transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl flex items-center gap-2"
+                    className={`w-full flex items-center justify-center gap-3 px-6 py-4 text-white rounded-xl font-bold transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl flex items-center gap-2 ${
+                      isPastel
+                        ? 'bg-gradient-to-r from-pink-400 to-purple-400 hover:from-pink-500 hover:to-purple-500 disabled:from-gray-300 disabled:to-gray-300'
+                        : 'bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700'
+                    }`}
                   >
                     <Save className="w-5 h-5" />
                     <span>
@@ -545,7 +627,14 @@ export function DetachedPDFExtraction() {
             {finalExtractedPages.length > 0 ? (
               <>
                 {/* Gallery */}
-                <div className="bg-gray-800/60 backdrop-blur-sm border border-cyber-purple-400/20 rounded-2xl p-6 shadow-2xl">
+                <div className={`backdrop-blur-sm rounded-2xl p-6 shadow-2xl ${
+                  isPastel
+                    ? 'bg-white/80 border-pink-200/40'
+                    : 'bg-gray-800/60 border-cyber-purple-400/20'
+                }`}
+                style={isPastel ? {
+                  boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+                } : {}}>
                   <PDFExtractionResults
                     pages={finalExtractedPages}
                     selectedPages={selectedPages}
@@ -553,37 +642,64 @@ export function DetachedPDFExtraction() {
                     onPageSelect={handlePageSelect}
                     onSelectAll={handleSelectAll}
                     onDeselectAll={handleDeselectAll}
+                    isPastel={isPastel}
                   />
                 </div>
 
                 {/* Image Preview */}
                 {previewPage ? (
-                  <div className="bg-gray-800/60 backdrop-blur-sm border border-cyber-purple-400/20 rounded-2xl p-6 shadow-2xl">
+                  <div className={`backdrop-blur-sm rounded-2xl p-6 shadow-2xl ${
+                    isPastel
+                      ? 'bg-white/80 border-pink-200/40'
+                      : 'bg-gray-800/60 border-cyber-purple-400/20'
+                  }`}
+                  style={isPastel ? {
+                    boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+                  } : {}}>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-gray-200">
+                        <h3 className={`text-lg font-bold ${
+                          isPastel ? 'text-gray-700' : 'text-gray-200'
+                        }`}>
                           Page {previewPage.pageNumber} Preview
                         </h3>
                         <button
                           onClick={() => setPreviewPage(null)}
-                          className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors text-gray-400 hover:text-white"
+                          className={`p-2 rounded-lg transition-colors ${
+                            isPastel
+                              ? 'hover:bg-pink-100/50 text-gray-600 hover:text-gray-900'
+                              : 'hover:bg-gray-700/50 text-gray-400 hover:text-white'
+                          }`}
                           aria-label="Close preview"
                         >
                           <X className="w-5 h-5" />
                         </button>
                       </div>
-                      <div className="bg-gray-900/50 rounded-lg p-6 flex items-center justify-center min-h-[500px]">
+                      <div className={`rounded-lg p-6 flex items-center justify-center min-h-[500px] ${
+                        isPastel ? 'bg-pink-50/50' : 'bg-gray-900/50'
+                      }`}>
                         <img
                           src={previewPage.imageData}
                           alt={`Page ${previewPage.pageNumber}`}
-                          className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl border border-gray-700/50"
+                          className={`max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl border ${
+                            isPastel ? 'border-pink-200/50' : 'border-gray-700/50'
+                          }`}
                         />
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-gray-800/60 backdrop-blur-sm border border-cyber-purple-400/20 rounded-2xl p-12 shadow-2xl flex items-center justify-center min-h-[400px]">
-                    <div className="text-center text-gray-400">
+                  <div className={`backdrop-blur-sm rounded-2xl p-12 shadow-2xl flex items-center justify-center min-h-[400px] ${
+                    isPastel
+                      ? 'bg-white/80 border-pink-200/40'
+                      : 'bg-gray-800/60 border-cyber-purple-400/20'
+                  }`}
+                  style={isPastel ? {
+                    boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+                  } : {}}>
+                    <div className={`text-center ${
+                      isPastel ? 'text-gray-600' : 'text-gray-400'
+                    }`}>
                       <Eye className="w-16 h-16 mx-auto mb-4 opacity-50" />
                       <p className="text-lg font-medium">No preview selected</p>
                       <p className="text-sm mt-2">Click the eye icon on any extracted page to preview it here</p>
@@ -592,8 +708,17 @@ export function DetachedPDFExtraction() {
                 )}
               </>
             ) : (
-              <div className="bg-gray-800/60 backdrop-blur-sm border border-cyber-purple-400/20 rounded-2xl p-12 shadow-2xl flex items-center justify-center h-[400px]">
-                <div className="text-center text-gray-400">
+              <div className={`backdrop-blur-sm rounded-2xl p-12 shadow-2xl flex items-center justify-center h-[400px] ${
+                isPastel
+                  ? 'bg-white/80 border-pink-200/40'
+                  : 'bg-gray-800/60 border-cyber-purple-400/20'
+              }`}
+              style={isPastel ? {
+                boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+              } : {}}>
+                <div className={`text-center ${
+                  isPastel ? 'text-gray-600' : 'text-gray-400'
+                }`}>
                   <ImageIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
                   <p className="text-lg font-medium">No pages extracted yet</p>
                   <p className="text-sm mt-2">Select a PDF file and start conversion to see results</p>
@@ -611,6 +736,7 @@ export function DetachedPDFExtraction() {
         onConfirm={handleSave}
         initialSaveDirectory={caseFolderPath || null}
         defaultFolderName={pdfPath ? pdfPath.split(/[/\\]/).pop()?.replace(/\.pdf$/i, '') : undefined}
+        isPastel={isPastel}
       />
     </div>
   );

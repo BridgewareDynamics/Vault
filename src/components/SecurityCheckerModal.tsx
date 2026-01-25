@@ -6,8 +6,8 @@ import { useRedactionAudit, RedactionAuditResult } from '../hooks/useRedactionAu
 import { useToast } from './Toast/ToastContext';
 import { CaseSelectionDialog } from './Archive/CaseSelectionDialog';
 import { AuditSaveOptionsDialog, AuditSaveOption } from './AuditSaveOptionsDialog';
-
-import { ArchiveFile } from '../types';
+import { useSettingsContext } from '../utils/settingsContext';
+import { Theme, ArchiveFile } from '../types';
 
 interface SecurityCheckerModalProps {
   isOpen: boolean;
@@ -32,6 +32,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showCaseSelectionDialog, setShowCaseSelectionDialog] = useState(false);
   const [showAuditSaveDialog, setShowAuditSaveDialog] = useState(false);
+  const { settings: appSettings } = useSettingsContext();
+  const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
 
   const handleSelectFile = async () => {
     try {
@@ -475,22 +478,51 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 rounded-2xl border-2 border-cyber-purple-400/40 shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+            <div className={`rounded-2xl border-2 shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden flex flex-col ${
+              isPastel
+                ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50 border-pink-200/40'
+                : 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 border-cyber-purple-400/40'
+            }`}
+            style={isPastel ? {
+              boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+            } : {}}
+            >
               {/* Enhanced Header */}
-              <div className="relative p-8 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
+              <div className={`relative p-8 border-b backdrop-blur-xl ${
+                isPastel
+                  ? 'border-pink-200/40 bg-gradient-to-r from-white/95 via-pink-50/20 to-white/95'
+                  : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+              }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-6">
                     <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>
-                      <div className="relative p-5 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl shadow-2xl">
-                        <Shield className="w-10 h-10 text-white" />
-                      </div>
+                      {isPastel ? (
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-br from-pink-200 to-purple-200 rounded-2xl blur-xl opacity-50"></div>
+                          <div className="relative p-5 bg-gradient-to-br from-pink-100 to-purple-100 rounded-2xl shadow-lg border border-pink-200/40">
+                            <Shield className="w-10 h-10 text-pink-600" />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>
+                          <div className="relative p-5 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl shadow-2xl">
+                            <Shield className="w-10 h-10 text-white" />
+                          </div>
+                        </>
+                      )}
                     </div>
                     <div>
-                      <h2 className="text-3xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent">
+                      <h2 className={`text-3xl font-bold bg-clip-text text-transparent ${
+                        isPastel
+                          ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500'
+                          : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                      }`}>
                         PDF Security Audit
                       </h2>
-                      <p className="text-base text-gray-400 mt-1">
+                      <p className={`text-base mt-1 ${
+                        isPastel ? 'text-gray-600' : 'text-gray-400'
+                      }`}>
                         Comprehensive redaction risk and security analysis
                       </p>
                     </div>
@@ -498,19 +530,25 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                   <div className="flex items-center gap-3">
                     <button
                       onClick={handleDetach}
-                      className="px-5 py-2.5 bg-gray-800/80 hover:bg-gray-700/80 rounded-xl transition-all border border-gray-700/50 hover:border-cyber-purple-400/50 flex items-center gap-2 text-gray-300 hover:text-white"
+                      className={`px-5 py-2.5 rounded-xl transition-all border flex items-center gap-2 ${
+                        isPastel
+                          ? 'bg-pink-100/80 hover:bg-pink-200/80 border-pink-200/50 hover:border-pink-300/50 text-gray-700 hover:text-gray-900'
+                          : 'bg-gray-800/80 hover:bg-gray-700/80 border-gray-700/50 hover:border-cyber-purple-400/50 text-gray-300 hover:text-white'
+                      }`}
                       aria-label="Detach audit to separate window"
                       title="Open in separate window"
                     >
-                      <Maximize2 size={18} className="text-cyber-purple-400" />
+                      <Maximize2 size={18} className={isPastel ? 'text-pink-500' : 'text-cyber-purple-400'} />
                       <span className="font-medium text-sm">Detach</span>
                     </button>
                     <button
                       onClick={handleClose}
-                      className="p-2.5 hover:bg-gray-800 rounded-xl transition-colors"
+                      className={`p-2.5 rounded-xl transition-colors ${
+                        isPastel ? 'hover:bg-pink-100' : 'hover:bg-gray-800'
+                      }`}
                       aria-label="Close"
                     >
-                      <X className="w-5 h-5 text-gray-400" />
+                      <X className={`w-5 h-5 ${isPastel ? 'text-gray-600' : 'text-gray-400'}`} />
                     </button>
                   </div>
                 </div>
@@ -538,14 +576,30 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                     </div>
 
                     {/* File Selection Card */}
-                    <div className="bg-gray-800/60 backdrop-blur-sm border border-cyber-purple-400/20 rounded-2xl p-6 shadow-2xl">
+                    <div className={`backdrop-blur-sm rounded-2xl p-6 shadow-2xl ${
+                      isPastel
+                        ? 'bg-white/60 border border-pink-200/40'
+                        : 'bg-gray-800/60 border border-cyber-purple-400/20'
+                    }`}
+                    style={isPastel ? {
+                      boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+                    } : {}}
+                    >
                       <div className="space-y-5">
                         <div>
-                          <label className="block text-lg font-bold text-gray-200 mb-4">Select PDF File</label>
+                          <label className={`block text-lg font-bold mb-4 ${
+                            isPastel ? 'text-gray-700' : 'text-gray-200'
+                          }`}>
+                            Select PDF File
+                          </label>
                           <button
                             onClick={handleSelectFile}
                             disabled={isAuditing}
-                            className="w-full flex items-center justify-center gap-3 px-6 py-5 bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white text-base transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
+                            className={`w-full flex items-center justify-center gap-3 px-6 py-5 rounded-xl font-bold text-base transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] ${
+                              isPastel
+                                ? 'bg-gradient-to-r from-pink-500 via-pink-400 to-purple-500 hover:from-pink-600 hover:via-pink-500 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-300 text-white'
+                                : 'bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 text-white'
+                            }`}
                           >
                             <Upload className="w-5 h-5" />
                             <span>{pdfPath ? 'Change PDF File' : 'Select PDF File'}</span>
@@ -553,13 +607,31 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                         </div>
                         
                         {pdfPath && (
-                          <div className="flex items-center gap-4 p-4 bg-gray-900/60 rounded-xl border border-cyber-cyan-400/30">
-                            <div className="p-2.5 bg-cyber-cyan-400/20 rounded-lg">
-                              <FileText className="w-5 h-5 text-cyber-cyan-400" />
+                          <div className={`flex items-center gap-4 p-4 rounded-xl border ${
+                            isPastel
+                              ? 'bg-pink-50/60 border-pink-300/40'
+                              : 'bg-gray-900/60 border-cyber-cyan-400/30'
+                          }`}>
+                            <div className={`p-2.5 rounded-lg ${
+                              isPastel
+                                ? 'bg-pink-200/40'
+                                : 'bg-cyber-cyan-400/20'
+                            }`}>
+                              <FileText className={`w-5 h-5 ${
+                                isPastel ? 'text-pink-500' : 'text-cyber-cyan-400'
+                              }`} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs text-gray-400 mb-1">Selected File</p>
-                              <p className="text-sm text-gray-200 truncate font-medium">{pdfPath}</p>
+                              <p className={`text-xs mb-1 ${
+                                isPastel ? 'text-gray-600' : 'text-gray-400'
+                              }`}>
+                                Selected File
+                              </p>
+                              <p className={`text-sm truncate font-medium ${
+                                isPastel ? 'text-gray-700' : 'text-gray-200'
+                              }`}>
+                                {pdfPath}
+                              </p>
                             </div>
                           </div>
                         )}
@@ -567,15 +639,27 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                         {/* Settings Toggle */}
                         <button
                           onClick={() => setShowSettings(!showSettings)}
-                          className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-700/50 hover:bg-gray-700/70 rounded-xl transition-all border border-gray-600/50 hover:border-cyber-purple-400/50"
+                          className={`w-full flex items-center justify-between px-5 py-3.5 rounded-xl transition-all border ${
+                            isPastel
+                              ? 'bg-pink-100/50 hover:bg-pink-200/70 border-pink-200/50 hover:border-pink-300/50'
+                              : 'bg-gray-700/50 hover:bg-gray-700/70 border-gray-600/50 hover:border-cyber-purple-400/50'
+                          }`}
                           aria-label="Toggle Settings"
                         >
                           <div className="flex items-center gap-3">
-                            <Settings className="w-5 h-5 text-gray-300" />
-                            <span className="font-semibold text-gray-200">Advanced Settings</span>
+                            <Settings className={`w-5 h-5 ${
+                              isPastel ? 'text-gray-600' : 'text-gray-300'
+                            }`} />
+                            <span className={`font-semibold ${
+                              isPastel ? 'text-gray-700' : 'text-gray-200'
+                            }`}>
+                              Advanced Settings
+                            </span>
                           </div>
                           <div className={`transform transition-transform ${showSettings ? 'rotate-180' : ''}`}>
-                            <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className={`w-5 h-5 ${
+                              isPastel ? 'text-gray-600' : 'text-gray-400'
+                            }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
                           </div>
@@ -589,12 +673,24 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="bg-gray-900/60 rounded-xl p-5 space-y-4 border border-cyber-purple-400/30"
+                        className={`rounded-xl p-5 space-y-4 border ${
+                          isPastel
+                            ? 'bg-pink-50/60 border-pink-200/40'
+                            : 'bg-gray-900/60 border-cyber-purple-400/30'
+                        }`}
                       >
-                        <h3 className="text-base font-bold text-gray-200 mb-3">Audit Configuration</h3>
+                        <h3 className={`text-base font-bold mb-3 ${
+                          isPastel ? 'text-gray-700' : 'text-gray-200'
+                        }`}>
+                          Audit Configuration
+                        </h3>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-semibold text-gray-400 mb-2">Black Threshold</label>
+                            <label className={`block text-sm font-semibold mb-2 ${
+                              isPastel ? 'text-gray-600' : 'text-gray-400'
+                            }`}>
+                              Black Threshold
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -602,28 +698,48 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                               max="1"
                               value={settings.blackThreshold}
                               onChange={(e) => setSettings({ ...settings, blackThreshold: parseFloat(e.target.value) })}
-                              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
+                              className={`w-full px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:border-transparent ${
+                                isPastel
+                                  ? 'bg-white border border-pink-200 text-gray-700 focus:ring-pink-400'
+                                  : 'bg-gray-800 border border-gray-700 text-white focus:ring-cyber-purple-400'
+                              }`}
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold text-gray-400 mb-2">Min Overlap Area</label>
+                            <label className={`block text-sm font-semibold mb-2 ${
+                              isPastel ? 'text-gray-600' : 'text-gray-400'
+                            }`}>
+                              Min Overlap Area
+                            </label>
                             <input
                               type="number"
                               step="0.1"
                               min="0"
                               value={settings.minOverlapArea}
                               onChange={(e) => setSettings({ ...settings, minOverlapArea: parseFloat(e.target.value) })}
-                              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
+                              className={`w-full px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:border-transparent ${
+                                isPastel
+                                  ? 'bg-white border border-pink-200 text-gray-700 focus:ring-pink-400'
+                                  : 'bg-gray-800 border border-gray-700 text-white focus:ring-cyber-purple-400'
+                              }`}
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold text-gray-400 mb-2">Min Hits</label>
+                            <label className={`block text-sm font-semibold mb-2 ${
+                              isPastel ? 'text-gray-600' : 'text-gray-400'
+                            }`}>
+                              Min Hits
+                            </label>
                             <input
                               type="number"
                               min="1"
                               value={settings.minHits}
                               onChange={(e) => setSettings({ ...settings, minHits: parseInt(e.target.value) })}
-                              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
+                              className={`w-full px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:border-transparent ${
+                                isPastel
+                                  ? 'bg-white border border-pink-200 text-gray-700 focus:ring-pink-400'
+                                  : 'bg-gray-800 border border-gray-700 text-white focus:ring-cyber-purple-400'
+                              }`}
                             />
                           </div>
                         </div>
@@ -634,7 +750,11 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                     <button
                       onClick={handleRunAudit}
                       disabled={!pdfPath || isAuditing}
-                      className="w-full flex items-center justify-center gap-3 px-6 py-6 bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white text-lg transition-all disabled:cursor-not-allowed shadow-2xl hover:shadow-cyan-500/50 transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group"
+                      className={`w-full flex items-center justify-center gap-3 px-6 py-6 rounded-xl font-bold text-white text-lg transition-all disabled:cursor-not-allowed shadow-2xl transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group ${
+                        isPastel
+                          ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 hover:from-pink-600 hover:via-purple-600 hover:to-pink-600 disabled:from-gray-300 disabled:to-gray-300 hover:shadow-pink-500/50'
+                          : 'bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 hover:shadow-cyan-500/50'
+                      }`}
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                       {isAuditing ? (
@@ -652,12 +772,26 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
 
                     {/* Progress Indicator */}
                     {isAuditing && progressMessage && (
-                      <div className="bg-gradient-to-r from-cyan-900/40 to-purple-900/40 rounded-xl p-5 border-2 border-cyber-cyan-400/30">
+                      <div className={`rounded-xl p-5 border-2 ${
+                        isPastel
+                          ? 'bg-gradient-to-r from-pink-100/60 to-purple-100/60 border-pink-300/40'
+                          : 'bg-gradient-to-r from-cyan-900/40 to-purple-900/40 border-cyber-cyan-400/30'
+                      }`}>
                         <div className="flex items-center gap-3">
-                          <Loader2 className="w-5 h-5 animate-spin text-cyan-400" />
+                          <Loader2 className={`w-5 h-5 animate-spin ${
+                            isPastel ? 'text-pink-500' : 'text-cyan-400'
+                          }`} />
                           <div className="flex-1">
-                            <p className="text-base font-semibold text-cyan-300 mb-1">Processing...</p>
-                            <p className="text-sm text-gray-300">{progressMessage}</p>
+                            <p className={`text-base font-semibold mb-1 ${
+                              isPastel ? 'text-pink-600' : 'text-cyan-300'
+                            }`}>
+                              Processing...
+                            </p>
+                            <p className={`text-sm ${
+                              isPastel ? 'text-gray-700' : 'text-gray-300'
+                            }`}>
+                              {progressMessage}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -669,12 +803,24 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                     {!result ? (
                       <div className="h-full flex items-center justify-center min-h-[400px]">
                         <div className="text-center space-y-4">
-                          <div className="inline-flex p-5 bg-gray-800/50 rounded-2xl border border-cyber-purple-400/20">
-                            <Lock className="w-12 h-12 text-cyber-purple-400/50" />
+                          <div className={`inline-flex p-5 rounded-2xl border ${
+                            isPastel
+                              ? 'bg-pink-50/50 border-pink-200/40'
+                              : 'bg-gray-800/50 border-cyber-purple-400/20'
+                          }`}>
+                            <Lock className={`w-12 h-12 ${
+                              isPastel ? 'text-pink-400/50' : 'text-cyber-purple-400/50'
+                            }`} />
                           </div>
                           <div>
-                            <h3 className="text-xl font-bold text-gray-300 mb-2">Ready to Audit</h3>
-                            <p className="text-gray-400">Select a PDF file and run the security audit to see results here</p>
+                            <h3 className={`text-xl font-bold mb-2 ${
+                              isPastel ? 'text-gray-700' : 'text-gray-300'
+                            }`}>
+                              Ready to Audit
+                            </h3>
+                            <p className={isPastel ? 'text-gray-600' : 'text-gray-400'}>
+                              Select a PDF file and run the security audit to see results here
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -685,21 +831,47 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                         className="space-y-6"
                       >
                         {/* Results Header */}
-                        <div className="flex items-center justify-between bg-gray-800/60 backdrop-blur-sm border border-cyber-purple-400/20 rounded-2xl p-5 shadow-xl">
+                        <div className={`flex items-center justify-between backdrop-blur-sm rounded-2xl p-5 shadow-xl border ${
+                          isPastel
+                            ? 'bg-white/60 border-pink-200/40'
+                            : 'bg-gray-800/60 border-cyber-purple-400/20'
+                        }`}
+                        style={isPastel ? {
+                          boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+                        } : {}}
+                        >
                           <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-xl">
-                              <Lock className="w-6 h-6 text-cyber-purple-400" />
+                            <div className={`p-3 rounded-xl ${
+                              isPastel
+                                ? 'bg-gradient-to-br from-pink-200/40 to-purple-200/40'
+                                : 'bg-gradient-to-br from-purple-600/20 to-cyan-600/20'
+                            }`}>
+                              <Lock className={`w-6 h-6 ${
+                                isPastel ? 'text-pink-500' : 'text-cyber-purple-400'
+                              }`} />
                             </div>
                             <div>
-                              <h3 className="text-xl font-bold text-gray-200">Audit Results</h3>
-                              <p className="text-xs text-gray-400">{result.totalPages} pages analyzed</p>
+                              <h3 className={`text-xl font-bold ${
+                                isPastel ? 'text-gray-700' : 'text-gray-200'
+                              }`}>
+                                Audit Results
+                              </h3>
+                              <p className={`text-xs ${
+                                isPastel ? 'text-gray-600' : 'text-gray-400'
+                              }`}>
+                                {result.totalPages} pages analyzed
+                              </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
                             <button
                               onClick={() => handleSaveToCaseFolder()}
                               disabled={isGeneratingReport}
-                              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-xs"
+                              className={`px-4 py-2 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-xs ${
+                                isPastel
+                                  ? 'bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-300'
+                                  : 'bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700'
+                              }`}
                               title={caseFolderPath ? "Save report to current case folder" : "Save report to a case"}
                             >
                               {isGeneratingReport ? (
@@ -717,7 +889,11 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                             <button
                               onClick={handleDownloadReport}
                               disabled={isGeneratingReport}
-                              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-xs"
+                              className={`px-4 py-2 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-xs ${
+                                isPastel
+                                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:from-gray-300 disabled:to-gray-300'
+                                  : 'bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700'
+                              }`}
                             >
                               {isGeneratingReport ? (
                                 <>
@@ -756,7 +932,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                                   ? `${result.flaggedPages.length} Page${result.flaggedPages.length !== 1 ? 's' : ''} Flagged`
                                   : 'No Risks Detected'}
                               </div>
-                              <div className="text-base text-gray-300">
+                              <div className={`text-base ${
+                                isPastel ? 'text-gray-700' : 'text-gray-300'
+                              }`}>
                                 {result.totalPages} total pages analyzed
                               </div>
                             </div>
@@ -779,13 +957,21 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                                   <div className="flex items-start justify-between">
                                     <div className="flex-1">
                                       <div className="text-xl font-bold text-white mb-2">Page {page.pageNumber}</div>
-                                      <div className="text-sm text-gray-300 mb-3">
+                                      <div className={`text-sm mb-3 ${
+                                        isPastel ? 'text-gray-700' : 'text-gray-300'
+                                      }`}>
                                         {page.blackRectCount} black rect{page.blackRectCount !== 1 ? 's' : ''}, {page.overlapCount} overlap{page.overlapCount !== 1 ? 's' : ''}
                                       </div>
                                       <div className="flex items-center gap-3">
-                                        <span className="text-sm text-gray-400">Confidence:</span>
+                                        <span className={`text-sm ${
+                                          isPastel ? 'text-gray-600' : 'text-gray-400'
+                                        }`}>
+                                          Confidence:
+                                        </span>
                                         <div className="flex items-center gap-2">
-                                          <div className="w-28 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                          <div className={`w-28 h-2 rounded-full overflow-hidden ${
+                                            isPastel ? 'bg-pink-200' : 'bg-gray-700'
+                                          }`}>
                                             <div
                                               className={`h-full transition-all ${
                                                 page.confidenceScore >= 7 ? 'bg-red-500' :
@@ -829,7 +1015,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                                 {result.security.risk_score}/100
                               </span>
                             </div>
-                            <div className="w-full h-3.5 bg-gray-800/50 rounded-full overflow-hidden mb-2">
+                            <div className={`w-full h-3.5 rounded-full overflow-hidden mb-2 ${
+                              isPastel ? 'bg-pink-200/50' : 'bg-gray-800/50'
+                            }`}>
                               <div 
                                 className={`h-full transition-all duration-500 ${
                                   result.security.risk_score >= 70 ? 'bg-red-500' :
@@ -839,7 +1027,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                                 style={{ width: `${result.security.risk_score}%` }}
                               />
                             </div>
-                            <div className="text-sm text-gray-300">
+                            <div className={`text-sm ${
+                              isPastel ? 'text-gray-700' : 'text-gray-300'
+                            }`}>
                               {result.security.risk_score >= 70 ? 'HIGH RISK - Multiple serious privacy/security issues detected' :
                                result.security.risk_score >= 40 ? 'MEDIUM RISK - Several privacy concerns found' :
                                'LOW RISK - Minor issues only'}
@@ -849,19 +1039,35 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
 
                         {/* Security Findings */}
                         {result.security && (
-                          <div className="bg-gray-800/60 backdrop-blur-sm rounded-2xl p-6 border border-cyber-cyan-400/20">
-                            <h4 className="text-lg font-bold text-cyan-400 mb-5 flex items-center gap-2">
+                          <div className={`backdrop-blur-sm rounded-2xl p-6 border ${
+                            isPastel
+                              ? 'bg-white/60 border-pink-300/40'
+                              : 'bg-gray-800/60 border-cyber-cyan-400/20'
+                          }`}
+                          style={isPastel ? {
+                            boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+                          } : {}}
+                          >
+                            <h4 className={`text-lg font-bold mb-5 flex items-center gap-2 ${
+                              isPastel ? 'text-pink-500' : 'text-cyan-400'
+                            }`}>
                               <Shield className="w-5 h-5" />
                               Security & Privacy Findings
                             </h4>
                             <div className="space-y-2.5 max-h-80 overflow-y-auto">
                               {result.security.has_metadata && (
-                                <div className="flex items-center gap-3 p-2.5 bg-gray-900/50 rounded-lg">
+                                <div className={`flex items-center gap-3 p-2.5 rounded-lg ${
+                                  isPastel ? 'bg-pink-50/50' : 'bg-gray-900/50'
+                                }`}>
                                   <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-                                  <span className="text-gray-300 text-sm">
+                                  <span className={`text-sm ${
+                                    isPastel ? 'text-gray-700' : 'text-gray-300'
+                                  }`}>
                                     Metadata present ({result.security.metadata_keys.length} key{result.security.metadata_keys.length !== 1 ? 's' : ''})
                                     {result.security.metadata_keys.length > 0 && result.security.metadata_keys.length <= 5 && (
-                                      <span className="text-gray-500 ml-1">
+                                      <span className={`ml-1 ${
+                                        isPastel ? 'text-gray-600' : 'text-gray-500'
+                                      }`}>
                                         ({result.security.metadata_keys.join(', ')})
                                       </span>
                                     )}
@@ -870,7 +1076,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                               )}
 
                               {result.security.has_attachments && (
-                                <div className="flex items-center gap-3 p-2.5 bg-gray-900/50 rounded-lg">
+                                <div className={`flex items-center gap-3 p-2.5 rounded-lg ${
+                                  isPastel ? 'bg-pink-50/50' : 'bg-gray-900/50'
+                                }`}>
                                   <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
                                   <span className="text-gray-300 text-sm">Embedded attachments ({result.security.attachment_count} file{result.security.attachment_count !== 1 ? 's' : ''})</span>
                                 </div>

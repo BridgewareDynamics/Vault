@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
 import { Settings, FileText } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
+import { useSettingsContext } from '../utils/settingsContext';
+import { Theme } from '../types';
 
 interface ActionToolbarProps {
   hideWordEditorButton?: boolean;
@@ -9,6 +11,9 @@ interface ActionToolbarProps {
 
 export function ActionToolbar({ hideWordEditorButton = false, onSettingsClick }: ActionToolbarProps) {
   const { settings, loading } = useSettings();
+  const { settings: appSettings } = useSettingsContext();
+  const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
 
   const handleSettingsClick = () => {
     if (onSettingsClick) {
@@ -31,7 +36,11 @@ export function ActionToolbar({ hideWordEditorButton = false, onSettingsClick }:
         {!hideWordEditorButton && (
           <motion.button
             onClick={handleWordEditorClick}
-            className="p-2.5 bg-gray-800/90 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-lg backdrop-blur-sm transition-colors"
+            className={`p-2.5 rounded-full border shadow-lg backdrop-blur-sm transition-colors ${
+              isPastel
+                ? 'bg-gradient-to-br from-pink-200/90 via-purple-200/90 to-blue-200/90 hover:from-pink-200 hover:via-purple-200 hover:to-blue-200 text-gray-800 border-pink-300/40 hover:shadow-pink-300/30'
+                : 'bg-gray-800/90 hover:bg-gray-700 text-white border-cyber-purple-500/60'
+            }`}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
             aria-label="Open word editor"
@@ -45,7 +54,11 @@ export function ActionToolbar({ hideWordEditorButton = false, onSettingsClick }:
         <motion.button
           onClick={handleSettingsClick}
           disabled={loading || !settings}
-          className="p-2.5 bg-gray-800/90 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-lg backdrop-blur-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`p-2.5 rounded-full border shadow-lg backdrop-blur-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            isPastel
+              ? 'bg-gradient-to-br from-pink-200/90 via-purple-200/90 to-blue-200/90 hover:from-pink-200 hover:via-purple-200 hover:to-blue-200 text-gray-800 border-pink-300/40 hover:shadow-pink-300/30'
+              : 'bg-gray-800/90 hover:bg-gray-700 text-white border-cyber-purple-500/60'
+          }`}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
           aria-label="Open settings"
