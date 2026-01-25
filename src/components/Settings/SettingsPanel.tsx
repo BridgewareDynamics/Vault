@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge, FileText, TrendingUp } from 'lucide-react';
+import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge, FileText, TrendingUp, Palette, Check } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { formatBytes } from '../../utils/memoryMonitor';
 import { useToast } from '../Toast/ToastContext';
 import { WordEditorPanel } from '../WordEditor/WordEditorPanel';
 import { WordEditorDialog } from '../WordEditor/WordEditorDialog';
 import { useWordEditor } from '../../contexts/WordEditorContext';
+import { Theme } from '../../types';
 
 interface SettingsPanelProps {
   hideWordEditorButton?: boolean;
@@ -128,6 +129,7 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
     setExtractionQuality,
     setThumbnailSize,
     setPerformanceMode,
+    updateSettings,
   } = useSettings();
   const toast = useToast();
 
@@ -219,6 +221,15 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
       toast.success(`Performance mode set to ${mode}`);
     } catch (error) {
       toast.error('Failed to update performance mode');
+    }
+  };
+
+  const handleThemeChange = async (theme: Theme) => {
+    try {
+      await updateSettings({ theme });
+      toast.success(`Theme changed to ${theme === 'brideware-purple' ? 'Brideware Purple' : 'Pastel'}`);
+    } catch (error) {
+      toast.error('Failed to update theme');
     }
   };
 
@@ -565,6 +576,81 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
                     </div>
                     <p className="text-xs text-gray-500 mt-3 leading-relaxed">
                       Automatically adjusts settings based on system capabilities.
+                    </p>
+                  </motion.div>
+
+                  {/* Theme Selection */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 }}
+                    className="p-5 bg-gray-800/40 rounded-xl border border-gray-700/30 hover:border-cyber-purple-400/30 transition-all backdrop-blur-sm"
+                  >
+                    <label className="flex items-center gap-3 mb-4">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm"></div>
+                        <div className="relative p-2 bg-gradient-to-br from-purple-600/30 to-cyan-600/30 rounded-lg">
+                          <Palette className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-300">Theme</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { value: 'brideware-purple' as Theme, name: 'Brideware Purple', colors: { primary: '#c084fc', secondary: '#22d3ee' } },
+                        { value: 'pastel' as Theme, name: 'Pastel', colors: { primary: '#d8b4fe', secondary: '#a5b4fc' } },
+                      ].map((themeOption) => {
+                        const isSelected = settings.theme === themeOption.value;
+                        return (
+                          <motion.button
+                            key={themeOption.value}
+                            onClick={() => handleThemeChange(themeOption.value)}
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={`relative overflow-hidden p-4 rounded-xl border-2 transition-all ${
+                              isSelected
+                                ? 'bg-cyber-purple-500/20 border-cyber-purple-500/60 shadow-lg shadow-cyber-purple-500/20'
+                                : 'bg-gray-800/50 border-gray-700/50 hover:border-gray-600/50'
+                            }`}
+                          >
+                            {isSelected && (
+                              <motion.div
+                                initial={{ scale: 0, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="absolute top-2 right-2 z-10"
+                              >
+                                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-cyber-purple-400 to-cyber-cyan-400 flex items-center justify-center shadow-lg">
+                                  <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                                </div>
+                              </motion.div>
+                            )}
+                            <div className="flex flex-col items-center gap-3">
+                              <div className="flex gap-2">
+                                <div
+                                  className="w-8 h-8 rounded-full border-2 border-white/20"
+                                  style={{
+                                    background: themeOption.colors.primary,
+                                    boxShadow: `0 0 10px ${themeOption.colors.primary}80`,
+                                  }}
+                                />
+                                <div
+                                  className="w-8 h-8 rounded-full border-2 border-white/20"
+                                  style={{
+                                    background: themeOption.colors.secondary,
+                                    boxShadow: `0 0 10px ${themeOption.colors.secondary}80`,
+                                  }}
+                                />
+                              </div>
+                              <span className={`text-xs font-medium ${isSelected ? 'text-white' : 'text-gray-400'}`}>
+                                {themeOption.name}
+                              </span>
+                            </div>
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-3 leading-relaxed">
+                      Choose your preferred color theme for the application.
                     </p>
                   </motion.div>
                 </div>
