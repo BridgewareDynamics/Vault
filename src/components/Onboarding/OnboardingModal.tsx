@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { AnimatedGrid } from '../Shared/AnimatedGrid';
@@ -18,7 +18,7 @@ interface OnboardingModalProps {
   onComplete: (theme: Theme, dontShowAgain: boolean) => void;
 }
 
-export function OnboardingModal({ onComplete }: OnboardingModalProps) {
+export const OnboardingModal = memo(function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const [currentPage, setCurrentPage] = useState(0);
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
   const [dontShowAgain, setDontShowAgain] = useState(false);
@@ -47,7 +47,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const buttonBorder = isPastel ? 'border-purple-300/50' : 'border-cyber-purple-400/50';
   const buttonBorderHover = isPastel ? 'border-purple-300/80' : 'border-cyber-purple-400/80';
 
-  const handleContinue = () => {
+  const handleContinue = useCallback(() => {
     console.log('[OnboardingModal] handleContinue called, selectedTheme:', selectedTheme, 'type:', typeof selectedTheme);
     if (selectedTheme) {
       console.log('[OnboardingModal] Calling onComplete with theme:', selectedTheme, 'dontShowAgain:', dontShowAgain);
@@ -57,7 +57,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       // Show alert to user
       alert('Please select a theme before continuing.');
     }
-  };
+  }, [selectedTheme, dontShowAgain, onComplete, currentPage, totalPages]);
 
   const canContinue = currentPage === totalPages - 1 && selectedTheme !== null;
   
@@ -66,50 +66,46 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     console.log('[OnboardingModal] State update - currentPage:', currentPage, 'selectedTheme:', selectedTheme, 'canContinue:', canContinue);
   }, [currentPage, selectedTheme, canContinue]);
 
-  // Enhanced page variants with 3D effects
-  const pageVariants = {
+  // Optimized page variants - using 2D transforms for better performance
+  const pageVariants = useMemo(() => ({
     enter: (direction: number) => ({
-      x: direction > 0 ? 1200 : -1200,
+      x: direction > 0 ? 600 : -600,
       opacity: 0,
-      scale: 0.9,
-      rotateY: direction > 0 ? 15 : -15,
+      scale: 0.95,
     }),
     center: {
       x: 0,
       opacity: 1,
       scale: 1,
-      rotateY: 0,
     },
     exit: (direction: number) => ({
-      x: direction < 0 ? 1200 : -1200,
+      x: direction < 0 ? 600 : -600,
       opacity: 0,
-      scale: 0.9,
-      rotateY: direction < 0 ? 15 : -15,
+      scale: 0.95,
     }),
-  };
+  }), []);
 
-  const pageTransition = {
-    x: { type: 'spring', stiffness: 300, damping: 30 },
-    opacity: { duration: 0.5 },
-    scale: { duration: 0.5 },
-    rotateY: { duration: 0.5 },
-  };
+  const pageTransition = useMemo(() => ({
+    x: { type: 'spring', stiffness: 400, damping: 35, mass: 0.8 },
+    opacity: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] },
+    scale: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] },
+  }), []);
 
   const [direction, setDirection] = useState(0);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (currentPage < totalPages - 1) {
       setDirection(1);
-      setCurrentPage(currentPage + 1);
+      setCurrentPage(prev => prev + 1);
     }
-  };
+  }, [currentPage, totalPages]);
 
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
     if (currentPage > 0) {
       setDirection(-1);
-      setCurrentPage(currentPage - 1);
+      setCurrentPage(prev => prev - 1);
     }
-  };
+  }, [currentPage]);
 
   const modalContent = (
     <motion.div
@@ -135,17 +131,20 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     >
       {/* Enhanced Backdrop with Animation */}
       <motion.div
-        className="absolute inset-0 bg-black/90 backdrop-blur-md"
+        className="absolute inset-0 bg-black/90 backdrop-blur-sm"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+        style={{ 
+          willChange: 'opacity',
+        }}
       />
 
-      {/* Background Effects */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${bgGradient}`}>
+      {/* Background Effects - Optimized counts for better performance */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${bgGradient}`} style={{ willChange: 'auto' }}>
         <AnimatedGrid theme={currentTheme} />
-        <ParticleBackground theme={currentTheme} particleCount={80} />
-        <LightRays theme={currentTheme} rayCount={12} />
+        <ParticleBackground theme={currentTheme} particleCount={40} />
+        <LightRays theme={currentTheme} rayCount={8} />
         {/* Only show global ScanLine on pages other than the first page */}
         {currentPage !== 0 && <ScanLine theme={currentTheme} speed={15} />}
       </div>
@@ -153,15 +152,16 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       {/* Modal Content */}
       <motion.div
         className="relative z-10 w-full h-full flex flex-col"
-        initial={{ scale: 0.9, opacity: 0, rotateX: 10 }}
-        animate={{ scale: 1, opacity: 1, rotateX: 0 }}
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
         transition={{ 
-          duration: 0.6, 
+          duration: 0.4, 
           ease: [0.25, 0.1, 0.25, 1],
-          type: 'spring',
-          stiffness: 200,
         }}
-        style={{ perspective: '1000px' }}
+        style={{ 
+          willChange: 'transform, opacity',
+          transform: 'translate3d(0, 0, 0)', // Force GPU acceleration
+        }}
       >
         {/* Page Content */}
         <div className="flex-1 relative overflow-hidden">
@@ -175,7 +175,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
               exit="exit"
               transition={pageTransition}
               className="absolute inset-0"
-              style={{ transformStyle: 'preserve-3d' }}
+              style={{ 
+                willChange: 'transform, opacity',
+                transform: 'translate3d(0, 0, 0)', // Force GPU acceleration
+              }}
             >
               {currentPage === 0 && <OnboardingContent theme={currentTheme} />}
               {currentPage === 1 && <FeaturesPage theme={currentTheme} />}
@@ -196,10 +199,14 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
         {/* Enhanced Navigation Footer */}
         <motion.div
-          className={`relative z-20 px-8 py-6 border-t ${borderColor} bg-gradient-to-r ${headerBg} backdrop-blur-2xl`}
-          initial={{ opacity: 0, y: 30 }}
+          className={`relative z-20 px-8 py-6 border-t ${borderColor} bg-gradient-to-r ${headerBg} backdrop-blur-xl`}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.3 }}
+          transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 }}
+          style={{ 
+            willChange: 'transform, opacity',
+            transform: 'translate3d(0, 0, 0)',
+          }}
         >
           <div className="flex items-center justify-between max-w-6xl mx-auto">
             {/* Advanced Page Indicator */}
@@ -288,4 +295,4 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
   // Render directly (portal might be causing issues)
   return modalContent;
-}
+});

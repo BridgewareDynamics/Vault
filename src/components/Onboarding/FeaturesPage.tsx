@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { memo } from 'react';
 import { FileText, FolderOpen, Shield, Zap, Sparkles, Lock, Search, Layers, Download, Upload, Settings } from 'lucide-react';
 import { Theme } from '../../types';
 import { HolographicEffect } from '../Shared/HolographicEffect';
@@ -8,7 +9,7 @@ interface FeaturesPageProps {
   theme?: Theme;
 }
 
-export function FeaturesPage({ theme = 'brideware-purple' }: FeaturesPageProps) {
+export const FeaturesPage = memo(function FeaturesPage({ theme = 'brideware-purple' }: FeaturesPageProps) {
   const isPastel = theme === 'pastel';
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
@@ -52,10 +53,14 @@ export function FeaturesPage({ theme = 'brideware-purple' }: FeaturesPageProps) 
       <ScanLine theme={theme} speed={12} />
       
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 }}
+        transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.15 }}
         className="text-center space-y-16 max-w-7xl w-full relative z-10"
+        style={{ 
+          willChange: 'transform, opacity',
+          transform: 'translate3d(0, 0, 0)',
+        }}
       >
         {/* Header */}
         <div>
@@ -72,13 +77,12 @@ export function FeaturesPage({ theme = 'brideware-purple' }: FeaturesPageProps) 
               ],
             }}
             transition={{
-              opacity: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
-              y: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
-              textShadow: {
-                duration: 4,
-                repeat: Infinity,
-                ease: [0.4, 0, 0.6, 1],
-              },
+              opacity: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 },
+              y: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 },
+            }}
+            style={{ 
+              willChange: 'transform, opacity',
+              transform: 'translate3d(0, 0, 0)',
             }}
           >
             Powerful Features
@@ -87,7 +91,8 @@ export function FeaturesPage({ theme = 'brideware-purple' }: FeaturesPageProps) 
             className={`text-xl ${isPastel ? 'text-gray-600' : 'text-gray-300'}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.35 }}
+            transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.3 }}
+            style={{ willChange: 'opacity' }}
           >
             Everything you need to organize and manage your research efficiently
           </motion.p>
@@ -100,20 +105,23 @@ export function FeaturesPage({ theme = 'brideware-purple' }: FeaturesPageProps) 
             return (
               <motion.div
                 key={feature.title}
-                initial={{ opacity: 0, scale: 0.9, y: 30, rotateY: -15 }}
-                animate={{ opacity: 1, scale: 1, y: 0, rotateY: 0 }}
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{
-                  duration: 0.9,
+                  duration: 0.5,
                   ease: [0.25, 0.1, 0.25, 1],
-                  delay: 0.5 + index * 0.15,
+                  delay: 0.4 + index * 0.1,
                 }}
                 className="relative group"
                 whileHover={{ 
-                  y: -8,
-                  scale: 1.03,
-                  transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] }
+                  y: -6,
+                  scale: 1.02,
+                  transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] }
                 }}
-                style={{ perspective: '1000px' }}
+                style={{ 
+                  willChange: 'transform, opacity',
+                  transform: 'translate3d(0, 0, 0)',
+                }}
               >
                 <HolographicEffect intensity={0.25} className="rounded-3xl overflow-hidden">
                   <motion.div
@@ -215,9 +223,13 @@ export function FeaturesPage({ theme = 'brideware-purple' }: FeaturesPageProps) 
         {/* Additional Features Grid */}
         <motion.div
           className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12"
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 1.2 }}
+          transition={{ duration: 0.5, delay: 0.8 }}
+          style={{ 
+            willChange: 'transform, opacity',
+            transform: 'translate3d(0, 0, 0)',
+          }}
         >
           {additionalFeatures.map((feature, index) => {
             const Icon = feature.icon;
@@ -225,13 +237,17 @@ export function FeaturesPage({ theme = 'brideware-purple' }: FeaturesPageProps) 
               <motion.div
                 key={feature.title}
                 className={`flex items-center gap-4 p-6 rounded-2xl bg-gradient-to-br ${cardBg} backdrop-blur-xl border ${isPastel ? 'border-purple-300/20' : 'border-cyber-purple-400/20'} overflow-hidden`}
-                initial={{ opacity: 0, x: -20 }}
+                initial={{ opacity: 0, x: -15 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 1.3 + index * 0.1 }}
+                transition={{ delay: 0.9 + index * 0.08 }}
                 whileHover={{ 
-                  scale: 1.05,
-                  x: 5,
+                  scale: 1.03,
+                  x: 3,
                   transition: { duration: 0.2 }
+                }}
+                style={{ 
+                  willChange: 'transform, opacity',
+                  transform: 'translate3d(0, 0, 0)',
                 }}
                 style={{
                   boxShadow: `0 0 20px ${primaryRgba}0.2), inset 0 0 20px ${primaryRgba}0.05)`,
@@ -251,4 +267,4 @@ export function FeaturesPage({ theme = 'brideware-purple' }: FeaturesPageProps) 
       </motion.div>
     </div>
   );
-}
+});

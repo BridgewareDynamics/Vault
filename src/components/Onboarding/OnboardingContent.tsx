@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { memo, useMemo } from 'react';
 import { FileText, FolderOpen, Shield } from 'lucide-react';
 import { Theme } from '../../types';
 import { HolographicEffect } from '../Shared/HolographicEffect';
@@ -9,7 +10,7 @@ interface OnboardingContentProps {
   theme?: Theme;
 }
 
-export function OnboardingContent({ theme = 'brideware-purple' }: OnboardingContentProps) {
+export const OnboardingContent = memo(function OnboardingContent({ theme = 'brideware-purple' }: OnboardingContentProps) {
   const isPastel = theme === 'pastel';
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
@@ -22,30 +23,38 @@ export function OnboardingContent({ theme = 'brideware-purple' }: OnboardingCont
 
   return (
     <div className="relative flex flex-col items-center justify-center h-full px-8 py-12 overflow-hidden">
-      {/* Advanced Background Effects */}
-      <HexGrid theme={theme} density={30} />
-      <NeuralNetwork theme={theme} nodeCount={20} />
+      {/* Advanced Background Effects - Optimized counts */}
+      <HexGrid theme={theme} density={20} />
+      <NeuralNetwork theme={theme} nodeCount={12} />
 
       {/* Main Content */}
       <motion.div
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        initial={{ opacity: 0, y: 20, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ 
-          duration: 1.2, 
+          duration: 0.6, 
           ease: [0.25, 0.1, 0.25, 1], 
-          delay: 0.3 
+          delay: 0.2 
         }}
         className="text-center space-y-12 max-w-5xl relative z-10"
+        style={{ 
+          willChange: 'transform, opacity',
+          transform: 'translate3d(0, 0, 0)',
+        }}
       >
         {/* Animated Logo/Icon */}
         <motion.div
           className="flex justify-center mb-8"
-          initial={{ opacity: 0, scale: 0.8, rotate: -180 }}
-          animate={{ opacity: 1, scale: 1, rotate: 0 }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
           transition={{ 
-            duration: 1.5, 
-            ease: [0.34, 1.56, 0.64, 1],
-            delay: 0.4 
+            duration: 0.5, 
+            ease: [0.25, 0.1, 0.25, 1],
+            delay: 0.3 
+          }}
+          style={{ 
+            willChange: 'transform, opacity',
+            transform: 'translate3d(0, 0, 0)',
           }}
         >
           <div className="relative w-40 h-40 flex items-center justify-center">
@@ -56,6 +65,8 @@ export function OnboardingContent({ theme = 'brideware-purple' }: OnboardingCont
               transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
               style={{
                 boxShadow: `0 0 40px ${primaryRgba}0.6), inset 0 0 40px ${primaryRgba}0.2)`,
+                willChange: 'transform',
+                transform: 'translate3d(0, 0, 0)',
               }}
             />
             <motion.div
@@ -64,6 +75,8 @@ export function OnboardingContent({ theme = 'brideware-purple' }: OnboardingCont
               transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
               style={{
                 boxShadow: `0 0 30px ${secondaryRgba}0.6), inset 0 0 30px ${secondaryRgba}0.2)`,
+                willChange: 'transform',
+                transform: 'translate3d(0, 0, 0)',
               }}
             />
             
@@ -181,24 +194,18 @@ export function OnboardingContent({ theme = 'brideware-purple' }: OnboardingCont
         {/* Title with Advanced Effects */}
         <motion.h1
           className={`text-6xl md:text-7xl font-bold mb-6 ${isPastel ? 'text-gray-800' : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent'} bg-[length:200%_auto] ${isPastel ? '' : 'animate-shimmer'}`}
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{
             opacity: 1,
             y: 0,
-            textShadow: [
-              `0 0 30px ${primaryRgba}0.5), 0 0 60px ${secondaryRgba}0.3)`,
-              `0 0 40px ${primaryRgba}0.8), 0 0 80px ${secondaryRgba}0.5)`,
-              `0 0 30px ${primaryRgba}0.5), 0 0 60px ${secondaryRgba}0.3)`,
-            ],
           }}
           transition={{
-            opacity: { duration: 1, ease: [0.25, 0.1, 0.25, 1], delay: 0.5 },
-            y: { duration: 1, ease: [0.25, 0.1, 0.25, 1], delay: 0.5 },
-            textShadow: {
-              duration: 4,
-              repeat: Infinity,
-              ease: [0.4, 0, 0.6, 1],
-            },
+            opacity: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1], delay: 0.4 },
+            y: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1], delay: 0.4 },
+          }}
+          style={{ 
+            willChange: 'transform, opacity',
+            transform: 'translate3d(0, 0, 0)',
           }}
         >
           Welcome to Vault
@@ -208,7 +215,8 @@ export function OnboardingContent({ theme = 'brideware-purple' }: OnboardingCont
           className={`text-2xl md:text-3xl ${textColor} font-light mb-4`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.7 }}
+          transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.5 }}
+          style={{ willChange: 'opacity' }}
         >
           A powerful research organization system
         </motion.p>
@@ -217,7 +225,8 @@ export function OnboardingContent({ theme = 'brideware-purple' }: OnboardingCont
           className={`text-lg ${textColorLight} max-w-2xl mx-auto`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.9 }}
+          transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.6 }}
+          style={{ willChange: 'opacity' }}
         >
           Designed for students, researchers, and professionals who demand precision, security, and efficiency
         </motion.p>
@@ -227,7 +236,8 @@ export function OnboardingContent({ theme = 'brideware-purple' }: OnboardingCont
           className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 relative"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 1.1 }}
+          transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.7 }}
+          style={{ willChange: 'opacity' }}
         >
           {/* Refined Vertical Scan Line - Constrained to cards area, going through center */}
           <motion.div
@@ -267,19 +277,22 @@ export function OnboardingContent({ theme = 'brideware-purple' }: OnboardingCont
               <motion.div
                 key={feature.title}
                 className="relative group"
-                initial={{ opacity: 0, y: 30, rotateX: -15 }}
-                animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{
-                  duration: 0.9,
+                  duration: 0.5,
                   ease: [0.25, 0.1, 0.25, 1],
-                  delay: 1.2 + index * 0.15,
+                  delay: 0.8 + index * 0.1,
                 }}
                 whileHover={{ 
-                  y: -8,
-                  scale: 1.05,
-                  transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] }
+                  y: -6,
+                  scale: 1.03,
+                  transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] }
                 }}
-                style={{ perspective: '1000px' }}
+                style={{ 
+                  willChange: 'transform, opacity',
+                  transform: 'translate3d(0, 0, 0)',
+                }}
               >
                 <HolographicEffect intensity={0.2} className="rounded-3xl overflow-hidden">
                   <motion.div
@@ -337,4 +350,4 @@ export function OnboardingContent({ theme = 'brideware-purple' }: OnboardingCont
       </motion.div>
     </div>
   );
-}
+});

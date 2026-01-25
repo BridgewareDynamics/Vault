@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { memo } from 'react';
 import { ThemeSelector } from './ThemeSelector';
 import { CircularCheckbox } from './CircularCheckbox';
 import { Theme } from '../../types';
@@ -13,7 +14,7 @@ interface ThemeSelectionPageProps {
   theme?: Theme;
 }
 
-export function ThemeSelectionPage({
+export const ThemeSelectionPage = memo(function ThemeSelectionPage({
   selectedTheme,
   onSelectTheme,
   dontShowAgain,
@@ -29,10 +30,14 @@ export function ThemeSelectionPage({
       <ScanLine theme={theme} speed={8} />
       
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 }}
+        transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.15 }}
         className="text-center space-y-12 max-w-6xl w-full relative z-10"
+        style={{ 
+          willChange: 'transform, opacity',
+          transform: 'translate3d(0, 0, 0)',
+        }}
       >
         {/* Header */}
         <div>
@@ -49,13 +54,12 @@ export function ThemeSelectionPage({
               ],
             }}
             transition={{
-              opacity: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
-              y: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
-              textShadow: {
-                duration: 4,
-                repeat: Infinity,
-                ease: [0.4, 0, 0.6, 1],
-              },
+              opacity: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 },
+              y: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 },
+            }}
+            style={{ 
+              willChange: 'transform, opacity',
+              transform: 'translate3d(0, 0, 0)',
             }}
           >
             Choose Your Theme
@@ -64,7 +68,8 @@ export function ThemeSelectionPage({
             className={`text-xl ${isPastel ? 'text-gray-600' : 'text-gray-300'}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.35 }}
+            transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.3 }}
+            style={{ willChange: 'opacity' }}
           >
             Select a theme that matches your style and workflow
           </motion.p>
@@ -83,10 +88,14 @@ export function ThemeSelectionPage({
 
         {/* Don't Show Again Checkbox */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.7 }}
+          transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.5 }}
           className="flex justify-center pt-8"
+          style={{ 
+            willChange: 'transform, opacity',
+            transform: 'translate3d(0, 0, 0)',
+          }}
         >
           <HolographicEffect intensity={0.15} className="rounded-2xl overflow-hidden">
             <div className={`p-4 rounded-2xl bg-gradient-to-br ${isPastel ? 'from-slate-100/90 via-pink-50/90 to-slate-100/90' : 'from-gray-900/90 via-gray-800/90 to-gray-900/90'} backdrop-blur-xl border ${isPastel ? 'border-purple-300/20' : 'border-cyber-purple-400/20'}`}
@@ -107,10 +116,14 @@ export function ThemeSelectionPage({
         {/* Completion Message */}
         {selectedTheme && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
+            transition={{ duration: 0.4, delay: 0.25 }}
             className={`text-lg ${isPastel ? 'text-purple-600' : 'text-cyber-cyan-400'} font-semibold`}
+            style={{ 
+              willChange: 'transform, opacity',
+              transform: 'translate3d(0, 0, 0)',
+            }}
           >
             <motion.div
               animate={{
@@ -133,4 +146,4 @@ export function ThemeSelectionPage({
       </motion.div>
     </div>
   );
-}
+});

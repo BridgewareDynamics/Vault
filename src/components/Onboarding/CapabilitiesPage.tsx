@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { memo } from 'react';
 import { GraduationCap, Briefcase, FileSearch, Users, BookOpen, Target } from 'lucide-react';
 import { Theme } from '../../types';
 import { HolographicEffect } from '../Shared/HolographicEffect';
@@ -8,7 +9,7 @@ interface CapabilitiesPageProps {
   theme?: Theme;
 }
 
-export function CapabilitiesPage({ theme = 'brideware-purple' }: CapabilitiesPageProps) {
+export const CapabilitiesPage = memo(function CapabilitiesPage({ theme = 'brideware-purple' }: CapabilitiesPageProps) {
   const isPastel = theme === 'pastel';
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
@@ -58,13 +59,17 @@ export function CapabilitiesPage({ theme = 'brideware-purple' }: CapabilitiesPag
 
   return (
     <div className="relative flex flex-col items-center justify-center h-full px-8 py-12 overflow-hidden">
-      <NeuralNetwork theme={theme} nodeCount={25} />
+      <NeuralNetwork theme={theme} nodeCount={15} />
       
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 }}
+        transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.15 }}
         className="text-center space-y-12 max-w-7xl w-full relative z-10"
+        style={{ 
+          willChange: 'transform, opacity',
+          transform: 'translate3d(0, 0, 0)',
+        }}
       >
         {/* Header */}
         <div>
@@ -81,13 +86,12 @@ export function CapabilitiesPage({ theme = 'brideware-purple' }: CapabilitiesPag
               ],
             }}
             transition={{
-              opacity: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
-              y: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
-              textShadow: {
-                duration: 4,
-                repeat: Infinity,
-                ease: [0.4, 0, 0.6, 1],
-              },
+              opacity: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 },
+              y: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 },
+            }}
+            style={{ 
+              willChange: 'transform, opacity',
+              transform: 'translate3d(0, 0, 0)',
             }}
           >
             Perfect For
@@ -96,7 +100,8 @@ export function CapabilitiesPage({ theme = 'brideware-purple' }: CapabilitiesPag
             className={`text-xl ${isPastel ? 'text-gray-600' : 'text-gray-300'}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.35 }}
+            transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.3 }}
+            style={{ willChange: 'opacity' }}
           >
             Discover how The Vault can transform your workflow
           </motion.p>
@@ -109,18 +114,22 @@ export function CapabilitiesPage({ theme = 'brideware-purple' }: CapabilitiesPag
             return (
               <motion.div
                 key={useCase.title}
-                initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{
-                  duration: 0.7,
+                  duration: 0.5,
                   ease: [0.25, 0.1, 0.25, 1],
-                  delay: 0.5 + index * 0.1,
+                  delay: 0.4 + index * 0.08,
                 }}
                 className="relative group"
                 whileHover={{ 
-                  y: -6,
+                  y: -5,
                   scale: 1.02,
-                  transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] }
+                  transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] }
+                }}
+                style={{ 
+                  willChange: 'transform, opacity',
+                  transform: 'translate3d(0, 0, 0)',
                 }}
               >
                 <HolographicEffect intensity={0.2} className="rounded-3xl overflow-hidden">
@@ -188,4 +197,4 @@ export function CapabilitiesPage({ theme = 'brideware-purple' }: CapabilitiesPag
       </motion.div>
     </div>
   );
-}
+});

@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { memo } from 'react';
 import { FileText, FolderOpen, Shield } from 'lucide-react';
 import { Theme } from '../../types';
 import { HolographicEffect } from '../Shared/HolographicEffect';
@@ -8,7 +9,7 @@ interface GettingStartedPageProps {
   theme?: Theme;
 }
 
-export function GettingStartedPage({ theme = 'brideware-purple' }: GettingStartedPageProps) {
+export const GettingStartedPage = memo(function GettingStartedPage({ theme = 'brideware-purple' }: GettingStartedPageProps) {
   const isPastel = theme === 'pastel';
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
@@ -40,13 +41,17 @@ export function GettingStartedPage({ theme = 'brideware-purple' }: GettingStarte
 
   return (
     <div className="relative flex flex-col items-center justify-center h-full px-8 py-12 overflow-hidden">
-      <HexGrid theme={theme} density={25} />
+      <HexGrid theme={theme} density={18} />
       
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 }}
+        transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.15 }}
         className="text-center space-y-16 max-w-6xl w-full relative z-10"
+        style={{ 
+          willChange: 'transform, opacity',
+          transform: 'translate3d(0, 0, 0)',
+        }}
       >
         {/* Header */}
         <div>
@@ -63,13 +68,12 @@ export function GettingStartedPage({ theme = 'brideware-purple' }: GettingStarte
               ],
             }}
             transition={{
-              opacity: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
-              y: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
-              textShadow: {
-                duration: 4,
-                repeat: Infinity,
-                ease: [0.4, 0, 0.6, 1],
-              },
+              opacity: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 },
+              y: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 },
+            }}
+            style={{ 
+              willChange: 'transform, opacity',
+              transform: 'translate3d(0, 0, 0)',
             }}
           >
             Getting Started
@@ -78,7 +82,8 @@ export function GettingStartedPage({ theme = 'brideware-purple' }: GettingStarte
             className={`text-xl ${isPastel ? 'text-gray-600' : 'text-gray-300'}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.35 }}
+            transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.3 }}
+            style={{ willChange: 'opacity' }}
           >
             Follow these simple steps to begin your journey
           </motion.p>
@@ -106,14 +111,18 @@ export function GettingStartedPage({ theme = 'brideware-purple' }: GettingStarte
               return (
                 <motion.div
                   key={step.title}
-                  initial={{ opacity: 0, x: isEven ? -50 : 50 }}
+                  initial={{ opacity: 0, x: isEven ? -30 : 30 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{
-                    duration: 0.8,
+                    duration: 0.5,
                     ease: [0.25, 0.1, 0.25, 1],
-                    delay: 0.6 + index * 0.2,
+                    delay: 0.4 + index * 0.15,
                   }}
                   className={`flex flex-col md:flex-row items-center gap-8 ${isEven ? 'md:flex-row-reverse' : ''}`}
+                  style={{ 
+                    willChange: 'transform, opacity',
+                    transform: 'translate3d(0, 0, 0)',
+                  }}
                 >
                   {/* Step Number & Icon */}
                   <div className="relative flex-shrink-0">
@@ -195,4 +204,4 @@ export function GettingStartedPage({ theme = 'brideware-purple' }: GettingStarte
       </motion.div>
     </div>
   );
-}
+});

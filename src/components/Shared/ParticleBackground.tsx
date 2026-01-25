@@ -27,7 +27,7 @@ export function ParticleBackground({ particleCount = 50, theme = 'brideware-purp
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
 
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
       {particles.map((particle) => (
         <motion.div
           key={particle.id}
@@ -38,37 +38,39 @@ export function ParticleBackground({ particleCount = 50, theme = 'brideware-purp
             left: `${particle.left}%`,
             top: `${particle.top}%`,
             boxShadow: `0 0 ${particle.size * 4}px ${secondaryRgba}0.6)`,
+            willChange: 'transform, opacity',
+            transform: 'translate3d(0, 0, 0)', // Force GPU acceleration
           }}
           initial={{ opacity: 0 }}
           animate={{
-            y: [0, -80, 0],
-            x: [0, Math.sin(particle.id) * 30, 0],
-            opacity: [0, 0.3, 0.7, 0.3],
-            scale: [1, 1.3, 1],
+            y: [0, -60, 0],
+            x: [0, Math.sin(particle.id) * 20, 0],
+            opacity: [0, 0.25, 0.5, 0.25],
+            scale: [1, 1.2, 1],
           }}
           transition={{
             opacity: {
-              duration: 1.2,
+              duration: 1,
               ease: [0.25, 0.1, 0.25, 1],
-              delay: 0.3 + (particle.delay * 0.1),
+              delay: 0.2 + (particle.delay * 0.08),
               times: [0, 0.3, 0.7, 1],
             },
             y: {
               duration: particle.duration,
               repeat: Infinity,
-              delay: 1.2 + particle.delay,
+              delay: 1 + particle.delay,
               ease: [0.4, 0, 0.6, 1],
             },
             x: {
               duration: particle.duration,
               repeat: Infinity,
-              delay: 1.2 + particle.delay,
+              delay: 1 + particle.delay,
               ease: [0.4, 0, 0.6, 1],
             },
             scale: {
               duration: particle.duration,
               repeat: Infinity,
-              delay: 1.2 + particle.delay,
+              delay: 1 + particle.delay,
               ease: [0.4, 0, 0.6, 1],
             },
           }}
