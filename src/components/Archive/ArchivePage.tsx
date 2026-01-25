@@ -30,6 +30,8 @@ import { ActionToolbar } from '../ActionToolbar';
 import { logger } from '../../utils/logger';
 // import { useWordEditor } from '../../contexts/WordEditorContext'; // Unused for now
 import { useArchiveContext } from '../../contexts/ArchiveContext';
+import { useSettingsContext } from '../../utils/settingsContext';
+import { Theme } from '../../types';
 
 interface ArchivePageProps {
   onBack: () => void;
@@ -77,6 +79,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const toast = useToast();
   // const { isOpen: isWordEditorOpen } = useWordEditor(); // Unused for now
   const { currentCase: archiveContextCase, setCurrentCase: setArchiveContextCase } = useArchiveContext();
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
   
   // Track if we've attempted to restore case from context (prevents multiple restorations)
   const hasRestoredCaseRef = useRef(false);
@@ -917,12 +922,20 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900 transition-all duration-300"
+      className={`min-h-screen transition-all duration-300 ${
+        isPastel
+          ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
+          : 'bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900'
+      }`}
     >
       <div className="flex flex-col h-screen overflow-hidden">
         {/* Enhanced Header */}
         <motion.div 
-          className="relative p-8 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl"
+          className={`relative p-8 border-b backdrop-blur-xl ${
+            isPastel
+              ? 'border-pink-200/40 bg-gradient-to-r from-slate-100/80 via-pink-50/30 to-slate-100/80'
+              : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+          }`}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ 
@@ -934,14 +947,26 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-6">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>
-                <div className="relative p-5 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl shadow-2xl">
+                <div className={`absolute inset-0 rounded-2xl blur-xl opacity-50 ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                    : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                }`}></div>
+                <div className={`relative p-5 rounded-2xl shadow-2xl ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                    : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                }`}>
                   <FolderOpen className="w-10 h-10 text-white" />
                 </div>
               </div>
               <div className="flex-1">
                 <motion.h1
-                  className="text-4xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]"
+                  className={`text-4xl font-bold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                    isPastel
+                      ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400'
+                      : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                  }`}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ 
@@ -953,7 +978,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   The Vault
                 </motion.h1>
                 <motion.p 
-                  className="text-lg text-gray-400 mt-2"
+                  className={`text-lg mt-2 ${
+                    isPastel ? 'text-gray-600' : 'text-gray-400'
+                  }`}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ 
@@ -970,14 +997,22 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   <div className="flex items-center gap-2 flex-wrap mt-2">
                     <button
                       onClick={() => navigateToFolder(currentCase.path)}
-                      className={`text-sm ${currentFolderPath ? 'text-cyber-purple-400 hover:text-cyber-purple-300 underline' : 'text-white font-medium'}`}
+                      className={`text-sm ${
+                        currentFolderPath
+                          ? isPastel
+                            ? 'text-pink-500 hover:text-pink-600 underline'
+                            : 'text-cyber-purple-400 hover:text-cyber-purple-300 underline'
+                          : isPastel
+                            ? 'text-gray-800 font-medium'
+                            : 'text-white font-medium'
+                      }`}
                       aria-label={`Navigate to case ${currentCase.name}`}
                     >
                       {currentCase.name}
                     </button>
                     {currentFolderPath && (
                       <>
-                        <span className="text-gray-500">/</span>
+                        <span className={isPastel ? 'text-gray-400' : 'text-gray-500'}>/</span>
                         <div className="flex items-center gap-2">
                           {folderNavigationStack.map((path) => {
                             const folderName = path.split(/[/\\]/).pop() || path;
@@ -985,16 +1020,22 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                               <span key={path} className="flex items-center gap-2">
                                 <button
                                   onClick={() => navigateToFolder(path)}
-                                  className="text-cyber-purple-400 hover:text-cyber-purple-300 text-sm underline"
+                                  className={`text-sm underline ${
+                                    isPastel
+                                      ? 'text-pink-500 hover:text-pink-600'
+                                      : 'text-cyber-purple-400 hover:text-cyber-purple-300'
+                                  }`}
                                   aria-label={`Navigate to folder ${folderName}`}
                                 >
                                   {folderName}
                                 </button>
-                                <span className="text-gray-500">/</span>
+                                <span className={isPastel ? 'text-gray-400' : 'text-gray-500'}>/</span>
                               </span>
                             );
                           })}
-                          <span className="text-white text-sm font-medium">
+                          <span className={`text-sm font-medium ${
+                            isPastel ? 'text-gray-800' : 'text-white'
+                          }`}>
                             {currentFolderPath.split(/[/\\]/).pop() || currentFolderPath}
                           </span>
                         </div>
@@ -1008,7 +1049,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               <div className="flex items-center gap-2">
                 <button
                   onClick={onBack}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
+                  className={`flex items-center gap-2 px-3 py-2 rounded-full border shadow-sm transition-colors ${
+                    isPastel
+                      ? 'bg-white/80 hover:bg-white text-gray-800 border-pink-300/60'
+                      : 'bg-gray-800/80 hover:bg-gray-700 text-white border-cyber-purple-500/60'
+                  }`}
                   aria-label="Return to home screen"
                 >
                   <Home size={18} aria-hidden="true" />
@@ -1026,7 +1071,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                       // Reset restoration flag so it can restore in the future if needed
                       hasRestoredCaseRef.current = false;
                     }}
-                    className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
+                    className={`flex items-center gap-2 px-3 py-2 rounded-full border shadow-sm transition-colors ${
+                    isPastel
+                      ? 'bg-white/80 hover:bg-white text-gray-800 border-pink-300/60'
+                      : 'bg-gray-800/80 hover:bg-gray-700 text-white border-cyber-purple-500/60'
+                  }`}
                     aria-label="Go back to cases list"
                   >
                     <ArrowLeft size={18} aria-hidden="true" />
@@ -1036,7 +1085,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                 {currentCase && currentFolderPath && (
                   <button
                     onClick={goBackToParentFolder}
-                    className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
+                    className={`flex items-center gap-2 px-3 py-2 rounded-full border shadow-sm transition-colors ${
+                    isPastel
+                      ? 'bg-white/80 hover:bg-white text-gray-800 border-pink-300/60'
+                      : 'bg-gray-800/80 hover:bg-gray-700 text-white border-cyber-purple-500/60'
+                  }`}
                     aria-label={`Go back to ${folderNavigationStack.length > 0 && folderNavigationStack[folderNavigationStack.length - 1] !== currentCase.path ? 'parent folder' : 'case'}`}
                   >
                     <ArrowLeft size={18} aria-hidden="true" />
@@ -1061,7 +1114,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
           )}
 
           {/* Enhanced Toolbar */}
-          <div className="relative z-50 px-6 sm:px-8 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b border-cyber-purple-400/20 bg-gray-900/30 backdrop-blur-sm">
+          <div className={`relative z-50 px-6 sm:px-8 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b backdrop-blur-sm ${
+            isPastel
+              ? 'border-pink-200/20 bg-white/30'
+              : 'border-cyber-purple-400/20 bg-gray-900/30'
+          }`}>
             <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               {/* Action Buttons Group */}
               <div className="flex items-center gap-3 sm:gap-4">
@@ -1070,7 +1127,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                     onClick={() => setShowCaseDialog(true)}
                     whileHover={{ scale: 1.02, y: -1 }}
                     whileTap={{ scale: 0.98 }}
-                    className="relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-purple-500/30 border border-purple-400/30"
+                    className={`relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl border ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-400/90 via-purple-400/90 to-pink-400/90 hover:from-pink-400 hover:via-purple-400 hover:to-pink-400 hover:shadow-pink-400/30 border-pink-300/30'
+                        : 'bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 hover:shadow-purple-500/30 border-purple-400/30'
+                    }`}
                     aria-label="Create new case file"
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
@@ -1090,7 +1151,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                       onClick={handleAddFiles}
                       whileHover={{ scale: 1.02, y: -1 }}
                       whileTap={{ scale: 0.98 }}
-                      className="relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-purple-500/30 border border-purple-400/30"
+                      className={`relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl border ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-400/90 via-purple-400/90 to-pink-400/90 hover:from-pink-400 hover:via-purple-400 hover:to-pink-400 hover:shadow-pink-400/30 border-pink-300/30'
+                        : 'bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 hover:shadow-purple-500/30 border-purple-400/30'
+                    }`}
                       aria-label="Add files to case"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
@@ -1106,7 +1171,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                       onClick={() => setShowCreateFolderDialog(true)}
                       whileHover={{ scale: 1.02, y: -1 }}
                       whileTap={{ scale: 0.98 }}
-                      className="relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-purple-500/30 border border-purple-400/30"
+                      className={`relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl border ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-400/90 via-purple-400/90 to-pink-400/90 hover:from-pink-400 hover:via-purple-400 hover:to-pink-400 hover:shadow-pink-400/30 border-pink-300/30'
+                        : 'bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 hover:shadow-purple-500/30 border-purple-400/30'
+                    }`}
                       aria-label="Create new folder"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
@@ -1139,16 +1208,36 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                 onClick={() => setShowDriveDialog(true)}
                 whileHover={{ scale: 1.02, y: -1 }}
                 whileTap={{ scale: 0.98 }}
-                className="relative overflow-hidden group flex items-center gap-2.5 px-4 sm:px-5 py-2.5 bg-gray-800/70 hover:bg-gray-800/90 text-white rounded-xl border-2 border-gray-700/50 hover:border-cyber-purple-400/60 transition-all duration-300 font-medium shadow-md hover:shadow-lg hover:shadow-cyber-purple-500/20 backdrop-blur-sm"
+                className={`relative overflow-hidden group flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-xl border-2 transition-all duration-300 font-medium shadow-md hover:shadow-lg backdrop-blur-sm ${
+                  isPastel
+                    ? 'bg-white/70 hover:bg-white/90 text-gray-800 border-pink-200/50 hover:border-pink-400/60 hover:shadow-pink-400/20'
+                    : 'bg-gray-800/70 hover:bg-gray-800/90 text-white border-gray-700/50 hover:border-cyber-purple-400/60 hover:shadow-cyber-purple-500/20'
+                }`}
                 aria-label="Switch vault directory"
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5 transition-all duration-500"></div>
+                <div className={`absolute inset-0 transition-all duration-500 ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-400/0 via-pink-400/0 to-purple-400/0 group-hover:from-pink-400/5 group-hover:via-pink-400/3 group-hover:to-purple-400/5'
+                    : 'bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5'
+                }`}></div>
                 <div className="relative flex items-center gap-2.5">
                   <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <FolderOpen size={16} className="relative z-10 text-gray-300 group-hover:text-cyber-purple-400 transition-colors" />
+                    <div className={`absolute inset-0 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-400/20 to-purple-400/20'
+                        : 'bg-gradient-to-br from-purple-600/20 to-cyan-600/20'
+                    }`}></div>
+                    <FolderOpen size={16} className={`relative z-10 transition-colors ${
+                      isPastel
+                        ? 'text-gray-600 group-hover:text-pink-500'
+                        : 'text-gray-300 group-hover:text-cyber-purple-400'
+                    }`} />
                   </div>
-                  <span className="relative z-10 text-sm sm:text-base text-gray-300 group-hover:text-white transition-colors">Switch Vault</span>
+                  <span className={`relative z-10 text-sm sm:text-base transition-colors ${
+                    isPastel
+                      ? 'text-gray-600 group-hover:text-gray-800'
+                      : 'text-gray-300 group-hover:text-white'
+                  }`}>Switch Vault</span>
                 </div>
               </motion.button>
             </div>
@@ -1157,7 +1246,13 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
           {/* Content */}
           <div
             ref={dropZoneRef}
-            className={`relative z-0 flex-1 overflow-y-auto px-8 pt-6 pb-8 ${isDragging ? 'bg-cyber-purple-500/20 border-2 border-cyber-purple-500 border-dashed rounded-lg m-4' : ''}`}
+            className={`relative z-0 flex-1 overflow-y-auto px-8 pt-6 pb-8 ${
+              isDragging
+                ? isPastel
+                  ? 'bg-pink-300/20 border-2 border-pink-400 border-dashed rounded-lg m-4'
+                  : 'bg-cyber-purple-500/20 border-2 border-cyber-purple-500 border-dashed rounded-lg m-4'
+                : ''
+            }`}
           >
           {loading ? (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -1176,14 +1271,22 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, ease: "easeOut" }}
-                  className="mb-6 p-4 bg-gray-800/50 border border-cyber-purple-500/30 rounded-lg backdrop-blur-sm"
+                  className={`mb-6 p-4 rounded-lg backdrop-blur-sm ${
+                    isPastel
+                      ? 'bg-white/50 border border-pink-300/30'
+                      : 'bg-gray-800/50 border border-cyber-purple-500/30'
+                  }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0 mt-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-cyber-purple-400"></div>
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        isPastel ? 'bg-pink-400' : 'bg-cyber-purple-400'
+                      }`}></div>
                     </div>
                     <div className="flex-1">
-                      <p className="text-gray-300 text-sm leading-relaxed">
+                      <p className={`text-sm leading-relaxed ${
+                        isPastel ? 'text-gray-700' : 'text-gray-300'
+                      }`}>
                         {currentCase.description}
                       </p>
                     </div>
@@ -1821,14 +1924,28 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             <>
               {!currentCase && cases.length === 0 && (
                 <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-                  <div className="inline-flex p-8 bg-gray-800/50 rounded-2xl border border-cyber-purple-400/20 mb-6">
-                    <FolderOpen className="w-20 h-20 text-cyber-purple-400/50" />
+                  <div className={`inline-flex p-8 rounded-2xl border mb-6 ${
+                    isPastel
+                      ? 'bg-white/50 border-pink-300/20'
+                      : 'bg-gray-800/50 border-cyber-purple-400/20'
+                  }`}>
+                    <FolderOpen className={`w-20 h-20 ${
+                      isPastel ? 'text-pink-400/50' : 'text-cyber-purple-400/50'
+                    }`} />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-300 mb-2">No cases yet</h3>
-                  <p className="text-gray-400 text-lg mb-6">Create your first case file to get started</p>
+                  <h3 className={`text-2xl font-bold mb-2 ${
+                    isPastel ? 'text-gray-800' : 'text-gray-300'
+                  }`}>No cases yet</h3>
+                  <p className={`text-lg mb-6 ${
+                    isPastel ? 'text-gray-600' : 'text-gray-400'
+                  }`}>Create your first case file to get started</p>
                   <button
                     onClick={() => setShowCaseDialog(true)}
-                    className="px-6 py-3 bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 rounded-lg font-semibold text-white text-base transition-all shadow-lg hover:shadow-cyan-500/50 transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group"
+                    className={`px-6 py-3 rounded-lg font-semibold text-white text-base transition-all shadow-lg transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group ${
+                      isPastel
+                        ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 hover:shadow-pink-400/50'
+                        : 'bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 hover:shadow-cyan-500/50'
+                    }`}
                     aria-label="Create your first case"
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
@@ -1838,14 +1955,28 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               )}
               {currentCase && files.filter(f => !f.isFolder).length === 0 && (
                 <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-                  <div className="inline-flex p-8 bg-gray-800/50 rounded-2xl border border-cyber-purple-400/20 mb-6">
-                    <FileText className="w-20 h-20 text-cyber-purple-400/50" />
+                  <div className={`inline-flex p-8 rounded-2xl border mb-6 ${
+                    isPastel
+                      ? 'bg-white/50 border-pink-300/20'
+                      : 'bg-gray-800/50 border-cyber-purple-400/20'
+                  }`}>
+                    <FileText className={`w-20 h-20 ${
+                      isPastel ? 'text-pink-400/50' : 'text-cyber-purple-400/50'
+                    }`} />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-300 mb-2">No files in this case</h3>
-                  <p className="text-gray-400 text-lg mb-6">Add files to get started organizing your case</p>
+                  <h3 className={`text-2xl font-bold mb-2 ${
+                    isPastel ? 'text-gray-800' : 'text-gray-300'
+                  }`}>No files in this case</h3>
+                  <p className={`text-lg mb-6 ${
+                    isPastel ? 'text-gray-600' : 'text-gray-400'
+                  }`}>Add files to get started organizing your case</p>
                   <button
                     onClick={handleAddFiles}
-                    className="px-6 py-3 bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 rounded-lg font-semibold text-white text-base transition-all shadow-lg hover:shadow-cyan-500/50 transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group"
+                    className={`px-6 py-3 rounded-lg font-semibold text-white text-base transition-all shadow-lg transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group ${
+                      isPastel
+                        ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 hover:shadow-pink-400/50'
+                        : 'bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 hover:shadow-cyan-500/50'
+                    }`}
                     aria-label="Add files to this case"
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>

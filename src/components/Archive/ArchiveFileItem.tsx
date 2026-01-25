@@ -1,9 +1,10 @@
 import { motion } from 'framer-motion';
 import { useState, useRef, useEffect } from 'react';
-import { ArchiveFile, CategoryTag } from '../../types';
+import { ArchiveFile, CategoryTag, Theme } from '../../types';
 import { FileText, Image, Video, File, Trash2, Play, ChevronDown, Pencil, Tag } from 'lucide-react';
 import { PDFOptionsDropdown } from './PDFOptionsDropdown';
 import { CategoryTag as CategoryTagComponent } from './CategoryTag';
+import { useSettingsContext } from '../../utils/settingsContext';
 
 interface ArchiveFileItemProps {
   file: ArchiveFile;
@@ -22,6 +23,9 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLButtonElement>(null);
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -47,13 +51,13 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
   const getFileIcon = () => {
     switch (file.type) {
       case 'image':
-        return <Image className="w-8 h-8 text-cyber-purple-400" aria-hidden="true" />;
+        return <Image className={`w-8 h-8 ${isPastel ? 'text-pink-500' : 'text-cyber-purple-400'}`} aria-hidden="true" />;
       case 'pdf':
         return <FileText className="w-8 h-8 text-red-400" aria-hidden="true" />;
       case 'video':
         return <Video className="w-8 h-8 text-blue-400" aria-hidden="true" />;
       default:
-        return <File className="w-8 h-8 text-gray-400" aria-hidden="true" />;
+        return <File className={`w-8 h-8 ${isPastel ? 'text-gray-500' : 'text-gray-400'}`} aria-hidden="true" />;
     }
   };
 
@@ -94,12 +98,22 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
     >
       <div
         onClick={onClick}
-        className="relative rounded-2xl overflow-hidden border-2 border-gray-700/50 hover:border-cyber-purple-500/60 transition-all duration-300 ease-out bg-gray-800/60 backdrop-blur-sm hover:bg-gray-800/80 shadow-lg hover:shadow-2xl hover:shadow-cyber-purple-500/20"
+        className={`relative rounded-2xl overflow-hidden border-2 transition-all duration-300 ease-out backdrop-blur-sm shadow-lg hover:shadow-2xl ${
+          isPastel
+            ? 'border-pink-200/50 hover:border-pink-400/60 bg-white/60 hover:bg-white/80 hover:shadow-pink-400/20'
+            : 'border-gray-700/50 hover:border-cyber-purple-500/60 bg-gray-800/60 hover:bg-gray-800/80 hover:shadow-cyber-purple-500/20'
+        }`}
       >
         {/* Glowing background effect */}
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10 transition-all duration-500"></div>
+        <div className={`absolute inset-0 transition-all duration-500 ${
+          isPastel
+            ? 'bg-gradient-to-br from-pink-400/0 via-pink-400/0 to-purple-400/0 group-hover:from-pink-400/10 group-hover:via-pink-400/5 group-hover:to-purple-400/10'
+            : 'bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10'
+        }`}></div>
         {/* Thumbnail or Icon */}
-        <div className="aspect-[3/4] bg-gray-900 relative overflow-hidden">
+        <div className={`aspect-[3/4] relative overflow-hidden ${
+          isPastel ? 'bg-slate-100' : 'bg-gray-900'
+        }`}>
           {file.thumbnail ? (
             <img
               src={file.thumbnail}
@@ -126,11 +140,17 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                     e.stopPropagation();
                     onTagClick();
                   }}
-                  className="p-1 hover:bg-gray-700 rounded transition-colors opacity-0 group-hover:opacity-100"
+                  className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 ${
+                    isPastel ? 'hover:bg-pink-100' : 'hover:bg-gray-700'
+                  }`}
                   aria-label="Add category tag"
                   title="Add category tag"
                 >
-                  <Tag className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" />
+                  <Tag className={`w-3 h-3 ${
+                    isPastel
+                      ? 'text-gray-500 hover:text-pink-500'
+                      : 'text-gray-400 hover:text-cyber-purple-400'
+                  }`} />
                 </button>
               ) : (
                 // Has tag: Show tag badge with small edit button
@@ -141,11 +161,17 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                       e.stopPropagation();
                       onTagClick();
                     }}
-                    className="p-0.5 hover:bg-gray-700/50 rounded transition-colors opacity-0 group-hover:opacity-100"
-                    aria-label="Change category tag"
-                    title="Change category tag"
-                  >
-                    <Pencil className="w-2.5 h-2.5 text-gray-400 hover:text-cyber-purple-400" />
+                    className={`p-0.5 rounded transition-colors opacity-0 group-hover:opacity-100 ${
+                      isPastel ? 'hover:bg-pink-100/50' : 'hover:bg-gray-700/50'
+                    }`}
+                  aria-label="Change category tag"
+                  title="Change category tag"
+                >
+                  <Pencil className={`w-2.5 h-2.5 ${
+                    isPastel
+                      ? 'text-gray-500 hover:text-pink-500'
+                      : 'text-gray-400 hover:text-cyber-purple-400'
+                  }`} />
                   </button>
                 </>
               )}
@@ -153,7 +179,11 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
           )}
 
           {/* File type badge - positioned below tag if tag exists, otherwise normal position */}
-          <div className={`absolute top-2 z-10 bg-gradient-to-r from-purple-600 to-cyan-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg backdrop-blur-sm shadow-lg ${onTagClick && caseTag ? 'left-2 top-10' : 'left-2'}`}>
+          <div className={`absolute top-2 z-10 text-white text-xs font-bold px-3 py-1.5 rounded-lg backdrop-blur-sm shadow-lg ${
+            isPastel
+              ? 'bg-gradient-to-r from-pink-400 to-purple-400'
+              : 'bg-gradient-to-r from-purple-600 to-cyan-600'
+          } ${onTagClick && caseTag ? 'left-2 top-10' : 'left-2'}`}>
             {file.type.toUpperCase()}
           </div>
 
@@ -165,7 +195,11 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                   e.stopPropagation();
                   onExtract();
                 }}
-                className="p-2 bg-cyber-purple-500/90 hover:bg-cyber-purple-500 rounded-full backdrop-blur-sm"
+                className={`p-2 rounded-full backdrop-blur-sm ${
+                  isPastel
+                    ? 'bg-pink-400/90 hover:bg-pink-400'
+                    : 'bg-cyber-purple-500/90 hover:bg-cyber-purple-500'
+                }`}
                 aria-label="Extract PDF"
                 title="Start frame extraction"
               >
@@ -176,10 +210,16 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
         </div>
 
         {/* File name */}
-        <div className="p-5 space-y-2 bg-gray-800/40 backdrop-blur-sm">
+        <div className={`p-5 space-y-2 backdrop-blur-sm ${
+          isPastel ? 'bg-white/40' : 'bg-gray-800/40'
+        }`}>
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <p className="text-white text-base font-bold truncate mb-2 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyber-purple-400 group-hover:to-cyber-cyan-400 transition-all duration-300">
+              <p className={`text-base font-bold truncate mb-2 transition-all duration-300 ${
+                isPastel
+                  ? 'text-gray-800 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-pink-400 group-hover:to-purple-400'
+                  : 'text-white group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyber-purple-400 group-hover:to-cyber-cyan-400'
+              }`}>
                 {file.name}
               </p>
             </div>
@@ -190,11 +230,17 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                     e.stopPropagation();
                     onRename();
                   }}
-                  className="flex-shrink-0 p-2 hover:bg-gray-700/60 rounded-lg transition-all"
+                  className={`flex-shrink-0 p-2 rounded-lg transition-all ${
+                    isPastel ? 'hover:bg-pink-100/60' : 'hover:bg-gray-700/60'
+                  }`}
                   aria-label="Rename file"
                   title="Rename file"
                 >
-                  <Pencil className="w-4 h-4 text-gray-300 hover:text-cyber-purple-400" aria-hidden="true" />
+                  <Pencil className={`w-4 h-4 ${
+                    isPastel
+                      ? 'text-gray-600 hover:text-pink-500'
+                      : 'text-gray-300 hover:text-cyber-purple-400'
+                  }`} aria-hidden="true" />
                 </button>
               )}
               {file.type === 'pdf' && (onExtract || onRunAudit) && (
@@ -204,12 +250,20 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                     e.stopPropagation();
                     setShowDropdown(!showDropdown);
                   }}
-                  className={`flex-shrink-0 p-2 hover:bg-gray-700/60 rounded-lg transition-all ${showDropdown ? 'bg-gray-700/60 rotate-180' : ''}`}
+                  className={`flex-shrink-0 p-2 rounded-lg transition-all ${
+                    isPastel
+                      ? `hover:bg-pink-100/60 ${showDropdown ? 'bg-pink-100/60' : ''}`
+                      : `hover:bg-gray-700/60 ${showDropdown ? 'bg-gray-700/60' : ''}`
+                  }`}
                   aria-label="PDF options"
                   title="PDF options"
                   aria-expanded={showDropdown}
                 >
-                  <ChevronDown className={`w-4 h-4 text-gray-300 transition-transform duration-300 ${showDropdown ? 'rotate-180' : ''}`} aria-hidden="true" />
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${
+                    isPastel
+                      ? `text-gray-600 ${showDropdown ? 'rotate-180' : ''}`
+                      : `text-gray-300 ${showDropdown ? 'rotate-180' : ''}`
+                  }`} aria-hidden="true" />
                 </button>
               )}
             </div>
