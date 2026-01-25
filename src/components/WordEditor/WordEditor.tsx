@@ -10,6 +10,8 @@ import { LexicalEditor, LexicalEditorHandle } from './LexicalEditor';
 import { useEditorShortcuts } from '../../hooks/useEditorShortcuts';
 import { calculateTextStats } from '../../utils/textStats';
 import { Save, FilePlus } from 'lucide-react';
+import { useSettingsContext } from '../../utils/settingsContext';
+import { Theme } from '../../types';
 
 export interface WordEditorHandle {
   getContent: () => string;
@@ -52,6 +54,9 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
   const [sentenceCount, setSentenceCount] = useState(0);
   const [showSaveMenu, setShowSaveMenu] = useState(false);
   const saveMenuRef = useRef<HTMLDivElement>(null);
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
   
   // Debounced localStorage save function
   const debouncedSaveDraft = useRef(
@@ -680,19 +685,38 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       <div className="flex-1 overflow-auto p-4 relative">
         {/* Loading overlay */}
         {isLoading && (
-          <div className="absolute inset-0 bg-gray-900/90 backdrop-blur-xl flex items-center justify-center z-10 rounded-lg">
+          <div className={`absolute inset-0 backdrop-blur-xl flex items-center justify-center z-10 rounded-lg ${
+            isPastel ? 'bg-white/90' : 'bg-gray-900/90'
+          }`}>
             <div className="text-center space-y-4">
               <div className="inline-flex items-center justify-center">
                 <div className="relative">
-                  <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
-                  <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
-                  <div className="relative w-12 h-12">
-                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
-                    <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
-                  </div>
+                  {isPastel ? (
+                    <>
+                      <div className="absolute inset-0 border-4 border-pink-300/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                      <div className="absolute inset-2 border-2 border-purple-300/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                      <div className="relative w-12 h-12">
+                        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-pink-400 border-r-purple-400 animate-spin"></div>
+                        <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-purple-400 border-l-pink-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                      <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                      <div className="relative w-12 h-12">
+                        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                        <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
-              <p className="text-gray-300 font-medium">Loading file...</p>
+              <p className={`font-medium ${
+                isPastel ? 'text-gray-700' : 'text-gray-300'
+              }`}>
+                Loading file...
+              </p>
             </div>
           </div>
         )}
@@ -709,21 +733,39 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       </div>
 
       {/* Status bar */}
-      <div className="border-t border-gray-700/50">
+      <div className={`border-t ${
+        isPastel ? 'border-pink-200/40' : 'border-gray-700/50'
+      }`}>
         <div className="px-3 py-2 flex items-center justify-between gap-3 overflow-hidden">
           {/* Left side: Status text and statistics */}
           <div className="flex items-center gap-1.5 text-xs flex-nowrap min-w-0 flex-shrink">
             {hasUnsavedChanges && (
               <>
-                <span className="text-yellow-400 whitespace-nowrap">Unsaved changes</span>
-                <span className="text-gray-600 text-[10px]">•</span>
+                <span className={`whitespace-nowrap ${
+                  isPastel ? 'text-yellow-600' : 'text-yellow-400'
+                }`}>
+                  Unsaved changes
+                </span>
+                <span className={`text-[10px] ${
+                  isPastel ? 'text-gray-500' : 'text-gray-600'
+                }`}>
+                  •
+                </span>
               </>
             )}
-            <span className="text-gray-400 whitespace-nowrap">
+            <span className={`whitespace-nowrap ${
+              isPastel ? 'text-gray-600' : 'text-gray-400'
+            }`}>
               {wordCount} {wordCount === 1 ? 'word' : 'words'}
             </span>
-            <span className="text-gray-600 text-[10px]">•</span>
-            <span className="text-gray-400 whitespace-nowrap">
+            <span className={`text-[10px] ${
+              isPastel ? 'text-gray-500' : 'text-gray-600'
+            }`}>
+              •
+            </span>
+            <span className={`whitespace-nowrap ${
+              isPastel ? 'text-gray-600' : 'text-gray-400'
+            }`}>
               {sentenceCount} {sentenceCount === 1 ? 'sentence' : 'sentences'}
             </span>
           </div>
@@ -733,7 +775,11 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           {/* New File Button */}
           <button
             onClick={handleNewFile}
-            className="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs"
+            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs ${
+              isPastel
+                ? 'bg-pink-100 hover:bg-pink-200 text-gray-700'
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            }`}
             title="New File"
           >
             <FilePlus size={14} />
@@ -755,8 +801,12 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
             }}
             className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs ${
               hasUnsavedChanges
-                ? 'bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                ? isPastel
+                  ? 'bg-pink-500 hover:bg-pink-600 text-white'
+                  : 'bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white'
+                : isPastel
+                  ? 'bg-pink-100 hover:bg-pink-200 text-gray-700'
+                  : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
             }`}
             title="Save current file"
           >
@@ -766,9 +816,15 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
 
           {/* Saving indicator */}
           {isSaving && (
-            <div className="flex items-center gap-2 text-cyber-purple-400 text-xs">
+            <div className={`flex items-center gap-2 text-xs ${
+              isPastel ? 'text-pink-500' : 'text-cyber-purple-400'
+            }`}>
               <div className="relative w-3 h-3">
-                <div className="absolute inset-0 rounded-full border border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                <div className={`absolute inset-0 rounded-full border border-transparent animate-spin ${
+                  isPastel
+                    ? 'border-t-pink-400 border-r-purple-400'
+                    : 'border-t-cyber-purple-400 border-r-cyber-cyan-400'
+                }`}></div>
               </div>
               <span>Saving...</span>
             </div>

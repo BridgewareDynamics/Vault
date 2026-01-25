@@ -23,9 +23,10 @@ interface CaseNotesGalleryProps {
   onOpenFile: (filePath: string) => void;
   onNewFile: (fileName: string) => void;
   onFileDeleted?: (filePath: string) => void;
+  hideHeader?: boolean;
 }
 
-export function CaseNotesGallery({ onSelectCase, onClose, onOpenFile, onNewFile, onFileDeleted }: CaseNotesGalleryProps) {
+export function CaseNotesGallery({ onSelectCase, onClose, onOpenFile, onNewFile, onFileDeleted, hideHeader = false }: CaseNotesGalleryProps) {
   const [cases, setCases] = useState<ArchiveCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -229,71 +230,73 @@ export function CaseNotesGallery({ onSelectCase, onClose, onOpenFile, onNewFile,
       isPastel
         ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
         : 'bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900'
-    }`}>
-      {/* Enhanced Header - Responsive */}
-      <div className={`relative p-3 sm:p-4 md:p-6 border-b backdrop-blur-xl flex-shrink-0 ${
-        isPastel
-          ? 'border-pink-200/30 bg-gradient-to-r from-slate-100/95 via-pink-50/20 to-slate-100/95'
-          : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
       }`}>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 sm:gap-3 md:gap-4 min-w-0 flex-1">
-            <motion.button
-              onClick={onClose}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              className={`p-1.5 sm:p-2 rounded-xl transition-colors flex-shrink-0 ${
-                isPastel
-                  ? 'hover:bg-pink-100/80 text-gray-600 hover:text-gray-800'
-                  : 'hover:bg-gray-800/80 text-gray-400 hover:text-white'
-              }`}
-              aria-label="Back to editor"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            </motion.button>
-            <div className="relative flex-shrink-0">
-              <div className={`absolute inset-0 rounded-xl sm:rounded-2xl blur-xl opacity-50 ${
-                isPastel
-                  ? 'bg-gradient-to-br from-pink-300 to-purple-300'
-                  : 'bg-gradient-to-br from-purple-600 to-cyan-600'
-              }`}></div>
-              <div className={`relative p-2 sm:p-2.5 md:p-3 rounded-xl sm:rounded-2xl shadow-2xl ${
-                isPastel
-                  ? 'bg-gradient-to-br from-pink-300 to-purple-300'
-                  : 'bg-gradient-to-br from-purple-600 to-cyan-600'
-              }`}>
-                <Folder className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-white" />
+      {/* Enhanced Header - Responsive */}
+      {!hideHeader && (
+        <div className={`relative p-3 sm:p-4 md:p-6 border-b backdrop-blur-xl flex-shrink-0 ${
+          isPastel
+            ? 'border-pink-200/30 bg-gradient-to-r from-slate-100/95 via-pink-50/20 to-slate-100/95'
+            : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+        }`}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 md:gap-4 min-w-0 flex-1">
+              <motion.button
+                onClick={onClose}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                className={`p-1.5 sm:p-2 rounded-xl transition-colors flex-shrink-0 ${
+                  isPastel
+                    ? 'hover:bg-pink-100/80 text-gray-600 hover:text-gray-800'
+                    : 'hover:bg-gray-800/80 text-gray-400 hover:text-white'
+                }`}
+                aria-label="Back to editor"
+              >
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              </motion.button>
+              <div className="relative flex-shrink-0">
+                <div className={`absolute inset-0 rounded-xl sm:rounded-2xl blur-xl opacity-50 ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                    : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                }`}></div>
+                <div className={`relative p-2 sm:p-2.5 md:p-3 rounded-xl sm:rounded-2xl shadow-2xl ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                    : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                }`}>
+                  <Folder className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-white" />
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className={`text-lg sm:text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] truncate ${
+                  isPastel
+                    ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400'
+                    : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                }`}>
+                  Case Notes Library
+                </h3>
+                <p className={`text-xs sm:text-sm mt-0.5 hidden sm:block ${
+                  isPastel ? 'text-gray-600' : 'text-gray-400'
+                }`}>Browse and manage notes across all cases</p>
               </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <h3 className={`text-lg sm:text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] truncate ${
+            {filteredCases.length > 0 && (
+              <div className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border flex-shrink-0 ${
                 isPastel
-                  ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400'
-                  : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                  ? 'bg-white/60 border-pink-300/20'
+                  : 'bg-gray-800/60 border-cyber-purple-400/20'
               }`}>
-                Case Notes Library
-              </h3>
-              <p className={`text-xs sm:text-sm mt-0.5 hidden sm:block ${
-                isPastel ? 'text-gray-600' : 'text-gray-400'
-              }`}>Browse and manage notes across all cases</p>
-            </div>
+                <TrendingUp className={`w-3 h-3 sm:w-4 sm:h-4 ${
+                  isPastel ? 'text-pink-500' : 'text-cyber-purple-400'
+                }`} />
+                <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${
+                  isPastel ? 'text-gray-700' : 'text-gray-300'
+                }`}>{filteredCases.length} {filteredCases.length === 1 ? 'case' : 'cases'}</span>
+              </div>
+            )}
           </div>
-          {filteredCases.length > 0 && (
-            <div className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border flex-shrink-0 ${
-              isPastel
-                ? 'bg-white/60 border-pink-300/20'
-                : 'bg-gray-800/60 border-cyber-purple-400/20'
-            }`}>
-              <TrendingUp className={`w-3 h-3 sm:w-4 sm:h-4 ${
-                isPastel ? 'text-pink-500' : 'text-cyber-purple-400'
-              }`} />
-              <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${
-                isPastel ? 'text-gray-700' : 'text-gray-300'
-              }`}>{filteredCases.length} {filteredCases.length === 1 ? 'case' : 'cases'}</span>
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
       {/* Enhanced Search Bar - Responsive */}
       <div className={`p-3 sm:p-4 md:p-6 border-b flex-shrink-0 ${

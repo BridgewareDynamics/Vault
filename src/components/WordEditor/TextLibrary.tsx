@@ -496,6 +496,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
               onOpenFile={onOpenFile}
               onNewFile={handleNewFileConfirm}
               onFileDeleted={onFileDeleted}
+              hideHeader={true}
             />
           </div>
         </div>
