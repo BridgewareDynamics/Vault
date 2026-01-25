@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Play, FileText, FolderOpen, Shield } from 'lucide-react';
+import { FileText, FolderOpen, Shield } from 'lucide-react';
 import { Theme } from '../../types';
 import { HolographicEffect } from '../Shared/HolographicEffect';
 import { HexGrid } from '../Shared/HexGrid';
@@ -192,28 +192,6 @@ export function GettingStartedPage({ theme = 'brideware-purple' }: GettingStarte
           </div>
         </div>
 
-        {/* Call to Action */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 1.4 }}
-          className="flex justify-center"
-        >
-          <motion.div
-            className={`inline-flex items-center gap-3 px-8 py-4 rounded-2xl ${isPastel ? 'bg-gradient-to-br from-purple-300 to-pink-300' : 'bg-gradient-to-br from-cyber-purple-400 to-cyber-cyan-400'} text-white font-semibold text-lg shadow-2xl`}
-            style={{
-              boxShadow: `0 0 40px ${primaryRgba}0.8), 0 0 80px ${secondaryRgba}0.5)`,
-            }}
-            whileHover={{ 
-              scale: 1.05,
-              boxShadow: `0 0 60px ${primaryRgba}1), 0 0 120px ${secondaryRgba}0.7)`,
-            }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <Play className="w-5 h-5" />
-            <span>Let's Begin</span>
-          </motion.div>
-        </motion.div>
       </motion.div>
     </div>
   );
