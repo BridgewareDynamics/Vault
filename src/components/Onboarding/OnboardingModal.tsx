@@ -11,7 +11,6 @@ import { GettingStartedPage } from './GettingStartedPage';
 import { ThemeSelectionPage } from './ThemeSelectionPage';
 import { AdvancedPageIndicator } from './AdvancedPageIndicator';
 import { Theme } from '../../types';
-import { HolographicEffect } from '../Shared/HolographicEffect';
 import { ScanLine } from '../Shared/ScanLine';
 
 interface OnboardingModalProps {

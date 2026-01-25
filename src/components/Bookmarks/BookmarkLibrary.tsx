@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Bookmark as BookmarkIcon, ArrowLeft, Folder, Search } from 'lucide-react';
-import { Bookmark, BookmarkFolder } from '../../types';
+import { Bookmark, BookmarkFolder, Theme } from '../../types';
 import { BookmarkCard } from './BookmarkCard';
 import { BookmarkFolderCard } from './BookmarkFolderCard';
 import { useToast } from '../Toast/ToastContext';
+import { useSettingsContext } from '../../utils/settingsContext';
 
 interface BookmarkLibraryProps {
   onClose: () => void;
@@ -18,6 +19,9 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'pdf' | 'page'>('date');
   const toast = useToast();
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
 
   const loadBookmarks = useCallback(async () => {
     if (!window.electronAPI) {
@@ -139,17 +143,33 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center space-y-6">
-          <div className="inline-flex p-6 bg-gradient-to-br from-cyan-900/40 to-purple-900/40 rounded-2xl border-2 border-cyber-cyan-400/30">
+          <div className={`inline-flex p-6 rounded-2xl border-2 ${
+            isPastel
+              ? 'bg-gradient-to-br from-pink-100/60 to-purple-100/60 border-pink-300/40'
+              : 'bg-gradient-to-br from-cyan-900/40 to-purple-900/40 border-cyber-cyan-400/30'
+          }`}>
             <div className="relative">
-              <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
-              <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+              <div className={`absolute inset-0 border-4 rounded-full animate-spin ${
+                isPastel ? 'border-pink-400/40' : 'border-cyber-purple-400/40'
+              }`} style={{ animationDuration: '2s' }}></div>
+              <div className={`absolute inset-2 border-2 rounded-full animate-spin ${
+                isPastel ? 'border-purple-400/50' : 'border-cyber-cyan-400/50'
+              }`} style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
               <div className="relative w-12 h-12">
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
-                <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                <div className={`absolute inset-0 rounded-full border-4 border-transparent animate-spin ${
+                  isPastel
+                    ? 'border-t-pink-400 border-r-purple-400'
+                    : 'border-t-cyber-purple-400 border-r-cyber-cyan-400'
+                }`}></div>
+                <div className={`absolute inset-2 rounded-full border-2 border-transparent animate-spin ${
+                  isPastel
+                    ? 'border-b-purple-400 border-l-pink-400'
+                    : 'border-b-cyber-cyan-400 border-l-cyber-purple-400'
+                }`} style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
               </div>
             </div>
           </div>
-          <p className="text-gray-300 text-lg">Loading bookmarks...</p>
+          <p className={`text-lg ${isPastel ? 'text-gray-700' : 'text-gray-300'}`}>Loading bookmarks...</p>
         </div>
       </div>
     );
@@ -158,41 +178,65 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b border-gray-700/50 flex items-center justify-between flex-shrink-0">
+      <div className={`p-4 border-b flex items-center justify-between flex-shrink-0 ${
+        isPastel
+          ? 'border-pink-200/30 bg-gradient-to-r from-slate-50/95 via-pink-50/20 to-slate-50/95'
+          : 'border-gray-700/50'
+      }`}>
         <div className="flex items-center gap-2">
           {selectedFolderId && (
             <button
               onClick={() => setSelectedFolderId(null)}
-              className="p-1 hover:bg-gray-800 rounded transition-colors"
+              className={`p-1 rounded transition-colors ${
+                isPastel
+                  ? 'hover:bg-pink-100/80'
+                  : 'hover:bg-gray-800'
+              }`}
               aria-label="Back to bookmarks"
             >
-              <ArrowLeft size={18} className="text-gray-400" />
+              <ArrowLeft size={18} className={isPastel ? 'text-gray-600' : 'text-gray-400'} />
             </button>
           )}
-          <h3 className="text-lg font-semibold text-white">
+          <h3 className={`text-lg font-semibold ${
+            isPastel ? 'text-gray-800' : 'text-white'
+          }`}>
             {currentFolder ? currentFolder.name : 'Bookmark Library'}
           </h3>
         </div>
       </div>
 
       {/* Search and Filter */}
-      <div className={`p-4 border-b border-gray-700/50 flex items-center gap-2 flex-shrink-0 ${isDetached ? 'justify-center' : ''}`}>
+      <div className={`p-4 border-b flex items-center gap-2 flex-shrink-0 ${
+        isPastel
+          ? 'border-pink-200/30'
+          : 'border-gray-700/50'
+      } ${isDetached ? 'justify-center' : ''}`}>
         {isDetached ? (
           <>
             <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${
+                isPastel ? 'text-gray-500' : 'text-gray-400'
+              }`} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search bookmarks..."
-                className="w-80 pl-10 pr-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyber-purple-500"
+                className={`w-80 pl-10 pr-4 py-2 rounded-lg focus:outline-none whitespace-nowrap ${
+                  isPastel
+                    ? 'bg-white/80 border border-pink-200/50 text-gray-800 placeholder-gray-500 focus:border-pink-400'
+                    : 'bg-gray-800/50 border border-gray-700 text-white placeholder-gray-400 focus:border-cyber-purple-500'
+                }`}
               />
             </div>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyber-purple-500 whitespace-nowrap"
+              className={`px-3 py-2 rounded-lg text-sm focus:outline-none whitespace-nowrap ${
+                isPastel
+                  ? 'bg-white/80 border border-pink-200/50 text-gray-800 focus:border-pink-400'
+                  : 'bg-gray-800/50 border border-gray-700 text-white focus:border-cyber-purple-500'
+              }`}
             >
               <option value="date">Sort by Date</option>
               <option value="name">Sort by Name</option>
@@ -203,19 +247,29 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
         ) : (
           <>
             <div className="flex-1 relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${
+                isPastel ? 'text-gray-500' : 'text-gray-400'
+              }`} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search bookmarks..."
-                className="w-full pl-10 pr-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyber-purple-500"
+                className={`w-full pl-10 pr-4 py-2 rounded-lg focus:outline-none ${
+                  isPastel
+                    ? 'bg-white/80 border border-pink-200/50 text-gray-800 placeholder-gray-500 focus:border-pink-400'
+                    : 'bg-gray-800/50 border border-gray-700 text-white placeholder-gray-400 focus:border-cyber-purple-500'
+                }`}
               />
             </div>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyber-purple-500 whitespace-nowrap"
+              className={`px-3 py-2 rounded-lg text-sm focus:outline-none whitespace-nowrap ${
+                isPastel
+                  ? 'bg-white/80 border border-pink-200/50 text-gray-800 focus:border-pink-400'
+                  : 'bg-gray-800/50 border border-gray-700 text-white focus:border-cyber-purple-500'
+              }`}
             >
               <option value="date">Sort by Date</option>
               <option value="name">Sort by Name</option>
@@ -230,7 +284,9 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {!selectedFolderId && rootFolders.length > 0 && (
           <div className="mb-6">
-            <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
+            <h4 className={`text-sm font-medium mb-3 flex items-center gap-2 ${
+              isPastel ? 'text-gray-600' : 'text-gray-400'
+            }`}>
               <Folder size={16} />
               Folders
             </h4>
@@ -257,12 +313,12 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
 
         {filteredAndSortedBookmarks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <BookmarkIcon size={48} className="text-gray-600 mb-4" />
-            <p className="text-gray-400 mb-2">
+            <BookmarkIcon size={48} className={isPastel ? 'text-gray-500 mb-4' : 'text-gray-600 mb-4'} />
+            <p className={isPastel ? 'text-gray-600 mb-2' : 'text-gray-400 mb-2'}>
               {searchQuery ? 'No bookmarks found' : 'No bookmarks yet'}
             </p>
             {!searchQuery && (
-              <p className="text-gray-500 text-sm">
+              <p className={isPastel ? 'text-gray-500 text-sm' : 'text-gray-500 text-sm'}>
                 Create bookmarks from PDF pages to get started
               </p>
             )}
@@ -270,7 +326,9 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
         ) : (
           <div>
             {!selectedFolderId && rootFolders.length > 0 && (
-              <h4 className="text-sm font-medium text-gray-400 mb-3">Bookmarks</h4>
+              <h4 className={`text-sm font-medium mb-3 ${
+                isPastel ? 'text-gray-600' : 'text-gray-400'
+              }`}>Bookmarks</h4>
             )}
             <div className={isDetached 
               ? "grid gap-4 justify-items-start"

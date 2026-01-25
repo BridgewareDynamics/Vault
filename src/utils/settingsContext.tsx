@@ -29,8 +29,19 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         throw new Error('Settings API not available - preload script may need to be rebuilt');
       }
       
-      const loaded = await window.electronAPI.getSettings();
-      setSettings(loaded);
+      const loaded = await window.electronAPI.getSettings() as Partial<AppSettings>;
+      // Ensure all required fields are present
+      const completeSettings: AppSettings = {
+        hardwareAcceleration: loaded.hardwareAcceleration ?? true,
+        ramLimitMB: loaded.ramLimitMB ?? 2048,
+        fullscreen: loaded.fullscreen ?? false,
+        extractionQuality: loaded.extractionQuality ?? 'high',
+        thumbnailSize: loaded.thumbnailSize ?? 200,
+        performanceMode: loaded.performanceMode ?? 'auto',
+        showOnboarding: loaded.showOnboarding ?? true,
+        theme: loaded.theme ?? 'brideware-purple',
+      };
+      setSettings(completeSettings);
     } catch (error) {
       console.error('Failed to load settings:', error);
       // Set defaults on error
@@ -60,8 +71,19 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         throw new Error('Settings API not available - preload script may need to be rebuilt');
       }
       
-      const updated = await window.electronAPI.updateSettings(updates);
-      setSettings(updated);
+      const updated = await window.electronAPI.updateSettings(updates) as Partial<AppSettings>;
+      // Ensure all required fields are present
+      const completeSettings: AppSettings = {
+        hardwareAcceleration: updated.hardwareAcceleration ?? true,
+        ramLimitMB: updated.ramLimitMB ?? 2048,
+        fullscreen: updated.fullscreen ?? false,
+        extractionQuality: updated.extractionQuality ?? 'high',
+        thumbnailSize: updated.thumbnailSize ?? 200,
+        performanceMode: updated.performanceMode ?? 'auto',
+        showOnboarding: updated.showOnboarding ?? true,
+        theme: updated.theme ?? 'brideware-purple',
+      };
+      setSettings(completeSettings);
     } catch (error) {
       console.error('Failed to update settings:', error);
       throw error;

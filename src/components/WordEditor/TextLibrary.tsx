@@ -6,6 +6,8 @@ import { NewFileNameDialog } from './NewFileNameDialog';
 import { DeleteTextFileConfirmDialog } from './DeleteTextFileConfirmDialog';
 import { useArchiveContext } from '../../contexts/ArchiveContext';
 import { CaseNotesGallery } from './CaseNotesGallery';
+import { Theme } from '../../types';
+import { useSettingsContext } from '../../utils/settingsContext';
 
 // Hook to detect container width for responsive design
 function useContainerWidth(ref: React.RefObject<HTMLDivElement>) {
@@ -129,6 +131,9 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   
   // Get current case context - returns null if not available
   const { currentCase } = useArchiveContext();
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
   
   // Initialize loading state - will be updated based on whether we should show gallery
   // Start with true, will be set to false if we should show gallery
@@ -432,21 +437,43 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
     // Enhanced gallery for detached mode
     if (isDetached) {
       return (
-        <div className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900">
-          <div className="relative p-8 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
+        <div className={`flex flex-col h-full overflow-hidden ${
+          isPastel
+            ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
+            : 'bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900'
+        }`}>
+          <div className={`relative p-8 border-b backdrop-blur-xl ${
+            isPastel
+              ? 'border-pink-200/30 bg-gradient-to-r from-slate-100/95 via-pink-50/20 to-slate-100/95'
+              : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+          }`}>
             <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
               <div className="flex items-center gap-6">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>
-                  <div className="relative p-5 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl shadow-2xl">
+                  <div className={`absolute inset-0 rounded-2xl blur-xl opacity-50 ${
+                    isPastel
+                      ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                      : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                  }`}></div>
+                  <div className={`relative p-5 rounded-2xl shadow-2xl ${
+                    isPastel
+                      ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                      : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                  }`}>
                     <FolderOpen className="w-10 h-10 text-white" />
                   </div>
                 </div>
                 <div>
-                  <h1 className="text-4xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                  <h1 className={`text-4xl font-bold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                    isPastel
+                      ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400'
+                      : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                  }`}>
                     Case Notes Gallery
                   </h1>
-                  <p className="text-lg text-gray-400 mt-2">
+                  <p className={`text-lg mt-2 ${
+                    isPastel ? 'text-gray-600' : 'text-gray-400'
+                  }`}>
                     Browse and manage notes across all cases
                   </p>
                 </div>
@@ -502,25 +529,47 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
     // Handle loading state for detached mode
     if (loading) {
       return (
-        <div className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900">
-          <div className="relative p-8 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
+        <div className={`flex flex-col h-full overflow-hidden ${
+          isPastel
+            ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
+            : 'bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900'
+        }`}>
+          <div className={`relative p-8 border-b backdrop-blur-xl ${
+            isPastel
+              ? 'border-pink-200/30 bg-gradient-to-r from-slate-100/95 via-pink-50/20 to-slate-100/95'
+              : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+          }`}>
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-6">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>
-                  <div className="relative p-5 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl shadow-2xl">
+                  <div className={`absolute inset-0 rounded-2xl blur-xl opacity-50 ${
+                    isPastel
+                      ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                      : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                  }`}></div>
+                  <div className={`relative p-5 rounded-2xl shadow-2xl ${
+                    isPastel
+                      ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                      : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                  }`}>
                     <FileText className="w-10 h-10 text-white" />
                   </div>
                 </div>
                 <div>
-                  <h1 className="text-4xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                  <h1 className={`text-4xl font-bold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                    isPastel
+                      ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400'
+                      : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                  }`}>
                     {selectedCaseForNotes 
                       ? `Case Notes: ${selectedCaseForNotes.name}` 
                       : currentCase
                         ? `Case Notes: ${currentCase.name}`
                         : 'Text Library'}
                   </h1>
-                  <p className="text-lg text-gray-400 mt-2">
+                  <p className={`text-lg mt-2 ${
+                    isPastel ? 'text-gray-600' : 'text-gray-400'
+                  }`}>
                     {selectedCaseForNotes || currentCase 
                       ? 'Manage and organize your case notes' 
                       : 'Your personal document collection'}
@@ -532,10 +581,18 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
           <div className="flex-1 overflow-y-auto p-8">
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-6">
-                <div className="inline-flex p-6 bg-gradient-to-br from-cyan-900/40 to-purple-900/40 rounded-2xl border-2 border-cyber-cyan-400/30">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-cyan-400"></div>
+                <div className={`inline-flex p-6 rounded-2xl border-2 ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-100/40 to-purple-100/40 border-pink-300/30'
+                    : 'bg-gradient-to-br from-cyan-900/40 to-purple-900/40 border-cyber-cyan-400/30'
+                }`}>
+                  <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${
+                    isPastel ? 'border-pink-400' : 'border-cyber-cyan-400'
+                  }`}></div>
                 </div>
-                <p className="text-gray-300 text-lg">Loading files...</p>
+                <p className={`text-lg ${
+                  isPastel ? 'text-gray-700' : 'text-gray-300'
+                }`}>Loading files...</p>
               </div>
             </div>
           </div>
@@ -543,26 +600,48 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
       );
     }
     return (
-      <div ref={containerRef} className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900">
+      <div ref={containerRef} className={`flex flex-col h-full overflow-hidden ${
+        isPastel
+          ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
+          : 'bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900'
+      }`}>
         {/* Enhanced Header - Detached Mode */}
-        <div className="relative p-8 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
+        <div className={`relative p-8 border-b backdrop-blur-xl ${
+          isPastel
+            ? 'border-pink-200/30 bg-gradient-to-r from-slate-100/95 via-pink-50/20 to-slate-100/95'
+            : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+        }`}>
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-6">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>
-                <div className="relative p-5 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl shadow-2xl">
+                <div className={`absolute inset-0 rounded-2xl blur-xl opacity-50 ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                    : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                }`}></div>
+                <div className={`relative p-5 rounded-2xl shadow-2xl ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                    : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                }`}>
                   <FileText className="w-10 h-10 text-white" />
                 </div>
               </div>
               <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                <h1 className={`text-4xl font-bold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                  isPastel
+                    ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400'
+                    : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                }`}>
                   {selectedCaseForNotes 
                     ? `Case Notes: ${selectedCaseForNotes.name}` 
                     : currentCase
                       ? `Case Notes: ${currentCase.name}`
                       : 'Text Library'}
                 </h1>
-                <p className="text-lg text-gray-400 mt-2">
+                <p className={`text-lg mt-2 ${
+                  isPastel ? 'text-gray-600' : 'text-gray-400'
+                }`}>
                   {selectedCaseForNotes || currentCase 
                     ? 'Manage and organize your case notes' 
                     : 'Your personal document collection'}
@@ -573,7 +652,11 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
               {(currentCase || selectedCaseForNotes) && (
                 <button
                   onClick={() => setShowGallery(true)}
-                  className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 rounded-lg transition-all border border-gray-700/50 hover:border-cyber-purple-400/50 flex items-center gap-2 text-gray-300 hover:text-white text-sm font-medium"
+                  className={`px-4 py-2 rounded-lg transition-all border flex items-center gap-2 text-sm font-medium ${
+                    isPastel
+                      ? 'bg-white/80 hover:bg-pink-50/80 border-pink-200/50 hover:border-pink-400/50 text-gray-700 hover:text-gray-800'
+                      : 'bg-gray-800/80 hover:bg-gray-700/80 border-gray-700/50 hover:border-cyber-purple-400/50 text-gray-300 hover:text-white'
+                  }`}
                   title="View all cases"
                 >
                   <FolderOpen size={16} />
@@ -582,7 +665,11 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
               )}
               <button
                 onClick={handleNewFileClick}
-                className="px-5 py-2.5 bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700 rounded-lg font-medium text-white text-sm transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group flex items-center gap-2"
+                className={`px-5 py-2.5 rounded-lg font-medium text-white text-sm transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group flex items-center gap-2 ${
+                  isPastel
+                    ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500'
+                    : 'bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700'
+                }`}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                 <Plus size={16} className="relative z-10" />
@@ -597,24 +684,46 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
           {loading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-6">
-                <div className="inline-flex p-6 bg-gradient-to-br from-cyan-900/40 to-purple-900/40 rounded-2xl border-2 border-cyber-cyan-400/30">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-cyan-400"></div>
+                <div className={`inline-flex p-6 rounded-2xl border-2 ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-100/40 to-purple-100/40 border-pink-300/30'
+                    : 'bg-gradient-to-br from-cyan-900/40 to-purple-900/40 border-cyber-cyan-400/30'
+                }`}>
+                  <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${
+                    isPastel ? 'border-pink-400' : 'border-cyber-cyan-400'
+                  }`}></div>
                 </div>
-                <p className="text-gray-300 text-lg">Loading files...</p>
+                <p className={`text-lg ${
+                  isPastel ? 'text-gray-700' : 'text-gray-300'
+                }`}>Loading files...</p>
               </div>
             </div>
           ) : files.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="inline-flex p-8 bg-gray-800/50 rounded-2xl border border-cyber-purple-400/20 mb-6">
-                <FileText className="w-20 h-20 text-cyber-purple-400/50" />
+              <div className={`inline-flex p-8 rounded-2xl border mb-6 ${
+                isPastel
+                  ? 'bg-white/50 border-pink-300/20'
+                  : 'bg-gray-800/50 border-cyber-purple-400/20'
+              }`}>
+                <FileText className={`w-20 h-20 ${
+                  isPastel ? 'text-pink-400/50' : 'text-cyber-purple-400/50'
+                }`} />
               </div>
-              <h3 className="text-2xl font-bold text-gray-300 mb-2">No notes yet</h3>
-              <p className="text-gray-400 text-lg mb-6">
+              <h3 className={`text-2xl font-bold mb-2 ${
+                isPastel ? 'text-gray-800' : 'text-gray-300'
+              }`}>No notes yet</h3>
+              <p className={`text-lg mb-6 ${
+                isPastel ? 'text-gray-600' : 'text-gray-400'
+              }`}>
                 {(selectedCaseForNotes || currentCase) ? 'Create your first case note to get started' : 'Create your first document to get started'}
               </p>
               <button
                 onClick={handleNewFileClick}
-                className="px-6 py-3 bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 rounded-lg font-semibold text-white text-base transition-all shadow-lg hover:shadow-cyan-500/50 transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group"
+                className={`px-6 py-3 rounded-lg font-semibold text-white text-base transition-all shadow-lg transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group ${
+                  isPastel
+                    ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 hover:shadow-pink-400/50'
+                    : 'bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 hover:shadow-cyan-500/50'
+                }`}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                 <Plus size={18} className="relative z-10 mr-2" />
@@ -665,17 +774,35 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center space-y-6">
-          <div className="inline-flex p-6 bg-gradient-to-br from-cyan-900/40 to-purple-900/40 rounded-2xl border-2 border-cyber-cyan-400/30">
+          <div className={`inline-flex p-6 rounded-2xl border-2 ${
+            isPastel
+              ? 'bg-gradient-to-br from-pink-100/40 to-purple-100/40 border-pink-300/30'
+              : 'bg-gradient-to-br from-cyan-900/40 to-purple-900/40 border-cyber-cyan-400/30'
+          }`}>
             <div className="relative">
-              <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
-              <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+              <div className={`absolute inset-0 border-4 rounded-full animate-spin ${
+                isPastel ? 'border-pink-400/40' : 'border-cyber-purple-400/40'
+              }`} style={{ animationDuration: '2s' }}></div>
+              <div className={`absolute inset-2 border-2 rounded-full animate-spin ${
+                isPastel ? 'border-pink-400/50' : 'border-cyber-cyan-400/50'
+              }`} style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
               <div className="relative w-12 h-12">
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
-                <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                <div className={`absolute inset-0 rounded-full border-4 border-transparent animate-spin ${
+                  isPastel
+                    ? 'border-t-pink-400 border-r-purple-400'
+                    : 'border-t-cyber-purple-400 border-r-cyber-cyan-400'
+                }`}></div>
+                <div className={`absolute inset-2 rounded-full border-2 border-transparent animate-spin ${
+                  isPastel
+                    ? 'border-b-purple-400 border-l-pink-400'
+                    : 'border-b-cyber-cyan-400 border-l-cyber-purple-400'
+                }`} style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
               </div>
             </div>
           </div>
-          <p className="text-gray-300 text-lg">Loading files...</p>
+          <p className={`text-lg ${
+            isPastel ? 'text-gray-700' : 'text-gray-300'
+          }`}>Loading files...</p>
         </div>
       </div>
     );
@@ -685,7 +812,11 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   return (
     <div ref={containerRef} className="flex flex-col h-full overflow-hidden">
       {/* Header - Adaptive based on width */}
-      <div className={`${useListView ? 'px-2.5 py-2' : 'px-6 py-5'} border-b border-gray-700/50 flex items-center justify-between flex-shrink-0 bg-gray-900/30 transition-all duration-200 ease-out`}>
+      <div className={`${useListView ? 'px-2.5 py-2' : 'px-6 py-5'} border-b flex items-center justify-between flex-shrink-0 transition-all duration-200 ease-out ${
+        isPastel
+          ? 'border-pink-200/50 bg-white/30'
+          : 'border-gray-700/50 bg-gray-900/30'
+      }`}>
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {selectedCaseForNotes ? (
             <button
@@ -693,23 +824,29 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
                 setSelectedCaseForNotes(null);
                 setShowGallery(true);
               }}
-              className={`${useListView ? 'p-1' : 'p-1.5'} hover:bg-gray-800/50 rounded-lg transition-all duration-200 flex-shrink-0`}
+              className={`${useListView ? 'p-1' : 'p-1.5'} rounded-lg transition-all duration-200 flex-shrink-0 ${
+                isPastel ? 'hover:bg-pink-100/50' : 'hover:bg-gray-800/50'
+              }`}
               aria-label="Back to cases gallery"
               title="Back to cases"
             >
-              <ArrowLeft size={useListView ? 14 : 18} className="text-gray-400" />
+              <ArrowLeft size={useListView ? 14 : 18} className={isPastel ? 'text-gray-600' : 'text-gray-400'} />
             </button>
           ) : (
             <button
               onClick={onClose}
-              className={`${useListView ? 'p-1' : 'p-1.5'} hover:bg-gray-800/50 rounded-lg transition-all duration-200 flex-shrink-0`}
+              className={`${useListView ? 'p-1' : 'p-1.5'} rounded-lg transition-all duration-200 flex-shrink-0 ${
+                isPastel ? 'hover:bg-pink-100/50' : 'hover:bg-gray-800/50'
+              }`}
               aria-label="Back to editor"
             >
-              <ArrowLeft size={useListView ? 14 : 18} className="text-gray-400" />
+              <ArrowLeft size={useListView ? 14 : 18} className={isPastel ? 'text-gray-600' : 'text-gray-400'} />
             </button>
           )}
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <h3 className={`${useListView ? 'text-xs' : 'text-xl'} font-bold text-white truncate transition-all duration-200 ease-out`}>
+            <h3 className={`${useListView ? 'text-xs' : 'text-xl'} font-bold truncate transition-all duration-200 ease-out ${
+              isPastel ? 'text-gray-800' : 'text-white'
+            }`}>
               {selectedCaseForNotes 
                 ? `Case Notes: ${selectedCaseForNotes.name}` 
                 : currentCase
@@ -719,7 +856,11 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
             {(currentCase || selectedCaseForNotes) && (
               <button
                 onClick={() => setShowGallery(true)}
-                className={`${useListView ? 'px-2 py-1' : 'px-3 py-1.5'} ${useListView ? 'text-xs' : 'text-xs'} bg-gray-700/40 hover:bg-gray-700/60 text-gray-300 hover:text-white rounded-md transition-all duration-200 ease-out flex items-center gap-1.5 border border-gray-600/30 flex-shrink-0`}
+                className={`${useListView ? 'px-2 py-1' : 'px-3 py-1.5'} ${useListView ? 'text-xs' : 'text-xs'} rounded-md transition-all duration-200 ease-out flex items-center gap-1.5 border flex-shrink-0 ${
+                  isPastel
+                    ? 'bg-pink-100/40 hover:bg-pink-200/60 text-gray-700 hover:text-gray-800 border-pink-200/30'
+                    : 'bg-gray-700/40 hover:bg-gray-700/60 text-gray-300 hover:text-white border-gray-600/30'
+                }`}
                 title="View all cases"
               >
                 <FolderOpen size={useListView ? 12 : 14} />
@@ -730,7 +871,11 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
         </div>
         <button
           onClick={handleNewFileClick}
-          className={`${useListView ? 'px-2 py-1' : 'px-3 py-2'} bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white rounded-md transition-all duration-200 ease-out flex items-center gap-1 ${useListView ? 'text-xs' : 'text-sm'} font-medium ${useListView ? 'shadow-sm' : 'shadow-md'} shadow-cyber-purple-500/20 hover:shadow-lg hover:shadow-cyber-purple-500/30 flex-shrink-0`}
+          className={`${useListView ? 'px-2 py-1' : 'px-3 py-2'} text-white rounded-md transition-all duration-200 ease-out flex items-center gap-1 ${useListView ? 'text-xs' : 'text-sm'} font-medium ${useListView ? 'shadow-sm' : 'shadow-md'} hover:shadow-lg flex-shrink-0 ${
+            isPastel
+              ? 'bg-pink-400 hover:bg-pink-500 shadow-pink-400/20 hover:shadow-pink-400/30'
+              : 'bg-cyber-purple-500 hover:bg-cyber-purple-600 shadow-cyber-purple-500/20 hover:shadow-cyber-purple-500/30'
+          }`}
         >
           <Plus size={useListView ? 12 : 16} />
           {!useListView && <span>New Note</span>}
@@ -741,13 +886,21 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
       <div className={`flex-1 overflow-y-auto ${useListView ? 'px-2.5 py-2' : 'px-6 py-6'} transition-all duration-200 ease-out`}>
         {files.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <FileText size={useListView ? 40 : 64} className="text-gray-600 mb-6 transition-all duration-200 ease-out" />
-            <p className={`text-gray-300 ${useListView ? 'text-sm' : 'text-lg'} mb-3 font-medium transition-all duration-200 ease-out`}>
+            <FileText size={useListView ? 40 : 64} className={`mb-6 transition-all duration-200 ease-out ${
+              isPastel ? 'text-gray-400' : 'text-gray-600'
+            }`} />
+            <p className={`${useListView ? 'text-sm' : 'text-lg'} mb-3 font-medium transition-all duration-200 ease-out ${
+              isPastel ? 'text-gray-700' : 'text-gray-300'
+            }`}>
               {(selectedCaseForNotes || currentCase) ? 'No notes yet for this case' : 'No text files yet'}
             </p>
             <button
               onClick={handleNewFileClick}
-              className={`${useListView ? 'px-3 py-1.5 text-xs' : 'px-6 py-3 text-sm'} bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white rounded-lg transition-all duration-200 font-medium shadow-md shadow-cyber-purple-500/20 hover:shadow-lg`}
+              className={`${useListView ? 'px-3 py-1.5 text-xs' : 'px-6 py-3 text-sm'} text-white rounded-lg transition-all duration-200 font-medium shadow-md hover:shadow-lg ${
+                isPastel
+                  ? 'bg-pink-400 hover:bg-pink-500 shadow-pink-400/20'
+                  : 'bg-cyber-purple-500 hover:bg-cyber-purple-600 shadow-cyber-purple-500/20'
+              }`}
             >
               {(selectedCaseForNotes || currentCase) ? 'Create your first note' : 'Create your first document'}
             </button>

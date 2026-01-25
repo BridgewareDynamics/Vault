@@ -248,12 +248,6 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
   // Theme-aware styling
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
   const isPastel = theme === 'pastel';
-  
-  // Pastel theme colors
-  const primaryColor = isPastel ? '#d8b4fe' : '#c084fc';
-  const secondaryColor = isPastel ? '#a5b4fc' : '#22d3ee';
-  const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
-  const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
 
   return (
     <>
@@ -848,7 +842,6 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
                         { value: 'pastel' as Theme, name: 'Pastel', colors: { primary: '#d8b4fe', secondary: '#a5b4fc' } },
                       ].map((themeOption) => {
                         const isSelected = settings.theme === themeOption.value;
-                        const isPastelOption = themeOption.value === 'pastel';
                         return (
                           <motion.button
                             key={themeOption.value}

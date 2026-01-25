@@ -10,6 +10,8 @@ import { useArchiveContext } from '../../contexts/ArchiveContext';
 import { debugLog } from '../../utils/debugLogger';
 import { WordEditorErrorBoundary } from './WordEditorErrorBoundary';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
+import { Theme } from '../../types';
+import { useSettingsContext } from '../../utils/settingsContext';
 
 const MIN_WIDTH = 400;
 const MAX_WIDTH_PERCENT = 80;
@@ -34,6 +36,9 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   const toast = useToast();
   const { setIsOpen: setContextOpen, panelWidth, setPanelWidth } = useWordEditor();
   const { currentCase } = useArchiveContext();
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
   const resizeStartXRef = useRef<number>(0);
   const resizeStartWidthRef = useRef<number>(500);
   const hasAutoOpenedLibraryRef = useRef(false); // Track if we've auto-opened library for this panel session
@@ -345,8 +350,16 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
             })}
             className={`${
               isInline 
-                ? 'h-full bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 backdrop-blur-xl border-l border-cyber-purple-400/30 flex flex-col'
-                : 'fixed right-0 top-0 bottom-0 bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 backdrop-blur-xl border-l border-cyber-purple-400/30 shadow-2xl z-50 flex flex-col'
+                ? `h-full backdrop-blur-xl border-l flex flex-col ${
+                    isPastel
+                      ? 'bg-gradient-to-br from-slate-50 via-pink-50/20 to-slate-50 border-pink-200/30'
+                      : 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 border-cyber-purple-400/30'
+                  }`
+                : `fixed right-0 top-0 bottom-0 backdrop-blur-xl border-l shadow-2xl z-50 flex flex-col ${
+                    isPastel
+                      ? 'bg-gradient-to-br from-slate-50 via-pink-50/20 to-slate-50 border-pink-200/30'
+                      : 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 border-cyber-purple-400/30'
+                  }`
             }`}
             style={isInline ? undefined : {
               width: panelWidth,
@@ -370,27 +383,49 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
                 <div
                   className={`absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-300 ${
                     isResizing
-                      ? 'bg-gradient-to-b from-purple-600 via-purple-500 to-cyan-600 shadow-lg shadow-purple-500/50'
-                      : 'bg-cyber-purple-500/0 group-hover:bg-gradient-to-b group-hover:from-purple-600/60 group-hover:via-purple-500/60 group-hover:to-cyan-600/60'
+                      ? isPastel
+                        ? 'bg-gradient-to-b from-pink-400 via-purple-400 to-pink-400 shadow-lg shadow-pink-400/50'
+                        : 'bg-gradient-to-b from-purple-600 via-purple-500 to-cyan-600 shadow-lg shadow-purple-500/50'
+                      : isPastel
+                        ? 'bg-pink-400/0 group-hover:bg-gradient-to-b group-hover:from-pink-400/60 group-hover:via-purple-400/60 group-hover:to-pink-400/60'
+                        : 'bg-cyber-purple-500/0 group-hover:bg-gradient-to-b group-hover:from-purple-600/60 group-hover:via-purple-500/60 group-hover:to-cyan-600/60'
                   }`}
                 />
               </div>
             )}
             {/* Enhanced Header */}
-            <div className="relative p-4 sm:p-5 border-b border-cyber-purple-400/20 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
+            <div className={`relative p-4 sm:p-5 border-b backdrop-blur-xl ${
+              isPastel
+                ? 'border-pink-200/20 bg-gradient-to-r from-slate-100/95 via-pink-50/20 to-slate-100/95'
+                : 'border-cyber-purple-400/20 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+            }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 sm:gap-4">
                   <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl sm:rounded-2xl blur-xl opacity-50"></div>
-                    <div className="relative p-2.5 sm:p-3 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl sm:rounded-2xl shadow-2xl">
+                    <div className={`absolute inset-0 rounded-xl sm:rounded-2xl blur-xl opacity-50 ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                        : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                    }`}></div>
+                    <div className={`relative p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shadow-2xl ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                        : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                    }`}>
                       <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </div>
                   </div>
                   <div>
-                    <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                    <h2 className={`text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                      isPastel
+                        ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400'
+                        : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                    }`}>
                       Word Editor
                     </h2>
-                    <p className="text-xs sm:text-sm text-gray-400 mt-0.5 hidden sm:block">Create and edit documents</p>
+                    <p className={`text-xs sm:text-sm mt-0.5 hidden sm:block ${
+                      isPastel ? 'text-gray-600' : 'text-gray-400'
+                    }`}>Create and edit documents</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -399,14 +434,28 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
                     onClick={handleDetach}
                     whileHover={{ scale: 1.1, y: -1 }}
                     whileTap={{ scale: 0.9 }}
-                    className="relative overflow-hidden group p-2 hover:bg-gray-800/80 rounded-xl transition-all"
+                    className={`relative overflow-hidden group p-2 rounded-xl transition-all ${
+                      isPastel ? 'hover:bg-pink-100/80' : 'hover:bg-gray-800/80'
+                    }`}
                     aria-label="Detach editor to separate window"
                     title="Open in separate window"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10 transition-all duration-500"></div>
+                    <div className={`absolute inset-0 transition-all duration-500 ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-400/0 via-pink-400/0 to-purple-400/0 group-hover:from-pink-400/10 group-hover:via-pink-400/5 group-hover:to-purple-400/10'
+                        : 'bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10'
+                    }`}></div>
                     <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      <Maximize2 size={18} className="relative z-10 text-gray-400 group-hover:text-cyber-purple-400 transition-colors" />
+                      <div className={`absolute inset-0 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity ${
+                        isPastel
+                          ? 'bg-gradient-to-br from-pink-300/20 to-purple-300/20'
+                          : 'bg-gradient-to-br from-purple-600/20 to-cyan-600/20'
+                      }`}></div>
+                      <Maximize2 size={18} className={`relative z-10 transition-colors ${
+                        isPastel
+                          ? 'text-gray-500 group-hover:text-pink-500'
+                          : 'text-gray-400 group-hover:text-cyber-purple-400'
+                      }`} />
                     </div>
                   </motion.button>
                   {/* Enhanced Bookmark Library button */}
@@ -417,22 +466,40 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
                     }}
                     whileHover={{ scale: 1.1, y: -1 }}
                     whileTap={{ scale: 0.9 }}
-                    className={`relative overflow-hidden group p-2 rounded-xl transition-all ${
-                      showBookmarkLibrary 
-                        ? 'bg-cyber-purple-500/20 border border-cyber-purple-400/40' 
-                        : 'hover:bg-gray-800/80'
+                    className={`relative overflow-hidden group p-2 rounded-xl transition-all border ${
+                      showBookmarkLibrary
+                        ? isPastel
+                          ? 'bg-pink-300/20 border-pink-400/40'
+                          : 'bg-cyber-purple-500/20 border-cyber-purple-400/40'
+                        : isPastel
+                          ? 'hover:bg-pink-100/80 border-transparent'
+                          : 'hover:bg-gray-800/80 border-transparent'
                     }`}
                     aria-label="Open bookmark library"
                     title="Bookmark Library"
                   >
                     <div className={`absolute inset-0 bg-gradient-to-br transition-all duration-500 ${
                       showBookmarkLibrary
-                        ? 'from-purple-600/10 via-purple-600/5 to-cyan-600/10'
-                        : 'from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5'
+                        ? isPastel
+                          ? 'from-pink-400/10 via-pink-400/5 to-purple-400/10'
+                          : 'from-purple-600/10 via-purple-600/5 to-cyan-600/10'
+                        : isPastel
+                          ? 'from-pink-400/0 via-pink-400/0 to-purple-400/0 group-hover:from-pink-400/5 group-hover:via-pink-400/3 group-hover:to-purple-400/5'
+                          : 'from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5'
                     }`}></div>
                     <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      <Bookmark size={18} className={`relative z-10 transition-colors ${showBookmarkLibrary ? 'text-cyber-purple-400' : 'text-gray-400 group-hover:text-cyber-purple-400'}`} />
+                      <div className={`absolute inset-0 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity ${
+                        isPastel
+                          ? 'bg-gradient-to-br from-pink-300/20 to-purple-300/20'
+                          : 'bg-gradient-to-br from-purple-600/20 to-cyan-600/20'
+                      }`}></div>
+                      <Bookmark size={18} className={`relative z-10 transition-colors ${
+                        showBookmarkLibrary
+                          ? isPastel ? 'text-pink-500' : 'text-cyber-purple-400'
+                          : isPastel
+                            ? 'text-gray-500 group-hover:text-pink-500'
+                            : 'text-gray-400 group-hover:text-cyber-purple-400'
+                      }`} />
                     </div>
                   </motion.button>
                   {/* Enhanced Library button */}
@@ -444,22 +511,40 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
                     }}
                     whileHover={{ scale: 1.1, y: -1 }}
                     whileTap={{ scale: 0.9 }}
-                    className={`relative overflow-hidden group p-2 rounded-xl transition-all ${
-                      showLibrary 
-                        ? 'bg-cyber-purple-500/20 border border-cyber-purple-400/40' 
-                        : 'hover:bg-gray-800/80'
+                    className={`relative overflow-hidden group p-2 rounded-xl transition-all border ${
+                      showLibrary
+                        ? isPastel
+                          ? 'bg-pink-300/20 border-pink-400/40'
+                          : 'bg-cyber-purple-500/20 border-cyber-purple-400/40'
+                        : isPastel
+                          ? 'hover:bg-pink-100/80 border-transparent'
+                          : 'hover:bg-gray-800/80 border-transparent'
                     }`}
                     aria-label="Open text library"
                     title="Text Library"
                   >
                     <div className={`absolute inset-0 bg-gradient-to-br transition-all duration-500 ${
                       showLibrary
-                        ? 'from-purple-600/10 via-purple-600/5 to-cyan-600/10'
-                        : 'from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5'
+                        ? isPastel
+                          ? 'from-pink-400/10 via-pink-400/5 to-purple-400/10'
+                          : 'from-purple-600/10 via-purple-600/5 to-cyan-600/10'
+                        : isPastel
+                          ? 'from-pink-400/0 via-pink-400/0 to-purple-400/0 group-hover:from-pink-400/5 group-hover:via-pink-400/3 group-hover:to-purple-400/5'
+                          : 'from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5'
                     }`}></div>
                     <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      <Library size={18} className={`relative z-10 transition-colors ${showLibrary ? 'text-cyber-purple-400' : 'text-gray-400 group-hover:text-cyber-purple-400'}`} />
+                      <div className={`absolute inset-0 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity ${
+                        isPastel
+                          ? 'bg-gradient-to-br from-pink-300/20 to-purple-300/20'
+                          : 'bg-gradient-to-br from-purple-600/20 to-cyan-600/20'
+                      }`}></div>
+                      <Library size={18} className={`relative z-10 transition-colors ${
+                        showLibrary
+                          ? isPastel ? 'text-pink-500' : 'text-cyber-purple-400'
+                          : isPastel
+                            ? 'text-gray-500 group-hover:text-pink-500'
+                            : 'text-gray-400 group-hover:text-cyber-purple-400'
+                      }`} />
                     </div>
                   </motion.button>
                   {/* Enhanced Close button */}
@@ -474,7 +559,11 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
                     }}
                     whileHover={{ scale: 1.1, rotate: 90 }}
                     whileTap={{ scale: 0.9 }}
-                    className="p-2 hover:bg-gray-800/80 rounded-xl transition-colors text-gray-400 hover:text-white"
+                    className={`p-2 rounded-xl transition-colors ${
+                      isPastel
+                        ? 'hover:bg-pink-100/80 text-gray-600 hover:text-gray-800'
+                        : 'hover:bg-gray-800/80 text-gray-400 hover:text-white'
+                    }`}
                     aria-label="Close editor"
                   >
                     <X size={20} />

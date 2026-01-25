@@ -16,6 +16,9 @@ interface ExtractionFolderProps {
 
 export function ExtractionFolder({ folder, isExtracting = false, onClick, onDelete, onRename, onEditBackground }: ExtractionFolderProps) {
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | undefined>(undefined);
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = theme === 'pastel';
 
   // Load background image as data URL
   useEffect(() => {

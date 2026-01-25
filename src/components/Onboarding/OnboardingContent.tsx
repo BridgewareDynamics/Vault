@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { FileText, FolderOpen, Shield } from 'lucide-react';
 import { Theme } from '../../types';
 import { HolographicEffect } from '../Shared/HolographicEffect';

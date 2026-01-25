@@ -54,18 +54,8 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
   const bgGradient = isPastel 
     ? 'from-slate-50 via-pink-50/30 to-slate-50' 
     : 'from-gray-950 via-purple-950/50 to-gray-950';
-  const primaryColor = isPastel ? '#d8b4fe' : '#c084fc';
-  const secondaryColor = isPastel ? '#a5b4fc' : '#22d3ee';
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
-  const textColor = isPastel ? 'text-gray-800' : 'text-gray-300';
-  const textColorLight = isPastel ? 'text-gray-600' : 'text-gray-400';
-  const cardBg = isPastel 
-    ? 'from-slate-100/90 via-pink-50/90 to-slate-100/90' 
-    : 'from-gray-900/90 via-gray-800/90 to-gray-900/90';
-  const headerBg = isPastel
-    ? 'from-slate-100/80 via-pink-50/30 to-slate-100/80'
-    : 'from-gray-900/80 via-purple-900/30 to-gray-900/80';
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {

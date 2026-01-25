@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { memo } from 'react';
-import { FileText, FolderOpen, Shield, Zap, Sparkles, Lock, Search, Layers, Download, Upload, Settings } from 'lucide-react';
+import { FileText, FolderOpen, Shield, Search, Layers, Settings } from 'lucide-react';
 import { Theme } from '../../types';
 import { HolographicEffect } from '../Shared/HolographicEffect';
 import { ScanLine } from '../Shared/ScanLine';
@@ -13,7 +13,6 @@ export const FeaturesPage = memo(function FeaturesPage({ theme = 'brideware-purp
   const isPastel = theme === 'pastel';
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
-  const textColor = isPastel ? 'text-gray-800' : 'text-gray-300';
   const cardBg = isPastel 
     ? 'from-slate-100/90 via-pink-50/90 to-slate-100/90' 
     : 'from-gray-900/90 via-gray-800/90 to-gray-900/90';
@@ -248,8 +247,6 @@ export const FeaturesPage = memo(function FeaturesPage({ theme = 'brideware-purp
                 style={{ 
                   willChange: 'transform, opacity',
                   transform: 'translate3d(0, 0, 0)',
-                }}
-                style={{
                   boxShadow: `0 0 20px ${primaryRgba}0.2), inset 0 0 20px ${primaryRgba}0.05)`,
                 }}
               >
