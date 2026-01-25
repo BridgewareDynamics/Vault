@@ -114,6 +114,7 @@ export interface PDFViewport {
 // Settings Types
 export type ExtractionQuality = 'high' | 'medium' | 'low';
 export type PerformanceMode = 'auto' | 'high' | 'balanced' | 'low';
+export type Theme = 'brideware-purple' | 'pastel';
 
 export interface AppSettings {
   hardwareAcceleration: boolean;
@@ -122,6 +123,8 @@ export interface AppSettings {
   extractionQuality: ExtractionQuality;
   thumbnailSize: number;
   performanceMode: PerformanceMode;
+  showOnboarding: boolean;
+  theme: Theme;
 }
 
 // Bookmark Types

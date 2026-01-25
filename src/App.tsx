@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { ToastProvider, useToast } from './components/Toast/ToastContext';
 import { ToastContainer } from './components/Toast/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -25,6 +25,8 @@ import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
 import { DetachedSecurityChecker } from './components/DetachedSecurityChecker';
 import { DetachedPDFExtraction } from './components/DetachedPDFExtraction';
 import { ResizableDivider } from './components/ResizableDivider';
+import { OnboardingModal } from './components/Onboarding/OnboardingModal';
+import { Theme } from './types';
 import './App.css';
 
 function AppContent() {
@@ -37,6 +39,8 @@ function AppContent() {
   const [showArchive, setShowArchive] = useState(false);
   const [showSecurityChecker, setShowSecurityChecker] = useState(false);
   const [showPDFExtraction, setShowPDFExtraction] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(true); // Default to true for new users
+  const onboardingCompletedRef = useRef(false); // Track if onboarding was explicitly completed
 
   // Listen for reattach data from detached PDF audit window
   useEffect(() => {
@@ -87,9 +91,54 @@ function AppContent() {
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
-  const { settings } = useSettingsContext();
+  const { settings, updateSettings } = useSettingsContext();
   const { isOpen: isWordEditorOpen, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
   const [shouldUseOverlayMode, setShouldUseOverlayMode] = useState(false);
+
+  // Check if onboarding should be shown
+  useEffect(() => {
+    // Don't override if onboarding was just completed in this session
+    if (onboardingCompletedRef.current) {
+      console.log('[Onboarding] Onboarding was completed in this session, not overriding');
+      return;
+    }
+
+    if (settings) {
+      // If showOnboarding is explicitly false, don't show
+      // If undefined/null (new user), default to true
+      // For new users without settings, showOnboarding will be true by default
+      const shouldShow = settings.showOnboarding !== false;
+      console.log('[Onboarding] Settings loaded:', { 
+        showOnboarding: settings.showOnboarding, 
+        shouldShow,
+        type: typeof settings.showOnboarding,
+        settingsKeys: Object.keys(settings),
+        hasShowOnboarding: 'showOnboarding' in settings,
+      });
+      console.log('[Onboarding] Setting showOnboarding to:', shouldShow, 'from settings:', settings.showOnboarding);
+      setShowOnboarding(shouldShow);
+    } else {
+      // If settings haven't loaded yet, keep showOnboarding as true (default for new users)
+      console.log('[Onboarding] Settings not loaded yet, defaulting to true');
+      setShowOnboarding(true);
+    }
+  }, [settings]);
+
+  // Apply theme to document body
+  useEffect(() => {
+    if (settings?.theme) {
+      const theme = settings.theme;
+      console.log('[App] Applying theme to document:', theme);
+      document.documentElement.setAttribute('data-theme', theme);
+      document.body.setAttribute('data-theme', theme);
+      
+      // Also apply as class for CSS targeting
+      document.documentElement.classList.remove('theme-pastel', 'theme-brideware-purple');
+      document.documentElement.classList.add(`theme-${theme}`);
+      document.body.classList.remove('theme-pastel', 'theme-brideware-purple');
+      document.body.classList.add(`theme-${theme}`);
+    }
+  }, [settings?.theme]);
 
   // Check if we're in detached editor mode
   // In dev mode, it's a query param: ?editor=detached
@@ -491,8 +540,39 @@ function AppContent() {
 
   // Show welcome screen if no PDF selected and not extracting
   if (!selectedPdfPath && !isExtracting && extractedPages.length === 0) {
+    console.log('[Onboarding] Rendering welcome screen, showOnboarding:', showOnboarding, typeof showOnboarding);
     return (
       <>
+        {/* Show onboarding modal if needed - ALWAYS render it first */}
+        {showOnboarding && (
+          <OnboardingModal
+            onComplete={async (theme: Theme, dontShowAgain: boolean) => {
+              console.log('[Onboarding] Completing onboarding - theme:', theme, 'dontShowAgain:', dontShowAgain);
+              try {
+                // Mark onboarding as completed to prevent useEffect from overriding
+                onboardingCompletedRef.current = true;
+                setShowOnboarding(false);
+                
+                console.log('[Onboarding] Updating settings with theme:', theme);
+                await updateSettings({
+                  showOnboarding: !dontShowAgain,
+                  theme,
+                });
+                console.log('[Onboarding] Settings updated successfully, theme set to:', theme);
+                
+                // Force a small delay to ensure settings context has updated
+                // The useEffect above will pick up the theme change from settings context
+                setTimeout(() => {
+                  console.log('[Onboarding] Settings should now be updated in context');
+                }, 100);
+              } catch (error) {
+                console.error('[Onboarding] Failed to update settings:', error);
+                // Reset the ref if update failed so onboarding can be shown again
+                onboardingCompletedRef.current = false;
+              }
+            }}
+          />
+        )}
         <div 
           className="transition-all duration-300"
         >

@@ -2,6 +2,8 @@ import { motion } from 'framer-motion';
 import { useMemo, useState, useEffect } from 'react';
 import { ActionToolbar } from './ActionToolbar';
 import { FileText, Shield, FolderOpen, Zap, Sparkles } from 'lucide-react';
+import { useSettingsContext } from '../utils/settingsContext';
+import { Theme } from '../types';
 
 // Get base URL for assets (works in both dev and production)
 const getAssetPath = (path: string) => {
@@ -40,9 +42,30 @@ const generateLightRays = (count: number) => {
 };
 
 export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityChecker, onOpenPDFExtraction }: WelcomeScreenProps) {
+  // Get theme from settings
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'pastel';
   const particles = useMemo(() => generateParticles(50), []);
   const lightRays = useMemo(() => generateLightRays(8), []);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  // Theme colors
+  const isPastel = theme === 'pastel';
+  const bgGradient = isPastel 
+    ? 'from-slate-50 via-pink-50/30 to-slate-50' 
+    : 'from-gray-950 via-purple-950/50 to-gray-950';
+  const primaryColor = isPastel ? '#d8b4fe' : '#c084fc';
+  const secondaryColor = isPastel ? '#a5b4fc' : '#22d3ee';
+  const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
+  const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
+  const textColor = isPastel ? 'text-gray-800' : 'text-gray-300';
+  const textColorLight = isPastel ? 'text-gray-600' : 'text-gray-400';
+  const cardBg = isPastel 
+    ? 'from-slate-100/90 via-pink-50/90 to-slate-100/90' 
+    : 'from-gray-900/90 via-gray-800/90 to-gray-900/90';
+  const headerBg = isPastel
+    ? 'from-slate-100/80 via-pink-50/30 to-slate-100/80'
+    : 'from-gray-900/80 via-purple-900/30 to-gray-900/80';
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -53,7 +76,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
   }, []);
 
   return (
-    <div className="relative flex flex-col min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 overflow-hidden">
+    <div className={`relative flex flex-col min-h-screen bg-gradient-to-br ${bgGradient} overflow-hidden`}>
       {/* Animated Background Grid */}
       <motion.div 
         className="absolute inset-0"
@@ -69,8 +92,8 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
           className="absolute inset-0"
           style={{
             backgroundImage: `
-              linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+              linear-gradient(${primaryRgba}0.1) 1px, transparent 1px),
+              linear-gradient(90deg, ${primaryRgba}0.1) 1px, transparent 1px)
             `,
             backgroundSize: '50px 50px',
             maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
@@ -83,13 +106,13 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
         {particles.map((particle) => (
           <motion.div
             key={particle.id}
-            className="absolute rounded-full bg-cyber-cyan-400"
+            className={`absolute rounded-full ${isPastel ? 'bg-purple-300' : 'bg-cyber-cyan-400'}`}
             style={{
               width: `${particle.size}px`,
               height: `${particle.size}px`,
               left: `${particle.left}%`,
               top: `${particle.top}%`,
-              boxShadow: `0 0 ${particle.size * 4}px rgba(34, 211, 238, 0.6)`,
+              boxShadow: `0 0 ${particle.size * 4}px ${secondaryRgba}0.6)`,
             }}
             initial={{ opacity: 0 }}
             animate={{
@@ -137,8 +160,8 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
             style={{
               transform: `rotate(${ray.angle}deg)`,
               transformOrigin: 'top center',
-              background: 'linear-gradient(to bottom, rgba(139, 92, 246, 0.3), transparent)',
-              boxShadow: '0 0 20px rgba(139, 92, 246, 0.5)',
+              background: `linear-gradient(to bottom, ${primaryRgba}0.3), transparent)`,
+              boxShadow: `0 0 20px ${primaryRgba}0.5)`,
             }}
             initial={{ opacity: 0, scaleY: 0.3 }}
             animate={{
@@ -169,7 +192,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
       <motion.div
         className="absolute w-96 h-96 rounded-full pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
+          background: `radial-gradient(circle, ${primaryRgba}0.15) 0%, transparent 70%)`,
           left: mousePosition.x - 192,
           top: mousePosition.y - 192,
           filter: 'blur(60px)',
@@ -198,13 +221,13 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
       <motion.div
         className="absolute pointer-events-none z-0"
         style={{
-          background: 'linear-gradient(to right, transparent 0%, rgba(139, 92, 246, 0.6) 20%, rgba(139, 92, 246, 0.8) 50%, rgba(139, 92, 246, 0.6) 80%, transparent 100%)',
+          background: `linear-gradient(to right, transparent 0%, ${primaryRgba}0.6) 20%, ${primaryRgba}0.8) 50%, ${primaryRgba}0.6) 80%, transparent 100%)`,
           height: '2px',
           top: 'calc(50% + 180px)', // Positioned to go through center of button cards
           left: '50%',
           width: 'calc(min(100% - 4rem, 80rem) - 2rem)', // Match button container width minus some padding to align with button edges
           maxWidth: 'calc(80rem - 2rem)',
-          boxShadow: '0 0 10px rgba(139, 92, 246, 0.9), 0 0 20px rgba(139, 92, 246, 0.5), 0 0 30px rgba(139, 92, 246, 0.3)',
+          boxShadow: `0 0 10px ${primaryRgba}0.9), 0 0 20px ${primaryRgba}0.5), 0 0 30px ${primaryRgba}0.3)`,
         }}
         initial={{ 
           opacity: 0, 
@@ -230,7 +253,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
 
       {/* Enhanced Header */}
       <motion.div 
-        className="relative z-10 w-full px-8 pt-8 pb-6 border-b border-cyber-purple-400/20 bg-gradient-to-r from-gray-900/80 via-purple-900/30 to-gray-900/80 backdrop-blur-2xl"
+        className={`relative z-10 w-full px-8 pt-8 pb-6 border-b ${isPastel ? 'border-purple-300/20' : 'border-cyber-purple-400/20'} bg-gradient-to-r ${headerBg} backdrop-blur-2xl`}
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ 
@@ -353,7 +376,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
             <div className="relative w-64 h-64 flex items-center justify-center">
               {/* Outer Glow Rings */}
               <motion.div
-                className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full"
+                className={`absolute inset-0 border-4 ${isPastel ? 'border-purple-300/40' : 'border-cyber-purple-400/40'} rounded-full`}
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ 
                   opacity: 1, 
@@ -366,11 +389,11 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                 rotate: { duration: 30, repeat: Infinity, ease: "linear", delay: 1.4 },
               }}
                 style={{
-                  boxShadow: '0 0 30px rgba(139, 92, 246, 0.6), inset 0 0 30px rgba(139, 92, 246, 0.2)',
+                  boxShadow: `0 0 30px ${primaryRgba}0.6), inset 0 0 30px ${primaryRgba}0.2)`,
                 }}
               />
               <motion.div
-                className="absolute inset-8 border-2 border-cyber-cyan-400/50 rounded-full"
+                className={`absolute inset-8 border-2 ${isPastel ? 'border-purple-400/50' : 'border-cyber-cyan-400/50'} rounded-full`}
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ 
                   opacity: 1, 
@@ -383,7 +406,7 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                 rotate: { duration: 24, repeat: Infinity, ease: "linear", delay: 1.45 },
               }}
                 style={{
-                  boxShadow: '0 0 20px rgba(34, 211, 238, 0.6), inset 0 0 20px rgba(34, 211, 238, 0.2)',
+                  boxShadow: `0 0 20px ${secondaryRgba}0.6), inset 0 0 20px ${secondaryRgba}0.2)`,
                 }}
               />
               
@@ -409,12 +432,12 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                   },
                 }}
                 style={{
-                  filter: 'drop-shadow(0 0 40px rgba(139, 92, 246, 0.8))',
+                  filter: `drop-shadow(0 0 40px ${primaryRgba}0.8))`,
                 }}
               />
               
               <motion.div
-                className="absolute inset-0 bg-cyber-cyan-400/40 blur-2xl rounded-full"
+                className={`absolute inset-0 ${isPastel ? 'bg-purple-300/40' : 'bg-cyber-cyan-400/40'} blur-2xl rounded-full`}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{
                   opacity: [0.3, 0.6, 0.3],
@@ -445,11 +468,11 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                   opacity: 1,
                   scale: 1,
                   y: [0, -12, 0],
-                  filter: [
-                    'drop-shadow(0 0 20px rgba(139, 92, 246, 0.8)) drop-shadow(0 0 40px rgba(34, 211, 238, 0.6))',
-                    'drop-shadow(0 0 30px rgba(139, 92, 246, 1)) drop-shadow(0 0 60px rgba(34, 211, 238, 0.8))',
-                    'drop-shadow(0 0 20px rgba(139, 92, 246, 0.8)) drop-shadow(0 0 40px rgba(34, 211, 238, 0.6))',
-                  ],
+                    filter: [
+                      `drop-shadow(0 0 20px ${primaryRgba}0.8)) drop-shadow(0 0 40px ${secondaryRgba}0.6))`,
+                      `drop-shadow(0 0 30px ${primaryRgba}1)) drop-shadow(0 0 60px ${secondaryRgba}0.8))`,
+                      `drop-shadow(0 0 20px ${primaryRgba}0.8)) drop-shadow(0 0 40px ${secondaryRgba}0.6))`,
+                    ],
                 }}
                 transition={{
                   opacity: { 
@@ -487,8 +510,8 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                     height: '4px',
                     top: `${15 + (i * 7)}%`,
                     left: `${15 + (i * 7)}%`,
-                    background: 'radial-gradient(circle, rgba(34, 211, 238, 1), transparent)',
-                    boxShadow: '0 0 10px rgba(34, 211, 238, 0.8), 0 0 20px rgba(34, 211, 238, 0.4)',
+                    background: `radial-gradient(circle, ${secondaryRgba}1), transparent)`,
+                    boxShadow: `0 0 10px ${secondaryRgba}0.8), 0 0 20px ${secondaryRgba}0.4)`,
                   }}
                   animate={{
                     scale: [0, 1.3, 0],
@@ -523,20 +546,20 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
               <div
                 className="absolute -inset-[2px] pointer-events-none z-0 rounded-3xl"
                 style={{
-                  background: 'linear-gradient(to right, transparent 0%, rgba(139, 92, 246, 0.6) 20%, rgba(139, 92, 246, 0.8) 50%, rgba(139, 92, 246, 0.6) 80%, transparent 100%)',
+                  background: `linear-gradient(to right, transparent 0%, ${primaryRgba}0.6) 20%, ${primaryRgba}0.8) 50%, ${primaryRgba}0.6) 80%, transparent 100%)`,
                   padding: '2px',
                   WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
                   WebkitMaskComposite: 'xor',
                   mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
                   maskComposite: 'exclude',
-                  boxShadow: '0 0 10px rgba(139, 92, 246, 0.9), 0 0 20px rgba(139, 92, 246, 0.5), 0 0 30px rgba(139, 92, 246, 0.3)',
+                  boxShadow: `0 0 10px ${primaryRgba}0.9), 0 0 20px ${primaryRgba}0.5), 0 0 30px ${primaryRgba}0.3)`,
                 }}
               />
               {/* Animated Border Wrapper */}
               <motion.div
                 className="rounded-3xl p-[3px]"
                 style={{
-                  background: 'linear-gradient(45deg, rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.9), rgba(139, 92, 246, 0.9))',
+                  backgroundImage: `linear-gradient(45deg, ${primaryRgba}0.9), ${secondaryRgba}0.9), ${primaryRgba}0.9))`,
                   backgroundSize: '200% 200%',
                 }}
                 animate={{
@@ -559,9 +582,9 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                   }}
                   whileTap={{ scale: 0.98 }}
                   onClick={onOpenPDFExtraction || onSelectFile}
-                  className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10"
+                  className={`w-full relative overflow-hidden rounded-3xl bg-gradient-to-br ${cardBg} backdrop-blur-xl shadow-2xl transition-all duration-200 z-10`}
                   style={{
-                    boxShadow: '0 0 30px rgba(139, 92, 246, 0.3), inset 0 0 30px rgba(139, 92, 246, 0.1)',
+                    boxShadow: `0 0 30px ${primaryRgba}0.3), inset 0 0 30px ${primaryRgba}0.1)`,
                   }}
                 >
                 {/* Enhanced Glow on Hover */}
@@ -615,16 +638,16 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                     </motion.div>
                   </motion.div>
                   <div className="text-center">
-                    <h3 className="text-2xl font-bold text-white mb-2 bg-gradient-to-r from-cyber-purple-400 to-cyber-cyan-400 bg-clip-text text-transparent">
-                      PDF to PNG
+                    <h3 className={`text-2xl font-bold mb-2 ${isPastel ? 'text-gray-800' : 'text-white'} ${isPastel ? '' : 'bg-gradient-to-r from-cyber-purple-400 to-cyber-cyan-400 bg-clip-text text-transparent'}`}>
+                      {isPastel ? 'PDF to PNG' : <span className="bg-gradient-to-r from-cyber-purple-400 to-cyber-cyan-400 bg-clip-text text-transparent">PDF to PNG</span>}
                     </h3>
-                    <p className="text-sm text-gray-300">Extract pages from PDF files</p>
+                    <p className={`text-sm ${isPastel ? 'text-gray-600' : 'text-gray-300'}`}>Extract pages from PDF files</p>
                   </div>
                   <motion.div
-                    className="flex items-center gap-3 text-white font-semibold text-lg"
+                    className={`flex items-center gap-3 ${isPastel ? 'text-gray-800' : 'text-white'} font-semibold text-lg`}
                     whileHover={{ scale: 1.1 }}
                   >
-                    <Sparkles className="w-5 h-5 text-cyber-cyan-400" />
+                    <Sparkles className={`w-5 h-5 ${isPastel ? 'text-purple-400' : 'text-cyber-cyan-400'}`} />
                     <span>Select file</span>
                   </motion.div>
                 </div>
@@ -647,20 +670,20 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
               <div
                 className="absolute -inset-[2px] pointer-events-none z-0 rounded-3xl"
                 style={{
-                  background: 'linear-gradient(to right, transparent 0%, rgba(139, 92, 246, 0.6) 20%, rgba(139, 92, 246, 0.8) 50%, rgba(139, 92, 246, 0.6) 80%, transparent 100%)',
+                  background: `linear-gradient(to right, transparent 0%, ${primaryRgba}0.6) 20%, ${primaryRgba}0.8) 50%, ${primaryRgba}0.6) 80%, transparent 100%)`,
                   padding: '2px',
                   WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
                   WebkitMaskComposite: 'xor',
                   mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
                   maskComposite: 'exclude',
-                  boxShadow: '0 0 10px rgba(139, 92, 246, 0.9), 0 0 20px rgba(139, 92, 246, 0.5), 0 0 30px rgba(139, 92, 246, 0.3)',
+                  boxShadow: `0 0 10px ${primaryRgba}0.9), 0 0 20px ${primaryRgba}0.5), 0 0 30px ${primaryRgba}0.3)`,
                 }}
               />
               {/* Animated Border Wrapper */}
               <motion.div
                 className="rounded-3xl p-[3px]"
                 style={{
-                  background: 'linear-gradient(45deg, rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.9), rgba(139, 92, 246, 0.9))',
+                  backgroundImage: `linear-gradient(45deg, ${primaryRgba}0.9), ${secondaryRgba}0.9), ${primaryRgba}0.9))`,
                   backgroundSize: '200% 200%',
                 }}
                 animate={{
@@ -683,9 +706,9 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                   }}
                   whileTap={{ scale: 0.98 }}
                   onClick={onOpenArchive}
-                  className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10"
+                  className={`w-full relative overflow-hidden rounded-3xl bg-gradient-to-br ${cardBg} backdrop-blur-xl shadow-2xl transition-all duration-200 z-10`}
                   style={{
-                    boxShadow: '0 0 30px rgba(139, 92, 246, 0.3), inset 0 0 30px rgba(139, 92, 246, 0.1)',
+                    boxShadow: `0 0 30px ${primaryRgba}0.3), inset 0 0 30px ${primaryRgba}0.1)`,
                   }}
                 >
                 {/* Enhanced Glow on Hover */}
@@ -768,20 +791,20 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
               <div
                 className="absolute -inset-[2px] pointer-events-none z-0 rounded-3xl"
                 style={{
-                  background: 'linear-gradient(to right, transparent 0%, rgba(139, 92, 246, 0.6) 20%, rgba(139, 92, 246, 0.8) 50%, rgba(139, 92, 246, 0.6) 80%, transparent 100%)',
+                  background: `linear-gradient(to right, transparent 0%, ${primaryRgba}0.6) 20%, ${primaryRgba}0.8) 50%, ${primaryRgba}0.6) 80%, transparent 100%)`,
                   padding: '2px',
                   WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
                   WebkitMaskComposite: 'xor',
                   mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
                   maskComposite: 'exclude',
-                  boxShadow: '0 0 10px rgba(139, 92, 246, 0.9), 0 0 20px rgba(139, 92, 246, 0.5), 0 0 30px rgba(139, 92, 246, 0.3)',
+                  boxShadow: `0 0 10px ${primaryRgba}0.9), 0 0 20px ${primaryRgba}0.5), 0 0 30px ${primaryRgba}0.3)`,
                 }}
               />
               {/* Animated Border Wrapper */}
               <motion.div
                 className="rounded-3xl p-[3px]"
                 style={{
-                  background: 'linear-gradient(45deg, rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.9), rgba(139, 92, 246, 0.9))',
+                  backgroundImage: `linear-gradient(45deg, ${primaryRgba}0.9), ${secondaryRgba}0.9), ${primaryRgba}0.9))`,
                   backgroundSize: '200% 200%',
                 }}
                 animate={{
@@ -804,9 +827,9 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                   }}
                   whileTap={{ scale: 0.98 }}
                   onClick={onOpenSecurityChecker}
-                  className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200"
+                  className={`w-full relative overflow-hidden rounded-3xl bg-gradient-to-br ${cardBg} backdrop-blur-xl shadow-2xl transition-all duration-200`}
                   style={{
-                    boxShadow: '0 0 30px rgba(139, 92, 246, 0.3), inset 0 0 30px rgba(139, 92, 246, 0.1)',
+                    boxShadow: `0 0 30px ${primaryRgba}0.3), inset 0 0 30px ${primaryRgba}0.1)`,
                   }}
                 >
                 {/* Enhanced Glow on Hover */}
@@ -818,8 +841,8 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                     transition: { duration: 0.2 }
                   }}
                   style={{
-                    background: 'radial-gradient(circle at center, rgba(139, 92, 246, 0.2) 0%, transparent 70%)',
-                    boxShadow: '0 0 40px rgba(139, 92, 246, 0.6), 0 0 60px rgba(34, 211, 238, 0.4)',
+                    background: `radial-gradient(circle at center, ${primaryRgba}0.2) 0%, transparent 70%)`,
+                    boxShadow: `0 0 40px ${primaryRgba}0.6), 0 0 60px ${secondaryRgba}0.4)`,
                   }}
                 />
                 <motion.div 
@@ -833,9 +856,9 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                     className="relative"
                     animate={{
                       filter: [
-                        'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
-                        'drop-shadow(0 0 25px rgba(139, 92, 246, 0.9))',
-                        'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+                        `drop-shadow(0 0 15px ${primaryRgba}0.6))`,
+                        `drop-shadow(0 0 25px ${primaryRgba}0.9))`,
+                        `drop-shadow(0 0 15px ${primaryRgba}0.6))`,
                       ],
                     }}
                     transition={{
@@ -844,9 +867,9 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                       ease: "easeInOut",
                     }}
                   >
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-3xl blur-2xl opacity-60"></div>
+                    <div className={`absolute inset-0 bg-gradient-to-br ${isPastel ? 'from-purple-300 to-pink-300' : 'from-purple-600 to-cyan-600'} rounded-3xl blur-2xl opacity-60`}></div>
                     <motion.div 
-                      className="relative p-6 bg-gradient-to-br from-purple-600/90 to-cyan-600/90 rounded-3xl shadow-2xl border border-cyber-purple-400/50"
+                      className={`relative p-6 bg-gradient-to-br ${isPastel ? 'from-purple-300/90 to-pink-300/90' : 'from-purple-600/90 to-cyan-600/90'} rounded-3xl shadow-2xl border ${isPastel ? 'border-purple-300/50' : 'border-cyber-purple-400/50'}`}
                       whileHover={{ 
                         scale: 1.1,
                         rotate: [0, -2, 2, -2, 2, 0],
@@ -857,16 +880,16 @@ export function WelcomeScreen({ onSelectFile, onOpenArchive, onOpenSecurityCheck
                     </motion.div>
                   </motion.div>
                   <div className="text-center">
-                    <h3 className="text-2xl font-bold text-white mb-2 bg-gradient-to-r from-cyber-purple-400 to-cyber-cyan-400 bg-clip-text text-transparent">
-                      PDF Audit
+                    <h3 className={`text-2xl font-bold mb-2 ${isPastel ? 'text-gray-800' : 'text-white'} ${isPastel ? '' : 'bg-gradient-to-r from-cyber-purple-400 to-cyber-cyan-400 bg-clip-text text-transparent'}`}>
+                      {isPastel ? 'PDF Audit' : <span className="bg-gradient-to-r from-cyber-purple-400 to-cyber-cyan-400 bg-clip-text text-transparent">PDF Audit</span>}
                     </h3>
-                    <p className="text-sm text-gray-300">Security & redaction analysis</p>
+                    <p className={`text-sm ${isPastel ? 'text-gray-600' : 'text-gray-300'}`}>Security & redaction analysis</p>
                   </div>
                   <motion.div
-                    className="flex items-center gap-3 text-white font-semibold text-lg"
+                    className={`flex items-center gap-3 ${isPastel ? 'text-gray-800' : 'text-white'} font-semibold text-lg`}
                     whileHover={{ scale: 1.1 }}
                   >
-                    <Shield className="w-5 h-5 text-cyber-cyan-400" />
+                    <Shield className={`w-5 h-5 ${isPastel ? 'text-purple-400' : 'text-cyber-cyan-400'}`} />
                     <span>Run Audit</span>
                   </motion.div>
                 </div>

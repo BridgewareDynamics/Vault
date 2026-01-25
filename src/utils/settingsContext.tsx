@@ -41,6 +41,8 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         extractionQuality: 'high',
         thumbnailSize: 200,
         performanceMode: 'auto',
+        showOnboarding: true,
+        theme: 'brideware-purple',
       });
     } finally {
       setLoading(false);
