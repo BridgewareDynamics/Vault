@@ -464,49 +464,97 @@ function AppContent() {
           >
             <Suspense
               fallback={
-                <div className="relative min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 flex items-center justify-center overflow-hidden">
-                  {/* Animated Background Grid */}
-                  <div 
-                    className="absolute inset-0 opacity-20"
-                    style={{
-                      backgroundImage: `
-                        linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
-                      `,
-                      backgroundSize: '50px 50px',
-                      maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
-                    }}
-                  />
+                (() => {
+                  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+                  const isPastel = theme === 'pastel';
                   
-                  {/* Content */}
-                  <div className="relative z-10 text-center space-y-6">
-                    {/* Modern Spinner with Gradient */}
-                    <div className="inline-flex items-center justify-center">
-                      <div className="relative">
-                        {/* Outer Glow Ring */}
-                        <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
-                        <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
-                        
-                        {/* Main Spinner */}
-                        <div className="relative w-16 h-16">
-                          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
-                          <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                  return (
+                    <div className={`relative min-h-screen flex items-center justify-center overflow-hidden ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
+                        : 'bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950'
+                    }`}>
+                      {/* Animated Background Grid */}
+                      <div 
+                        className={`absolute inset-0 ${isPastel ? 'opacity-10' : 'opacity-20'}`}
+                        style={{
+                          backgroundImage: isPastel
+                            ? `
+                              linear-gradient(rgba(251, 182, 206, 0.15) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(251, 182, 206, 0.15) 1px, transparent 1px)
+                            `
+                            : `
+                              linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+                            `,
+                          backgroundSize: '50px 50px',
+                          maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
+                        }}
+                      />
+                      
+                      {/* Content */}
+                      <div className="relative z-10 text-center space-y-6">
+                        {/* Modern Spinner with Gradient */}
+                        <div className="inline-flex items-center justify-center">
+                          <div className="relative">
+                            {isPastel ? (
+                              <>
+                                {/* Pastel Theme Spinner */}
+                                {/* Outer Glow Ring */}
+                                <div className="absolute inset-0 border-4 border-pink-300/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                                <div className="absolute inset-2 border-2 border-purple-300/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                                
+                                {/* Main Spinner */}
+                                <div className="relative w-16 h-16">
+                                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-pink-400 border-r-purple-400 animate-spin"></div>
+                                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-purple-400 border-l-pink-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                                </div>
+                                
+                                {/* Center Glow */}
+                                <div className="absolute inset-4 bg-gradient-to-br from-pink-300/30 to-purple-300/30 rounded-full blur-xl"></div>
+                                
+                                {/* Soft pastel particles effect */}
+                                <div className="absolute inset-0 rounded-full">
+                                  <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-pink-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '0s', animationDuration: '2s' }}></div>
+                                  <div className="absolute top-3/4 right-1/4 w-2 h-2 bg-purple-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '0.5s', animationDuration: '2s' }}></div>
+                                  <div className="absolute bottom-1/4 left-1/2 w-1.5 h-1.5 bg-blue-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '1s', animationDuration: '2s' }}></div>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {/* Dark Theme Spinner */}
+                                {/* Outer Glow Ring */}
+                                <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                                <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                                
+                                {/* Main Spinner */}
+                                <div className="relative w-16 h-16">
+                                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                                </div>
+                                
+                                {/* Center Glow */}
+                                <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
+                              </>
+                            )}
+                          </div>
                         </div>
                         
-                        {/* Center Glow */}
-                        <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
+                        {/* Loading Text */}
+                        <div className="space-y-2">
+                          <p className={`text-xl font-semibold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                            isPastel
+                              ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400'
+                              : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                          }`}>
+                            Loading Archive...
+                          </p>
+                          <p className={`text-sm font-medium ${isPastel ? 'text-gray-600' : 'text-gray-400'}`}>Initializing vault systems</p>
+                        </div>
                       </div>
                     </div>
-                    
-                    {/* Loading Text */}
-                    <div className="space-y-2">
-                      <p className="text-xl font-semibold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
-                        Loading Archive...
-                      </p>
-                      <p className="text-sm text-gray-400 font-medium">Initializing vault systems</p>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()
               }
             >
               <ArchivePage key="archive-page" onBack={() => setShowArchive(false)} />
@@ -600,17 +648,29 @@ function AppContent() {
   // Show extraction view even if no pages extracted yet (during extraction)
   if (selectedPdfPath && extractedPages.length === 0 && !isExtracting && !error) {
     // This shouldn't happen, but just in case
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    const isPastel = theme === 'pastel';
+    
     return (
       <>
-        <div className="relative min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950 flex items-center justify-center overflow-hidden">
+        <div className={`relative min-h-screen flex items-center justify-center overflow-hidden ${
+          isPastel
+            ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
+            : 'bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950'
+        }`}>
           {/* Animated Background Grid */}
           <div 
-            className="absolute inset-0 opacity-20"
+            className={`absolute inset-0 ${isPastel ? 'opacity-10' : 'opacity-20'}`}
             style={{
-              backgroundImage: `
-                linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
-              `,
+              backgroundImage: isPastel
+                ? `
+                  linear-gradient(rgba(251, 182, 206, 0.15) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(251, 182, 206, 0.15) 1px, transparent 1px)
+                `
+                : `
+                  linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+                `,
               backgroundSize: '50px 50px',
               maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
             }}
@@ -621,27 +681,59 @@ function AppContent() {
             {/* Modern Spinner with Gradient */}
             <div className="inline-flex items-center justify-center">
               <div className="relative">
-                {/* Outer Glow Ring */}
-                <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
-                <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
-                
-                {/* Main Spinner */}
-                <div className="relative w-16 h-16">
-                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
-                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
-                </div>
-                
-                {/* Center Glow */}
-                <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
+                {isPastel ? (
+                  <>
+                    {/* Pastel Theme Spinner */}
+                    {/* Outer Glow Ring */}
+                    <div className="absolute inset-0 border-4 border-pink-300/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                    <div className="absolute inset-2 border-2 border-purple-300/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                    
+                    {/* Main Spinner */}
+                    <div className="relative w-16 h-16">
+                      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-pink-400 border-r-purple-400 animate-spin"></div>
+                      <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-purple-400 border-l-pink-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                    </div>
+                    
+                    {/* Center Glow */}
+                    <div className="absolute inset-4 bg-gradient-to-br from-pink-300/30 to-purple-300/30 rounded-full blur-xl"></div>
+                    
+                    {/* Soft pastel particles effect */}
+                    <div className="absolute inset-0 rounded-full">
+                      <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-pink-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '0s', animationDuration: '2s' }}></div>
+                      <div className="absolute top-3/4 right-1/4 w-2 h-2 bg-purple-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '0.5s', animationDuration: '2s' }}></div>
+                      <div className="absolute bottom-1/4 left-1/2 w-1.5 h-1.5 bg-blue-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '1s', animationDuration: '2s' }}></div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Dark Theme Spinner */}
+                    {/* Outer Glow Ring */}
+                    <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                    <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                    
+                    {/* Main Spinner */}
+                    <div className="relative w-16 h-16">
+                      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                      <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                    </div>
+                    
+                    {/* Center Glow */}
+                    <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
+                  </>
+                )}
               </div>
             </div>
             
             {/* Loading Text */}
             <div className="space-y-2">
-              <p className="text-xl font-semibold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+              <p className={`text-xl font-semibold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                isPastel
+                  ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400'
+                  : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+              }`}>
                 Preparing...
               </p>
-              <p className="text-sm text-gray-400 font-medium">Initializing extraction systems</p>
+              <p className={`text-sm font-medium ${isPastel ? 'text-gray-600' : 'text-gray-400'}`}>Initializing extraction systems</p>
             </div>
           </div>
         </div>
