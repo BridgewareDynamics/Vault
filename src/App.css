@@ -23,6 +23,42 @@ body {
   min-height: 100vh;
 }
 
+/* Map canvas — smooth node drag, no layout jank */
+.map-canvas-root .react-flow__node {
+  will-change: transform;
+}
+
+.map-canvas-root .react-flow__node.dragging {
+  z-index: 10;
+  cursor: grabbing;
+}
+
+.map-canvas-root .react-flow__edge-path {
+  transition: stroke 0.15s ease, stroke-dasharray 0.15s ease;
+}
+
+.map-canvas-root .react-flow__handle {
+  opacity: 0.35;
+}
+
+.map-canvas-root .react-flow__node:hover .react-flow__handle,
+.map-canvas-root .react-flow__node.selected .react-flow__handle {
+  opacity: 1;
+}
+
+.map-canvas-root .react-flow__minimap {
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+}
+
+.map-canvas-root .react-flow__minimap-mask {
+  fill: rgba(139, 92, 246, 0.08);
+}
+
+.map-canvas-root .react-flow__panel {
+  pointer-events: auto;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;

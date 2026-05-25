@@ -11,6 +11,7 @@ import { ImageViewer } from './components/ImageViewer';
 import { Toolbar } from './components/Toolbar';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
+const MapModule = lazy(() => import('./components/Map/MapModule').then(module => ({ default: module.MapModule })));
 import { usePDFExtraction } from './hooks/usePDFExtraction';
 import { ConversionSettings } from './types';
 import { ExtractedPage } from './types';
@@ -37,6 +38,7 @@ function AppContent() {
   const [saveToZip, setSaveToZip] = useState(false);
   const [, setFolderName] = useState<string | undefined>(undefined);
   const [showArchive, setShowArchive] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const [showSecurityChecker, setShowSecurityChecker] = useState(false);
   const [showPDFExtraction, setShowPDFExtraction] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(true); // Default to true for new users
@@ -448,6 +450,26 @@ function AppContent() {
     }
   }, [selectedPdfPath, reset]);
 
+  // Show Map feature
+  if (showMap) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+              Loading Map...
+            </div>
+          }
+        >
+          <MapModule theme={theme} onExit={() => setShowMap(false)} />
+        </Suspense>
+        <ToastContainer />
+        <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
+      </>
+    );
+  }
+
   // Show archive if requested
   if (showArchive) {
     // Always render the same structure to prevent ArchivePage from remounting
@@ -628,7 +650,15 @@ function AppContent() {
             onSelectFile={handleSelectFile}
             onOpenArchive={() => setShowArchive(true)}
             onOpenSecurityChecker={() => setShowSecurityChecker(true)}
+<<<<<<< Updated upstream
             onOpenPDFExtraction={() => setShowPDFExtraction(true)}
+=======
+<<<<<<< Updated upstream
+=======
+            onOpenPDFExtraction={() => setShowPDFExtraction(true)}
+            onOpenMap={() => setShowMap(true)}
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
           />
         </div>
         <ToastContainer />

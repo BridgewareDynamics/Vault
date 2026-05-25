@@ -8,11 +8,21 @@ interface HolographicEffectProps {
 }
 
 export function HolographicEffect({ children, className = '', intensity = 0.3 }: HolographicEffectProps) {
+<<<<<<< Updated upstream
   // Extract rounded classes from className to apply to overlay
   const roundedClass = className.match(/rounded-[a-z0-9-]+/)?.[0] || '';
   
   return (
     <div className={`relative ${className}`}>
+=======
+  // Preserve rounded arbitrary values like rounded-[32px] on the animated overlay.
+  const roundedClass = className
+    .split(/\s+/)
+    .find((token) => token.startsWith('rounded')) || '';
+  
+  return (
+    <div className={`relative overflow-hidden ${className}`}>
+>>>>>>> Stashed changes
       <motion.div
         className={`absolute inset-0 pointer-events-none ${roundedClass}`}
         style={{

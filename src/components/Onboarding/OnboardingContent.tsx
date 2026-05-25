@@ -1,6 +1,10 @@
 import { motion } from 'framer-motion';
 import { memo } from 'react';
+<<<<<<< Updated upstream
 import { FileText, FolderOpen, Shield } from 'lucide-react';
+=======
+import { FileText, FolderOpen, Shield, Map as MapIcon } from 'lucide-react';
+>>>>>>> Stashed changes
 import { Theme } from '../../types';
 import { HolographicEffect } from '../Shared/HolographicEffect';
 import { HexGrid } from '../Shared/HexGrid';
@@ -128,7 +132,11 @@ export const OnboardingContent = memo(function OnboardingContent({ theme = 'brid
                 },
               }}
             >
+<<<<<<< Updated upstream
               {/* Icon with glassmorphic effect instead of solid background */}
+=======
+              {/* Stylized circular badge that keeps the fix while matching the Vault aesthetic */}
+>>>>>>> Stashed changes
               <div className="relative">
                 {/* Glow behind icon */}
                 <motion.div
@@ -144,6 +152,7 @@ export const OnboardingContent = memo(function OnboardingContent({ theme = 'brid
                   }}
                 />
                 
+<<<<<<< Updated upstream
                 {/* Icon container with subtle backdrop */}
                 <motion.div
                   className={`relative p-5 rounded-2xl backdrop-blur-md ${isPastel ? 'bg-purple-200/20 border border-purple-300/30' : 'bg-purple-900/20 border border-cyber-purple-400/30'}`}
@@ -156,6 +165,46 @@ export const OnboardingContent = memo(function OnboardingContent({ theme = 'brid
                   }}
                 >
                   <FolderOpen className={`w-20 h-20 ${isPastel ? 'text-purple-600' : 'text-white'}`} />
+=======
+                {/* Keep all visible layers circular so Electron never shows a square blur surface */}
+                <motion.div
+                  className={`relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border ${
+                    isPastel
+                      ? 'border-purple-300/50 bg-white/95'
+                      : 'border-cyber-purple-400/40 bg-gray-950/95'
+                  }`}
+                  style={{
+                    boxShadow: isPastel
+                      ? '0 0 28px rgba(216, 180, 254, 0.24), inset 0 1px 10px rgba(255, 255, 255, 0.55)'
+                      : '0 0 26px rgba(139, 92, 246, 0.26), 0 0 42px rgba(34, 211, 238, 0.12), inset 0 1px 10px rgba(255, 255, 255, 0.08)',
+                  }}
+                  whileHover={{
+                    scale: 1.08,
+                  }}
+                >
+                  <div
+                    className={`absolute inset-0 rounded-full ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-white via-purple-50 to-pink-100'
+                        : 'bg-gradient-to-br from-gray-900 via-purple-950 to-slate-950'
+                    }`}
+                  />
+                  <div
+                    className={`absolute inset-[0.35rem] rounded-full border ${
+                      isPastel
+                        ? 'border-purple-200/60'
+                        : 'border-white/10'
+                    }`}
+                  />
+                  <div
+                    className={`absolute inset-[0.55rem] rounded-full ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-white/90 via-purple-100/85 to-pink-100/90'
+                        : 'bg-gradient-to-br from-purple-500/16 via-transparent to-cyan-400/14'
+                    }`}
+                  />
+                  <FolderOpen className={`relative z-10 w-20 h-20 ${isPastel ? 'text-purple-600 drop-shadow-sm' : 'text-white drop-shadow-[0_0_14px_rgba(139,92,246,0.45)]'}`} />
+>>>>>>> Stashed changes
                 </motion.div>
               </div>
             </motion.div>
@@ -218,7 +267,11 @@ export const OnboardingContent = memo(function OnboardingContent({ theme = 'brid
           transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.5 }}
           style={{ willChange: 'opacity' }}
         >
+<<<<<<< Updated upstream
           A powerful research organization system
+=======
+          A connected workspace for documents, cases, maps, and audits
+>>>>>>> Stashed changes
         </motion.p>
 
         <motion.p
@@ -228,12 +281,21 @@ export const OnboardingContent = memo(function OnboardingContent({ theme = 'brid
           transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.6 }}
           style={{ willChange: 'opacity' }}
         >
+<<<<<<< Updated upstream
           Designed for students, researchers, and professionals who demand precision, security, and efficiency
+=======
+          Designed for researchers, investigators, and professionals who need one place to extract, organize,
+          map, and verify their work
+>>>>>>> Stashed changes
         </motion.p>
 
         {/* Feature Cards with 3D Effect */}
         <motion.div
+<<<<<<< Updated upstream
           className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 relative"
+=======
+          className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 mt-16 relative"
+>>>>>>> Stashed changes
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.7 }}
@@ -268,9 +330,16 @@ export const OnboardingContent = memo(function OnboardingContent({ theme = 'brid
             }}
           />
           {[
+<<<<<<< Updated upstream
             { icon: FileText, title: 'PDF Extraction', description: 'Extract pages from PDF files', color: 'from-purple-600 to-cyan-600' },
             { icon: FolderOpen, title: 'Archive Management', description: 'Organize your research materials', color: 'from-purple-600 to-cyan-600' },
             { icon: Shield, title: 'Security Audit', description: 'Analyze PDF security and redactions', color: 'from-purple-600 to-cyan-600' },
+=======
+            { icon: FileText, title: 'PDF Extraction', description: 'Turn long documents into workable pages' },
+            { icon: FolderOpen, title: 'Archive Management', description: 'Keep cases and source material organized' },
+            { icon: MapIcon, title: 'Research Maps', description: 'Build visual timelines for connected evidence' },
+            { icon: Shield, title: 'Security Audit', description: 'Review redactions, metadata, and document risk' },
+>>>>>>> Stashed changes
           ].map((feature, index) => {
             const Icon = feature.icon;
             return (

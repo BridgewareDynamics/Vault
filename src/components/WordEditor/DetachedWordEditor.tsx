@@ -20,7 +20,15 @@ export function DetachedWordEditor() {
   const [pendingClose, setPendingClose] = useState(false);
   const [isReattaching, setIsReattaching] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+<<<<<<< Updated upstream
   const [casePath, setCasePath] = useState<string | null>(null); // Store case path from detach
+=======
+<<<<<<< Updated upstream
+=======
+  const [casePath, setCasePath] = useState<string | null>(null); // Store case path from detach
+  const [libraryKey, setLibraryKey] = useState(0); // Force refresh when library is shown
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
   const editorRef = useRef<WordEditorHandle>(null);
   const toast = useToast();
   const { settings } = useSettingsContext();
@@ -310,6 +318,57 @@ export function DetachedWordEditor() {
         : 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900'
     }`}>
       <div className="h-screen flex flex-col">
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+        {/* Header */}
+        <div className="p-4 border-b border-gray-700/50 bg-gray-900/95 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold bg-gradient-purple bg-clip-text text-transparent">
+              Word Editor
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Reattach button */}
+            <button
+              onClick={handleReattach}
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              aria-label="Reattach editor to main window"
+              title="Return to main window"
+            >
+              <Minimize2 size={18} className="text-cyber-purple-400" />
+            </button>
+            {/* Bookmark Library button */}
+            <button
+              onClick={() => {
+                setShowBookmarkLibrary(!showBookmarkLibrary);
+                setShowLibrary(false);
+              }}
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              aria-label="Open bookmark library"
+              title="Bookmark Library"
+            >
+              <Bookmark size={18} className={showBookmarkLibrary ? 'text-cyber-purple-400' : 'text-gray-400'} />
+            </button>
+            {/* Library button */}
+            <button
+              onClick={() => {
+                debugLog({
+                  location: 'DetachedWordEditor.tsx:LibraryToggle',
+                  message: 'Library toggle clicked',
+                  data: { currentShowLibrary: showLibrary, filePath, editorKey },
+                });
+                setShowLibrary(!showLibrary);
+                setShowBookmarkLibrary(false);
+              }}
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              aria-label="Open text library"
+              title="Text Library"
+            >
+              <Library size={18} className={showLibrary ? 'text-cyber-purple-400' : 'text-gray-400'} />
+            </button>
+=======
+>>>>>>> Stashed changes
         {/* Enhanced Header */}
         <div className={`relative p-4 sm:p-5 backdrop-blur-xl ${
           isPastel
@@ -436,6 +495,13 @@ export function DetachedWordEditor() {
                     message: 'Library toggle clicked',
                     data: { currentShowLibrary: showLibrary, filePath, editorKey },
                   });
+<<<<<<< Updated upstream
+=======
+                  if (!showLibrary) {
+                    // Force refresh when opening library
+                    setLibraryKey(prev => prev + 1);
+                  }
+>>>>>>> Stashed changes
                   setShowLibrary(!showLibrary);
                   setShowBookmarkLibrary(false);
                 }}
@@ -480,6 +546,10 @@ export function DetachedWordEditor() {
                 </div>
               </motion.button>
             </div>
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
           </div>
         </div>
 
@@ -539,6 +609,7 @@ export function DetachedWordEditor() {
             />
           ) : showLibrary ? (
             <TextLibrary
+              key={`library-${libraryKey}`}
               onOpenFile={handleOpenFile}
               onNewFile={handleNewFile}
               onClose={() => {

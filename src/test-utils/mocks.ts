@@ -47,6 +47,9 @@ export const mockElectronAPI = {
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   toggleFullscreen: vi.fn(),
+  // Map APIs
+  listMaps: vi.fn(),
+  deleteMap: vi.fn(),
   // Word Editor APIs
   readTextFile: vi.fn(),
   saveTextFile: vi.fn(),

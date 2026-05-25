@@ -14,10 +14,19 @@ import { loadSettings } from './utils/settings';
 import * as bookmarkStorage from './utils/bookmarkStorage';
 import { auditPDFRedaction } from './utils/pdfRedactionAudit';
 import { generateAuditReport } from './utils/generateAuditReport';
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
 import { LocalDatabase } from './database/localDatabase';
 import { migrateMetadataFilesToDatabase } from './database/migration';
 import { FileSystemWatcher } from './database/watcher';
 import { File } from './database/models';
+<<<<<<< Updated upstream
+=======
+import * as mapStorage from './utils/mapStorage';
+>>>>>>> Stashed changes
 
 // Helper function to detect file type from path
 function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | 'other' {
@@ -64,6 +73,10 @@ async function findCasePathFromPath(filePath: string): Promise<string | null> {
   
   return null;
 }
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -4462,6 +4475,131 @@ ipcMain.handle('open-bookmark-in-main-window', async (event, options: { pdfPath:
     throw new Error(`Failed to open bookmark in main window: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
+
+// Map (Research Timeline) handlers
+ipcMain.handle('list-maps', async () => {
+  try {
+    return await mapStorage.listAllMaps();
+  } catch (error) {
+    logger.error('Failed to list maps:', error);
+    throw new Error(`Failed to list maps: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('list-case-maps', async (event, casePath: string) => {
+  try {
+    return await mapStorage.listCaseMaps(casePath);
+  } catch (error) {
+    logger.error('Failed to list case maps:', error);
+    throw new Error(`Failed to list case maps: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('create-map', async (event, title: string, casePath?: string | null) => {
+  try {
+    return await mapStorage.createMap(title, casePath ?? null);
+  } catch (error) {
+    logger.error('Failed to create map:', error);
+    throw new Error(`Failed to create map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('read-map', async (event, mapFolderPath: string) => {
+  try {
+    return await mapStorage.readMapDocument(mapFolderPath);
+  } catch (error) {
+    logger.error('Failed to read map:', error);
+    throw new Error(`Failed to read map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('save-map', async (event, document: mapStorage.MapDocumentStored) => {
+  try {
+    return await mapStorage.saveMapDocument(document);
+  } catch (error) {
+    logger.error('Failed to save map:', error);
+    throw new Error(`Failed to save map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('delete-map', async (event, mapFolderPath: string) => {
+  try {
+    await mapStorage.deleteMap(mapFolderPath);
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to delete map:', error);
+    throw new Error(`Failed to delete map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('rename-map', async (event, mapFolderPath: string, newTitle: string) => {
+  try {
+    return await mapStorage.renameMap(mapFolderPath, newTitle);
+  } catch (error) {
+    logger.error('Failed to rename map:', error);
+    throw new Error(`Failed to rename map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('select-map-attachments', async () => {
+  if (!mainWindow) return [];
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Files for Block',
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return [];
+  }
+  return result.filePaths.filter((p) => isSafePath(p));
+});
+
+ipcMain.handle(
+  'copy-map-attachment-to-assets',
+  async (event, mapFolderPath: string, sourcePath: string, attachmentId: string) => {
+    try {
+      return await mapStorage.copyAttachmentToMapAssets(mapFolderPath, sourcePath, attachmentId);
+    } catch (error) {
+      logger.error('Failed to copy map attachment:', error);
+      throw new Error(
+        `Failed to copy attachment: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+);
+
+ipcMain.handle('export-map-to-directory', async (event, mapFolderPath: string, destDirectory: string) => {
+  try {
+    const exportPath = await mapStorage.exportMapToDirectory(mapFolderPath, destDirectory);
+    return { success: true, exportPath };
+  } catch (error) {
+    logger.error('Failed to export map to directory:', error);
+    throw new Error(
+      `Failed to export map: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+ipcMain.handle(
+  'export-map-png',
+  async (
+    event,
+    options: { mapFolderPath: string; pngBase64: string; destFilePath?: string }
+  ) => {
+    try {
+      const filePath = await mapStorage.saveMapPng(
+        options.mapFolderPath,
+        options.pngBase64,
+        options.destFilePath
+      );
+      return { success: true, filePath };
+    } catch (error) {
+      logger.error('Failed to export map PNG:', error);
+      throw new Error(
+        `Failed to export PNG: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+);
 
 // Close current window
 ipcMain.handle('close-window', async () => {

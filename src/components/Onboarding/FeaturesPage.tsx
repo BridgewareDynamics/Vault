@@ -1,6 +1,10 @@
 import { motion } from 'framer-motion';
 import { memo } from 'react';
+<<<<<<< Updated upstream
 import { FileText, FolderOpen, Shield, Search, Layers, Settings } from 'lucide-react';
+=======
+import { FileText, FolderOpen, Shield, Search, Layers, Settings, Map as MapIcon } from 'lucide-react';
+>>>>>>> Stashed changes
 import { Theme } from '../../types';
 import { HolographicEffect } from '../Shared/HolographicEffect';
 import { ScanLine } from '../Shared/ScanLine';
@@ -33,6 +37,16 @@ export const FeaturesPage = memo(function FeaturesPage({ theme = 'brideware-purp
       details: ['Case folders', 'Category tags', 'Background images', 'Quick search'],
     },
     {
+<<<<<<< Updated upstream
+=======
+      icon: MapIcon,
+      title: 'Map',
+      description: 'Build research timelines with dated blocks, attachments, and notes',
+      color: 'from-purple-600 to-cyan-600',
+      details: ['Tier-based chronology', 'File attachments', 'Timeline canvas', 'Vault & case save'],
+    },
+    {
+>>>>>>> Stashed changes
       icon: Shield,
       title: 'PDF Audit',
       description: 'Comprehensive security and redaction analysis for your documents',
@@ -42,9 +56,15 @@ export const FeaturesPage = memo(function FeaturesPage({ theme = 'brideware-purp
   ];
 
   const additionalFeatures = [
+<<<<<<< Updated upstream
     { icon: Search, title: 'Advanced Search', description: 'Find files quickly with powerful search' },
     { icon: Layers, title: 'Organized Structure', description: 'Hierarchical folder organization' },
     { icon: Settings, title: 'Customizable', description: 'Tailor the app to your workflow' },
+=======
+    { icon: Search, title: 'Advanced Search', description: 'Find files quickly across growing research libraries' },
+    { icon: Layers, title: 'Connected Workflow', description: 'Move from archive records into maps without losing context' },
+    { icon: Settings, title: 'Customizable', description: 'Tailor themes and workspace behavior to your workflow' },
+>>>>>>> Stashed changes
   ];
 
   return (
@@ -93,12 +113,20 @@ export const FeaturesPage = memo(function FeaturesPage({ theme = 'brideware-purp
             transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.3 }}
             style={{ willChange: 'opacity' }}
           >
+<<<<<<< Updated upstream
             Everything you need to organize and manage your research efficiently
+=======
+            Extract, archive, map, and audit from one connected research workspace
+>>>>>>> Stashed changes
           </motion.p>
         </div>
 
         {/* Main Features */}
+<<<<<<< Updated upstream
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+=======
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+>>>>>>> Stashed changes
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (

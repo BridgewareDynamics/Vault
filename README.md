@@ -2,14 +2,14 @@
 
 **A Professional Research Organization Tool**
 
-**Version**: 1.0.0-prerelease.4
+**Version**: 1.0.0-prerelease.6
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.2-blue.svg)](https://reactjs.org/)
 [![Electron](https://img.shields.io/badge/Electron-28.1-blue.svg)](https://www.electronjs.org/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
-The Vault is a powerful desktop application designed for researchers, investigators, and professionals who need to organize, extract, and manage PDF documents systematically. Built with Electron and React, it provides a modern, intuitive interface for converting PDF pages to PNG images and organizing them within a structured case-based filing system with advanced categorization, tagging, bookmark management, and rich text editing capabilities.
+The Vault is a desktop research workspace for investigators, researchers, and professionals who need to extract, organize, map, and audit document-driven work. Built with Electron and React, it now brings four connected workflows into one application: `PDF to PNG` for page extraction, `The Vault` for case-based organization, `Map` for visual research timelines, and `PDF Audit` for security and redaction review. Recent updates also add case-linkable maps, smarter audit report saving, and case-aware note browsing alongside bookmarks, thumbnails, and rich text editing.
 
 ## Table of Contents
 
@@ -23,91 +23,57 @@ The Vault is a powerful desktop application designed for researchers, investigat
 
 ## Features
 
-### PDF Extraction
-- **High-Quality Conversion**: Extract individual pages from PDF documents as PNG images
-- **Batch Processing**: Process entire PDFs with real-time progress tracking
-- **Flexible Output**: Save extracted pages to custom directories or ZIP archives
-- **Parent File Preservation**: Option to save the original PDF alongside extracted pages
+### Connected Research Workspace
+- **Four Launch Surfaces**: Start from `PDF to PNG`, `The Vault`, `PDF Audit`, or `Map` directly from the welcome screen
+- **Connected Workflow**: Onboarding and home navigation now frame the app as a single `Extract -> Archive -> Map -> Audit` workflow
+- **Unified Experience**: Shared theming, detached windows, toast feedback, and keyboard-friendly dialogs across the app
 
-### The Vault - Research Organization System
-- **Case-Based Organization**: Create and manage case files for organizing research projects
-- **Category Tags**: Organize cases and files with custom color-coded category tags
-  - Create custom tags with names and colors
-  - Assign tags to cases and individual files
-  - Filter and search by category tags
-  - Visual tag indicators in the interface
-- **Extraction Folders**: Automatically organize PDF extractions within case folders
-- **Hierarchical Structure**: Navigate through nested folders with breadcrumb navigation
-- **File Management**: 
-  - Rename files and folders with inline editing
-  - Delete files and folders with confirmation dialogs
-  - Search across cases and files (with tag filtering)
-  - Drag and drop file uploads
+### PDF to PNG
+- **High-Quality Conversion**: Extract PDF pages into PNG or JPEG outputs
+- **Whole-Document Processing**: Run extraction with real-time progress feedback and gallery previews
+- **Flexible Saving**: Export to custom folders or ZIP archives
+- **Parent File Preservation**: Optionally keep the original PDF alongside extracted pages
+
+### The Vault
+- **Case-Based Organization**: Create and manage case folders for investigations and research projects
+- **Category Tags**: Apply custom color-coded tags to cases and individual files
+- **Archive Search & Navigation**: Browse nested folders with breadcrumbs, search, tag filtering, and inline file actions
+- **Integrated File Workflows**: Drag files into a case, extract PDFs inside a case, and keep related evidence together
+
+### Research Maps
+- **Map Workspace**: Create blank maps from a dedicated `Map` area and reopen work from the `Map Library`
+- **Visual Chronology Builder**: Build timelines with dated blocks and branch cards for side threads, related evidence, or alternate paths
+- **Block-Level Context**: Add notes and file attachments directly to map blocks
+- **Case Linking**: Assign a map to a case or move it back to the Vault library later
+- **Library Controls**: Search maps, filter by `All maps`, `Vault`, or `Case linked`, and sort by recency, title, or block count
+- **Export Options**: Export a map as a PNG poster, native JSON, or copy the full map folder to another destination
+
+### PDF Audit
+- **Security & Redaction Analysis**: Review PDFs for redaction overlap issues and document security concerns
+- **Report Generation**: Generate audit reports from findings inside the app
+- **Smarter Save Placement**: Save reports with `Save Loose`, `Make PDF Folder`, `Add to PDF Folder`, or `Make Subfolder Within PDF Folder`
+- **Case-Friendly Output**: Audit reports can now be placed alongside extracted PDF material more cleanly
+
+### Notes, Bookmarks, and Writing
+- **Rich Text Editing**: Lexical-based editor with formatting, keyboard shortcuts, detached windows, and unsaved-change protection
+- **Case-Aware Notes**: Browse notes with a `Case Notes Gallery`, switch to `View All Cases`, and create a `New Note` in the current case context
+- **Global Text Library**: Keep reusable notes outside of any single case in the root `TextLibrary`
+- **Bookmark System**: Save PDF page bookmarks with thumbnails, folders, metadata, and cross-window open support
 
 ### File Viewing & Management
-- **Thumbnail Generation**: Automatic thumbnail generation for images, PDFs, and videos
-  - Image thumbnails using Sharp library
-  - PDF page thumbnails (first page)
-  - Video thumbnails captured at 10% duration or 1 second (whichever is smaller)
-  - Cached thumbnails for improved performance
-- **Enhanced Image Viewer**: Professional file viewer with advanced zoom controls
-  - Zoom in/out with buttons and keyboard shortcuts (+/=, -, 0)
-  - Live zoom percentage display
-  - Double-click to zoom functionality
-  - Drag-to-pan when zoomed
-  - Reset zoom button
-  - Smooth animations and visual feedback
-- **Full-Screen Viewer**: View files in a dedicated viewer with navigation controls
-- **File Type Detection**: Automatic categorization of files (images, PDFs, videos, other)
-- **Metadata Tracking**: File size, modification dates, and parent PDF relationships
-
-### Bookmark System
-- **PDF Page Bookmarks**: Create bookmarks directly from PDF viewer for quick reference
-- **Automatic Thumbnails**: Bookmarks automatically generate and store thumbnails
-- **Organized Library**: Browse and manage bookmarks in a dedicated library interface
-- **Folder Organization**: Organize bookmarks in hierarchical folders
-- **Rich Metadata**: Add names, descriptions, notes, and tags to bookmarks
-- **Quick Navigation**: Open bookmarked PDF pages directly from the library
-- **Visual Indicators**: See bookmark indicators in the PDF viewer
-- **Cross-Window Support**: Open bookmarks from detached editor windows in the main window
-
-### Word Editor
-- **Rich Text Editing**: Full-featured word processor built on Lexical framework
-- **Text Formatting**: Bold, italic, underline, font sizes (8pt-72pt), text alignment
-- **File Management**: Create, save, delete, and export text files
-- **Text Library**: Browse and manage all your text files in one place
-- **Detached Windows**: Edit in separate windows for multi-document workflows
-- **Auto-Save Drafts**: Automatic draft saving to localStorage with debouncing
-- **Unsaved Changes Detection**: Confirmation dialogs prevent accidental data loss
-- **Keyboard Shortcuts**: 
-  - Ctrl+S / Cmd+S: Save file
-  - Ctrl+N / Cmd+N: New file
-  - Ctrl+B / Cmd+B: Toggle bold
-  - Ctrl+I / Cmd+I: Toggle italic
-  - Ctrl+U / Cmd+U: Toggle underline
-  - Ctrl+Z / Cmd+Z: Undo
-  - Ctrl+Shift+Z / Cmd+Shift+Z: Redo
-- **Text Statistics**: Word count, sentence count, and more
-- **Export Support**: Export to TXT (PDF, DOCX, RTF planned)
-
-### User Experience
-- **Modern UI**: Cyberpunk-themed interface with smooth animations
-- **Real-Time Feedback**: Toast notifications and progress bars
-- **Responsive Design**: Adapts to different screen sizes
-- **Keyboard Shortcuts**: 
-  - Enter to confirm, Escape to cancel in dialogs
-  - Arrow keys to navigate between files in viewer
-  - Zoom controls: +/= (zoom in), - (zoom out), 0 (reset)
-  - Escape to close viewers and dialogs
+- **Thumbnail Generation**: Automatic thumbnails for images, PDFs, and videos with caching for performance
+- **Enhanced Viewer**: Zoom, reset, double-click zoom, keyboard navigation, and drag-to-pan support
+- **File Type Detection**: Automatic categorization of images, PDFs, videos, and other assets
+- **Metadata Tracking**: File size, modification dates, and parent PDF relationships for extraction folders
 
 ## Architecture
 
 ### Tech Stack
 
-- **Frontend**: React 18.2, TypeScript 5.3, TailwindCSS, Framer Motion
-- **Backend**: Electron 28.1, Node.js 20+
+- **Frontend**: React 18.2, TypeScript 5.3, TailwindCSS, Framer Motion, `@xyflow/react`
+- **Backend**: Electron 28.1, Node.js 24.12.0, `better-sqlite3`
 - **PDF Processing**: PDF.js 3.11.174
-- **Image Processing**: Sharp 0.33.2
+- **Image & Export Utilities**: Sharp 0.33.2, `html-to-image`, JSZip
 - **Testing**: Vitest 1.1.0, Testing Library
 - **Build Tools**: Vite 5.0, Electron Builder 24.9
 
@@ -116,8 +82,8 @@ The Vault is a powerful desktop application designed for researchers, investigat
 
 ### Prerequisites
 
-- **Node.js**: Version 20.x or higher
-- **npm**: Version 9.x or higher (comes with Node.js)
+- **Node.js**: Version `24.12.0`
+- **npm**: Version `11.6.2` or higher
 - **Git**: For cloning the repository
 
 ### Development Setup
@@ -206,32 +172,37 @@ The Vault is a powerful desktop application designed for researchers, investigat
 
 ### Project Structure
 
-```
+```text
 Vault/
-├── electron/                 # Electron main process
-│   ├── main.ts              # Main entry point
-│   ├── preload.ts           # Preload script (IPC bridge)
-│   └── utils/               # Utility modules
-│       ├── archiveConfig.ts # Vault configuration
-│       ├── pathValidator.ts # Path validation
-│       ├── pdfExtractor.ts  # PDF processing
-│       └── thumbnailGenerator.ts # Thumbnail generation
-├── src/                      # React application
-│   ├── components/          # React components
-│   │   ├── Archive/        # Vault-specific components
-│   │   ├── Toast/          # Toast notification system
-│   │   └── ...             # Other UI components
-│   ├── hooks/              # Custom React hooks
-│   │   ├── useArchive.ts   # Vault management
-│   │   ├── useArchiveExtraction.ts # Vault PDF extraction
-│   │   ├── usePDFExtraction.ts # Standard PDF extraction
-│   │   └── useCategoryTags.ts # Category tag management
-│   ├── types/              # TypeScript type definitions
-│   ├── utils/              # Utility functions
-│   └── test-utils/         # Testing utilities and mocks
-├── dist/                    # Built frontend (generated)
-├── dist-electron/          # Built Electron main (generated)
-└── release/                 # Production installers (generated)
+├── electron/                    # Electron main process
+│   ├── main.ts                  # IPC handlers and app orchestration
+│   ├── preload.ts               # Typed renderer bridge
+│   ├── database/                # Database integration and file watching
+│   └── utils/
+│       ├── archiveConfig.ts     # Vault configuration
+│       ├── mapStorage.ts        # Map persistence, exports, and storage layout
+│       ├── pathValidator.ts     # Safe path validation
+│       ├── pdfExtractor.ts      # PDF processing
+│       └── thumbnailGenerator.ts
+├── src/                         # React application
+│   ├── components/
+│   │   ├── Archive/             # Case archive UI
+│   │   ├── Map/                 # Map landing, library, canvas, dialogs
+│   │   ├── Onboarding/          # First-run workflow guidance
+│   │   ├── WordEditor/          # Notes and writing tools
+│   │   └── Toast/               # Toast notification system
+│   ├── contexts/                # Archive and editor providers
+│   ├── hooks/
+│   │   ├── useArchive.ts
+│   │   ├── useArchiveExtraction.ts
+│   │   ├── useMapDocument.ts
+│   │   └── usePDFExtraction.ts
+│   ├── types/                   # Shared TypeScript definitions
+│   ├── utils/                   # Utility modules, including map layout/routing helpers
+│   └── test-utils/              # Test helpers and mocks
+├── dist/                        # Built frontend (generated)
+├── dist-electron/               # Built Electron main process (generated)
+└── release/                     # Installers and packaged builds (generated)
 ```
 
 ## Usage Guide
@@ -239,285 +210,214 @@ Vault/
 ### Getting Started
 
 1. **Launch The Vault**
-   - Run the application from your desktop or command line
-   - You'll see the welcome screen with two options:
-     - **Select file**: Extract pages from a PDF
-     - **The Vault**: Access your research organization system
+   - Start the desktop app and choose one of four workspaces from the home screen:
+     - **PDF to PNG**
+     - **The Vault**
+     - **PDF Audit**
+     - **Map**
 
-### PDF Extraction Workflow
+2. **Configure Your Vault Directory**
+   - The first time you open `The Vault` or `Map`, select the directory that will store your archive
+   - This location is reused in later sessions
 
-1. **Select a PDF File**
-   - Click "Select file" on the welcome screen
-   - Choose a PDF file from your file system
-   - Extraction begins automatically
+3. **Follow the Built-In Onboarding**
+   - First-run onboarding now walks through the full `Extract -> Archive -> Map -> Audit` workflow
+
+### PDF to PNG Workflow
+
+1. **Open `PDF to PNG`**
+   - Choose a PDF from the home screen
+   - Extraction starts immediately
 
 2. **Monitor Progress**
-   - Watch the progress bar for extraction status
-   - View real-time status messages
-   - See extracted pages appear in the gallery
+   - Watch real-time extraction updates
+   - Review page thumbnails as they are generated
 
-3. **Save Extracted Pages**
-   - Select a save directory
-   - Choose save options:
-     - **Save parent file**: Include the original PDF
-     - **Save to ZIP**: Package everything in a ZIP archive
-     - **Folder name**: Organize in a named folder
-   - Click "Save" to export
+3. **Save Output**
+   - Pick a destination folder
+   - Optionally save the original PDF
+   - Optionally export everything to ZIP
 
-### The Vault - Research Organization
+### The Vault Workflow
 
-#### Setting Up Your Vault
+1. **Create a Case**
+   - Open `The Vault`
+   - Create a case folder for the matter, project, or investigation you are working on
 
-1. **Select Vault Drive**
-   - Click "The Vault" from the welcome screen
-   - First time: Select a directory to store your vault
-   - This location is remembered for future sessions
+2. **Organize Source Material**
+   - Drag files into a case or add them through the file picker
+   - Create extraction folders from PDFs inside a case
+   - Use category tags, search, and breadcrumbs to keep navigation manageable
 
-2. **Create a Case File**
-   - Click "Start Case File" button
-   - Enter a case name (e.g., "Research Project 2024")
-   - The case folder is created in your vault directory
+3. **Work with Files**
+   - Open images, PDFs, and videos with thumbnail-backed previews
+   - Rename or delete files and folders with inline actions and confirmation dialogs
 
-#### Using Bookmarks
+4. **Capture Notes and Bookmarks**
+   - Open the text editor for case notes or global notes
+   - Create PDF page bookmarks for quick return points in source documents
 
-1. **Create a Bookmark**
-   - Open a PDF in the viewer
-   - Navigate to the page you want to bookmark
-   - Click the bookmark icon or use the bookmark button
-   - Enter bookmark details (name, description, notes, tags)
-   - The bookmark is saved with an automatic thumbnail
+### Research Maps Workflow
 
-2. **Access Bookmark Library**
-   - Click the bookmark icon in the toolbar
-   - Browse all your bookmarks organized by folders
-   - Search and filter bookmarks
-   - Click "Open" on any bookmark to navigate to that PDF page
+1. **Open `Map`**
+   - Choose `Create Blank Map` to start fresh
+   - Or open `Map Library` to resume saved work
 
-3. **Organize Bookmarks**
-   - Create folders to organize bookmarks
-   - Move bookmarks between folders
-   - Edit bookmark details (name, description, notes, tags)
-   - Delete bookmarks you no longer need
+2. **Build Your Timeline**
+   - Add dated timeline blocks for major events
+   - Add branch cards for side threads, alternate explanations, or related evidence
+   - Attach files and notes directly to each block
 
-#### Using the Word Editor
+3. **Link Maps to Case Work**
+   - Use `Assign case` to move a map into a case
+   - Use `Move to Vault Library` to return it to global storage later
 
-1. **Open the Word Editor**
-   - Click the word editor icon in the toolbar
-   - Create a new file or open an existing one
-   - Start typing and formatting your text
+4. **Search and Export**
+   - In `Map Library`, search maps, filter by storage scope, and sort by recency, title, or block count
+   - Export maps as PNG, native JSON, or a copied map folder
 
-2. **Text Formatting**
-   - Use the toolbar buttons or keyboard shortcuts
-   - Format text: bold, italic, underline
-   - Adjust font size (8pt to 72pt)
-   - Align text: left, center, right, justify
+### PDF Audit Workflow
 
-3. **File Management**
-   - Create new files with Ctrl+N / Cmd+N
-   - Save files with Ctrl+S / Cmd+S
-   - Access the text library to browse all your text files
-   - Delete files you no longer need
+1. **Open `PDF Audit`**
+   - Select a PDF and run the security/redaction audit
 
-4. **Detached Editor**
-   - Click the detach button to open editor in a separate window
-   - Work on multiple documents simultaneously
-   - Reattach the editor to return to the main window
-   - Bookmarks opened from detached editor open in the main window
+2. **Review Findings**
+   - Inspect flagged pages and redaction overlap warnings
+   - Review document-level security findings such as metadata, attachments, annotations, forms, layers, or suspicious updates when present
 
-#### Organizing Research Materials
+3. **Save the Audit Report**
+   - Choose the save strategy that fits the case:
+     - **Save Loose**
+     - **Make PDF Folder**
+     - **Add to PDF Folder**
+     - **Make Subfolder Within PDF Folder**
 
-1. **Add Files to a Case**
-   - Open a case by clicking on it
-   - Click "Add Files" or drag and drop files
-   - Files are copied into the case folder
+### Notes and Bookmarks
 
-2. **Extract PDFs Within Cases**
-   - Click on a PDF file in your case
-   - Click the play button or PDF options dropdown
-   - Choose extraction settings:
-     - Create new extraction folder
-     - Name the folder
-     - Option to save parent PDF
-   - Extraction runs and pages are saved to the folder
+1. **Case Notes Gallery**
+   - If you are not already inside a case, open the notes flow and browse all cases from `Case Notes Gallery`
+   - Use `View All Cases` to switch back from a case-specific notes view
 
-3. **Navigate Your Vault**
-   - Use breadcrumb navigation to move between folders
-   - Click folders to open them
-   - Use "Back" buttons to navigate up the hierarchy
+2. **Create Notes in Context**
+   - `New Note` creates a note inside the active case when you are working in case context
+   - Otherwise, notes are saved into the global `TextLibrary`
 
-#### File Management
-
-1. **Rename Files/Folders**
-   - Hover over a file or folder
-   - Click the pencil icon
-   - Enter new name and press Enter or click Confirm
-
-2. **Delete Files/Folders**
-   - Hover over a file or folder
-   - Click the trash icon
-   - Confirm deletion in the dialog
-
-3. **Search & Filter**
-   - Use the search bar to find files or cases
-   - Search works across case names and file names
-   - Filter by category tags using the tag selector
-   - Results update in real-time
-
-4. **Category Tags**
-   - Create custom category tags with names and colors
-   - Assign tags to cases or individual files
-   - Use tags to organize and filter your research materials
-   - Tags are visually displayed on cases and files
-
-5. **View Files**
-   - Click on any file to open the viewer
-   - Use arrow keys or buttons to navigate between files
-   - Zoom controls: +/= (zoom in), - (zoom out), 0 (reset), double-click to zoom
-   - Drag to pan when zoomed in
-   - Press Escape to close the viewer
+3. **Use Bookmarks for Fast Navigation**
+   - Save important PDF pages with thumbnails and metadata
+   - Open bookmarks back into the main window from detached views
 
 ### Best Practices for Research Organization
 
-1. **Case Structure**
-   - Create separate cases for different research projects
-   - Use descriptive case names
-   - Keep related materials together
+1. **Keep Related Work Together**
+   - Store the case, extracted pages, notes, map, and audit output in the same Vault workflow whenever possible
 
-2. **Extraction Folders**
-   - Name extraction folders descriptively
-   - Group related PDF extractions
-   - Use consistent naming conventions
+2. **Use Maps for Chronology**
+   - Build a map when folders alone stop being enough to explain sequence, causality, or branching events
 
-3. **File Organization**
-   - Keep original PDFs alongside extractions
-   - Use folders to separate different document types
-   - Regularly review and organize your vault
+3. **Save Audits Beside Their Source**
+   - Prefer saving audit reports inside the PDF folder or a subfolder within it so the report stays attached to the document history
+
+4. **Use Global Libraries Intentionally**
+   - Keep reusable references in `Map Library` or `TextLibrary`
+   - Link work back to a case once it becomes investigation-specific
 
 ## Technical Details
 
 ### Key Components
 
 #### Main Process (`electron/main.ts`)
-- Handles all file system operations
-- Manages IPC communication
-- Validates paths and file operations
-- Processes PDF extractions
-- Generates thumbnails
+- Handles secure file system operations, PDF extraction, archive workflows, audit reporting, map persistence, and exports
+- Owns the IPC surface used by the renderer
+- Validates paths before touching the file system
 
 #### Preload Script (`electron/preload.ts`)
 - Bridges renderer and main processes
-- Exposes safe Electron APIs to React
-- Type-safe IPC communication
+- Exposes typed APIs for extraction, archive, notes, bookmarks, audit, and map features
+- Preserves Electron security boundaries with context isolation
 
 #### React Application (`src/App.tsx`)
-- Main application component
-- Manages routing between views
-- Coordinates PDF extraction and Vault access
+- Routes between the four top-level workspaces: `PDF to PNG`, `The Vault`, `PDF Audit`, and `Map`
+- Hosts onboarding, settings, toasts, and detached-window reattachment flows
+
+#### Map Workspace (`src/components/Map/`)
+- Contains the map landing page, library, editor, export dialog, and React Flow canvas
+- Supports autosaving documents, chronology relayout, case linking, and attachment-backed blocks
+
+#### Writing & Notes (`src/components/WordEditor/`)
+- Provides the Lexical editor, text library, detached editor support, and case-aware note browsing
 
 #### Custom Hooks
 
 **`usePDFExtraction`** (`src/hooks/usePDFExtraction.ts`)
-- Manages PDF extraction state
-- Handles PDF.js integration
-- Provides progress updates
-- Returns extracted pages
+- Manages PDF extraction state, progress updates, and extracted page data
 
 **`useArchive`** (`src/hooks/useArchive.ts`)
-- Manages Vault state and operations
-- Handles case and file management
-- Provides search functionality
-- Manages thumbnail caching
+- Manages archive drive setup, case loading, search, file actions, and thumbnails
 
 **`useArchiveExtraction`** (`src/hooks/useArchiveExtraction.ts`)
-- Specialized PDF extraction for Vault
-- Integrates with case folder structure
-- Saves directly to extraction folders
+- Handles case-scoped PDF extraction and extraction-folder workflows
+
+**`useMapDocument`** (`src/hooks/useMapDocument.ts`)
+- Loads, autosaves, and updates map documents
+- Persists viewport and layout changes while keeping the editor responsive
 
 **`useCategoryTags`** (`src/hooks/useCategoryTags.ts`)
-- Manages category tag creation and assignment
-- Handles tag-to-case and tag-to-file relationships
-- Provides tag lookup and filtering capabilities
+- Manages category tag creation, assignment, lookup, and filtering
 
 ### IPC Handlers
 
-The application uses Electron IPC for secure communication between processes:
+The application uses Electron IPC for secure communication between processes. Major handler groups include:
 
-- `select-pdf-file`: Open file dialog for PDF selection
-- `select-save-directory`: Open directory selection dialog
-- `validate-pdf-for-extraction`: Validate PDF file integrity
-- `read-pdf-file`: Read PDF file data
-- `save-files`: Save extracted pages to disk
-- `select-archive-drive`: Select Vault storage location
-- `create-case-folder`: Create a new case folder
-- `create-extraction-folder`: Create extraction folder within case
-- `list-archive-cases`: List all case folders
-- `list-case-files`: List files in a case or folder
-- `add-files-to-case`: Copy files into a case
-- `delete-case`: Delete a case folder
-- `delete-file`: Delete a file or folder
-- `rename-file`: Rename a file or folder
-- `get-file-thumbnail`: Generate thumbnail for a file (images, PDFs, videos)
-- `read-file-data`: Read file data for viewing
-- `extract-pdf-from-archive`: Extract PDF pages to Vault folder
-- `get-category-tags`: Get all category tags
-- `create-category-tag`: Create a new category tag
-- `set-case-category-tag`: Assign/remove category tag from a case
-- `set-file-category-tag`: Assign/remove category tag from a file
-- `get-case-category-tag`: Get category tag for a case
-- `get-file-category-tag`: Get category tag for a file
-- `create-bookmark`: Create a new bookmark
-- `get-bookmarks`: Get all bookmarks
-- `update-bookmark`: Update an existing bookmark
-- `delete-bookmark`: Delete a bookmark
-- `get-bookmark-thumbnail`: Get thumbnail for a bookmark
-- `create-bookmark-folder`: Create a bookmark folder
-- `update-bookmark-folder`: Update a bookmark folder
-- `delete-bookmark-folder`: Delete a bookmark folder
-- `create-word-editor-window`: Create detached word editor window
-- `reattach-word-editor`: Reattach word editor to main window
-- `open-bookmark-in-main-window`: Open bookmark in main window from detached editor
-- `create-text-file`: Create a new text file
-- `read-text-file`: Read text file content
-- `save-text-file`: Save text file
-- `delete-text-file`: Delete a text file
-- `list-text-files`: List all text files in vault
+- **Extraction**: `select-pdf-file`, `validate-pdf-for-extraction`, `read-pdf-file`, `save-files`, `extract-pdf-from-archive`
+- **Archive**: `select-archive-drive`, `create-case-folder`, `list-archive-cases`, `list-case-files`, `add-files-to-case`, `create-extraction-folder`, `rename-file`, `delete-file`
+- **Tags and metadata**: `get-category-tags`, `create-category-tag`, `delete-category-tag`, `set-case-category-tag`, `set-file-category-tag`
+- **Notes and bookmarks**: `list-text-files`, `create-text-file`, `save-text-file`, `delete-text-file`, `list-case-notes`, `create-case-note`, `create-bookmark`, `get-bookmarks`, `update-bookmark`, `delete-bookmark`
+- **Audit**: `audit-pdf-redaction`, `generate-audit-report`
+- **Maps**: `list-maps`, `list-case-maps`, `create-map`, `read-map`, `save-map`, `rename-map`, `delete-map`, `select-map-attachments`, `export-map-to-directory`, `export-map-png`
 
 ### State Management
 
-The application uses React hooks for state management:
-- **Local State**: `useState` for component-specific state
-- **Custom Hooks**: Encapsulate complex state logic
-- **Context API**: Toast notifications via `ToastContext`
-- **Refs**: Store mutable values and avoid re-renders
+The application uses React hooks and context providers for state management:
+- **Local State**: `useState` for view-specific UI state
+- **Custom Hooks**: Feature-specific state and side effects
+- **Context API**: Toast, settings, archive, and word editor state
+- **Refs**: Used for viewport persistence, focus management, and avoiding unnecessary re-renders
 
 ### File Organization System
 
-The Vault uses a hierarchical file structure:
+The Vault stores case work, maps, and notes in a structured on-disk layout:
 
-```
+```text
 vault-directory/
 ├── Case-Name-1/
+│   ├── .maps/
+│   │   └── <map-id>/
+│   │       ├── map.vault-map.json
+│   │       └── assets/
+│   ├── .notes/
+│   │   └── interview-summary.txt
 │   ├── document1.pdf
 │   ├── image1.jpg
-│   ├── Extraction-Folder-1/
-│   │   ├── .parent-pdf (metadata)
-│   │   ├── document1.pdf (optional)
-│   │   ├── page-1.png
-│   │   ├── page-2.png
-│   │   └── ...
-│   └── Extraction-Folder-2/
+│   └── Extraction-Folder-1/
+│       ├── .parent-pdf
+│       ├── document1.pdf
+│       ├── page-1.png
 │       └── ...
-├── Case-Name-2/
-│   └── ...
+├── MapLibrary/
+│   └── <map-id>/
+│       ├── map.vault-map.json
+│       └── assets/
+├── TextLibrary/
+│   └── general-notes.txt
 └── ...
 ```
 
 ### Security Features
 
-- **Path Validation**: All file paths are validated before operations
-- **Context Isolation**: Renderer process cannot access Node.js directly
-- **Safe IPC**: Only whitelisted operations are exposed
-- **Input Sanitization**: Folder and file names are validated
+- **Path Validation**: All file and folder paths are validated before operations
+- **Context Isolation**: Renderer code cannot access Node.js directly
+- **Safe IPC Surface**: Only whitelisted, typed operations are exposed through the preload bridge
+- **Input Sanitization**: Case names, folder names, and file actions are validated before use
 
 ## Development
 
@@ -613,13 +513,13 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
   - Search functionality is case-sensitive
 
 - **Features Not Yet Implemented**:
-  - Batch PDF extraction (multiple PDFs at once)
+  - Batch PDF extraction across multiple source PDFs at once
   - PDF password support
   - Custom thumbnail sizes
-  - Export vault to different formats
+  - Export vault contents to additional formats
   - Cloud storage integration
   - Multi-user support
-  - Tag editing and deletion (tags can be created and assigned, but not yet edited or deleted)
+  - Category tag editing (creation, assignment, and deletion are supported)
 
 ## Troubleshooting
 
@@ -629,7 +529,7 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
 - **Solution**: 
   - Delete `node_modules` and `package-lock.json`
   - Run `npm install` again
-  - Ensure Node.js version is 20.x or higher
+  - Ensure Node.js version matches the project requirement (`24.12.0`)
 
 **Problem**: TypeScript compilation errors
 - **Solution**:
@@ -677,7 +577,7 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
 
 **Problem**: Application crashes on startup
 - **Solution**:
-  - Check Node.js version: `node --version` (must be 20.x+)
+  - Check Node.js version: `node --version` (must match the project requirement, currently `24.12.0`)
   - Clear application data (location varies by OS)
   - Check for conflicting Electron processes: close all Electron windows
   - Review error logs (see Logging section)

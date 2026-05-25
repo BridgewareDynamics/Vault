@@ -53,6 +53,11 @@ export function AuditSaveOptionsDialog({
   casePath,
   existingFolders,
 }: AuditSaveOptionsDialogProps) {
+<<<<<<< Updated upstream
+=======
+  const { settings } = useSettingsContext();
+  const isPastel = (settings?.theme as Theme) === 'pastel';
+>>>>>>> Stashed changes
   const [selectedOption, setSelectedOption] = useState<AuditSaveOption | null>(null);
   const [detectedFolders, setDetectedFolders] = useState<ArchiveFile[]>([]);
   const [isDetecting, setIsDetecting] = useState(false);

@@ -151,3 +151,80 @@ export interface BookmarkFolder {
   updatedAt: number;
 }
 
+// Map (Research Timeline) Types
+export type MapDateTier = 'era' | 'phase' | 'year' | 'month' | 'day';
+export type MapBlockKind = 'timeline' | 'branch';
+export type MapBranchSide = 'left' | 'right';
+export type MapEdgeKind = 'chronology' | 'branch';
+export type MapCanvasSide = 'top' | 'right' | 'bottom' | 'left';
+
+export interface MapBlockChronology {
+  tier: MapDateTier;
+  eraLabel?: string;
+  phaseLabel?: string;
+  year?: number;
+  month?: number;
+  day?: number;
+  sortKey: string;
+}
+
+export interface MapAttachment {
+  id: string;
+  fileName: string;
+  relativePath: string;
+  vaultPath: string;
+  type: 'image' | 'pdf' | 'video' | 'other';
+  thumbnailPath?: string;
+}
+
+export interface MapBlock {
+  id: string;
+  kind?: MapBlockKind;
+  title?: string;
+  chronology?: MapBlockChronology;
+  notesHtml: string;
+  attachments: MapAttachment[];
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  positionLocked?: boolean;
+  branchParentBlockId?: string;
+  branchSide?: MapBranchSide;
+  branchSourceSide?: MapCanvasSide;
+  branchOrder?: number;
+}
+
+export interface MapEdge {
+  id: string;
+  kind?: MapEdgeKind;
+  sourceBlockId: string;
+  targetBlockId: string;
+  style: 'solid' | 'dotted';
+  sourceHandle?: string;
+  targetHandle?: string;
+}
+
+export interface MapDocument {
+  id: string;
+  title: string;
+  version: 1;
+  createdAt: number;
+  updatedAt: number;
+  casePath: string | null;
+  mapFolderPath: string;
+  blocks: MapBlock[];
+  edges: MapEdge[];
+  viewport: { x: number; y: number; zoom: number };
+  layoutMode: 'timeline-vertical';
+  defaultEdgeStyle: 'solid' | 'dotted';
+}
+
+export interface MapListEntry {
+  id: string;
+  title: string;
+  mapFolderPath: string;
+  casePath: string | null;
+  caseName?: string;
+  modified: number;
+  blockCount: number;
+}
+

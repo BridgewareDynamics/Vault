@@ -8,6 +8,10 @@ import { OnboardingContent } from './OnboardingContent';
 import { FeaturesPage } from './FeaturesPage';
 import { CapabilitiesPage } from './CapabilitiesPage';
 import { GettingStartedPage } from './GettingStartedPage';
+<<<<<<< Updated upstream
+=======
+import { MapWorkspacePage } from './MapWorkspacePage';
+>>>>>>> Stashed changes
 import { ThemeSelectionPage } from './ThemeSelectionPage';
 import { AdvancedPageIndicator } from './AdvancedPageIndicator';
 import { Theme } from '../../types';
@@ -29,7 +33,11 @@ export const OnboardingModal = memo(function OnboardingModal({ onComplete }: Onb
     console.log('[OnboardingModal] selectedTheme changed to:', selectedTheme);
   }, [selectedTheme]);
 
+<<<<<<< Updated upstream
   const totalPages = 5; // Increased from 3 to 5
+=======
+  const totalPages = 6;
+>>>>>>> Stashed changes
 
   // Theme colors - default to brideware-purple if no theme selected
   const currentTheme: Theme = selectedTheme || 'brideware-purple';
@@ -181,9 +189,16 @@ export const OnboardingModal = memo(function OnboardingModal({ onComplete }: Onb
             >
               {currentPage === 0 && <OnboardingContent theme={currentTheme} />}
               {currentPage === 1 && <FeaturesPage theme={currentTheme} />}
+<<<<<<< Updated upstream
               {currentPage === 2 && <CapabilitiesPage theme={currentTheme} />}
               {currentPage === 3 && <GettingStartedPage theme={currentTheme} />}
               {currentPage === 4 && (
+=======
+              {currentPage === 2 && <MapWorkspacePage theme={currentTheme} />}
+              {currentPage === 3 && <CapabilitiesPage theme={currentTheme} />}
+              {currentPage === 4 && <GettingStartedPage theme={currentTheme} />}
+              {currentPage === 5 && (
+>>>>>>> Stashed changes
                 <ThemeSelectionPage
                   selectedTheme={selectedTheme}
                   onSelectTheme={setSelectedTheme}

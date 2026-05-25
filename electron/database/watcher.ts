@@ -13,6 +13,10 @@ export class FileSystemWatcher {
   private archiveDrive: string | null = null;
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
   private readonly DEBOUNCE_MS = 500; // Debounce rapid changes
+<<<<<<< Updated upstream
+=======
+  private readonly SPECIAL_ROOT_FOLDERS = new Set(['MapLibrary', 'TextLibrary']);
+>>>>>>> Stashed changes
 
   constructor(db: LocalDatabase) {
     this.db = db;
@@ -131,6 +135,23 @@ export class FileSystemWatcher {
    */
   private async handleCaseChange(eventType: string, casePath: string): Promise<void> {
     try {
+<<<<<<< Updated upstream
+=======
+      const caseName = path.basename(casePath);
+      if (this.SPECIAL_ROOT_FOLDERS.has(caseName)) {
+        const existingCase = this.db.getCaseByPath(casePath);
+        if (existingCase) {
+          this.db.deleteCase(casePath);
+        }
+        if (this.watchers.has(casePath)) {
+          this.watchers.get(casePath)?.close();
+          this.watchers.delete(casePath);
+        }
+        logger.debug(`Ignoring special Vault folder: ${casePath}`);
+        return;
+      }
+
+>>>>>>> Stashed changes
       const stats = await fs.promises.stat(casePath).catch(() => null);
       
       if (eventType === 'rename' && !stats) {
@@ -148,7 +169,10 @@ export class FileSystemWatcher {
       }
 
       // Case was created or modified
+<<<<<<< Updated upstream
       const caseName = path.basename(casePath);
+=======
+>>>>>>> Stashed changes
       const existingCase = this.db.getCaseByPath(casePath);
 
       if (!existingCase) {
@@ -203,22 +227,46 @@ export class FileSystemWatcher {
       if (stats.isDirectory()) {
         // Folder was created or modified
         if (!existingFile) {
+<<<<<<< Updated upstream
           await this.syncFolderToDatabase(filePath, parentDir);
           logger.debug(`Folder added to database: ${filePath}`);
         } else {
           await this.syncFolderToDatabase(filePath, parentDir);
           logger.debug(`Folder updated in database: ${filePath}`);
+=======
+          const synced = await this.syncFolderToDatabase(filePath, parentDir);
+          if (synced) {
+            logger.debug(`Folder added to database: ${filePath}`);
+          }
+        } else {
+          const synced = await this.syncFolderToDatabase(filePath, parentDir);
+          if (synced) {
+            logger.debug(`Folder updated in database: ${filePath}`);
+          }
+>>>>>>> Stashed changes
         }
         // Start watching the folder
         this.watchDirectory(filePath);
       } else {
         // File was created or modified
         if (!existingFile) {
+<<<<<<< Updated upstream
           await this.syncFileToDatabase(filePath, parentDir);
           logger.debug(`File added to database: ${filePath}`);
         } else {
           await this.syncFileToDatabase(filePath, parentDir);
           logger.debug(`File updated in database: ${filePath}`);
+=======
+          const synced = await this.syncFileToDatabase(filePath, parentDir);
+          if (synced) {
+            logger.debug(`File added to database: ${filePath}`);
+          }
+        } else {
+          const synced = await this.syncFileToDatabase(filePath, parentDir);
+          if (synced) {
+            logger.debug(`File updated in database: ${filePath}`);
+          }
+>>>>>>> Stashed changes
         }
       }
     } catch (error) {
@@ -281,7 +329,11 @@ export class FileSystemWatcher {
   /**
    * Sync file to database
    */
+<<<<<<< Updated upstream
   private async syncFileToDatabase(filePath: string, parentDir: string): Promise<void> {
+=======
+  private async syncFileToDatabase(filePath: string, parentDir: string): Promise<boolean> {
+>>>>>>> Stashed changes
     try {
       const stats = await fs.promises.stat(filePath);
       const fileName = path.basename(filePath);
@@ -289,11 +341,23 @@ export class FileSystemWatcher {
       const checksum = await this.db.calculateChecksum(filePath);
       const fileId = this.db.generateId(filePath);
 
+<<<<<<< Updated upstream
       // Find case ID from parent directory
       const caseRecord = this.db.getCaseByPath(parentDir);
       if (!caseRecord) {
         logger.warn(`Case not found for file: ${filePath}`);
         return;
+=======
+      // Resolve the nearest case ancestor so nested folders work correctly.
+      const caseRecord = this.findNearestCaseRecord(parentDir);
+      if (!caseRecord) {
+        if (this.isInsideSpecialRootFolder(filePath)) {
+          logger.debug(`Skipping database sync for special Vault file: ${filePath}`);
+          return false;
+        }
+        logger.warn(`Case not found for file: ${filePath}`);
+        return false;
+>>>>>>> Stashed changes
       }
 
       const existingFile = this.db.getFileByPath(filePath);
@@ -319,15 +383,26 @@ export class FileSystemWatcher {
           created_at: stats.birthtime.getTime(),
         });
       }
+<<<<<<< Updated upstream
     } catch (error) {
       logger.warn(`Failed to sync file to database: ${filePath}`, error);
+=======
+      return true;
+    } catch (error) {
+      logger.warn(`Failed to sync file to database: ${filePath}`, error);
+      return false;
+>>>>>>> Stashed changes
     }
   }
 
   /**
    * Sync folder to database
    */
+<<<<<<< Updated upstream
   private async syncFolderToDatabase(folderPath: string, parentDir: string): Promise<void> {
+=======
+  private async syncFolderToDatabase(folderPath: string, parentDir: string): Promise<boolean> {
+>>>>>>> Stashed changes
     try {
       const stats = await fs.promises.stat(folderPath);
       const folderName = path.basename(folderPath);
@@ -348,11 +423,23 @@ export class FileSystemWatcher {
         }
       }
 
+<<<<<<< Updated upstream
       // Find case ID from parent directory
       const caseRecord = this.db.getCaseByPath(parentDir);
       if (!caseRecord) {
         logger.warn(`Case not found for folder: ${folderPath}`);
         return;
+=======
+      // Resolve the nearest case ancestor so nested folders work correctly.
+      const caseRecord = this.findNearestCaseRecord(parentDir);
+      if (!caseRecord) {
+        if (this.isInsideSpecialRootFolder(folderPath)) {
+          logger.debug(`Skipping database sync for special Vault folder: ${folderPath}`);
+          return false;
+        }
+        logger.warn(`Case not found for folder: ${folderPath}`);
+        return false;
+>>>>>>> Stashed changes
       }
 
       const existingFolder = this.db.getFileByPath(folderPath);
@@ -382,8 +469,15 @@ export class FileSystemWatcher {
           created_at: stats.birthtime.getTime(),
         });
       }
+<<<<<<< Updated upstream
     } catch (error) {
       logger.warn(`Failed to sync folder to database: ${folderPath}`, error);
+=======
+      return true;
+    } catch (error) {
+      logger.warn(`Failed to sync folder to database: ${folderPath}`, error);
+      return false;
+>>>>>>> Stashed changes
     }
   }
 
@@ -419,4 +513,38 @@ export class FileSystemWatcher {
       return 'other';
     }
   }
+<<<<<<< Updated upstream
+=======
+
+  private findNearestCaseRecord(startPath: string) {
+    if (!this.archiveDrive) {
+      return null;
+    }
+
+    let currentPath = startPath;
+    while (currentPath !== this.archiveDrive && currentPath !== path.dirname(currentPath)) {
+      const caseRecord = this.db.getCaseByPath(currentPath);
+      if (caseRecord) {
+        return caseRecord;
+      }
+      currentPath = path.dirname(currentPath);
+    }
+
+    return null;
+  }
+
+  private isInsideSpecialRootFolder(targetPath: string): boolean {
+    if (!this.archiveDrive) {
+      return false;
+    }
+
+    const relativePath = path.relative(this.archiveDrive, targetPath);
+    if (!relativePath || relativePath.startsWith('..')) {
+      return false;
+    }
+
+    const [rootFolder] = relativePath.split(path.sep);
+    return this.SPECIAL_ROOT_FOLDERS.has(rootFolder);
+  }
+>>>>>>> Stashed changes
 }

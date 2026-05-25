@@ -262,6 +262,53 @@ declare global {
         defaultPath: string;
         filters: Array<{ name: string; extensions: string[] }>;
       }) => Promise<{ canceled: boolean; filePath?: string }>;
+<<<<<<< Updated upstream
+=======
+      // Map API
+      listMaps: () => Promise<Array<{
+        id: string;
+        title: string;
+        mapFolderPath: string;
+        casePath: string | null;
+        caseName?: string;
+        modified: number;
+        blockCount: number;
+      }>>;
+      listCaseMaps: (casePath: string) => Promise<Array<{
+        id: string;
+        title: string;
+        mapFolderPath: string;
+        casePath: string | null;
+        caseName?: string;
+        modified: number;
+        blockCount: number;
+      }>>;
+      createMap: (title: string, casePath?: string | null) => Promise<import('./index').MapDocument>;
+      readMap: (mapFolderPath: string) => Promise<import('./index').MapDocument>;
+      saveMap: (document: import('./index').MapDocument) => Promise<import('./index').MapDocument>;
+      deleteMap: (mapFolderPath: string) => Promise<{ success: boolean }>;
+      renameMap: (mapFolderPath: string, newTitle: string) => Promise<import('./index').MapDocument>;
+      selectMapAttachments: () => Promise<string[]>;
+      copyMapAttachmentToAssets: (
+        mapFolderPath: string,
+        sourcePath: string,
+        attachmentId: string
+      ) => Promise<{
+        relativePath: string;
+        vaultPath: string;
+        fileName: string;
+        type: 'image' | 'pdf' | 'video' | 'other';
+      }>;
+      exportMapToDirectory: (
+        mapFolderPath: string,
+        destDirectory: string
+      ) => Promise<{ success: boolean; exportPath: string }>;
+      exportMapPng: (options: {
+        mapFolderPath: string;
+        pngBase64: string;
+        destFilePath?: string;
+      }) => Promise<{ success: boolean; filePath: string }>;
+>>>>>>> Stashed changes
     };
   }
 }

@@ -216,6 +216,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     defaultPath: string;
     filters: Array<{ name: string; extensions: string[] }>;
   }) => ipcRenderer.invoke('show-save-dialog', options),
+  // Map API
+  listMaps: () => ipcRenderer.invoke('list-maps'),
+  listCaseMaps: (casePath: string) => ipcRenderer.invoke('list-case-maps', casePath),
+  createMap: (title: string, casePath?: string | null) => ipcRenderer.invoke('create-map', title, casePath),
+  readMap: (mapFolderPath: string) => ipcRenderer.invoke('read-map', mapFolderPath),
+  saveMap: (document: unknown) => ipcRenderer.invoke('save-map', document),
+  deleteMap: (mapFolderPath: string) => ipcRenderer.invoke('delete-map', mapFolderPath),
+  renameMap: (mapFolderPath: string, newTitle: string) => ipcRenderer.invoke('rename-map', mapFolderPath, newTitle),
+  selectMapAttachments: () => ipcRenderer.invoke('select-map-attachments'),
+  copyMapAttachmentToAssets: (mapFolderPath: string, sourcePath: string, attachmentId: string) =>
+    ipcRenderer.invoke('copy-map-attachment-to-assets', mapFolderPath, sourcePath, attachmentId),
+  exportMapToDirectory: (mapFolderPath: string, destDirectory: string) =>
+    ipcRenderer.invoke('export-map-to-directory', mapFolderPath, destDirectory),
+  exportMapPng: (options: { mapFolderPath: string; pngBase64: string; destFilePath?: string }) =>
+    ipcRenderer.invoke('export-map-png', options),
 });
 
 // Type declaration for TypeScript

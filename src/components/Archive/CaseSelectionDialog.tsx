@@ -15,6 +15,8 @@ export function CaseSelectionDialog({
   onClose,
   onSelectCase,
 }: CaseSelectionDialogProps) {
+  const { settings } = useSettingsContext();
+  const isPastel = (settings?.theme as Theme) === 'pastel';
   const [cases, setCases] = useState<ArchiveCase[]>([]);
   const [loading, setLoading] = useState(false);
 
