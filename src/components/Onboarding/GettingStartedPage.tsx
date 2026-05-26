@@ -1,10 +1,6 @@
 import { motion } from 'framer-motion';
 import { memo } from 'react';
-<<<<<<< Updated upstream
-import { FileText, FolderOpen, Shield } from 'lucide-react';
-=======
 import { FileText, FolderOpen, Shield, Map as MapIcon } from 'lucide-react';
->>>>>>> Stashed changes
 import { Theme } from '../../types';
 import { HolographicEffect } from '../Shared/HolographicEffect';
 import { HexGrid } from '../Shared/HexGrid';
@@ -35,11 +31,6 @@ export const GettingStartedPage = memo(function GettingStartedPage({ theme = 'br
       color: 'from-purple-600 to-cyan-600',
     },
     {
-<<<<<<< Updated upstream
-      icon: Shield,
-      title: 'Audit & Secure',
-      description: 'Run security audits on your documents',
-=======
       icon: MapIcon,
       title: 'Build a Map',
       description: 'Turn scattered evidence into a visual timeline with dated blocks and notes',
@@ -49,7 +40,6 @@ export const GettingStartedPage = memo(function GettingStartedPage({ theme = 'br
       icon: Shield,
       title: 'Audit & Secure',
       description: 'Review security, redactions, and document risk before you share or file',
->>>>>>> Stashed changes
       color: 'from-purple-600 to-cyan-600',
     },
   ];
@@ -100,11 +90,7 @@ export const GettingStartedPage = memo(function GettingStartedPage({ theme = 'br
             transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.3 }}
             style={{ willChange: 'opacity' }}
           >
-<<<<<<< Updated upstream
-            Follow these simple steps to begin your journey
-=======
             Follow these simple steps to build your first research workspace
->>>>>>> Stashed changes
           </motion.p>
         </div>
 

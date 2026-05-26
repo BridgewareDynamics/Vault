@@ -14,19 +14,11 @@ import { loadSettings } from './utils/settings';
 import * as bookmarkStorage from './utils/bookmarkStorage';
 import { auditPDFRedaction } from './utils/pdfRedactionAudit';
 import { generateAuditReport } from './utils/generateAuditReport';
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
 import { LocalDatabase } from './database/localDatabase';
 import { migrateMetadataFilesToDatabase } from './database/migration';
 import { FileSystemWatcher } from './database/watcher';
 import { File } from './database/models';
-<<<<<<< Updated upstream
-=======
 import * as mapStorage from './utils/mapStorage';
->>>>>>> Stashed changes
 
 // Helper function to detect file type from path
 function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | 'other' {
@@ -73,11 +65,6 @@ async function findCasePathFromPath(filePath: string): Promise<string | null> {
   
   return null;
 }
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
->>>>>>> Stashed changes
-
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 // Enable hardware acceleration command line switches

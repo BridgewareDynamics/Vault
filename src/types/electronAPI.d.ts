@@ -262,8 +262,6 @@ declare global {
         defaultPath: string;
         filters: Array<{ name: string; extensions: string[] }>;
       }) => Promise<{ canceled: boolean; filePath?: string }>;
-<<<<<<< Updated upstream
-=======
       // Map API
       listMaps: () => Promise<Array<{
         id: string;
@@ -308,7 +306,6 @@ declare global {
         pngBase64: string;
         destFilePath?: string;
       }) => Promise<{ success: boolean; filePath: string }>;
->>>>>>> Stashed changes
     };
   }
 }

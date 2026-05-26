@@ -650,15 +650,8 @@ function AppContent() {
             onSelectFile={handleSelectFile}
             onOpenArchive={() => setShowArchive(true)}
             onOpenSecurityChecker={() => setShowSecurityChecker(true)}
-<<<<<<< Updated upstream
-            onOpenPDFExtraction={() => setShowPDFExtraction(true)}
-=======
-<<<<<<< Updated upstream
-=======
             onOpenPDFExtraction={() => setShowPDFExtraction(true)}
             onOpenMap={() => setShowMap(true)}
->>>>>>> Stashed changes
->>>>>>> Stashed changes
           />
         </div>
         <ToastContainer />

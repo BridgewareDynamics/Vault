@@ -255,11 +255,6 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
     }
   }, []);
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
   // Update loading state based on whether we should show gallery
   // If we're in case gallery, don't show loading - show gallery instead
   useEffect(() => {
@@ -286,8 +281,6 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   // Check for both null and undefined since currentCase?.path can be undefined
   const shouldShowGallery = showGallery || ((effectiveCasePath === null || effectiveCasePath === undefined) && selectedCaseForNotes === null);
 
-<<<<<<< Updated upstream
-=======
   // Track when component becomes visible to force refresh
   const [refreshKey, setRefreshKey] = useState(0);
   
@@ -297,7 +290,6 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
     setRefreshKey(prev => prev + 1);
   }, []); // Run once on mount
 
->>>>>>> Stashed changes
   useEffect(() => {
     // Wait for context to stabilize before loading files
     if (!contextStabilized) {
@@ -326,14 +318,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
       loadFiles();
     }
     // If shouldShowGalleryCalc is true, we don't load files - the gallery will be shown instead
-<<<<<<< Updated upstream
-  }, [selectedCaseForNotes?.path, currentCase?.path, showGallery, contextStabilized, detachedCasePath]);
-
-=======
   }, [selectedCaseForNotes?.path, currentCase?.path, showGallery, contextStabilized, detachedCasePath, refreshKey]);
-
->>>>>>> Stashed changes
->>>>>>> Stashed changes
   const loadFiles = async () => {
     // #region agent log
     if (window.electronAPI?.debugLog) {
@@ -420,8 +405,8 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   };
 
   const handleNewFileConfirm = async (fileName: string) => {
-    // Use selectedCaseForNotes if available, otherwise use currentCase, otherwise global
-    const casePath = selectedCaseForNotes?.path || currentCase?.path;
+    // Preserve detached-window case context when creating new notes.
+    const casePath = selectedCaseForNotes?.path || detachedCasePath || currentCase?.path;
     
     if (casePath) {
       // Create case note
