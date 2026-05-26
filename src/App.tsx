@@ -465,7 +465,12 @@ function AppContent() {
           <MapModule theme={theme} onExit={() => setShowMap(false)} />
         </Suspense>
         <ToastContainer />
-        <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+          inlineWordEditorContainerId="map-word-editor-inline-container"
+        />
       </>
     );
   }

@@ -8,6 +8,7 @@ import {
 } from '../utils/mapLayout';
 import { buildMapEdges } from '../utils/mapEdgeRouting';
 import { logger } from '../utils/logger';
+import { normalizeMapEdgeAppearance } from '../components/Map/mapEdgeAppearance';
 
 const AUTOSAVE_MS = 700;
 
@@ -52,6 +53,7 @@ function normalizeDocument(doc: MapDocument): MapDocument {
     blocks,
     edges: normalizedEdges,
     defaultEdgeStyle,
+    defaultEdgeAppearance: normalizeMapEdgeAppearance(doc.defaultEdgeAppearance),
     viewport: doc.viewport ?? { x: 0, y: 0, zoom: 1 },
     layoutMode: 'timeline-vertical',
   };

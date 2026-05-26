@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge, FileText, TrendingUp, Palette, Check } from 'lucide-react';
@@ -14,9 +14,15 @@ interface SettingsPanelProps {
   hideWordEditorButton?: boolean;
   isArchiveVisible?: boolean;
   hideFixedButtons?: boolean;
+  inlineWordEditorContainerId?: string;
 }
 
-export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible = false, hideFixedButtons = false }: SettingsPanelProps) {
+export function SettingsPanel({
+  hideWordEditorButton = false,
+  isArchiveVisible = false,
+  hideFixedButtons = false,
+  inlineWordEditorContainerId,
+}: SettingsPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isWordEditorOpen, setIsWordEditorOpen] = useState(false);
   const [showWordEditorDialog, setShowWordEditorDialog] = useState(false);
@@ -25,27 +31,32 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
   const [memoryInfo, setMemoryInfo] = useState<{ used: number; total: number } | null>(null);
   const [inlineContainerAvailable, setInlineContainerAvailable] = useState(false);
   const { isOpen: isWordEditorContextOpen, setIsOpen: setWordEditorContextOpen } = useWordEditor();
+  const resolvedInlineContainerId =
+    inlineWordEditorContainerId ?? (isArchiveVisible ? 'word-editor-inline-container' : undefined);
+
+  const closeWordEditorPanel = useCallback(() => {
+    setIsWordEditorOpen(false);
+    setWordEditorContextOpen(false);
+    setOpenLibraryOnMount(false);
+    window.dispatchEvent(new CustomEvent('close-word-editor'));
+  }, [setWordEditorContextOpen]);
 
   // Listen for reattach data from detached window
   useEffect(() => {
-    const handleReattach = (_event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
-      // When reattaching in archive mode, we want inline (side-by-side) layout, not overlay
-      // Only dispatch the overlay-mode event if we're NOT in archive mode
-      if (!isArchiveVisible) {
+    const handleReattach = () => {
+      // When an inline editor container exists for the current workspace, prefer docking
+      // back into that layout instead of forcing the shared overlay experience.
+      if (!resolvedInlineContainerId) {
         // Use the same event that opening from viewer uses to ensure consistent behavior
         // This ensures the PDF viewer's ref is set immediately
         window.dispatchEvent(new CustomEvent('open-word-editor-from-viewer'));
       }
-      // In archive mode, we skip the overlay event so shouldUseOverlayMode stays false
-      // This ensures we get side-by-side layout when the inline container exists
       setIsWordEditorOpen(true);
       setWordEditorContextOpen(true);
     };
 
     const handleCloseForBookmark = () => {
-      setIsWordEditorOpen(false);
-      setWordEditorContextOpen(false);
-      setOpenLibraryOnMount(false);
+      closeWordEditorPanel();
     };
 
     const handleOpenSettings = () => {
@@ -62,19 +73,38 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
       setWordEditorContextOpen(true);
     };
 
-    window.addEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
-    window.addEventListener('close-word-editor-for-bookmark' as any, handleCloseForBookmark as EventListener);
-    window.addEventListener('open-settings' as any, handleOpenSettings as EventListener);
-    window.addEventListener('open-word-editor-dialog' as any, handleOpenWordEditorDialog as EventListener);
-    window.addEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
-    return () => {
-      window.removeEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
-      window.removeEventListener('close-word-editor-for-bookmark' as any, handleCloseForBookmark as EventListener);
-      window.removeEventListener('open-settings' as any, handleOpenSettings as EventListener);
-      window.removeEventListener('open-word-editor-dialog' as any, handleOpenWordEditorDialog as EventListener);
-      window.removeEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
+    const handleOpenWordEditorPanel = (
+      event: CustomEvent<{ filePath?: string | null; openLibrary?: boolean }>
+    ) => {
+      if (event.detail && 'filePath' in event.detail) {
+        setCurrentFilePath(event.detail.filePath ?? null);
+      }
+      setOpenLibraryOnMount(Boolean(event.detail?.openLibrary));
+      setIsWordEditorOpen(true);
+      setWordEditorContextOpen(true);
     };
-  }, [setWordEditorContextOpen]);
+
+    const handleCloseWordEditorPanel = () => {
+      closeWordEditorPanel();
+    };
+
+    window.addEventListener('reattach-word-editor-data', handleReattach as EventListener);
+    window.addEventListener('close-word-editor-for-bookmark', handleCloseForBookmark as EventListener);
+    window.addEventListener('open-settings', handleOpenSettings as EventListener);
+    window.addEventListener('open-word-editor-dialog', handleOpenWordEditorDialog as EventListener);
+    window.addEventListener('open-word-editor-from-viewer', handleOpenWordEditorFromViewer as EventListener);
+    window.addEventListener('open-word-editor-panel', handleOpenWordEditorPanel as EventListener);
+    window.addEventListener('close-word-editor-panel', handleCloseWordEditorPanel as EventListener);
+    return () => {
+      window.removeEventListener('reattach-word-editor-data', handleReattach as EventListener);
+      window.removeEventListener('close-word-editor-for-bookmark', handleCloseForBookmark as EventListener);
+      window.removeEventListener('open-settings', handleOpenSettings as EventListener);
+      window.removeEventListener('open-word-editor-dialog', handleOpenWordEditorDialog as EventListener);
+      window.removeEventListener('open-word-editor-from-viewer', handleOpenWordEditorFromViewer as EventListener);
+      window.removeEventListener('open-word-editor-panel', handleOpenWordEditorPanel as EventListener);
+      window.removeEventListener('close-word-editor-panel', handleCloseWordEditorPanel as EventListener);
+    };
+  }, [closeWordEditorPanel, resolvedInlineContainerId, setWordEditorContextOpen]);
 
   // Sync local state with context state - when context opens, open local state too
   useEffect(() => {
@@ -85,14 +115,14 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
 
   // Check for inline container availability, especially important when reattaching in archive mode
   useEffect(() => {
-    if (!isArchiveVisible || !isWordEditorOpen) {
+    if (!resolvedInlineContainerId || !isWordEditorOpen) {
       setInlineContainerAvailable(false);
       return;
     }
 
     // Check if container exists
     const checkContainer = () => {
-      const container = document.getElementById('word-editor-inline-container');
+      const container = document.getElementById(resolvedInlineContainerId);
       setInlineContainerAvailable(!!container);
     };
 
@@ -118,7 +148,7 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
       clearTimeout(timeoutId);
       observer.disconnect();
     };
-  }, [isArchiveVisible, isWordEditorOpen]);
+  }, [resolvedInlineContainerId, isWordEditorOpen]);
 
   const {
     settings,
@@ -956,12 +986,12 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
       />
 
       {/* Word Editor Panel */}
-      {isArchiveVisible && isWordEditorOpen ? (
+      {resolvedInlineContainerId && isWordEditorOpen ? (
         (() => {
-          // When in archive mode, try to find the inline container
+          // When a workspace provides an inline container, try to render side-by-side there first.
           // Use the state variable to track availability (updated by effect)
           const container = inlineContainerAvailable 
-            ? document.getElementById('word-editor-inline-container')
+            ? document.getElementById(resolvedInlineContainerId)
             : null;
           
           if (!container) {
@@ -971,11 +1001,7 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
               <WordEditorPanel
                 isOpen={isWordEditorOpen}
                 onClose={() => {
-                  setIsWordEditorOpen(false);
-                  setWordEditorContextOpen(false);
-                  setOpenLibraryOnMount(false);
-                  // Dispatch event to reset overlay mode flag
-                  window.dispatchEvent(new CustomEvent('close-word-editor'));
+                  closeWordEditorPanel();
                 }}
                 initialFilePath={currentFilePath}
                 openLibrary={openLibraryOnMount}
@@ -988,11 +1014,7 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
             <WordEditorPanel
               isOpen={isWordEditorOpen}
               onClose={() => {
-                setIsWordEditorOpen(false);
-                setWordEditorContextOpen(false);
-                setOpenLibraryOnMount(false);
-                // Dispatch event to reset overlay mode flag
-                window.dispatchEvent(new CustomEvent('close-word-editor'));
+                closeWordEditorPanel();
               }}
               initialFilePath={currentFilePath}
               openLibrary={openLibraryOnMount}
@@ -1005,11 +1027,7 @@ export function SettingsPanel({ hideWordEditorButton = false, isArchiveVisible =
         <WordEditorPanel
           isOpen={isWordEditorOpen}
           onClose={() => {
-            setIsWordEditorOpen(false);
-            setWordEditorContextOpen(false);
-            setOpenLibraryOnMount(false);
-            // Dispatch event to reset overlay mode flag
-            window.dispatchEvent(new CustomEvent('close-word-editor'));
+            closeWordEditorPanel();
           }}
           initialFilePath={currentFilePath}
           openLibrary={openLibraryOnMount}

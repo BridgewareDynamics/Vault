@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -9,7 +9,7 @@ import {
   useNodesState,
   useEdgesState,
   type Node,
-  type Edge,
+  type EdgeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
@@ -19,10 +19,28 @@ import {
   LayoutGrid,
   Link2,
   Link2Off,
+  PaintBucket,
+  X,
 } from 'lucide-react';
-import { MapBlock, MapBranchSide, MapCanvasSide, MapDocument, Theme } from '../../types';
+import {
+  MapBlock,
+  MapBranchSide,
+  MapCanvasSide,
+  MapDocument,
+  MapEdgeAppearance,
+  MapEdgeStyle,
+  Theme,
+} from '../../types';
 import { MapBlockNode, type MapBlockNodeData } from './MapBlockNode';
 import { useMapTheme } from './mapTheme';
+import { getMapBlockMinimapColor } from './mapBlockColors';
+import { MapEdgeColorPicker } from './MapEdgeColorPicker';
+import { MapStyledEdge, type MapStyledFlowEdge } from './MapStyledEdge';
+import {
+  getMapEdgeAppearanceLabel,
+  normalizeMapEdgeAppearance,
+  resolveMapEdgeRenderStyle,
+} from './mapEdgeAppearance';
 import {
   buildFlowEdgesFromBlocks,
   buildMapEdges,
@@ -31,118 +49,313 @@ import {
 } from '../../utils/mapEdgeRouting';
 
 const nodeTypes = { mapBlock: MapBlockNode };
+const edgeTypes: EdgeTypes = { mapStyled: MapStyledEdge };
 
 interface MapCanvasProps {
   document: MapDocument;
   theme: Theme;
-  edgeStyle: 'solid' | 'dotted';
+  edgeStyle: MapEdgeStyle;
+  edgeAppearance?: Partial<MapEdgeAppearance> | null;
   onBlocksChange: (blocks: MapBlock[]) => void;
   onViewportChange: (viewport: { x: number; y: number; zoom: number }) => void;
   onExpandBlock: (blockId: string) => void;
   onPreviewBlock: (blockId: string) => void;
   onDeleteBlock: (blockId: string) => void;
   onEditBlock: (blockId: string) => void;
+  onEditBlockColor: (blockId: string) => void;
   onCreateBranch: (blockId: string, side: MapBranchSide, sourceSide: MapCanvasSide) => void;
   onNewBlock: () => void;
-  onToggleEdgeStyle: () => void;
+  onEdgeStyleChange: (style: MapEdgeStyle) => void;
+  onEdgeAppearanceChange: (appearance: MapEdgeAppearance) => void;
   onRelayout: () => void;
 }
 
 interface MapCanvasToolbarProps {
   theme: Theme;
-  edgeStyle: 'solid' | 'dotted';
+  edgeStyle: MapEdgeStyle;
+  edgeAppearance?: Partial<MapEdgeAppearance> | null;
   onNewBlock: () => void;
-  onToggleEdgeStyle: () => void;
+  onEdgeStyleChange: (style: MapEdgeStyle) => void;
+  onEdgeAppearanceChange: (appearance: MapEdgeAppearance) => void;
   onRelayout: () => void;
 }
 
 function MapCanvasToolbar({
   theme,
   edgeStyle,
+  edgeAppearance,
   onNewBlock,
-  onToggleEdgeStyle,
+  onEdgeStyleChange,
+  onEdgeAppearanceChange,
   onRelayout,
 }: MapCanvasToolbarProps) {
   const t = useMapTheme(theme);
   const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const [isConnectorStudioOpen, setIsConnectorStudioOpen] = useState(false);
+  const toolbarShellRef = useRef<HTMLDivElement>(null);
+  const [connectorStudioStyle, setConnectorStudioStyle] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
+  const normalizedAppearance = useMemo(
+    () => normalizeMapEdgeAppearance(edgeAppearance),
+    [edgeAppearance]
+  );
 
   const shellClass = t.isPastel
     ? 'bg-white/88 border-pink-200/50 text-gray-800'
     : 'bg-gray-900/88 border-cyber-purple-500/40 text-white';
   const mutedClass = t.isPastel ? 'text-gray-500' : 'text-gray-400';
-  const toolBtn = `w-11 h-11 rounded-xl border flex items-center justify-center transition-all ${shellClass} ${
+  const toolBtn = `h-9 w-9 rounded-xl border flex items-center justify-center transition-all ${shellClass} ${
     t.isPastel ? 'hover:bg-white hover:border-purple-300/70' : 'hover:border-cyber-cyan-400/70 hover:bg-gray-900'
   }`;
-  const actionBtn = `w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${shellClass} ${
+  const compactActionBtn = `h-10 w-full flex items-center justify-center gap-2 rounded-xl border px-3 text-sm font-medium transition-all ${shellClass} ${
     t.isPastel ? 'hover:bg-white hover:border-purple-300/70' : 'hover:border-cyber-cyan-400/70 hover:bg-gray-900'
   }`;
+  const connectorPill =
+    'rounded-xl border px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-default';
+
+  useLayoutEffect(() => {
+    if (!isConnectorStudioOpen) {
+      setConnectorStudioStyle(null);
+      return;
+    }
+
+    const updateConnectorStudioLayout = () => {
+      const toolbarShell = toolbarShellRef.current;
+      if (!toolbarShell) {
+        return;
+      }
+
+      const margin = 16;
+      const gap = 12;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const maxPanelWidth = Math.min(480, viewportWidth - margin * 2);
+      const targetPanelHeight = Math.min(560, viewportHeight - margin * 2);
+      const toolbarRect = toolbarShell.getBoundingClientRect();
+
+      const top = Math.max(
+        margin,
+        Math.min(toolbarRect.bottom + gap, viewportHeight - margin - targetPanelHeight)
+      );
+      const left = Math.min(toolbarRect.left, viewportWidth - margin - maxPanelWidth);
+      const maxHeight = Math.max(320, viewportHeight - top - margin);
+
+      setConnectorStudioStyle({
+        top,
+        left: Math.max(margin, left),
+        width: maxPanelWidth,
+        maxHeight,
+      });
+    };
+
+    updateConnectorStudioLayout();
+    window.addEventListener('resize', updateConnectorStudioLayout);
+    return () => window.removeEventListener('resize', updateConnectorStudioLayout);
+  }, [isConnectorStudioOpen]);
 
   return (
     <Panel position="top-left" className="!m-4 !pointer-events-auto">
-      <div
-        className={`w-[300px] rounded-2xl border backdrop-blur-xl shadow-2xl overflow-hidden ${shellClass}`}
-      >
+      <div ref={toolbarShellRef} className="relative w-[344px] overflow-visible">
         <div
-          className={`px-4 py-3 border-b ${
-            t.isPastel ? 'border-pink-200/30 bg-pink-50/60' : 'border-white/10 bg-black/30'
-          }`}
+          className={`rounded-2xl border backdrop-blur-xl shadow-2xl overflow-hidden ${shellClass}`}
         >
-          <div className="flex items-center gap-2">
-            <LayoutGrid className={`w-4 h-4 ${t.primary}`} />
-            <span className="text-sm font-semibold">Canvas Tools</span>
+          <div
+            className={`px-4 py-2.5 border-b ${
+              t.isPastel ? 'border-pink-200/30 bg-pink-50/60' : 'border-white/10 bg-black/30'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <LayoutGrid className={`w-4 h-4 ${t.primary}`} />
+              <span className="text-sm font-semibold">Canvas Tools</span>
+            </div>
+            <p className={`mt-1 text-[11px] ${mutedClass}`}>
+              Locked on the canvas for quick timeline building.
+            </p>
           </div>
-          <p className={`text-xs mt-1 ${mutedClass}`}>
-            Locked on the canvas for quick timeline building.
-          </p>
-        </div>
 
-        <div className="p-4 space-y-4">
-          <div className="grid grid-cols-3 gap-2">
-            <button type="button" onClick={() => zoomIn({ duration: 180 })} className={toolBtn} aria-label="Zoom in">
-              <Plus className="w-5 h-5" />
-            </button>
-            <button type="button" onClick={() => zoomOut({ duration: 180 })} className={toolBtn} aria-label="Zoom out">
-              <Minus className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => fitView({ padding: 0.25, duration: 220 })}
-              className={toolBtn}
-              aria-label="Fit timeline to view"
+          <div className="p-3 space-y-3">
+            <div className="grid grid-cols-[2.25rem_2.25rem_2.25rem_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center">
+              <button type="button" onClick={() => zoomIn({ duration: 180 })} className={toolBtn} aria-label="Zoom in">
+                <Plus className="w-4 h-4" />
+              </button>
+              <button type="button" onClick={() => zoomOut({ duration: 180 })} className={toolBtn} aria-label="Zoom out">
+                <Minus className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => fitView({ padding: 0.25, duration: 220 })}
+                className={toolBtn}
+                aria-label="Fit timeline to view"
+              >
+                <ScanSearch className="w-4 h-4" />
+              </button>
+
+              <button type="button" onClick={onNewBlock} className={`${compactActionBtn} ${t.button} border-0`}>
+                <Plus className="w-4 h-4" />
+                <span className="truncate">New Block</span>
+              </button>
+
+              <button type="button" onClick={onRelayout} className={compactActionBtn}>
+                <LayoutGrid className="w-4 h-4" />
+                <span className="truncate">Re-layout</span>
+              </button>
+            </div>
+
+            <div
+              className={`rounded-2xl border p-3 transition-all ${
+                t.isPastel
+                  ? 'border-purple-200/50 bg-white/75'
+                  : 'border-white/10 bg-black/20'
+              }`}
             >
-              <ScanSearch className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            <button type="button" onClick={onNewBlock} className={`${actionBtn} ${t.button} border-0`}>
-              <Plus className="w-5 h-5" />
-              <span className="font-semibold">New Block</span>
-            </button>
-
-            <button type="button" onClick={onToggleEdgeStyle} className={actionBtn}>
-              {edgeStyle === 'solid' ? (
-                <Link2 className="w-5 h-5" />
-              ) : (
-                <Link2Off className="w-5 h-5" />
-              )}
-              <div className="text-left">
-                <div className="text-sm font-medium">
-                  {edgeStyle === 'solid' ? 'Solid connectors' : 'Dotted connectors'}
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+                    t.isPastel ? 'border-purple-200/60 bg-purple-50/90' : 'border-white/10 bg-gray-950/70'
+                  }`}
+                >
+                  {edgeStyle === 'solid' ? (
+                    <Link2 className="h-5 w-5" />
+                  ) : (
+                    <Link2Off className="h-5 w-5" />
+                  )}
                 </div>
-                <div className={`text-xs ${mutedClass}`}>Toggle line style</div>
-              </div>
-            </button>
 
-            <button type="button" onClick={onRelayout} className={actionBtn}>
-              <LayoutGrid className="w-5 h-5" />
-              <div className="text-left">
-                <div className="text-sm font-medium">Re-layout timeline</div>
-                <div className={`text-xs ${mutedClass}`}>Restore smart snake ordering</div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium">Connector styling</div>
+                  <div className={`text-[11px] ${mutedClass}`}>
+                    {getMapEdgeAppearanceLabel(normalizedAppearance)}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsConnectorStudioOpen((current) => !current)}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+                    t.isPastel
+                      ? 'border-purple-200/60 bg-white/90 text-purple-600 hover:bg-purple-50'
+                      : 'border-white/10 bg-gray-950/70 text-cyber-cyan-300 hover:bg-gray-900'
+                  }`}
+                  aria-label="Open connector color studio"
+                  aria-pressed={isConnectorStudioOpen}
+                >
+                  <PaintBucket className="h-4 w-4" />
+                </button>
               </div>
-            </button>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onEdgeStyleChange('solid')}
+                  className={`${connectorPill} ${
+                    edgeStyle === 'solid'
+                      ? t.isPastel
+                        ? 'border-purple-400 bg-purple-50/90 text-gray-900'
+                        : 'border-cyber-cyan-400/60 bg-cyber-cyan-500/10 text-white'
+                      : t.isPastel
+                        ? 'border-purple-200/60 bg-white/85 text-gray-700 hover:bg-white'
+                        : 'border-white/10 bg-gray-950/60 text-gray-200 hover:bg-gray-900'
+                  }`}
+                  aria-pressed={edgeStyle === 'solid'}
+                >
+                  Solid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onEdgeStyleChange('dotted')}
+                  className={`${connectorPill} ${
+                    edgeStyle === 'dotted'
+                      ? t.isPastel
+                        ? 'border-purple-400 bg-purple-50/90 text-gray-900'
+                        : 'border-cyber-cyan-400/60 bg-cyber-cyan-500/10 text-white'
+                      : t.isPastel
+                        ? 'border-purple-200/60 bg-white/85 text-gray-700 hover:bg-white'
+                        : 'border-white/10 bg-gray-950/60 text-gray-200 hover:bg-gray-900'
+                  }`}
+                  aria-pressed={edgeStyle === 'dotted'}
+                >
+                  Dotted
+                </button>
+              </div>
+            </div>
           </div>
         </div>
+
+        {isConnectorStudioOpen && (
+          <div
+            className={`absolute left-0 top-full z-50 mt-3 overflow-hidden rounded-[28px] border p-3 shadow-2xl backdrop-blur-xl ${
+              t.isPastel
+                ? 'border-purple-200/60 bg-white/88'
+                : 'border-cyber-purple-500/35 bg-gray-950/88'
+            }`}
+            style={
+              connectorStudioStyle
+                ? {
+                    position: 'fixed',
+                    top: connectorStudioStyle.top,
+                    left: connectorStudioStyle.left,
+                    width: connectorStudioStyle.width,
+                    maxHeight: connectorStudioStyle.maxHeight,
+                    marginTop: 0,
+                  }
+                : {
+                    position: 'fixed',
+                    top: 16,
+                    left: 16,
+                    width: 'min(480px, calc(100vw - 2rem))',
+                    maxHeight: 'calc(100vh - 2rem)',
+                    marginTop: 0,
+                  }
+            }
+          >
+            <div
+              className={`mb-3 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${
+                t.isPastel
+                  ? 'border-purple-200/50 bg-pink-50/70 text-gray-800'
+                  : 'border-white/10 bg-black/25 text-white'
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">Connector Studio</div>
+                <div className={`text-xs ${mutedClass}`}>
+                  Floating over the canvas so the full line styling panel stays visible.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsConnectorStudioOpen(false)}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+                  t.isPastel
+                    ? 'border-purple-200/60 bg-white/90 text-gray-600 hover:bg-white'
+                    : 'border-white/10 bg-gray-950/70 text-gray-300 hover:bg-gray-900'
+                }`}
+                aria-label="Close connector color studio"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div
+              className="min-h-0 overflow-y-auto pr-1"
+              style={{
+                maxHeight: connectorStudioStyle
+                  ? Math.max(220, connectorStudioStyle.maxHeight - 76)
+                  : undefined,
+              }}
+            >
+              <MapEdgeColorPicker
+                theme={theme}
+                appearance={normalizedAppearance}
+                onChange={onEdgeAppearanceChange}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </Panel>
   );
@@ -157,6 +370,7 @@ function blocksToNodes(
   onPreview: (id: string) => void,
   onDelete: (id: string) => void,
   onEdit: (id: string) => void,
+  onEditColor: (id: string) => void,
   onCreateBranch: (id: string, side: MapBranchSide, sourceSide: MapCanvasSide) => void
 ): Node<MapBlockNodeData>[] {
   const isPastel = theme === 'pastel';
@@ -171,6 +385,7 @@ function blocksToNodes(
       onPreview,
       onDelete,
       onEdit,
+      onEditColor,
       onCreateBranch,
       branchButtons: branchButtonMap.get(block.id) ?? [],
       occupiedSides: occupiedSideMap.get(block.id) ?? [],
@@ -257,9 +472,11 @@ function buildNodeAffordances(
   return { branchButtonsByBlockId, occupiedSidesByBlockId };
 }
 
-function flowEdgesFromDocument(doc: MapDocument): Edge[] {
+function flowEdgesFromDocument(doc: MapDocument, theme: Theme): MapStyledFlowEdge[] {
   const enriched = enrichEdgesWithHandles(doc.blocks, doc.edges);
   const routed = buildFlowEdgesFromBlocks(doc.blocks, enriched, doc.defaultEdgeStyle);
+  const blockById = new Map(doc.blocks.map((block) => [block.id, block]));
+  const edgeTheme = theme === 'pastel' ? 'pastel' : 'dark';
 
   return routed.map((e) => ({
     id: e.id,
@@ -267,9 +484,16 @@ function flowEdgesFromDocument(doc: MapDocument): Edge[] {
     target: e.target,
     sourceHandle: e.sourceHandle,
     targetHandle: e.targetHandle,
-    type: 'smoothstep',
+    type: 'mapStyled',
+    data: resolveMapEdgeRenderStyle({
+      appearance: doc.defaultEdgeAppearance,
+      sourceBlock: blockById.get(e.source),
+      targetBlock: blockById.get(e.target),
+      kind: e.kind,
+      style: e.style,
+      theme: edgeTheme,
+    }),
     style: {
-      stroke: e.kind === 'branch' ? '#f59e0b' : doc.defaultEdgeStyle === 'dotted' ? '#67e8f9' : '#a78bfa',
       strokeWidth: 2,
       strokeDasharray: e.style === 'dotted' ? '8 6' : undefined,
     },
@@ -281,24 +505,57 @@ function blocksSignature(blocks: MapBlock[]): string {
   return blocks
     .map(
       (b) =>
-        `${b.id}:${Math.round(b.position.x)}:${Math.round(b.position.y)}:${b.positionLocked ? 1 : 0}`
+        [
+          b.id,
+          Math.round(b.position.x),
+          Math.round(b.position.y),
+          b.positionLocked ? 1 : 0,
+          b.kind ?? '',
+          b.title ?? '',
+          b.color ?? '',
+          b.surfaceColor ?? '',
+          b.borderColor ?? '',
+          b.chronology?.sortKey ?? '',
+          b.notesHtml,
+          b.branchSide ?? '',
+          b.branchSourceSide ?? '',
+          b.branchOrder ?? '',
+          `${b.size.width}x${b.size.height}`,
+          b.attachments
+            .map((attachment) => `${attachment.id}:${attachment.type}:${attachment.fileName}`)
+            .join(','),
+        ].join(':')
     )
     .join('|');
+}
+
+export function getMiniMapNodeColor(block: MapBlock | undefined, theme: Theme): string {
+  return getMapBlockMinimapColor(
+    {
+      surfaceColor: block?.surfaceColor,
+      borderColor: block?.borderColor,
+      legacyColor: block?.color,
+    },
+    theme === 'pastel' ? 'pastel' : 'dark'
+  );
 }
 
 export function MapCanvas({
   document,
   theme,
   edgeStyle,
+  edgeAppearance,
   onBlocksChange,
   onViewportChange,
   onExpandBlock,
   onPreviewBlock,
   onDeleteBlock,
   onEditBlock,
+  onEditBlockColor,
   onCreateBranch,
   onNewBlock,
-  onToggleEdgeStyle,
+  onEdgeStyleChange,
+  onEdgeAppearanceChange,
   onRelayout,
 }: MapCanvasProps) {
   const t = useMapTheme(theme);
@@ -312,9 +569,10 @@ export function MapCanvas({
       onPreview: onPreviewBlock,
       onDelete: onDeleteBlock,
       onEdit: onEditBlock,
+      onEditColor: onEditBlockColor,
       onCreateBranch,
     }),
-    [onExpandBlock, onPreviewBlock, onDeleteBlock, onEditBlock, onCreateBranch]
+    [onExpandBlock, onPreviewBlock, onDeleteBlock, onEditBlock, onEditBlockColor, onCreateBranch]
   );
 
   const nodeAffordances = useMemo(
@@ -333,22 +591,23 @@ export function MapCanvas({
         blockCallbacks.onPreview,
         blockCallbacks.onDelete,
         blockCallbacks.onEdit,
+        blockCallbacks.onEditColor,
         blockCallbacks.onCreateBranch
       ),
     [document.blocks, nodeAffordances, theme, blockCallbacks]
   );
 
-  const initialEdges = useMemo(() => flowEdgesFromDocument(document), [document]);
+  const initialEdges = useMemo(() => flowEdgesFromDocument(document, theme), [document, theme]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<MapStyledFlowEdge>(initialEdges);
 
   const blocksSig = blocksSignature(document.blocks);
 
   useEffect(() => {
     if (isDraggingRef.current) return;
     if (blocksSig === lastBlocksSigRef.current) {
-      setEdges(flowEdgesFromDocument(document));
+      setEdges(flowEdgesFromDocument(document, theme));
       return;
     }
     lastBlocksSigRef.current = blocksSig;
@@ -362,10 +621,11 @@ export function MapCanvas({
         blockCallbacks.onPreview,
         blockCallbacks.onDelete,
         blockCallbacks.onEdit,
+        blockCallbacks.onEditColor,
         blockCallbacks.onCreateBranch
       )
     );
-    setEdges(flowEdgesFromDocument(document));
+    setEdges(flowEdgesFromDocument(document, theme));
   }, [blocksSig, document, nodeAffordances, theme, blockCallbacks, setNodes, setEdges]);
 
   const handleNodeDragStart = useCallback(() => {
@@ -384,19 +644,22 @@ export function MapCanvas({
       lastBlocksSigRef.current = blocksSignature(updatedBlocks);
       onBlocksChange(updatedBlocks);
       setEdges(
-        flowEdgesFromDocument({
-          ...document,
-          blocks: updatedBlocks,
-          edges: buildMapEdges(updatedBlocks, document.defaultEdgeStyle),
-        })
+        flowEdgesFromDocument(
+          {
+            ...document,
+            blocks: updatedBlocks,
+            edges: buildMapEdges(updatedBlocks, document.defaultEdgeStyle),
+          },
+          theme
+        )
       );
     },
-    [document, onBlocksChange, setEdges]
+    [document, onBlocksChange, setEdges, theme]
   );
 
   return (
     <div className="w-full h-full map-canvas-root" style={{ background: 'transparent' }}>
-      <ReactFlow
+      <ReactFlow<Node<MapBlockNodeData>, MapStyledFlowEdge>
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
@@ -404,6 +667,7 @@ export function MapCanvas({
         onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         nodesDraggable
         nodesConnectable={false}
         elementsSelectable
@@ -441,8 +705,10 @@ export function MapCanvas({
         <MapCanvasToolbar
           theme={theme}
           edgeStyle={edgeStyle}
+          edgeAppearance={edgeAppearance}
           onNewBlock={onNewBlock}
-          onToggleEdgeStyle={onToggleEdgeStyle}
+          onEdgeStyleChange={onEdgeStyleChange}
+          onEdgeAppearanceChange={onEdgeAppearanceChange}
           onRelayout={onRelayout}
         />
         <MiniMap
@@ -451,7 +717,7 @@ export function MapCanvas({
               ? '!bg-white/85 !border-pink-200/40'
               : '!bg-gray-900/85 !border-cyber-purple-500/40'
           }`}
-          nodeColor={() => (t.isPastel ? '#c4b5fd' : '#8b5cf6')}
+          nodeColor={(node) => getMiniMapNodeColor((node as Node<MapBlockNodeData>).data?.block, theme)}
           pannable
           zoomable
         />

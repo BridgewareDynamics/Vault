@@ -60,6 +60,11 @@ export interface MapDocumentStored {
   viewport: { x: number; y: number; zoom: number };
   layoutMode: 'timeline-vertical';
   defaultEdgeStyle: 'solid' | 'dotted';
+  defaultEdgeAppearance?: {
+    colorMode?: 'theme' | 'custom' | 'linked-blocks';
+    strokeColor?: string;
+    glowColor?: string;
+  };
 }
 
 export interface MapListEntryStored {
@@ -87,6 +92,9 @@ export function createEmptyMapDocument(title: string, mapFolderPath: string, cas
     viewport: { x: 0, y: 0, zoom: 1 },
     layoutMode: 'timeline-vertical',
     defaultEdgeStyle: 'solid',
+    defaultEdgeAppearance: {
+      colorMode: 'theme',
+    },
   };
 }
 

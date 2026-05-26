@@ -1,9 +1,15 @@
 import { memo, useEffect, useState } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
-import { Maximize2, FileText, File, Film, Trash2, Pencil, Plus } from 'lucide-react';
+import { Maximize2, FileText, File, Film, Trash2, Pencil, Plus, PaintBucket } from 'lucide-react';
 import { MapBlock, MapBranchSide, MapCanvasSide } from '../../types';
 import { formatChronologyLabel } from '../../utils/mapChronology';
 import type { MapHandleSide } from '../../utils/mapEdgeRouting';
+import {
+  getMapBlockSurfaceStyle,
+  mixHexColors,
+  resolveMapBlockColor,
+  withHexAlpha,
+} from './mapBlockColors';
 
 type BranchButton = {
   branchSide: MapBranchSide;
@@ -17,6 +23,7 @@ export type MapBlockNodeData = {
   onPreview: (blockId: string) => void;
   onDelete: (blockId: string) => void;
   onEdit: (blockId: string) => void;
+  onEditColor: (blockId: string) => void;
   onCreateBranch: (blockId: string, side: MapBranchSide, sourceSide: MapCanvasSide) => void;
   branchButtons: BranchButton[];
   occupiedSides: MapHandleSide[];
@@ -43,6 +50,7 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
     onPreview,
     onDelete,
     onEdit,
+    onEditColor,
     onCreateBranch,
     branchButtons,
     occupiedSides,
@@ -50,6 +58,11 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
   const isPastel = theme === 'pastel';
   const isBranch = block.kind === 'branch';
   const [thumb, setThumb] = useState<string | null>(null);
+  const resolvedColors = resolveMapBlockColor({
+    surfaceColor: block.surfaceColor,
+    borderColor: block.borderColor,
+    legacyColor: block.color,
+  });
 
   const imageAtt = block.attachments.find((a) => a.type === 'image');
   const pdfCount = block.attachments.filter((a) => a.type === 'pdf').length;
@@ -99,6 +112,42 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
     : isPastel
       ? 'bg-white/90'
       : 'bg-gray-900/95';
+  const customSurfaceStyle = getMapBlockSurfaceStyle(
+    {
+      surfaceColor: block.surfaceColor,
+      borderColor: block.borderColor,
+      legacyColor: block.color,
+    },
+    {
+      theme: isPastel ? 'pastel' : 'dark',
+      selected,
+    }
+  );
+  const accentColor = resolvedColors.accentColor
+    ? isPastel
+      ? resolvedColors.accentColor
+      : mixHexColors(resolvedColors.accentColor, '#FFFFFF', 0.22)
+    : undefined;
+  const titleColor =
+    resolvedColors.surfaceColor || resolvedColors.borderColor ? (isPastel ? '#1F2937' : '#FFFFFF') : undefined;
+  const bodyColor =
+    resolvedColors.surfaceColor || resolvedColors.borderColor ? (isPastel ? '#4B5563' : '#E5E7EB') : undefined;
+  const mutedColor =
+    resolvedColors.surfaceColor || resolvedColors.borderColor ? (isPastel ? '#6B7280' : '#CBD5E1') : undefined;
+  const actionSurface = resolvedColors.accentColor
+    ? {
+        background: isPastel
+          ? withHexAlpha(mixHexColors(resolvedColors.accentColor, '#FFFFFF', 0.88), 0.92)
+          : withHexAlpha(mixHexColors(resolvedColors.accentColor, '#0F172A', 0.6), 0.92),
+        borderColor: withHexAlpha(resolvedColors.accentColor, isPastel ? 0.2 : 0.32),
+        boxShadow: `0 10px 24px -18px ${withHexAlpha(resolvedColors.accentColor, 0.95)}`,
+      }
+    : undefined;
+  const mediaSurfaceStyle = resolvedColors.surfaceColor
+    ? {
+        backgroundImage: `linear-gradient(135deg, ${withHexAlpha(mixHexColors(resolvedColors.surfaceColor, '#FFFFFF', isPastel ? 0.74 : 0.18), isPastel ? 0.85 : 0.22)} 0%, ${withHexAlpha(mixHexColors(resolvedColors.surfaceColor, '#111827', isPastel ? 0.44 : 0.62), isPastel ? 0.24 : 0.45)} 100%)`,
+      }
+    : undefined;
 
   const cornerBtn = `nodrag nopan absolute w-6 h-6 flex items-center justify-center rounded-md z-20 ${
     isPastel ? 'bg-white/90 text-purple-500 hover:bg-purple-100' : 'bg-gray-800/90 text-cyber-cyan-400 hover:bg-gray-700'
@@ -126,7 +175,11 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
       className={`group relative rounded-2xl border-2 overflow-visible backdrop-blur-md shadow-lg ${borderClass} ${
         backgroundClass
       }`}
-      style={{ width: block.size.width, height: block.size.height }}
+      style={{
+        width: block.size.width,
+        height: block.size.height,
+        ...customSurfaceStyle,
+      }}
     >
       {SIDES.map(({ position, side }) => (
         <span key={side}>
@@ -150,6 +203,7 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
           key={`${branchSide}-${buttonSide}`}
           type="button"
           className={`${branchButtonClass} ${buttonSideClass[buttonSide]}`}
+          style={accentColor ? { ...actionSurface, color: accentColor } : actionSurface}
           onClick={(event) => {
             event.stopPropagation();
             onCreateBranch(block.id, branchSide, buttonSide);
@@ -166,6 +220,7 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
       {(['tl', 'tr', 'bl', 'br'] as const).map((corner) => {
         const isDeleteCorner = corner === 'br';
         const isEditCorner = corner === 'tr';
+        const isColorCorner = corner === 'bl';
         return (
           <button
             key={corner}
@@ -189,6 +244,9 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
                     ? 'bottom-1 left-1'
                     : 'bottom-1 right-1'
             }`}
+            style={
+              isColorCorner && accentColor ? { ...actionSurface, color: accentColor } : actionSurface
+            }
             onClick={(e) => {
               e.stopPropagation();
               if (isDeleteCorner) {
@@ -199,14 +257,28 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
                 onEdit(block.id);
                 return;
               }
+              if (isColorCorner) {
+                onEditColor(block.id);
+                return;
+              }
               onExpand(block.id);
             }}
-            aria-label={isDeleteCorner ? 'Delete block' : isEditCorner ? 'Edit block' : 'Expand block'}
+            aria-label={
+              isDeleteCorner
+                ? 'Delete block'
+                : isEditCorner
+                  ? 'Edit block'
+                  : isColorCorner
+                    ? 'Open color studio'
+                    : 'Expand block'
+            }
           >
             {isDeleteCorner ? (
               <Trash2 className="w-3 h-3" />
             ) : isEditCorner ? (
               <Pencil className="w-3 h-3" />
+            ) : isColorCorner ? (
+              <PaintBucket className="w-3 h-3" />
             ) : (
               <Maximize2 className="w-3 h-3" />
             )}
@@ -223,11 +295,15 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
           className={`text-xs font-semibold uppercase tracking-wide mb-1 ${
             isBranch ? branchTitleClass : isPastel ? 'text-purple-500' : 'text-cyber-cyan-400'
           }`}
+          style={accentColor ? { color: accentColor } : undefined}
         >
           {subtitle}
         </span>
         {block.title && (
-          <span className={`text-sm font-bold truncate mb-1 ${isPastel ? 'text-gray-800' : 'text-white'}`}>
+          <span
+            className={`text-sm font-bold truncate mb-1 ${isPastel ? 'text-gray-800' : 'text-white'}`}
+            style={titleColor ? { color: titleColor } : undefined}
+          >
             {block.title}
           </span>
         )}
@@ -238,6 +314,7 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
                 <span
                   className={`block text-[10px] leading-4 ${isPastel ? 'text-gray-600' : 'text-amber-100/90'}`}
                   style={{
+                    color: bodyColor,
                     display: '-webkit-box',
                     WebkitLineClamp: 4,
                     WebkitBoxOrient: 'vertical',
@@ -247,19 +324,36 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
                   {notePreview}
                 </span>
               ) : (
-                <span className={`text-[10px] italic ${isPastel ? 'text-gray-400' : 'text-amber-100/60'}`}>
+                <span
+                  className={`text-[10px] italic ${isPastel ? 'text-gray-400' : 'text-amber-100/60'}`}
+                  style={mutedColor ? { color: mutedColor } : undefined}
+                >
                   Add notes, files, and observations
                 </span>
               )}
             </div>
             <div className="flex items-center justify-between text-[10px]">
-              <span className={isPastel ? 'text-gray-500' : 'text-amber-100/75'}>{attachmentSummary}</span>
+              <span
+                className={isPastel ? 'text-gray-500' : 'text-amber-100/75'}
+                style={mutedColor ? { color: mutedColor } : undefined}
+              >
+                {attachmentSummary}
+              </span>
               {block.attachments.some((attachment) => attachment.type === 'video') ? (
-                <Film className={`w-3.5 h-3.5 ${isPastel ? 'text-amber-500' : 'text-amber-300'}`} />
+                <Film
+                  className={`w-3.5 h-3.5 ${isPastel ? 'text-amber-500' : 'text-amber-300'}`}
+                  style={accentColor ? { color: accentColor } : undefined}
+                />
               ) : pdfCount > 0 ? (
-                <FileText className={`w-3.5 h-3.5 ${isPastel ? 'text-amber-500' : 'text-amber-300'}`} />
+                <FileText
+                  className={`w-3.5 h-3.5 ${isPastel ? 'text-amber-500' : 'text-amber-300'}`}
+                  style={accentColor ? { color: accentColor } : undefined}
+                />
               ) : (
-                <File className={`w-3.5 h-3.5 ${isPastel ? 'text-amber-500' : 'text-amber-300'}`} />
+                <File
+                  className={`w-3.5 h-3.5 ${isPastel ? 'text-amber-500' : 'text-amber-300'}`}
+                  style={accentColor ? { color: accentColor } : undefined}
+                />
               )}
             </div>
           </>
@@ -270,6 +364,7 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
                 <span
                   className={`block text-[10px] leading-4 ${isPastel ? 'text-gray-600' : 'text-gray-300'}`}
                   style={{
+                    color: bodyColor,
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
@@ -279,18 +374,34 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
                   {notePreview}
                 </span>
               ) : (
-                <span className={`text-[10px] italic ${isPastel ? 'text-gray-400' : 'text-gray-500'}`}>
+                <span
+                  className={`text-[10px] italic ${isPastel ? 'text-gray-400' : 'text-gray-500'}`}
+                  style={mutedColor ? { color: mutedColor } : undefined}
+                >
                   No notes yet
                 </span>
               )}
             </div>
             <div className="mb-2 flex items-center justify-between text-[10px]">
-              <span className={isPastel ? 'text-gray-500' : 'text-gray-400'}>{attachmentSummary}</span>
+              <span
+                className={isPastel ? 'text-gray-500' : 'text-gray-400'}
+                style={mutedColor ? { color: mutedColor } : undefined}
+              >
+                {attachmentSummary}
+              </span>
               {pdfCount > 0 && (
-                <span className={isPastel ? 'text-purple-500' : 'text-cyber-cyan-400'}>{pdfCount} pdf</span>
+                <span
+                  className={isPastel ? 'text-purple-500' : 'text-cyber-cyan-400'}
+                  style={accentColor ? { color: accentColor } : undefined}
+                >
+                  {pdfCount} pdf
+                </span>
               )}
             </div>
-            <div className="flex-1 min-h-0 rounded-lg overflow-hidden bg-black/10 flex items-center justify-center">
+            <div
+              className="flex-1 min-h-0 rounded-lg overflow-hidden bg-black/10 flex items-center justify-center"
+              style={mediaSurfaceStyle}
+            >
               {thumb ? (
                 <img
                   src={thumb}
@@ -299,7 +410,10 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
                   draggable={false}
                 />
               ) : (
-                <div className={`flex flex-col items-center gap-1 ${isPastel ? 'text-gray-400' : 'text-gray-500'}`}>
+                <div
+                  className={`flex flex-col items-center gap-1 ${isPastel ? 'text-gray-400' : 'text-gray-500'}`}
+                  style={mutedColor ? { color: mutedColor } : undefined}
+                >
                   {pdfCount > 0 ? <FileText className="w-8 h-8" /> : <File className="w-8 h-8" />}
                   {block.attachments.length > 0 && <span className="text-xs">Preview</span>}
                   {block.attachments.some((a) => a.type === 'video') && <Film className="w-4 h-4" />}

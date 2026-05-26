@@ -6,6 +6,11 @@ import { LexicalEditor, LexicalEditorHandle } from '../WordEditor/LexicalEditor'
 import { ArchiveFileViewer } from '../Archive/ArchiveFileViewer';
 import { formatChronologyLabel } from '../../utils/mapChronology';
 import { useMapTheme } from './mapTheme';
+import {
+  getMapBlockSurfaceStyle,
+  mixHexColors,
+  resolveMapBlockColor,
+} from './mapBlockColors';
 
 interface BlockExpandModalProps {
   isOpen: boolean;
@@ -39,6 +44,38 @@ export function BlockExpandModal({
 
   if (!isOpen || !block) return null;
 
+  const resolvedColors = resolveMapBlockColor({
+    surfaceColor: block.surfaceColor,
+    borderColor: block.borderColor,
+    legacyColor: block.color,
+  });
+  const headerStyle = getMapBlockSurfaceStyle(
+    {
+      surfaceColor: block.surfaceColor,
+      borderColor: block.borderColor,
+      legacyColor: block.color,
+    },
+    {
+      theme: t.isPastel ? 'pastel' : 'dark',
+      selected: true,
+    }
+  );
+  const accentStyle = resolvedColors.accentColor
+    ? {
+        color: t.isPastel
+          ? resolvedColors.accentColor
+          : mixHexColors(resolvedColors.accentColor, '#FFFFFF', 0.22),
+      }
+    : undefined;
+  const titleStyle =
+    resolvedColors.surfaceColor || resolvedColors.borderColor
+      ? { color: t.isPastel ? '#1F2937' : '#FFFFFF' }
+      : undefined;
+  const subtitleStyle =
+    resolvedColors.surfaceColor || resolvedColors.borderColor
+      ? { color: t.isPastel ? '#4B5563' : '#E5E7EB' }
+      : undefined;
+
   return (
     <AnimatePresence>
       <motion.div
@@ -55,10 +92,12 @@ export function BlockExpandModal({
           onClick={(e) => e.stopPropagation()}
           className={`rounded-2xl border-2 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden ${t.card}`}
         >
-          <div className="flex items-center justify-between p-4 border-b border-white/10">
+          <div className="flex items-center justify-between p-4 border-b border-white/10" style={headerStyle}>
             <div>
-              <h2 className="text-xl font-bold">{block.title || (block.kind === 'branch' ? 'Branch Note' : 'Block')}</h2>
-              <p className={`text-sm ${t.primary}`}>
+              <h2 className="text-xl font-bold" style={titleStyle}>
+                {block.title || (block.kind === 'branch' ? 'Branch Note' : 'Block')}
+              </h2>
+              <p className={`text-sm ${t.primary}`} style={accentStyle ?? subtitleStyle}>
                 {block.kind === 'branch'
                   ? `${block.branchSide === 'left' ? 'Left' : 'Right'} branch note`
                   : formatChronologyLabel(block.chronology!)}

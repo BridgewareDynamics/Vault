@@ -127,4 +127,27 @@ describe('MapLibraryPage', () => {
       expect(screen.getByRole('button', { name: /delete map solo vault map/i })).toBeInTheDocument();
     });
   });
+
+  it('uses the styled delete dialog instead of browser confirm', async () => {
+    const user = userEvent.setup();
+
+    mockElectronAPI.deleteMap.mockResolvedValue(undefined);
+
+    await act(async () => {
+      render(<MapLibraryPage theme="brideware-purple" onBack={onBack} onOpenMap={onOpenMap} />);
+      await Promise.resolve();
+    });
+
+    await user.click(await screen.findByRole('button', { name: /delete map incident chain/i }));
+
+    expect(screen.getByRole('heading', { name: 'Delete Map' })).toBeInTheDocument();
+    expect(screen.getByText(/are you sure you want to delete/i)).toBeInTheDocument();
+    expect(screen.getByText(/"Incident Chain"/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Delete Map' }));
+
+    await waitFor(() => {
+      expect(mockElectronAPI.deleteMap).toHaveBeenCalledWith('/maps/incident-chain');
+    });
+  });
 });

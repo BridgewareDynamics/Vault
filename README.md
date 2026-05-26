@@ -71,7 +71,7 @@ The Vault is a desktop research workspace for investigators, researchers, and pr
 ### Tech Stack
 
 - **Frontend**: React 18.2, TypeScript 5.3, TailwindCSS, Framer Motion, `@xyflow/react`
-- **Backend**: Electron 28.1, Node.js 24.12.0, `better-sqlite3`
+- **Backend**: Electron 28.1, Node.js 22.15.1, `better-sqlite3`
 - **PDF Processing**: PDF.js 3.11.174
 - **Image & Export Utilities**: Sharp 0.33.2, `html-to-image`, JSZip
 - **Testing**: Vitest 1.1.0, Testing Library
@@ -82,7 +82,7 @@ The Vault is a desktop research workspace for investigators, researchers, and pr
 
 ### Prerequisites
 
-- **Node.js**: Version `24.12.0`
+- **Node.js**: Version `22.15.1`
 - **npm**: Version `11.6.2` or higher
 - **Git**: For cloning the repository
 
@@ -529,7 +529,7 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
 - **Solution**: 
   - Delete `node_modules` and `package-lock.json`
   - Run `npm install` again
-  - Ensure Node.js version matches the project requirement (`24.12.0`)
+  - Ensure Node.js version matches the project requirement (`22.15.1`)
 
 **Problem**: TypeScript compilation errors
 - **Solution**:
@@ -577,7 +577,7 @@ Before deploying to production, please review [PRODUCTION_READINESS.md](PRODUCTI
 
 **Problem**: Application crashes on startup
 - **Solution**:
-  - Check Node.js version: `node --version` (must match the project requirement, currently `24.12.0`)
+  - Check Node.js version: `node --version` (must match the project requirement, currently `22.15.1`)
   - Clear application data (location varies by OS)
   - Check for conflicting Electron processes: close all Electron windows
   - Review error logs (see Logging section)

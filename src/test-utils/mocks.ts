@@ -49,7 +49,16 @@ export const mockElectronAPI = {
   toggleFullscreen: vi.fn(),
   // Map APIs
   listMaps: vi.fn(),
+  listCaseMaps: vi.fn(),
+  createMap: vi.fn(),
+  readMap: vi.fn(),
+  saveMap: vi.fn(),
   deleteMap: vi.fn(),
+  renameMap: vi.fn(),
+  selectMapAttachments: vi.fn(),
+  copyMapAttachmentToAssets: vi.fn(),
+  exportMapToDirectory: vi.fn(),
+  exportMapPng: vi.fn(),
   // Word Editor APIs
   readTextFile: vi.fn(),
   saveTextFile: vi.fn(),

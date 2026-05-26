@@ -156,6 +156,8 @@ export type MapDateTier = 'era' | 'phase' | 'year' | 'month' | 'day';
 export type MapBlockKind = 'timeline' | 'branch';
 export type MapBranchSide = 'left' | 'right';
 export type MapEdgeKind = 'chronology' | 'branch';
+export type MapEdgeStyle = 'solid' | 'dotted';
+export type MapEdgeColorMode = 'theme' | 'custom' | 'linked-blocks';
 export type MapCanvasSide = 'top' | 'right' | 'bottom' | 'left';
 
 export interface MapBlockChronology {
@@ -181,6 +183,9 @@ export interface MapBlock {
   id: string;
   kind?: MapBlockKind;
   title?: string;
+  color?: string;
+  surfaceColor?: string;
+  borderColor?: string;
   chronology?: MapBlockChronology;
   notesHtml: string;
   attachments: MapAttachment[];
@@ -193,12 +198,18 @@ export interface MapBlock {
   branchOrder?: number;
 }
 
+export interface MapEdgeAppearance {
+  colorMode: MapEdgeColorMode;
+  strokeColor?: string;
+  glowColor?: string;
+}
+
 export interface MapEdge {
   id: string;
   kind?: MapEdgeKind;
   sourceBlockId: string;
   targetBlockId: string;
-  style: 'solid' | 'dotted';
+  style: MapEdgeStyle;
   sourceHandle?: string;
   targetHandle?: string;
 }
@@ -215,7 +226,8 @@ export interface MapDocument {
   edges: MapEdge[];
   viewport: { x: number; y: number; zoom: number };
   layoutMode: 'timeline-vertical';
-  defaultEdgeStyle: 'solid' | 'dotted';
+  defaultEdgeStyle: MapEdgeStyle;
+  defaultEdgeAppearance?: MapEdgeAppearance;
 }
 
 export interface MapListEntry {

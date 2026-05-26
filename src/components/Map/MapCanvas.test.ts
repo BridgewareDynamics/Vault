@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getBranchButtonsForBlock } from './MapCanvas';
+import { getBranchButtonsForBlock, getMiniMapNodeColor } from './MapCanvas';
 import { MAP_BLOCK_DEFAULT_SIZE, MAP_BRANCH_BLOCK_DEFAULT_SIZE } from '../../utils/mapLayout';
 import { buildChronology } from '../../utils/mapChronology';
 import type { MapBlock } from '../../types';
@@ -69,5 +69,18 @@ describe('getBranchButtonsForBlock', () => {
       { branchSide: 'left', buttonSide: 'bottom' },
       { branchSide: 'right', buttonSide: 'right' },
     ]);
+  });
+
+  it('uses a block custom color on the minimap when present', () => {
+    const block = { ...makeTimelineBlock(), surfaceColor: '#14B8A6', borderColor: '#7C3AED' };
+
+    expect(getMiniMapNodeColor(block, 'pastel')).toBe('#3EC5B6');
+    expect(getMiniMapNodeColor(block, 'brideware-purple')).toBe('#14A597');
+  });
+
+  it('still supports legacy single-color blocks on the minimap', () => {
+    const block = { ...makeTimelineBlock(), color: '#14B8A6' };
+
+    expect(getMiniMapNodeColor(block, 'pastel')).toBe('#3EC5B6');
   });
 });

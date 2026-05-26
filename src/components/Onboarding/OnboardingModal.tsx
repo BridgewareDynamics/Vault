@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnimatedGrid } from '../Shared/AnimatedGrid';
 import { ParticleBackground } from '../Shared/ParticleBackground';
 import { LightRays } from '../Shared/LightRays';
@@ -265,7 +265,6 @@ export const OnboardingModal = memo(function OnboardingModal({ onComplete }: Onb
                 >
                   <div className="flex items-center gap-2">
                     <span>Complete Setup</span>
-                    <Sparkles className="w-5 h-5" />
                   </div>
                 </motion.button>
               ) : (

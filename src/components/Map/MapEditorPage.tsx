@@ -1,19 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Home, Save, Download, FolderOpen, ArrowLeft } from 'lucide-react';
+import { Home, Save, Download, FolderOpen, ArrowLeft, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { toPng } from 'html-to-image';
-import { MapBlock, MapBranchSide, MapCanvasSide, Theme } from '../../types';
+import {
+  MapBlock,
+  MapBranchSide,
+  MapCanvasSide,
+  MapEdgeAppearance,
+  MapEdgeStyle,
+  Theme,
+} from '../../types';
 import { useMapDocument } from '../../hooks/useMapDocument';
 import { relayoutDocument } from '../../utils/mapLayout';
 import { useToast } from '../Toast/ToastContext';
 import { getUserFriendlyError } from '../../utils/errorMessages';
 import { CaseSelectionDialog } from '../Archive/CaseSelectionDialog';
+import { useWordEditor } from '../../contexts/WordEditorContext';
+import { ResizableDivider } from '../ResizableDivider';
 import { useMapTheme } from './mapTheme';
 import { MapCanvas } from './MapCanvas';
 import { CreateBlockDialog } from './CreateBlockDialog';
 import { BlockExpandModal } from './BlockExpandModal';
 import { MapExportDialog } from './MapExportDialog';
 import { DeleteBlockDialog } from './DeleteBlockDialog';
+import { normalizeMapEdgeAppearance } from './mapEdgeAppearance';
 
 interface MapEditorPageProps {
   theme: Theme;
@@ -30,6 +40,8 @@ interface BranchDraft {
   sourceSide: MapCanvasSide;
 }
 
+type CreateBlockDialogSection = 'timeline' | 'details' | 'files' | 'notes';
+
 export function MapEditorPage({
   theme,
   mapFolderPath,
@@ -41,12 +53,21 @@ export function MapEditorPage({
   const toast = useToast();
   const flowRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const {
+    isOpen: isWordEditorOpen,
+    dividerPosition,
+    setDividerPosition,
+    isDividerDragging,
+  } = useWordEditor();
   const { document, loading, saving, dirty, updateDocument, saveNow, relayout } =
     useMapDocument(mapFolderPath);
 
   const [showCreateBlock, setShowCreateBlock] = useState(false);
   const [expandBlockId, setExpandBlockId] = useState<string | null>(null);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [dialogInitialSection, setDialogInitialSection] = useState<CreateBlockDialogSection | undefined>(
+    undefined
+  );
   const [branchDraft, setBranchDraft] = useState<BranchDraft | null>(null);
   const [deletingBlockId, setDeletingBlockId] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
@@ -119,19 +140,30 @@ export function MapEditorPage({
         );
       });
       setBranchDraft(null);
+      setDialogInitialSection(undefined);
       toast.success(block.kind === 'branch' ? 'Branch card added' : 'Block added to timeline');
     },
     [document, updateDocument, toast]
   );
 
-  const handleToggleEdgeStyle = useCallback(() => {
+  const handleSetEdgeStyle = useCallback((next: MapEdgeStyle) => {
     if (!document) return;
-    const next: 'solid' | 'dotted' = document.defaultEdgeStyle === 'solid' ? 'dotted' : 'solid';
+    if (document.defaultEdgeStyle === next) return;
     updateDocument((prev) => {
       const updated = { ...prev, defaultEdgeStyle: next };
       return relayoutDocument(updated, false);
     });
   }, [document, updateDocument]);
+
+  const handleChangeEdgeAppearance = useCallback(
+    (nextAppearance: MapEdgeAppearance) => {
+      updateDocument((prev) => ({
+        ...prev,
+        defaultEdgeAppearance: normalizeMapEdgeAppearance(nextAppearance),
+      }));
+    },
+    [updateDocument]
+  );
 
   const handleExportPng = async () => {
     if (!document || !flowRef.current) return;
@@ -285,6 +317,19 @@ export function MapEditorPage({
         setExpandBlockId(null);
       }
       setBranchDraft(null);
+      setDialogInitialSection(undefined);
+      setEditingBlockId(blockId);
+    },
+    [expandBlockId]
+  );
+
+  const handleEditBlockColor = useCallback(
+    (blockId: string) => {
+      if (expandBlockId === blockId) {
+        setExpandBlockId(null);
+      }
+      setBranchDraft(null);
+      setDialogInitialSection('details');
       setEditingBlockId(blockId);
     },
     [expandBlockId]
@@ -333,6 +378,7 @@ export function MapEditorPage({
 
       setEditingBlockId(null);
       setBranchDraft(null);
+      setDialogInitialSection(undefined);
       toast.success('Block updated');
     },
     [document, toast, updateDocument]
@@ -344,6 +390,7 @@ export function MapEditorPage({
       const parentBlock = document.blocks.find((block) => block.id === parentBlockId);
       if (!parentBlock) return;
       setEditingBlockId(null);
+      setDialogInitialSection(undefined);
       if (expandBlockId === parentBlockId) {
         setExpandBlockId(null);
       }
@@ -357,6 +404,12 @@ export function MapEditorPage({
     },
     [document, expandBlockId]
   );
+
+  const handleToggleWordEditor = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent(isWordEditorOpen ? 'close-word-editor-panel' : 'open-word-editor-panel')
+    );
+  }, [isWordEditorOpen]);
 
   if (loading || !document) {
     return (
@@ -438,35 +491,75 @@ export function MapEditorPage({
           <Download className="w-4 h-4" />
           Export
         </button>
+        <button
+          type="button"
+          onClick={handleToggleWordEditor}
+          className={`ml-auto flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
+            isWordEditorOpen ? t.button : t.card
+          }`}
+          aria-pressed={isWordEditorOpen}
+          title={isWordEditorOpen ? 'Hide word editor' : 'Open word editor'}
+        >
+          {isWordEditorOpen ? (
+            <PanelRightClose className="w-4 h-4" />
+          ) : (
+            <PanelRightOpen className="w-4 h-4" />
+          )}
+          Word Editor
+        </button>
       </header>
 
-      <div className="flex-1 min-h-0">
-        <div ref={flowRef} className="w-full h-full">
-          <ReactFlowProvider>
-            <MapCanvas
-              document={document}
-              theme={theme}
-              edgeStyle={document.defaultEdgeStyle}
-              onBlocksChange={(blocks) => {
-                updateDocument((prev) => relayoutDocument({ ...prev, blocks }, false));
-              }}
-              onViewportChange={(viewport) => {
-                updateDocument((prev) => ({ ...prev, viewport }), { skipAutosave: false });
-              }}
-              onExpandBlock={setExpandBlockId}
-              onPreviewBlock={setExpandBlockId}
-              onDeleteBlock={handleDeleteBlock}
-              onEditBlock={handleEditBlock}
-              onCreateBranch={handleCreateBranch}
-              onNewBlock={() => {
-                setBranchDraft(null);
-                setShowCreateBlock(true);
-              }}
-              onToggleEdgeStyle={handleToggleEdgeStyle}
-              onRelayout={() => relayout(true)}
-            />
-          </ReactFlowProvider>
+      <div className={`flex-1 min-h-0 ${isWordEditorOpen ? 'flex' : ''}`}>
+        <div
+          className={`min-w-0 h-full ${isDividerDragging ? '' : 'transition-all duration-300'}`}
+          style={isWordEditorOpen ? { width: `${dividerPosition}%` } : { width: '100%' }}
+        >
+          <div ref={flowRef} className="w-full h-full">
+            <ReactFlowProvider>
+              <MapCanvas
+                document={document}
+                theme={theme}
+                edgeStyle={document.defaultEdgeStyle}
+                edgeAppearance={document.defaultEdgeAppearance}
+                onBlocksChange={(blocks) => {
+                  updateDocument((prev) => relayoutDocument({ ...prev, blocks }, false));
+                }}
+                onViewportChange={(viewport) => {
+                  updateDocument((prev) => ({ ...prev, viewport }), { skipAutosave: false });
+                }}
+                onExpandBlock={setExpandBlockId}
+                onPreviewBlock={setExpandBlockId}
+                onDeleteBlock={handleDeleteBlock}
+                onEditBlock={handleEditBlock}
+                onEditBlockColor={handleEditBlockColor}
+                onCreateBranch={handleCreateBranch}
+                onNewBlock={() => {
+                  setBranchDraft(null);
+                  setDialogInitialSection(undefined);
+                  setShowCreateBlock(true);
+                }}
+                onEdgeStyleChange={handleSetEdgeStyle}
+                onEdgeAppearanceChange={handleChangeEdgeAppearance}
+                onRelayout={() => relayout(true)}
+              />
+            </ReactFlowProvider>
+          </div>
         </div>
+        {isWordEditorOpen && (
+          <>
+            <ResizableDivider
+              position={dividerPosition}
+              onResize={setDividerPosition}
+              minLeft={30}
+              minRight={26}
+            />
+            <div
+              id="map-word-editor-inline-container"
+              className={`overflow-hidden h-full ${isDividerDragging ? '' : 'transition-all duration-300'}`}
+              style={{ width: `${100 - dividerPosition}%` }}
+            />
+          </>
+        )}
       </div>
 
       <CreateBlockDialog
@@ -475,11 +568,14 @@ export function MapEditorPage({
           setShowCreateBlock(false);
           setEditingBlockId(null);
           setBranchDraft(null);
+          setDialogInitialSection(undefined);
         }}
         theme={theme}
         mapFolderPath={document.mapFolderPath}
+        linkedCasePath={document.casePath}
         onSubmit={editingBlock ? handleSaveEditedBlock : handleAddBlock}
         blockToEdit={editingBlock}
+        initialSection={dialogInitialSection}
         branchContext={activeBranchContext}
       />
 

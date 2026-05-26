@@ -62,6 +62,7 @@ function buildProps(
       onPreview: vi.fn(),
       onDelete: vi.fn(),
       onEdit: vi.fn(),
+      onEditColor: vi.fn(),
       onCreateBranch: vi.fn(),
       branchButtons: options?.branchButtons ?? [
         { branchSide: 'left', buttonSide: 'left' },
@@ -122,5 +123,16 @@ describe('MapBlockNode', () => {
 
     expect(screen.getByText('Left branch note')).toBeInTheDocument();
     expect(screen.getByText('Branch Note')).toBeInTheDocument();
+  });
+
+  it('opens the color studio from the paint bucket corner button', async () => {
+    const user = userEvent.setup();
+    const props = buildProps(makeTimelineBlock());
+
+    render(<MapBlockNode {...props} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open color studio' }));
+
+    expect(props.data.onEditColor).toHaveBeenCalledWith('timeline-1');
   });
 });

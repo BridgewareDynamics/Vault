@@ -16,6 +16,7 @@ import { HolographicEffect } from '../Shared/HolographicEffect';
 import { ScanLine } from '../Shared/ScanLine';
 import { useToast } from '../Toast/ToastContext';
 import { useMapTheme } from './mapTheme';
+import { DeleteMapDialog } from './DeleteMapDialog';
 
 type MapLibraryFilter = 'all' | 'global' | 'case';
 type MapSortMode = 'recent' | 'name' | 'blocks';
@@ -75,6 +76,7 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
   const [filter, setFilter] = useState<MapLibraryFilter>('all');
   const [sortMode, setSortMode] = useState<MapSortMode>('recent');
   const [query, setQuery] = useState('');
+  const [mapPendingDelete, setMapPendingDelete] = useState<MapListEntry | null>(null);
 
   const isPastel = t.isPastel;
 
@@ -169,12 +171,16 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
 
   const handleDelete = async (event: MouseEvent<HTMLButtonElement>, entry: MapListEntry) => {
     event.stopPropagation();
-    if (!window.electronAPI?.deleteMap) return;
-    if (!confirm(`Delete map "${entry.title}"?`)) return;
+    setMapPendingDelete(entry);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!window.electronAPI?.deleteMap || !mapPendingDelete) return;
 
     try {
-      await window.electronAPI.deleteMap(entry.mapFolderPath);
+      await window.electronAPI.deleteMap(mapPendingDelete.mapFolderPath);
       toast.success('Map deleted');
+      setMapPendingDelete(null);
       await loadMaps();
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'deleting map' }));
@@ -645,6 +651,14 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
           )}
         </main>
       </div>
+
+      <DeleteMapDialog
+        isOpen={!!mapPendingDelete}
+        theme={theme}
+        mapTitle={mapPendingDelete?.title}
+        onClose={() => setMapPendingDelete(null)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

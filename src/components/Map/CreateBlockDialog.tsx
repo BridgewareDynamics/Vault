@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -7,22 +7,40 @@ import {
   Type,
   FileStack,
   StickyNote,
+  FolderOpen,
   Trash2,
 } from 'lucide-react';
 import { MapAttachment, MapBlock, MapBranchSide, MapDateTier, Theme } from '../../types';
 import { buildChronology, ChronologyInput, formatChronologyLabel } from '../../utils/mapChronology';
 import { MAP_BLOCK_DEFAULT_SIZE, MAP_BRANCH_BLOCK_DEFAULT_SIZE } from '../../utils/mapLayout';
 import { useMapTheme } from './mapTheme';
+import { MapBlockColorPicker } from './MapBlockColorPicker';
+import {
+  getMapBlockSurfaceStyle,
+  mixHexColors,
+  normalizeMapBlockColor,
+  resolveMapBlockColor,
+} from './mapBlockColors';
 import { randomUUID } from '../../utils/uuid';
 import { LexicalEditor, LexicalEditorHandle } from '../WordEditor/LexicalEditor';
+import { MapVaultLibraryPanel } from './MapVaultLibraryPanel';
+import {
+  createPendingMapAttachment,
+  isSavedMapAttachmentCopy,
+  MAP_VAULT_DRAG_MIME,
+  mergePendingMapAttachments,
+  PendingMapAttachment,
+} from './mapAttachmentUtils';
 
 interface CreateBlockDialogProps {
   isOpen: boolean;
   onClose: () => void;
   theme: Theme;
   mapFolderPath: string;
+  linkedCasePath?: string | null;
   onSubmit: (block: MapBlock) => void;
   blockToEdit?: MapBlock | null;
+  initialSection?: SectionId;
   branchContext?: {
     parentBlockId: string;
     parentTitle?: string;
@@ -49,8 +67,10 @@ const DEFAULT_FORM = {
   month: '' as number | '',
   day: '' as number | '',
   title: '',
+  surfaceColor: '',
+  borderColor: '',
   notesHtml: '',
-  pendingFiles: [] as string[],
+  pendingFiles: [] as PendingMapAttachment[],
 };
 
 type DialogFormState = typeof DEFAULT_FORM;
@@ -66,6 +86,8 @@ function buildFormFromBlock(blockToEdit?: MapBlock | null): DialogFormState {
     month: chronology?.month ?? DEFAULT_FORM.month,
     day: chronology?.day ?? DEFAULT_FORM.day,
     title: blockToEdit?.title ?? DEFAULT_FORM.title,
+    surfaceColor: blockToEdit?.surfaceColor ?? blockToEdit?.color ?? DEFAULT_FORM.surfaceColor,
+    borderColor: blockToEdit?.borderColor ?? blockToEdit?.color ?? DEFAULT_FORM.borderColor,
     notesHtml: blockToEdit?.notesHtml ?? DEFAULT_FORM.notesHtml,
     pendingFiles: DEFAULT_FORM.pendingFiles,
   };
@@ -76,8 +98,10 @@ export function CreateBlockDialog({
   onClose,
   theme,
   mapFolderPath,
+  linkedCasePath,
   onSubmit,
   blockToEdit,
+  initialSection,
   branchContext,
 }: CreateBlockDialogProps) {
   const t = useMapTheme(theme);
@@ -90,6 +114,8 @@ export function CreateBlockDialog({
   const [editorKey, setEditorKey] = useState('new-block-editor');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCaseLibrary, setShowCaseLibrary] = useState(false);
+  const [isVaultDropTarget, setIsVaultDropTarget] = useState(false);
   const isEditing = Boolean(blockToEdit);
   const isBranchMode = blockToEdit?.kind === 'branch' || Boolean(branchContext);
   const effectiveBranchContext =
@@ -106,13 +132,15 @@ export function CreateBlockDialog({
     if (isOpen) {
       setForm(buildFormFromBlock(blockToEdit));
       setExistingAttachments(blockToEdit?.attachments ?? []);
-      setSection(isBranchMode ? 'details' : 'timeline');
+      setSection(initialSection ?? (isBranchMode ? 'details' : 'timeline'));
       setError(null);
       setEditorKey(`${blockToEdit?.id ?? 'new'}-${Date.now()}`);
+      setShowCaseLibrary(false);
+      setIsVaultDropTarget(false);
     }
-  }, [isOpen, blockToEdit, isBranchMode]);
+  }, [isOpen, blockToEdit, initialSection, isBranchMode]);
 
-  const { tier, eraLabel, phaseLabel, year, month, day, title, pendingFiles } = form;
+  const { tier, eraLabel, phaseLabel, year, month, day, title, surfaceColor, borderColor, pendingFiles } = form;
 
   const showYear = tier === 'year' || tier === 'month' || tier === 'day';
   const showMonth = (tier === 'year' && year !== '') || tier === 'month' || tier === 'day';
@@ -144,23 +172,77 @@ export function CreateBlockDialog({
     return null;
   };
 
+  const addPendingFiles = useCallback((additions: PendingMapAttachment[]) => {
+    if (additions.length === 0) {
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      pendingFiles: mergePendingMapAttachments(prev.pendingFiles, additions),
+    }));
+    setError(null);
+  }, []);
+
   const handlePickFiles = async () => {
     if (!window.electronAPI?.selectMapAttachments) return;
     const paths = await window.electronAPI.selectMapAttachments();
     if (paths.length) {
-      updateForm('pendingFiles', [...pendingFiles, ...paths]);
+      addPendingFiles(
+        paths.map((path) =>
+          createPendingMapAttachment({
+            sourcePath: path,
+            origin: 'local',
+          })
+        )
+      );
     }
   };
+
+  const handleAttachVaultFile = useCallback(
+    (attachment: PendingMapAttachment) => {
+      addPendingFiles([attachment]);
+    },
+    [addPendingFiles]
+  );
 
   const removeFile = (path: string) => {
     updateForm(
       'pendingFiles',
-      pendingFiles.filter((p) => p !== path)
+      pendingFiles.filter((file) => file.sourcePath !== path)
     );
   };
 
   const removeExistingAttachment = (attachmentId: string) => {
     setExistingAttachments((prev) => prev.filter((attachment) => attachment.id !== attachmentId));
+  };
+
+  const handleVaultDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes(MAP_VAULT_DRAG_MIME)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setIsVaultDropTarget(true);
+  };
+
+  const handleVaultDrop = (event: DragEvent<HTMLDivElement>) => {
+    const payload = event.dataTransfer.getData(MAP_VAULT_DRAG_MIME);
+    setIsVaultDropTarget(false);
+
+    if (!payload) {
+      return;
+    }
+
+    event.preventDefault();
+
+    try {
+      const attachment = JSON.parse(payload) as PendingMapAttachment;
+      handleAttachVaultFile(attachment);
+    } catch {
+      setError('Could not attach the Vault file. Try clicking Attach instead.');
+    }
   };
 
   const handleSubmit = async () => {
@@ -176,12 +258,23 @@ export function CreateBlockDialog({
       const notesHtml = notesRef.current?.getContent() ?? form.notesHtml;
       const attachments: MapAttachment[] = [];
 
-      for (const sourcePath of pendingFiles) {
+      for (const pendingFile of pendingFiles) {
         const attachmentId = randomUUID();
+        if (pendingFile.origin === 'vault') {
+          attachments.push({
+            id: attachmentId,
+            fileName: pendingFile.fileName,
+            relativePath: pendingFile.sourcePath,
+            vaultPath: pendingFile.sourcePath,
+            type: pendingFile.type,
+          });
+          continue;
+        }
+
         if (window.electronAPI?.copyMapAttachmentToAssets) {
           const copied = await window.electronAPI.copyMapAttachmentToAssets(
             mapFolderPath,
-            sourcePath,
+            pendingFile.sourcePath,
             attachmentId
           );
           attachments.push({
@@ -199,6 +292,9 @@ export function CreateBlockDialog({
             id: blockToEdit?.id ?? randomUUID(),
             kind: 'branch',
             title: title.trim() || undefined,
+            color: undefined,
+            surfaceColor: normalizeMapBlockColor(surfaceColor),
+            borderColor: normalizeMapBlockColor(borderColor),
             chronology: undefined,
             notesHtml,
             attachments: [...existingAttachments, ...attachments],
@@ -214,6 +310,9 @@ export function CreateBlockDialog({
             id: blockToEdit?.id ?? randomUUID(),
             kind: 'timeline',
             title: title.trim() || undefined,
+            color: undefined,
+            surfaceColor: normalizeMapBlockColor(surfaceColor),
+            borderColor: normalizeMapBlockColor(borderColor),
             chronology: buildChronology({
               tier,
               eraLabel: tier === 'era' ? eraLabel : undefined,
@@ -262,6 +361,35 @@ export function CreateBlockDialog({
       ? 'bg-white/80 border-pink-200/50 text-gray-800 placeholder:text-gray-400'
       : 'bg-gray-950/60 border-cyber-purple-500/40 text-white placeholder:text-gray-500'
   }`;
+  const previewColors = resolveMapBlockColor({
+    surfaceColor,
+    borderColor,
+    legacyColor: blockToEdit?.color,
+  });
+  const previewCardStyle = getMapBlockSurfaceStyle(
+    {
+      surfaceColor,
+      borderColor,
+      legacyColor: blockToEdit?.color,
+    },
+    {
+    theme: t.isPastel ? 'pastel' : 'dark',
+    selected: true,
+    }
+  );
+  const previewTitleStyle = previewColors.surfaceColor || previewColors.borderColor
+    ? { color: t.isPastel ? '#1F2937' : '#FFFFFF' }
+    : undefined;
+  const previewSubtitleStyle = previewColors.surfaceColor || previewColors.borderColor
+    ? { color: t.isPastel ? '#4B5563' : '#E5E7EB' }
+    : undefined;
+  const previewAccentStyle = previewColors.accentColor
+    ? {
+        color: t.isPastel
+          ? previewColors.accentColor
+          : mixHexColors(previewColors.accentColor, '#FFFFFF', 0.22),
+      }
+    : undefined;
 
   return (
     <AnimatePresence>
@@ -275,14 +403,17 @@ export function CreateBlockDialog({
         aria-modal="true"
         aria-labelledby="create-block-title"
       >
-        <motion.div
-          initial={{ scale: 0.96, opacity: 0, y: 12 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.96, opacity: 0, y: 12 }}
-          transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+        <div
+          className="w-full max-w-[1800px] flex flex-col xl:flex-row items-stretch justify-center gap-4"
           onClick={(e) => e.stopPropagation()}
-          className={`rounded-2xl border-2 shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden ${t.card}`}
         >
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0, y: 12 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.96, opacity: 0, y: 12 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+            className={`rounded-2xl border-2 shadow-2xl w-full max-w-3xl xl:flex-1 max-h-[92vh] flex flex-col overflow-hidden ${t.card}`}
+          >
           <header
             className={`flex items-start justify-between gap-4 px-6 py-5 border-b shrink-0 ${
               t.isPastel ? 'border-pink-200/30' : 'border-white/10'
@@ -436,7 +567,7 @@ export function CreateBlockDialog({
             )}
 
             {section === 'details' && (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Block title</label>
                   <input
@@ -449,32 +580,82 @@ export function CreateBlockDialog({
                 </div>
                 <div
                   className={`p-4 rounded-xl border ${t.isPastel ? 'bg-purple-50/50 border-purple-200/40' : 'bg-cyber-purple-950/30 border-cyber-purple-500/30'}`}
+                  style={previewCardStyle}
                 >
-                  <p className="text-sm font-medium mb-1">Canvas preview</p>
-                  <p className={`text-lg font-bold ${t.primary}`}>
+                  <p className="text-sm font-medium mb-1" style={previewAccentStyle}>
+                    Canvas preview
+                  </p>
+                  <p className={`text-lg font-bold ${t.primary}`} style={previewTitleStyle}>
                     {title.trim() || (isBranchMode ? 'Untitled branch note' : 'Untitled block')}
                   </p>
-                  <p className={`text-sm ${t.muted}`}>
+                  <p className={`text-sm ${t.muted}`} style={previewSubtitleStyle}>
                     {isBranchMode ? branchSubtitle : formatChronologyLabel(previewChronology)}
                   </p>
-                  <p className={`text-xs mt-2 ${t.muted}`}>
+                  <p className={`text-xs mt-2 ${t.muted}`} style={previewSubtitleStyle}>
                     {existingAttachments.length + pendingFiles.length} attachment
                     {existingAttachments.length + pendingFiles.length === 1 ? '' : 's'}
                   </p>
+                </div>
+
+                <div>
+                  <div className="mb-2">
+                    <p className="text-sm font-semibold">Color Studio</p>
+                    <p className={`text-xs mt-1 ${t.muted}`}>
+                      Give this {isBranchMode ? 'branch card' : 'block'} its own glowing identity on the canvas.
+                    </p>
+                  </div>
+                  <MapBlockColorPicker
+                    theme={theme}
+                    surfaceColor={previewColors.surfaceColor}
+                    borderColor={previewColors.borderColor}
+                    legacyColor={blockToEdit?.color}
+                    onSurfaceColorChange={(nextColor) => updateForm('surfaceColor', nextColor ?? '')}
+                    onBorderColorChange={(nextColor) => updateForm('borderColor', nextColor ?? '')}
+                    blockLabel={title.trim() || (isBranchMode ? 'Untitled branch note' : 'Untitled block')}
+                  />
                 </div>
               </div>
             )}
 
             {section === 'files' && (
               <div className="space-y-4">
-                <button
-                  type="button"
-                  onClick={handlePickFiles}
-                  className={`w-full flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed ${t.card} ${t.cardHover}`}
+                <div
+                  aria-label="Block attachment drop zone"
+                  onDragOver={handleVaultDragOver}
+                  onDragLeave={() => setIsVaultDropTarget(false)}
+                  onDrop={handleVaultDrop}
+                  className={`rounded-2xl border-2 border-dashed p-4 transition-colors ${
+                    isVaultDropTarget
+                      ? t.isPastel
+                        ? 'border-purple-400 bg-purple-100/70'
+                        : 'border-cyber-cyan-400 bg-cyber-cyan-500/10'
+                      : t.isPastel
+                        ? 'border-pink-200/50 bg-white/40'
+                        : 'border-white/10 bg-black/20'
+                  }`}
                 >
-                  <Paperclip className="w-5 h-5" />
-                  Add images, PDFs, video, or other files
-                </button>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={handlePickFiles}
+                      className={`w-full flex items-center justify-center gap-2 py-4 rounded-xl border ${t.card} ${t.cardHover}`}
+                    >
+                      <Paperclip className="w-5 h-5" />
+                      Add local files
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCaseLibrary((prev) => !prev)}
+                      className={`w-full flex items-center justify-center gap-2 py-4 rounded-xl border ${t.card} ${t.cardHover}`}
+                    >
+                      <FolderOpen className="w-5 h-5" />
+                      {showCaseLibrary ? 'Hide Vault case library' : 'Browse Vault case library'}
+                    </button>
+                  </div>
+                  <p className={`text-xs mt-3 text-center ${t.muted}`}>
+                    Use the picker or drag from the Vault case library to attach a live PDF link.
+                  </p>
+                </div>
                 {existingAttachments.length === 0 && pendingFiles.length === 0 ? (
                   <p className={`text-sm text-center py-6 ${t.muted}`}>
                     No files attached yet. You can add them now and save them into this block.
@@ -489,7 +670,9 @@ export function CreateBlockDialog({
                         <FileStack className={`w-5 h-5 shrink-0 ${t.primary}`} />
                         <div className="flex-1 min-w-0">
                           <span className="block truncate text-sm">{attachment.fileName}</span>
-                          <span className={`block text-[11px] ${t.muted}`}>Saved in block</span>
+                          <span className={`block text-[11px] ${t.muted}`}>
+                            {isSavedMapAttachmentCopy(attachment) ? 'Saved in block' : 'Linked to Vault file'}
+                          </span>
                         </div>
                         <button
                           type="button"
@@ -501,19 +684,23 @@ export function CreateBlockDialog({
                         </button>
                       </li>
                     ))}
-                    {pendingFiles.map((filePath) => (
+                    {pendingFiles.map((file) => (
                       <li
-                        key={filePath}
+                        key={`${file.origin}:${file.sourcePath}`}
                         className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${t.card}`}
                       >
                         <FileStack className={`w-5 h-5 shrink-0 ${t.primary}`} />
                         <div className="flex-1 min-w-0">
-                          <span className="block truncate text-sm">{filePath.split(/[/\\]/).pop()}</span>
-                          <span className={`block text-[11px] ${t.muted}`}>Will be added on save</span>
+                          <span className="block truncate text-sm">{file.fileName}</span>
+                          <span className={`block text-[11px] ${t.muted}`}>
+                            {file.origin === 'vault'
+                              ? 'Vault link will be added on save'
+                              : 'Will be copied into block on save'}
+                          </span>
                         </div>
                         <button
                           type="button"
-                          onClick={() => removeFile(filePath)}
+                          onClick={() => removeFile(file.sourcePath)}
                           className="p-2 rounded-lg hover:bg-red-500/20 text-red-400"
                           aria-label="Remove file"
                         >
@@ -589,7 +776,16 @@ export function CreateBlockDialog({
               </button>
             </div>
           </footer>
-        </motion.div>
+          </motion.div>
+
+          <MapVaultLibraryPanel
+            isOpen={section === 'files' && showCaseLibrary}
+            linkedCasePath={linkedCasePath}
+            theme={theme}
+            onClose={() => setShowCaseLibrary(false)}
+            onAttachFile={handleAttachVaultFile}
+          />
+        </div>
       </motion.div>
     </AnimatePresence>
   );
