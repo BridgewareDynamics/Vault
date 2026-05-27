@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FileText, FolderOpen, Map as MapIcon, Mic2, Shield, type LucideIcon, Zap } from 'lucide-react';
 import { ActionToolbar } from './ActionToolbar';
-import { MenuGridBeamNetwork, MenuLightConduit } from './Welcome/MenuEnergyConnector';
+import { MenuGridBeamNetwork } from './Welcome/MenuEnergyConnector';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
 import { isLightTheme } from '../theme/themeSemantics';
@@ -590,7 +590,7 @@ export function WelcomeScreen({
           className="text-center max-w-7xl w-full pb-16"
         >
           <div
-            className="relative flex w-full flex-col items-center overflow-hidden"
+            className="relative flex w-full flex-col items-center overflow-visible"
             style={{ height: 256 + 64 - 40 }}
           >
             <motion.div
@@ -736,15 +736,9 @@ export function WelcomeScreen({
                 </div>
               )}
             </motion.div>
-
-            <MenuLightConduit
-              isPastel={isPastel}
-              primaryRgba={primaryRgba}
-              secondaryRgba={secondaryRgba}
-            />
           </div>
 
-          <div className="relative w-full max-w-7xl overflow-hidden">
+          <div className="relative w-full max-w-7xl overflow-visible">
             <MenuGridBeamNetwork
               isPastel={isPastel}
               primaryRgba={primaryRgba}
