@@ -6,6 +6,7 @@ import { MenuGridBeamNetwork, MenuLightConduit } from './Welcome/MenuEnergyConne
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
 import { isLightTheme } from '../theme/themeSemantics';
+import { warmTranscriptionEntry } from '../utils/transcriptionPrefetch';
 
 const getAssetPath = (path: string) => {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
@@ -84,6 +85,29 @@ export function WelcomeScreen({
   const theme: Theme = (settings?.theme as Theme) || 'pastel';
   const particles = useMemo(() => generateParticles(50), []);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (!onOpenTranscription) {
+      return;
+    }
+
+    const warm = () => warmTranscriptionEntry();
+    const idleId =
+      typeof window.requestIdleCallback === 'function'
+        ? window.requestIdleCallback(warm, { timeout: 2500 })
+        : undefined;
+    const timeoutId =
+      idleId === undefined ? window.setTimeout(warm, 1200) : undefined;
+
+    return () => {
+      if (idleId !== undefined) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [onOpenTranscription]);
 
   const isPastel = isLightTheme(theme);
   const bgGradient = isPastel
@@ -890,6 +914,7 @@ export function WelcomeScreen({
                           delay: card.delay,
                         }}
                         className="relative group"
+                        onPointerEnter={warmTranscriptionEntry}
                       >
                         {isPastel ? (
                           <motion.button
@@ -902,6 +927,7 @@ export function WelcomeScreen({
                               },
                             }}
                             whileTap={{ scale: 0.98 }}
+                            onPointerDown={warmTranscriptionEntry}
                             onClick={card.onClick}
                             className={`w-full relative overflow-hidden rounded-3xl bg-white/85 backdrop-blur-xl shadow-lg border-2 transition-all duration-300 z-10 ${card.pastel.borderClassName}`}
                             style={{ boxShadow: card.pastel.cardShadow }}
@@ -991,6 +1017,7 @@ export function WelcomeScreen({
                                   },
                                 }}
                                 whileTap={{ scale: 0.98 }}
+                                onPointerDown={warmTranscriptionEntry}
                                 onClick={card.onClick}
                                 className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10"
                                 style={{ boxShadow: card.dark.buttonShadow }}

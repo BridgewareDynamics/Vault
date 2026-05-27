@@ -8,7 +8,7 @@ export function useTranscriptionDocument(
   initialTranscriptionFolderPath: string | null
 ) {
   const [document, setDocument] = useState<TranscriptionDocument | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(initialTranscriptionFolderPath));
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

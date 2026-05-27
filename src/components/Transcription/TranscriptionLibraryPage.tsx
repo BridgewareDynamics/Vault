@@ -17,6 +17,10 @@ import { ScanLine } from '../Shared/ScanLine';
 import { useToast } from '../Toast/ToastContext';
 import { useTranscriptionTheme } from './transcriptionTheme';
 import { DeleteTranscriptionDialog } from './DeleteTranscriptionDialog';
+import {
+  getCachedTranscriptionLibrary,
+  setCachedTranscriptionLibrary,
+} from '../../utils/transcriptionPrefetch';
 
 type TranscriptionLibraryFilter = 'all' | 'global' | 'case';
 
@@ -49,8 +53,10 @@ export function TranscriptionLibraryPage({
 }: TranscriptionLibraryPageProps) {
   const t = useTranscriptionTheme(theme);
   const toast = useToast();
-  const [items, setItems] = useState<TranscriptionListEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<TranscriptionListEntry[]>(
+    () => getCachedTranscriptionLibrary() ?? []
+  );
+  const [loading, setLoading] = useState(() => !getCachedTranscriptionLibrary());
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<TranscriptionLibraryFilter>('all');
   const [entryPendingDelete, setEntryPendingDelete] = useState<TranscriptionListEntry | null>(null);
@@ -62,10 +68,13 @@ export function TranscriptionLibraryPage({
       return;
     }
 
-    setLoading(true);
+    if (!getCachedTranscriptionLibrary()) {
+      setLoading(true);
+    }
     try {
       const list = await window.electronAPI.listTranscriptions();
       setItems(list);
+      setCachedTranscriptionLibrary(list);
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'loading transcriptions' }));
     } finally {

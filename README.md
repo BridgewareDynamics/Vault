@@ -202,6 +202,66 @@ Useful environment overrides for the runtime build:
 - `VAULT_TRANSCRIPTION_GET_PIP_URL`
 - `VAULT_TRANSCRIPTION_DEFAULT_MODEL_PATH`
 - `VAULT_TRANSCRIPTION_DEFAULT_MODEL_URL`
+- `VAULT_TRANSCRIPTION_TORCH_VARIANT` (`gpu` or `cpu`)
+
+#### Developer setup (unbundled model/runtime)
+
+Repository note: The bundled runtime and model files are **not committed to git** (GitHub blocks large binaries). Developers can generate them locally using the scripts below.
+
+**Goal:** get a working local transcription runtime without building an installer.
+
+1. Install JS dependencies
+
+```bash
+npm ci
+```
+
+2. Build the local transcription runtime (downloads model if needed)
+
+```bash
+npm run build:transcription-runtime
+```
+
+3. Verify the runtime boots and the default model is locally ready
+
+```bash
+npm run verify:transcription-runtime
+```
+
+**What this does**
+- Stages a runtime under `build/transcription-runtime-bundled/` (embedded Python + backend context + models).
+- Downloads the **default model** if it is not found locally (controlled by `VAULT_TRANSCRIPTION_DEFAULT_MODEL_PATH` / `VAULT_TRANSCRIPTION_DEFAULT_MODEL_URL`).
+- Writes `build/transcription-runtime-bundled/runtime-manifest.json` used by the Electron app/runtime resolver.
+
+**CUDA / GPU notes (based on the current builder code)**
+- The runtime builder defaults to **GPU** (`VAULT_TRANSCRIPTION_TORCH_VARIANT=gpu`).
+- In GPU mode, the builder installs **CUDA-enabled** PyTorch wheels (currently the `cu128` wheels) and also installs CUDA runtime libraries via pip:
+  - `nvidia-cuda-runtime-cu12`
+  - `nvidia-cublas-cu12`
+  - `nvidia-cudnn-cu12`
+  - `nvidia-ml-py`
+- You still need a compatible **NVIDIA GPU + driver** on the machine to actually run inference on CUDA; otherwise the engine may fall back to CPU behavior depending on the model/server side configuration.
+
+**Common options**
+- **CPU-only runtime** (smaller; avoids CUDA wheels/runtime packages):
+
+```bash
+set VAULT_TRANSCRIPTION_TORCH_VARIANT=cpu&& npm run build:transcription-runtime
+```
+
+- **Use a local model file** (avoid downloading during build):
+
+```bash
+set VAULT_TRANSCRIPTION_DEFAULT_MODEL_PATH=C:\path\to\parakeet-tdt-0.6b-v2.nemo&& npm run build:transcription-runtime
+```
+
+- **Override model download URL** (if mirroring elsewhere):
+
+```bash
+set VAULT_TRANSCRIPTION_DEFAULT_MODEL_URL=https://.../parakeet-tdt-0.6b-v2.nemo&& npm run build:transcription-runtime
+```
+
+After building, run the app normally (for example `npm run electron:dev`). The transcription engine will resolve the local runtime automatically when it detects the staged runtime folder and manifest.
 
 ### Project Structure
 

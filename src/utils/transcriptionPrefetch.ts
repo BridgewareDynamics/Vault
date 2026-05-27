@@ -1,0 +1,99 @@
+import type {
+  TranscriptionEngineStatus,
+  TranscriptionListEntry,
+} from '../types';
+
+type TranscriptionModule = typeof import('../components/Transcription/TranscriptionModule');
+
+let transcriptionModuleImport: Promise<{ TranscriptionModule: TranscriptionModule['TranscriptionModule'] }> | null =
+  null;
+
+let engineStatusCache: TranscriptionEngineStatus | null = null;
+let engineStatusInflight: Promise<TranscriptionEngineStatus | null> | null = null;
+
+let libraryListCache: TranscriptionListEntry[] | null = null;
+let libraryListInflight: Promise<TranscriptionListEntry[] | null> | null = null;
+
+export function loadTranscriptionModule() {
+  if (!transcriptionModuleImport) {
+    transcriptionModuleImport = import('../components/Transcription/TranscriptionModule');
+  }
+  return transcriptionModuleImport;
+}
+
+export function prefetchTranscriptionModule(): Promise<unknown> {
+  return loadTranscriptionModule();
+}
+
+export function getCachedTranscriptionEngineStatus(): TranscriptionEngineStatus | null {
+  return engineStatusCache;
+}
+
+export async function prefetchTranscriptionEngineStatus(): Promise<TranscriptionEngineStatus | null> {
+  if (!window.electronAPI?.getTranscriptionEngineStatus) {
+    return null;
+  }
+
+  if (engineStatusCache) {
+    return engineStatusCache;
+  }
+
+  if (!engineStatusInflight) {
+    engineStatusInflight = window.electronAPI
+      .getTranscriptionEngineStatus()
+      .then((status) => {
+        engineStatusCache = status;
+        return status;
+      })
+      .catch(() => null)
+      .finally(() => {
+        engineStatusInflight = null;
+      });
+  }
+
+  return engineStatusInflight;
+}
+
+export function setCachedTranscriptionEngineStatus(status: TranscriptionEngineStatus | null) {
+  engineStatusCache = status;
+}
+
+export function getCachedTranscriptionLibrary(): TranscriptionListEntry[] | null {
+  return libraryListCache;
+}
+
+export async function prefetchTranscriptionLibrary(): Promise<TranscriptionListEntry[] | null> {
+  if (!window.electronAPI?.listTranscriptions) {
+    return null;
+  }
+
+  if (libraryListCache) {
+    return libraryListCache;
+  }
+
+  if (!libraryListInflight) {
+    libraryListInflight = window.electronAPI
+      .listTranscriptions()
+      .then((list) => {
+        libraryListCache = list;
+        return list;
+      })
+      .catch(() => null)
+      .finally(() => {
+        libraryListInflight = null;
+      });
+  }
+
+  return libraryListInflight;
+}
+
+export function setCachedTranscriptionLibrary(list: TranscriptionListEntry[] | null) {
+  libraryListCache = list;
+}
+
+/** Warm module chunk + lightweight main-process status while the user is still on Welcome. */
+export function warmTranscriptionEntry(): void {
+  void prefetchTranscriptionModule();
+  void prefetchTranscriptionEngineStatus();
+  void prefetchTranscriptionLibrary();
+}

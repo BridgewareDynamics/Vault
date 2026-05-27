@@ -13,9 +13,11 @@ import { SettingsPanel } from './components/Settings/SettingsPanel';
 const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
 const MapModule = lazy(() => import('./components/Map/MapModule').then(module => ({ default: module.MapModule })));
 const TranscriptionModule = lazy(() =>
-  import('./components/Transcription/TranscriptionModule').then((module) => ({
-    default: module.TranscriptionModule,
-  }))
+  import('./utils/transcriptionPrefetch').then(({ loadTranscriptionModule }) =>
+    loadTranscriptionModule().then((module) => ({
+      default: module.TranscriptionModule,
+    }))
+  )
 );
 import { usePDFExtraction } from './hooks/usePDFExtraction';
 import { ConversionSettings } from './types';
@@ -34,6 +36,10 @@ import { DetachedPDFExtraction } from './components/DetachedPDFExtraction';
 import { ResizableDivider } from './components/ResizableDivider';
 import { OnboardingModal } from './components/Onboarding/OnboardingModal';
 import { Theme } from './types';
+import {
+  prefetchTranscriptionModule,
+  warmTranscriptionEntry,
+} from './utils/transcriptionPrefetch';
 import './App.css';
 
 function AppContent() {
@@ -629,6 +635,7 @@ function AppContent() {
                 key="archive-page"
                 onBack={() => setShowArchive(false)}
                 onOpenTranscription={(sourcePath, casePath) => {
+                  warmTranscriptionEntry();
                   setTranscriptionLaunchSourcePath(sourcePath);
                   setTranscriptionLaunchCasePath(casePath);
                   setShowArchive(false);
@@ -708,6 +715,7 @@ function AppContent() {
             onOpenPDFExtraction={() => setShowPDFExtraction(true)}
             onOpenMap={() => setShowMap(true)}
             onOpenTranscription={() => {
+              void prefetchTranscriptionModule();
               setTranscriptionLaunchSourcePath(null);
               setTranscriptionLaunchCasePath(null);
               setShowTranscription(true);

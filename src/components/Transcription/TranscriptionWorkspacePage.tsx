@@ -19,6 +19,10 @@ import { useTranscriptionWorkspaceUi } from './workspace/useTranscriptionWorkspa
 import type { TranscriptionMediaSkimmerSelection } from './workspace/TranscriptionMediaSkimmer';
 import { deriveSegmentSettingsFromDuration } from '../../utils/transcriptionSegmentDefaults';
 import { useTranscriptionSourceDuration } from './workspace/useTranscriptionSourceDuration';
+import {
+  getCachedTranscriptionEngineStatus,
+  setCachedTranscriptionEngineStatus,
+} from '../../utils/transcriptionPrefetch';
 
 interface TranscriptionWorkspacePageProps {
   theme: Theme;
@@ -129,9 +133,13 @@ export function TranscriptionWorkspacePage({
 
   const [titleDraft, setTitleDraft] = useState('');
   const [showCaseDialog, setShowCaseDialog] = useState(false);
-  const [engineStatus, setEngineStatus] = useState<TranscriptionEngineStatus | null>(null);
+  const [engineStatus, setEngineStatus] = useState<TranscriptionEngineStatus | null>(() =>
+    getCachedTranscriptionEngineStatus()
+  );
   const [models, setModels] = useState<TranscriptionEngineModel[]>([]);
-  const [loadingEngineState, setLoadingEngineState] = useState(false);
+  const [loadingEngineState, setLoadingEngineState] = useState(
+    () => !getCachedTranscriptionEngineStatus()
+  );
   const [running, setRunning] = useState(false);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const documentRef = useRef(document);
@@ -193,10 +201,14 @@ export function TranscriptionWorkspacePage({
 
   const loadEngineState = useCallback(async () => {
     if (!window.electronAPI?.getTranscriptionEngineStatus) return;
-    setLoadingEngineState(true);
+    const hadCachedStatus = !!getCachedTranscriptionEngineStatus();
+    if (!hadCachedStatus) {
+      setLoadingEngineState(true);
+    }
     try {
       const status = await window.electronAPI.getTranscriptionEngineStatus();
       setEngineStatus(status);
+      setCachedTranscriptionEngineStatus(status);
       if (status.running && window.electronAPI.listTranscriptionModels) {
         const nextModels = await window.electronAPI.listTranscriptionModels();
         setModels(nextModels);
@@ -524,10 +536,20 @@ export function TranscriptionWorkspacePage({
     [engineStatus?.deviceDefault]
   );
 
-  if (loading || !document) {
+  if (!document) {
     return (
-      <div className={`flex h-screen items-center justify-center ${ui.t.bg}`}>
-        <p className={ui.t.muted}>Loading transcription workspace...</p>
+      <div className={`flex h-screen flex-col ${ui.t.bg}`}>
+        <div
+          className={`flex items-center justify-between border-b px-4 py-3 ${ui.t.border}`}
+        >
+          <div className="h-8 w-48 animate-pulse rounded-lg bg-white/10" />
+          <div className="h-8 w-24 animate-pulse rounded-lg bg-white/10" />
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <p className={ui.t.muted}>
+            {loading ? 'Loading transcription workspace...' : 'Transcription unavailable'}
+          </p>
+        </div>
       </div>
     );
   }

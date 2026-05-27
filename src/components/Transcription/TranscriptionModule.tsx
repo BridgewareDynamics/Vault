@@ -7,6 +7,8 @@ import { TranscriptionLandingPage } from './TranscriptionLandingPage';
 import { TranscriptionLibraryPage } from './TranscriptionLibraryPage';
 import { TranscriptionWorkspacePage } from './TranscriptionWorkspacePage';
 import { NewTranscriptionDialog } from './NewTranscriptionDialog';
+import { warmTranscriptionEntry } from '../../utils/transcriptionPrefetch';
+import { useTranscriptionTheme } from './transcriptionTheme';
 
 type TranscriptionScreen = 'landing' | 'library' | 'workspace';
 
@@ -40,6 +42,12 @@ export function TranscriptionModule({
     'Untitled Transcription'
   );
   const handledInitialLaunchRef = useRef(false);
+  const [isBootstrapping, setIsBootstrapping] = useState(false);
+  const t = useTranscriptionTheme(theme);
+
+  useEffect(() => {
+    warmTranscriptionEntry();
+  }, []);
 
   const ensureVault = useCallback(async (): Promise<boolean> => {
     if (!window.electronAPI?.getArchiveConfig) {
@@ -86,12 +94,23 @@ export function TranscriptionModule({
     }
 
     handledInitialLaunchRef.current = true;
+    setIsBootstrapping(true);
     void createWorkspace(
       defaultTitleFromSource(initialSourcePath),
       initialCasePath,
       initialSourcePath
-    );
+    ).finally(() => setIsBootstrapping(false));
   }, [createWorkspace, initialCasePath, initialSourcePath]);
+
+  if (isBootstrapping && screen !== 'workspace') {
+    return (
+      <div
+        className={`flex min-h-screen items-center justify-center ${t.t.bg} ${t.t.primary}`}
+      >
+        <p className={t.t.muted}>Preparing transcription workspace...</p>
+      </div>
+    );
+  }
 
   if (screen === 'workspace' && workspacePath) {
     return (

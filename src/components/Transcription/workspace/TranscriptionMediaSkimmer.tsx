@@ -52,10 +52,18 @@ export function TranscriptionMediaSkimmer({
 }: TranscriptionMediaSkimmerProps) {
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const isPlayingRef = useRef(false);
+  const startSecondsRef = useRef(0);
+  const endSecondsRef = useRef(0);
+  const applyRangeRef = useRef<
+    (start: number, end: number, total: number, notify?: boolean) => void
+  >(() => undefined);
+  const initKeyRef = useRef<string | null>(null);
   const [totalDuration, setTotalDuration] = useState(0);
   const [startSeconds, setStartSeconds] = useState(0);
   const [endSeconds, setEndSeconds] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackTimeSeconds, setPlaybackTimeSeconds] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
 
@@ -84,8 +92,8 @@ export function TranscriptionMediaSkimmer({
       const minGap = Math.min(MIN_MEDIA_SELECTION_SECONDS, safeTotal);
       const nextStart = clamp(start, 0, Math.max(0, safeTotal - minGap));
       const nextEnd = clamp(end, nextStart + minGap, safeTotal);
-      setStartSeconds(nextStart);
-      setEndSeconds(nextEnd);
+      setStartSeconds((previous) => (previous === nextStart ? previous : nextStart));
+      setEndSeconds((previous) => (previous === nextEnd ? previous : nextEnd));
       if (notify) {
         emitSelection(nextStart, nextEnd, safeTotal);
       }
@@ -94,10 +102,35 @@ export function TranscriptionMediaSkimmer({
   );
 
   useEffect(() => {
+    applyRangeRef.current = applyRange;
+  }, [applyRange]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    startSecondsRef.current = startSeconds;
+  }, [startSeconds]);
+
+  useEffect(() => {
+    endSecondsRef.current = endSeconds;
+  }, [endSeconds]);
+
+  const seekPreview = useCallback((seconds: number, total: number) => {
+    const media = mediaRef.current;
+    if (!media || total <= 0) return;
+    const nextTime = clamp(seconds, 0, total);
+    media.currentTime = nextTime;
+    setPlaybackTimeSeconds(nextTime);
+  }, []);
+
+  useEffect(() => {
     setTotalDuration(0);
     setStartSeconds(0);
     setEndSeconds(0);
     setIsPlaying(false);
+    setPlaybackTimeSeconds(0);
     setLoadError(null);
     setIsDragging(null);
   }, [mediaPath, sourceId]);
@@ -107,6 +140,10 @@ export function TranscriptionMediaSkimmer({
     if (!media) return;
 
     const handleLoadedMetadata = () => {
+      const nextKey = `${sourceId ?? ''}|${mediaUrl ?? ''}`;
+      if (initKeyRef.current === nextKey && totalDuration > 0) {
+        return;
+      }
       const duration = Number.isFinite(media.duration) ? media.duration : 0;
       if (duration <= 0) {
         setLoadError('Could not read media duration.');
@@ -115,13 +152,22 @@ export function TranscriptionMediaSkimmer({
 
       setLoadError(null);
       setTotalDuration(duration);
+      initKeyRef.current = `${sourceId ?? ''}|${mediaUrl ?? ''}`;
 
       if (selectionMatchesSource(savedSelection, sourceId, duration)) {
-        applyRange(savedSelection!.startSeconds, savedSelection!.endSeconds, duration);
+        applyRangeRef.current(
+          savedSelection!.startSeconds,
+          savedSelection!.endSeconds,
+          duration
+        );
+        media.currentTime = savedSelection!.startSeconds;
+        setPlaybackTimeSeconds(savedSelection!.startSeconds);
         return;
       }
 
-      applyRange(0, duration, duration);
+      applyRangeRef.current(0, duration, duration);
+      media.currentTime = 0;
+      setPlaybackTimeSeconds(0);
     };
 
     const handleError = () => {
@@ -130,12 +176,21 @@ export function TranscriptionMediaSkimmer({
     };
 
     const handleTimeUpdate = () => {
-      if (!isPlaying) return;
-      if (media.currentTime >= endSeconds - 0.05) {
+      setPlaybackTimeSeconds(media.currentTime);
+
+      if (!isPlayingRef.current) return;
+      const end = endSecondsRef.current;
+      const start = startSecondsRef.current;
+      if (media.currentTime >= end - 0.05) {
         media.pause();
-        media.currentTime = startSeconds;
+        media.currentTime = start;
+        setPlaybackTimeSeconds(start);
         setIsPlaying(false);
       }
+    };
+
+    const handleSeeked = () => {
+      setPlaybackTimeSeconds(media.currentTime);
     };
 
     const handleEnded = () => {
@@ -145,6 +200,7 @@ export function TranscriptionMediaSkimmer({
     media.addEventListener('loadedmetadata', handleLoadedMetadata);
     media.addEventListener('error', handleError);
     media.addEventListener('timeupdate', handleTimeUpdate);
+    media.addEventListener('seeked', handleSeeked);
     media.addEventListener('ended', handleEnded);
 
     if (media.readyState >= 1) {
@@ -155,9 +211,10 @@ export function TranscriptionMediaSkimmer({
       media.removeEventListener('loadedmetadata', handleLoadedMetadata);
       media.removeEventListener('error', handleError);
       media.removeEventListener('timeupdate', handleTimeUpdate);
+      media.removeEventListener('seeked', handleSeeked);
       media.removeEventListener('ended', handleEnded);
     };
-  }, [applyRange, endSeconds, isPlaying, savedSelection, sourceId, mediaUrl]);
+  }, [mediaUrl, savedSelection, sourceId, totalDuration]);
 
   const seekToFraction = useCallback(
     (clientX: number) => {
@@ -175,10 +232,27 @@ export function TranscriptionMediaSkimmer({
 
     const handlePointerMove = (event: PointerEvent) => {
       const time = seekToFraction(event.clientX);
+      const media = mediaRef.current;
       if (isDragging === 'start') {
-        applyRange(Math.min(time, endSeconds - MIN_MEDIA_SELECTION_SECONDS), endSeconds, totalDuration);
+        const nextStart = Math.min(time, endSeconds - MIN_MEDIA_SELECTION_SECONDS);
+        applyRange(nextStart, endSeconds, totalDuration);
+        if (media) {
+          media.pause();
+          isPlayingRef.current = false;
+          setIsPlaying(false);
+          media.currentTime = clamp(nextStart, 0, totalDuration);
+          setPlaybackTimeSeconds(media.currentTime);
+        }
       } else {
-        applyRange(startSeconds, Math.max(time, startSeconds + MIN_MEDIA_SELECTION_SECONDS), totalDuration);
+        const nextEnd = Math.max(time, startSeconds + MIN_MEDIA_SELECTION_SECONDS);
+        applyRange(startSeconds, nextEnd, totalDuration);
+        if (media) {
+          media.pause();
+          isPlayingRef.current = false;
+          setIsPlaying(false);
+          media.currentTime = clamp(nextEnd, 0, totalDuration);
+          setPlaybackTimeSeconds(media.currentTime);
+        }
       }
     };
 
@@ -201,17 +275,20 @@ export function TranscriptionMediaSkimmer({
 
     if (isPlaying) {
       media.pause();
+      setPlaybackTimeSeconds(media.currentTime);
       setIsPlaying(false);
       return;
     }
 
     if (media.currentTime < startSeconds || media.currentTime >= endSeconds) {
       media.currentTime = startSeconds;
+      setPlaybackTimeSeconds(startSeconds);
     }
 
     try {
       await media.play();
       setIsPlaying(true);
+      setPlaybackTimeSeconds(media.currentTime);
     } catch {
       setLoadError('Playback was blocked. Click play again.');
     }
@@ -223,7 +300,7 @@ export function TranscriptionMediaSkimmer({
     const media = mediaRef.current;
     if (media) {
       media.pause();
-      media.currentTime = 0;
+      seekPreview(0, totalDuration);
       setIsPlaying(false);
     }
   };
@@ -231,9 +308,7 @@ export function TranscriptionMediaSkimmer({
   const startPct = totalDuration > 0 ? (startSeconds / totalDuration) * 100 : 0;
   const endPct = totalDuration > 0 ? (endSeconds / totalDuration) * 100 : 0;
   const playheadPct =
-    totalDuration > 0 && mediaRef.current
-      ? (mediaRef.current.currentTime / totalDuration) * 100
-      : startPct;
+    totalDuration > 0 ? (playbackTimeSeconds / totalDuration) * 100 : 0;
 
   if (!mediaPath) {
     return (
