@@ -105,16 +105,10 @@ function MapCanvasToolbar({
     [edgeAppearance]
   );
 
-  const shellClass = t.isPastel
-    ? 'bg-white/88 border-pink-200/50 text-gray-800'
-    : 'bg-gray-900/88 border-cyber-purple-500/40 text-white';
-  const mutedClass = t.isPastel ? 'text-gray-500' : 'text-gray-400';
-  const toolBtn = `h-9 w-9 rounded-xl border flex items-center justify-center transition-all ${shellClass} ${
-    t.isPastel ? 'hover:bg-white hover:border-purple-300/70' : 'hover:border-cyber-cyan-400/70 hover:bg-gray-900'
-  }`;
-  const compactActionBtn = `h-10 w-full flex items-center justify-center gap-2 rounded-xl border px-3 text-sm font-medium transition-all ${shellClass} ${
-    t.isPastel ? 'hover:bg-white hover:border-purple-300/70' : 'hover:border-cyber-cyan-400/70 hover:bg-gray-900'
-  }`;
+  const shellClass = t.toolbar.shell;
+  const mutedClass = t.muted;
+  const toolBtn = `h-9 w-9 rounded-xl border flex items-center justify-center transition-all ${shellClass} ${t.toolbar.toolBtnHover}`;
+  const compactActionBtn = `h-10 w-full flex items-center justify-center gap-2 rounded-xl border px-3 text-sm font-medium transition-all ${shellClass} ${t.toolbar.toolBtnHover}`;
   const connectorPill =
     'rounded-xl border px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-default';
 
@@ -164,11 +158,7 @@ function MapCanvasToolbar({
         <div
           className={`rounded-2xl border backdrop-blur-xl shadow-2xl overflow-hidden ${shellClass}`}
         >
-          <div
-            className={`px-4 py-2.5 border-b ${
-              t.isPastel ? 'border-pink-200/30 bg-pink-50/60' : 'border-white/10 bg-black/30'
-            }`}
-          >
+          <div className={`px-4 py-2.5 border-b ${t.toolbar.header}`}>
             <div className="flex items-center gap-2">
               <LayoutGrid className={`w-4 h-4 ${t.primary}`} />
               <span className="text-sm font-semibold">Canvas Tools</span>
@@ -206,18 +196,10 @@ function MapCanvasToolbar({
               </button>
             </div>
 
-            <div
-              className={`rounded-2xl border p-3 transition-all ${
-                t.isPastel
-                  ? 'border-purple-200/50 bg-white/75'
-                  : 'border-white/10 bg-black/20'
-              }`}
-            >
+            <div className={`rounded-2xl border p-3 transition-all ${t.toolbar.section}`}>
               <div className="flex items-center gap-3">
                 <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
-                    t.isPastel ? 'border-purple-200/60 bg-purple-50/90' : 'border-white/10 bg-gray-950/70'
-                  }`}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${t.toolbar.accentBox}`}
                 >
                   {edgeStyle === 'solid' ? (
                     <Link2 className="h-5 w-5" />
@@ -236,11 +218,7 @@ function MapCanvasToolbar({
                 <button
                   type="button"
                   onClick={() => setIsConnectorStudioOpen((current) => !current)}
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
-                    t.isPastel
-                      ? 'border-purple-200/60 bg-white/90 text-purple-600 hover:bg-purple-50'
-                      : 'border-white/10 bg-gray-950/70 text-cyber-cyan-300 hover:bg-gray-900'
-                  }`}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${t.toolbar.iconBtn}`}
                   aria-label="Open connector color studio"
                   aria-pressed={isConnectorStudioOpen}
                 >
@@ -253,13 +231,7 @@ function MapCanvasToolbar({
                   type="button"
                   onClick={() => onEdgeStyleChange('solid')}
                   className={`${connectorPill} ${
-                    edgeStyle === 'solid'
-                      ? t.isPastel
-                        ? 'border-purple-400 bg-purple-50/90 text-gray-900'
-                        : 'border-cyber-cyan-400/60 bg-cyber-cyan-500/10 text-white'
-                      : t.isPastel
-                        ? 'border-purple-200/60 bg-white/85 text-gray-700 hover:bg-white'
-                        : 'border-white/10 bg-gray-950/60 text-gray-200 hover:bg-gray-900'
+                    edgeStyle === 'solid' ? t.toolbar.selected : t.toolbar.unselected
                   }`}
                   aria-pressed={edgeStyle === 'solid'}
                 >
@@ -269,13 +241,7 @@ function MapCanvasToolbar({
                   type="button"
                   onClick={() => onEdgeStyleChange('dotted')}
                   className={`${connectorPill} ${
-                    edgeStyle === 'dotted'
-                      ? t.isPastel
-                        ? 'border-purple-400 bg-purple-50/90 text-gray-900'
-                        : 'border-cyber-cyan-400/60 bg-cyber-cyan-500/10 text-white'
-                      : t.isPastel
-                        ? 'border-purple-200/60 bg-white/85 text-gray-700 hover:bg-white'
-                        : 'border-white/10 bg-gray-950/60 text-gray-200 hover:bg-gray-900'
+                    edgeStyle === 'dotted' ? t.toolbar.selected : t.toolbar.unselected
                   }`}
                   aria-pressed={edgeStyle === 'dotted'}
                 >
@@ -288,11 +254,7 @@ function MapCanvasToolbar({
 
         {isConnectorStudioOpen && (
           <div
-            className={`absolute left-0 top-full z-50 mt-3 overflow-hidden rounded-[28px] border p-3 shadow-2xl backdrop-blur-xl ${
-              t.isPastel
-                ? 'border-purple-200/60 bg-white/88'
-                : 'border-cyber-purple-500/35 bg-gray-950/88'
-            }`}
+            className={`absolute left-0 top-full z-50 mt-3 overflow-hidden rounded-[28px] border p-3 shadow-2xl backdrop-blur-xl ${t.toolbar.studioShell}`}
             style={
               connectorStudioStyle
                 ? {
@@ -314,11 +276,7 @@ function MapCanvasToolbar({
             }
           >
             <div
-              className={`mb-3 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${
-                t.isPastel
-                  ? 'border-purple-200/50 bg-pink-50/70 text-gray-800'
-                  : 'border-white/10 bg-black/25 text-white'
-              }`}
+              className={`mb-3 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${t.toolbar.studioHeader}`}
             >
               <div className="min-w-0">
                 <div className="text-sm font-semibold">Connector Studio</div>
@@ -330,11 +288,7 @@ function MapCanvasToolbar({
               <button
                 type="button"
                 onClick={() => setIsConnectorStudioOpen(false)}
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors ${
-                  t.isPastel
-                    ? 'border-purple-200/60 bg-white/90 text-gray-600 hover:bg-white'
-                    : 'border-white/10 bg-gray-950/70 text-gray-300 hover:bg-gray-900'
-                }`}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors ${t.toolbar.closeBtn}`}
                 aria-label="Close connector color studio"
               >
                 <X className="h-4 w-4" />

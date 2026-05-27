@@ -44,7 +44,7 @@ export function DeleteMapDialog({
           className={`w-full max-w-md rounded-2xl border-2 shadow-2xl overflow-hidden ${t.body} ${
             t.isPastel
               ? 'bg-gradient-to-br from-white to-pink-50 border-red-300/60'
-              : 'bg-gradient-to-br from-gray-900 to-gray-950 border-red-500/50'
+              : `${t.dialogShell} border-red-500/50`
           }`}
         >
           <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-white/10">
@@ -89,11 +89,7 @@ export function DeleteMapDialog({
             </p>
           </div>
 
-          <div
-            className={`px-6 py-4 border-t flex gap-3 ${
-              t.isPastel ? 'border-pink-200/30 bg-pink-50/30' : 'border-white/10 bg-black/20'
-            }`}
-          >
+          <div className={`px-6 py-4 border-t flex gap-3 ${t.dialogFooter}`}>
             <button
               type="button"
               onClick={onClose}

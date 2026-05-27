@@ -32,7 +32,7 @@ describe('DeleteTranscriptionDialog', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Deposition audio batch')).toBeInTheDocument();
     expect(screen.getByText('Opening statement transcript excerpt.')).toBeInTheDocument();
-    expect(screen.getByText(/Permanently removes the transcription folder/)).toBeInTheDocument();
+    expect(screen.getByText(/Permanently removes the transcript folder/)).toBeInTheDocument();
   });
 
   it('calls confirm and cancel handlers', async () => {
@@ -53,7 +53,7 @@ describe('DeleteTranscriptionDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onClose).toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: 'Delete Transcription' }));
+    await user.click(screen.getByRole('button', { name: 'Delete Transcript' }));
     expect(onConfirm).toHaveBeenCalled();
   });
 });

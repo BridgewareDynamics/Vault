@@ -89,7 +89,7 @@ export function DeleteTranscriptionDialog({
               </div>
               <div>
                 <h2 id="delete-transcription-dialog-title" className="text-xl font-bold text-red-400">
-                  Delete Transcription
+                  Delete Transcript
                 </h2>
                 <p className={`text-sm ${t.muted}`}>Remove this workspace from your library</p>
               </div>
@@ -176,7 +176,7 @@ export function DeleteTranscriptionDialog({
             </div>
 
             <p className="text-sm text-red-400">
-              Permanently removes the transcription folder, transcript text, and linked source assets from disk.
+              Permanently removes the transcript folder, transcript text, and linked source assets from disk.
             </p>
           </div>
 
@@ -200,7 +200,7 @@ export function DeleteTranscriptionDialog({
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <Trash2 className="h-4 w-4" />
-              {deleting ? 'Deleting…' : 'Delete Transcription'}
+              {deleting ? 'Deleting…' : 'Delete Transcript'}
             </button>
           </div>
         </motion.div>

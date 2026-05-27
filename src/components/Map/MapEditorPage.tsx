@@ -421,7 +421,7 @@ export function MapEditorPage({
 
   return (
     <div className={`h-screen flex flex-col overflow-hidden ${t.bg}`}>
-      <header className="flex items-center gap-3 p-4 border-b border-white/10 shrink-0 flex-wrap">
+      <header className={`flex items-center gap-3 p-4 border-b shrink-0 flex-wrap ${t.editorHeader}`}>
         <button type="button" onClick={onBack} className={`p-2 rounded-lg border ${t.card}`}>
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -445,11 +445,7 @@ export function MapEditorPage({
               }
             }}
             placeholder="Untitled Map"
-            className={`w-full px-3 py-2 rounded-xl border text-lg font-bold outline-none ${
-              t.isPastel
-                ? 'bg-white/85 border-pink-200/50 text-gray-800 focus:border-purple-300'
-                : 'bg-gray-900/90 border-cyber-purple-500/40 text-white focus:border-cyber-cyan-400'
-            }`}
+            className={`w-full px-3 py-2 rounded-xl border text-lg font-bold outline-none ${t.titleInput}`}
             aria-label="Map title"
           />
         </div>

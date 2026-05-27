@@ -254,7 +254,7 @@ export function TranscriptionWorkspaceShell({
                 if (event.key === 'Escape') onTitleEscape();
               }}
               className={`w-full rounded-xl border px-3 py-2 text-lg font-bold outline-none ${ui.input}`}
-              aria-label="Transcription title"
+              aria-label="Transcript title"
             />
             <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
               <span
@@ -537,11 +537,11 @@ export function TranscriptionWorkspaceShell({
 
                 <div
                   className={`rounded-2xl border p-3 ${ui.surface}`}
-                  aria-label="Transcription model library"
+                  aria-label="Transcript model library"
                 >
                   <p className={`text-[10px] uppercase tracking-[0.2em] ${ui.t.primary}`}>Model library</p>
                   <p className={`mt-1 text-xs ${ui.t.muted}`}>
-                    Download models to your Vault profile for offline transcription. Files are saved
+                    Download models to your Vault profile for offline transcript work. Files are saved
                     under your user data folder.
                   </p>
                   {engineStatus?.userModelsDirectory ? (
@@ -578,7 +578,7 @@ export function TranscriptionWorkspaceShell({
 
             {activeTab === 'settings' && (
               <div className={`space-y-3 rounded-2xl border p-3 ${ui.surface}`}>
-                <p className={`text-[10px] uppercase tracking-[0.2em] ${ui.t.primary}`}>Transcription settings</p>
+                <p className={`text-[10px] uppercase tracking-[0.2em] ${ui.t.primary}`}>Transcript settings</p>
 
                 <TranscriptionMediaSkimmer
                   ui={ui}
@@ -782,7 +782,7 @@ export function TranscriptionWorkspaceShell({
                 <div className="min-h-0 flex-1 overflow-y-auto p-2">
                   {document.segments.length === 0 ? (
                     <p className={`m-1 rounded-xl border px-3 py-4 text-center text-xs ${ui.inset}`}>
-                      Timestamp segments will appear here after transcription.
+                      Timestamp segments will appear here after you transcribe.
                     </p>
                   ) : (
                     <div className="space-y-1.5">

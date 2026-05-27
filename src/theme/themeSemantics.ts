@@ -33,7 +33,7 @@ export function getThemeTextRoles(theme: Theme): ThemeTextRoles {
   return {
     heading: light ? 'text-gray-900' : 'text-white',
     body: light ? 'text-gray-800' : 'text-gray-100',
-    muted: light ? 'text-gray-500' : 'text-gray-400',
+    muted: light ? 'text-gray-600' : 'text-gray-400',
     primary: light ? 'text-purple-500' : 'text-cyber-cyan-400',
   };
 }

@@ -1140,7 +1140,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                 onTranscribe(file);
               }}
               className="absolute top-4 right-20 z-40 text-white hover:text-cyber-cyan-300 transition-colors bg-black/70 backdrop-blur-sm rounded-full p-2 border border-cyber-cyan-500/50 hover:bg-gray-700/50"
-              aria-label="Open transcription workspace"
+              aria-label="Open transcript workspace"
               title="Transcribe media"
             >
               <AudioLines size={20} />

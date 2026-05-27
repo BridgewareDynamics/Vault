@@ -89,13 +89,6 @@ export function NewMapNameDialog({
       : nameWordCount >= 3
         ? 'Detailed working title'
         : 'Focused working title';
-  const insetSurfaceClassName = t.isPastel
-    ? 'border-purple-200/35 bg-white/78'
-    : 'border-white/10 bg-black/20';
-  const compactInsetSurfaceClassName = t.isPastel
-    ? 'border-purple-200/28 bg-white/72'
-    : 'border-white/10 bg-white/5';
-
   useEffect(() => {
     if (!isOpen) {
       openedRef.current = false;
@@ -138,11 +131,7 @@ export function NewMapNameDialog({
           exit={{ scale: 0.94, opacity: 0, y: 12 }}
           transition={{ type: 'spring', stiffness: 360, damping: 28 }}
           onClick={(e) => e.stopPropagation()}
-          className={`w-full max-w-5xl overflow-hidden rounded-[32px] border shadow-2xl ${t.body} ${
-            t.isPastel
-              ? 'border-pink-200/60 bg-gradient-to-br from-white via-pink-50/90 to-slate-50'
-              : 'border-cyber-purple-500/40 bg-gradient-to-br from-gray-900 via-gray-950 to-black'
-          }`}
+          className={`w-full max-w-5xl overflow-hidden rounded-[32px] border shadow-2xl ${t.body} ${t.dialogShellLarge}`}
         >
           <motion.form
             className="max-h-[90vh] overflow-y-auto"
@@ -152,18 +141,10 @@ export function NewMapNameDialog({
             }}
           >
             <div
-              className={`flex items-start justify-between gap-4 border-b px-6 py-5 md:px-8 md:py-6 ${
-                t.isPastel ? 'border-pink-200/30 bg-pink-50/30' : 'border-white/10 bg-black/20'
-              }`}
+              className={`flex items-start justify-between gap-4 border-b px-6 py-5 md:px-8 md:py-6 ${t.dialogHeaderTint}`}
             >
               <div className="flex items-center gap-4">
-                <div
-                  className={`rounded-2xl border p-3 ${
-                    t.isPastel
-                      ? 'border-pink-200/50 bg-white text-purple-500'
-                      : 'border-cyber-purple-500/30 bg-cyber-purple-500/10 text-cyber-cyan-400'
-                  }`}
-                >
+                <div className={`rounded-2xl border p-3 ${t.dialogIconBox}`}>
                   <MapIcon className="h-7 w-7" />
                 </div>
                 <div>
@@ -184,9 +165,7 @@ export function NewMapNameDialog({
               <button
                 type="button"
                 onClick={onClose}
-                className={`rounded-xl p-2 transition-colors ${
-                  t.isPastel ? 'hover:bg-white/90' : 'hover:bg-white/10'
-                }`}
+                className="rounded-xl p-2 transition-colors hover:bg-white/10"
                 aria-label="Close new map dialog"
               >
                 <X className="h-5 w-5" />
@@ -195,21 +174,13 @@ export function NewMapNameDialog({
 
             <div className="relative overflow-hidden px-6 py-6 md:px-8 md:py-8">
               <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                <div
-                  className={`absolute -left-10 top-8 h-40 w-40 rounded-full blur-3xl ${
-                    t.isPastel ? 'bg-fuchsia-200/40' : 'bg-cyber-purple-500/20'
-                  }`}
-                />
-                <div
-                  className={`absolute bottom-0 right-0 h-48 w-48 rounded-full blur-3xl ${
-                    t.isPastel ? 'bg-cyan-200/35' : 'bg-cyber-cyan-500/15'
-                  }`}
-                />
+                <div className={`absolute -left-10 top-8 h-40 w-40 rounded-full blur-3xl ${t.ambientGlowPrimary}`} />
+                <div className={`absolute bottom-0 right-0 h-48 w-48 rounded-full blur-3xl ${t.ambientGlowSecondary}`} />
               </div>
 
               <div className="relative z-10 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
               <div className="space-y-6">
-                <div className={`rounded-[30px] border p-6 ${insetSurfaceClassName}`}>
+                <div className={`rounded-[30px] border p-6 ${t.insetSurface}`}>
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className={`text-xs font-semibold uppercase tracking-[0.24em] ${t.primary}`}>Title setup</p>
@@ -236,11 +207,7 @@ export function NewMapNameDialog({
                         }
                       }}
                       placeholder="Untitled Map"
-                      className={`w-full rounded-[22px] border px-5 py-4 text-lg font-semibold outline-none transition-colors ${
-                        t.isPastel
-                          ? 'border-pink-200/50 bg-white/85 text-gray-800 focus:border-purple-300'
-                          : 'border-cyber-purple-500/40 bg-gray-900/90 text-white focus:border-cyber-cyan-400'
-                      }`}
+                      className={`w-full rounded-[22px] border px-5 py-4 text-lg font-semibold outline-none transition-colors ${t.titleInput}`}
                       aria-label="New map name"
                     />
                     <p className={`text-sm ${t.muted}`}>
@@ -256,7 +223,7 @@ export function NewMapNameDialog({
                     ].map((item) => (
                       <div
                         key={item.label}
-                        className={`rounded-[22px] border p-4 ${compactInsetSurfaceClassName}`}
+                        className={`rounded-[22px] border p-4 ${t.compactInsetSurface}`}
                       >
                         <p className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${t.primary}`}>
                           {item.label}
@@ -268,7 +235,7 @@ export function NewMapNameDialog({
                   </div>
                 </div>
 
-                <div className={`rounded-[30px] border p-6 ${insetSurfaceClassName}`}>
+                <div className={`rounded-[30px] border p-6 ${t.insetSurface}`}>
                   <div className="flex items-center gap-2">
                     <Wand2 className={`h-4 w-4 ${t.primary}`} />
                     <p className={`text-xs font-semibold uppercase tracking-[0.24em] ${t.primary}`}>Naming prompts</p>
@@ -296,23 +263,13 @@ export function NewMapNameDialog({
                           aria-label={prompt.title}
                           aria-pressed={isSelected}
                           className={`rounded-[24px] border p-4 text-left transition-all ${
-                            isSelected
-                              ? `${t.button} shadow-lg`
-                              : `${
-                                  t.isPastel
-                                    ? 'border-purple-200/50 bg-white/82 text-gray-800 hover:border-purple-300 hover:bg-white'
-                                    : 'border-white/10 bg-white/5 text-white hover:border-cyber-cyan-400/45 hover:bg-white/10'
-                                }`
+                            isSelected ? `${t.button} shadow-lg` : t.promptIdle
                           }`}
                         >
                           <div className="flex items-start gap-3">
                             <div
                               className={`rounded-2xl p-3 ${
-                                isSelected
-                                  ? 'bg-white/20 text-white'
-                                  : t.isPastel
-                                    ? 'bg-purple-50 text-purple-500'
-                                    : 'bg-cyber-purple-500/15 text-cyber-cyan-400'
+                                isSelected ? 'bg-white/20 text-white' : t.dialogIconBox
                               }`}
                             >
                               <Icon className="h-5 w-5" />
@@ -333,7 +290,7 @@ export function NewMapNameDialog({
                   </div>
                 </div>
 
-                <div className={`rounded-[30px] border p-6 ${insetSurfaceClassName}`}>
+                <div className={`rounded-[30px] border p-6 ${t.insetSurface}`}>
                   <p className={`text-xs font-semibold uppercase tracking-[0.24em] ${t.primary}`}>What opens first</p>
                   <div className="mt-4 grid gap-3 text-sm">
                     {[
@@ -343,13 +300,9 @@ export function NewMapNameDialog({
                     ].map((item) => (
                       <div
                         key={item}
-                        className={`flex items-center gap-3 rounded-[20px] px-4 py-3 ${compactInsetSurfaceClassName}`}
+                        className={`flex items-center gap-3 rounded-[20px] px-4 py-3 ${t.compactInsetSurface}`}
                       >
-                        <span
-                          className={`h-2.5 w-2.5 rounded-full ${
-                            t.isPastel ? 'bg-purple-400' : 'bg-cyber-cyan-400'
-                          }`}
-                        />
+                        <span className={`h-2.5 w-2.5 rounded-full ${t.highlightDot}`} />
                         <span>{item}</span>
                       </div>
                     ))}
@@ -357,13 +310,7 @@ export function NewMapNameDialog({
                 </div>
               </div>
 
-              <div
-                className={`overflow-hidden rounded-[32px] border p-6 md:p-7 ${
-                  t.isPastel
-                    ? 'border-pink-200/40 bg-gradient-to-br from-pink-50/80 via-white to-purple-50/70'
-                    : 'border-cyber-purple-500/25 bg-gradient-to-br from-cyber-purple-500/10 via-black/20 to-cyber-cyan-500/10'
-                }`}
-              >
+              <div className={`overflow-hidden rounded-[32px] border p-6 md:p-7 ${t.dialogPreviewPanel}`}>
                 <div className="space-y-5">
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -379,7 +326,7 @@ export function NewMapNameDialog({
                   </div>
 
                   <div
-                    className={`rounded-[28px] border p-6 ${compactInsetSurfaceClassName}`}
+                    className={`rounded-[28px] border p-6 ${t.compactInsetSurface}`}
                   >
                     <div className="flex items-start gap-4">
                       <div className={`rounded-3xl p-4 ${t.button}`}>
@@ -400,11 +347,7 @@ export function NewMapNameDialog({
                       ].map((chip) => (
                         <span
                           key={chip}
-                          className={`rounded-full border px-4 py-2 text-sm font-medium ${
-                            t.isPastel
-                              ? 'border-purple-200/60 bg-white/85 text-gray-700'
-                              : 'border-white/10 bg-black/20 text-gray-200'
-                          }`}
+                          className={`rounded-full border px-4 py-2 text-sm font-medium ${t.badgeNeutral}`}
                         >
                           {chip}
                         </span>
@@ -412,7 +355,7 @@ export function NewMapNameDialog({
                     </div>
                   </div>
 
-                  <div className={`rounded-[28px] border p-5 ${compactInsetSurfaceClassName}`}>
+                  <div className={`rounded-[28px] border p-5 ${t.compactInsetSurface}`}>
                     <p className="text-sm font-semibold">Launch profile</p>
                     <div className="mt-4 grid gap-3">
                       {[
@@ -440,9 +383,7 @@ export function NewMapNameDialog({
                         return (
                           <div
                             key={item.label}
-                            className={`rounded-[22px] border p-4 ${
-                              t.isPastel ? 'border-purple-200/35 bg-white/82' : 'border-white/10 bg-black/20'
-                            }`}
+                            className={`rounded-[22px] border p-4 ${t.insetSurface}`}
                           >
                             <div className="flex items-start gap-4">
                               <div className={`shrink-0 rounded-2xl p-3 ${t.button}`}>
@@ -460,7 +401,7 @@ export function NewMapNameDialog({
                     </div>
                   </div>
 
-                  <div className={`rounded-[28px] border p-5 ${compactInsetSurfaceClassName}`}>
+                  <div className={`rounded-[28px] border p-5 ${t.compactInsetSurface}`}>
                     <p className="text-sm font-semibold">Best for this map concept</p>
                     <div className="mt-4 grid gap-3">
                       {[
@@ -470,15 +411,9 @@ export function NewMapNameDialog({
                       ].map((item) => (
                         <div
                           key={item}
-                          className={`flex items-start gap-3 rounded-[20px] px-4 py-3 ${
-                            t.isPastel ? 'bg-white/80' : 'bg-black/20'
-                          }`}
+                          className={`flex items-start gap-3 rounded-[20px] px-4 py-3 ${t.highlightRow}`}
                         >
-                          <span
-                            className={`mt-1 h-2.5 w-2.5 rounded-full ${
-                              t.isPastel ? 'bg-purple-400' : 'bg-cyber-cyan-400'
-                            }`}
-                          />
+                          <span className={`mt-1 h-2.5 w-2.5 rounded-full ${t.highlightDot}`} />
                           <span className={`text-sm leading-6 ${t.muted}`}>{item}</span>
                         </div>
                       ))}
@@ -489,15 +424,11 @@ export function NewMapNameDialog({
             </div>
             </div>
 
-            <div
-              className={`flex flex-col gap-3 border-t px-6 py-4 md:flex-row md:px-8 ${
-                t.isPastel ? 'border-pink-200/30 bg-pink-50/20' : 'border-white/10 bg-black/20'
-              }`}
-            >
+            <div className={`flex flex-col gap-3 border-t px-6 py-4 md:flex-row md:px-8 ${t.dialogFooter}`}>
               <button
                 type="button"
                 onClick={onClose}
-                className={`flex-1 rounded-2xl border px-4 py-3 font-medium ${t.card}`}
+                className={`flex-1 rounded-2xl border px-4 py-3 font-medium ${t.dialogCancel}`}
               >
                 Cancel
               </button>

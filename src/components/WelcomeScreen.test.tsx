@@ -97,7 +97,7 @@ describe('WelcomeScreen', () => {
       </SettingsProvider>
     );
 
-    expect(screen.getByText('Transcription')).toBeInTheDocument();
+    expect(screen.getByText('Transcript')).toBeInTheDocument();
     expect(screen.getByText('Audio and video speech workflows for Vault case media')).toBeInTheDocument();
   });
 });

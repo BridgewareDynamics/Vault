@@ -76,7 +76,7 @@ export function TranscriptionLibraryPage({
       setItems(list);
       setCachedTranscriptionLibrary(list);
     } catch (error) {
-      toast.error(getUserFriendlyError(error, { operation: 'loading transcriptions' }));
+      toast.error(getUserFriendlyError(error, { operation: 'loading transcripts' }));
     } finally {
       setLoading(false);
     }
@@ -98,28 +98,17 @@ export function TranscriptionLibraryPage({
     });
   }, [filter, items, query]);
 
-  const panelClassName = t.isPastel
-    ? 'border-purple-200/40 bg-white/72 text-gray-800 shadow-[0_24px_80px_rgba(216,180,254,0.18)]'
-    : 'border-cyber-purple-500/25 bg-gray-950/65 text-white shadow-[0_24px_80px_rgba(15,23,42,0.65)]';
-  const mutedTextClassName = t.isPastel ? 'text-gray-600' : 'text-gray-300';
-  const compactInsetSurfaceClassName = t.isPastel
-    ? 'border-purple-200/28 bg-white/74'
-    : 'border-white/10 bg-white/5';
-  const secondaryButtonClassName = t.isPastel
-    ? 'border-purple-200/60 bg-white/85 text-gray-700 hover:border-purple-300 hover:bg-white'
-    : 'border-white/10 bg-white/5 text-gray-200 hover:border-cyber-cyan-400/45 hover:bg-white/10';
-
   const confirmDelete = async () => {
     if (!entryPendingDelete || !window.electronAPI?.deleteTranscription) return;
 
     setDeleting(true);
     try {
       await window.electronAPI.deleteTranscription(entryPendingDelete.transcriptionFolderPath);
-      toast.success('Transcription deleted');
+      toast.success('Transcript deleted');
       setEntryPendingDelete(null);
       await loadItems();
     } catch (error) {
-      toast.error(getUserFriendlyError(error, { operation: 'deleting transcription' }));
+      toast.error(getUserFriendlyError(error, { operation: 'deleting transcript' }));
     } finally {
       setDeleting(false);
     }
@@ -130,12 +119,12 @@ export function TranscriptionLibraryPage({
       <HexGrid theme={theme} density={24} />
       <ScanLine theme={theme} speed={12} />
       <div className={`relative z-10 flex min-h-screen flex-col ${t.body}`}>
-        <header className="border-b border-white/10 backdrop-blur-xl">
+        <header className={`border-b backdrop-blur-xl ${t.headerBorder}`}>
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 py-5">
             <button
               type="button"
               onClick={onBack}
-              className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 transition-colors ${secondaryButtonClassName}`}
+              className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 transition-colors ${t.secondaryButton}`}
             >
               <ArrowLeft className="h-5 w-5" />
               <span className="font-medium">Back</span>
@@ -147,7 +136,7 @@ export function TranscriptionLibraryPage({
               </div>
               <div className="text-right">
                 <p className={`text-xs uppercase tracking-[0.28em] ${t.primary}`}>
-                  Transcription Library
+                  Transcript Library
                 </p>
                 <h1 className={`text-xl font-bold md:text-2xl ${t.heading}`}>Saved Workspaces</h1>
               </div>
@@ -156,9 +145,9 @@ export function TranscriptionLibraryPage({
         </header>
 
         <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8 md:py-10">
-          <section className={`grid gap-4 rounded-[32px] border p-6 md:p-7 ${panelClassName}`}>
+          <section className={`grid gap-4 rounded-[32px] border p-6 md:p-7 ${t.panel}`}>
             <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto] lg:items-end">
-              <div className={`rounded-[24px] border p-4 ${compactInsetSurfaceClassName}`}>
+              <div className={`rounded-[24px] border p-4 ${t.compactInsetSurface}`}>
                 <label htmlFor="transcription-library-search" className="text-sm font-semibold">
                   Search workspaces
                 </label>
@@ -171,12 +160,12 @@ export function TranscriptionLibraryPage({
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="Search by title, case, or excerpt"
                     className="w-full bg-transparent text-sm outline-none"
-                    aria-label="Search transcriptions"
+                    aria-label="Search transcripts"
                   />
                 </div>
               </div>
 
-              <div className={`rounded-[24px] border p-4 ${compactInsetSurfaceClassName}`}>
+              <div className={`rounded-[24px] border p-4 ${t.compactInsetSurface}`}>
                 <p className="text-sm font-semibold">Storage scope</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(['all', 'global', 'case'] as const).map((value) => (
@@ -185,7 +174,7 @@ export function TranscriptionLibraryPage({
                       type="button"
                       onClick={() => setFilter(value)}
                       className={`rounded-full border px-4 py-2 text-sm font-semibold ${
-                        filter === value ? t.button : secondaryButtonClassName
+                        filter === value ? t.button : t.secondaryButton
                       }`}
                     >
                       {value === 'all'
@@ -198,30 +187,30 @@ export function TranscriptionLibraryPage({
                 </div>
               </div>
 
-              <div className={`rounded-[24px] border p-4 ${compactInsetSurfaceClassName}`}>
+              <div className={`rounded-[24px] border p-4 ${t.compactInsetSurface}`}>
                 <p className={`text-xs uppercase tracking-[0.22em] ${t.primary}`}>Visible</p>
                 <p className="mt-2 text-3xl font-bold">{filteredItems.length}</p>
-                <p className={`mt-1 text-sm ${mutedTextClassName}`}>Workspace results</p>
+                <p className={`mt-1 text-sm ${t.mutedText}`}>Workspace results</p>
               </div>
             </div>
           </section>
 
           {loading ? (
-            <section className={`rounded-[30px] border p-10 text-center ${panelClassName}`}>
+            <section className={`rounded-[30px] border p-10 text-center ${t.panel}`}>
               <p className={`text-sm uppercase tracking-[0.28em] ${t.primary}`}>Loading library</p>
-              <p className={`mt-4 text-base ${mutedTextClassName}`}>
-                Pulling saved transcription work into the command center.
+              <p className={`mt-4 text-base ${t.mutedText}`}>
+                Pulling saved transcript work into the command center.
               </p>
             </section>
           ) : filteredItems.length === 0 ? (
-            <section className={`rounded-[32px] border p-10 md:p-14 ${panelClassName}`}>
+            <section className={`rounded-[32px] border p-10 md:p-14 ${t.panel}`}>
               <div className="mx-auto max-w-2xl text-center">
                 <div className={`mx-auto w-fit rounded-3xl p-5 ${t.button}`}>
                   <AudioLines className="h-10 w-10 text-white" />
                 </div>
                 <h3 className={`mt-6 text-3xl font-bold ${t.heading}`}>Nothing matches this view yet.</h3>
-                <p className={`mt-4 text-base leading-7 ${mutedTextClassName}`}>
-                  Create a new transcription workspace or widen the current search and filter controls.
+                <p className={`mt-4 text-base leading-7 ${t.mutedText}`}>
+                  Create a new transcript workspace or widen the current search and filter controls.
                 </p>
               </div>
             </section>
@@ -238,17 +227,13 @@ export function TranscriptionLibraryPage({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.35, delay: 0.04 * index }}
                     whileHover={{ y: -4, scale: 1.01 }}
-                    className={`group relative flex h-full flex-col overflow-hidden rounded-[28px] border p-5 ${panelClassName}`}
+                    className={`group relative flex h-full flex-col overflow-hidden rounded-[28px] border p-5 ${t.panel}`}
                   >
                     <button
                       type="button"
                       onClick={() => setEntryPendingDelete(entry)}
-                      className={`absolute right-4 top-4 z-20 rounded-xl p-2 transition-opacity md:opacity-0 md:group-hover:opacity-100 ${
-                        t.isPastel
-                          ? 'bg-red-50 text-red-500 hover:bg-red-100'
-                          : 'bg-red-500/10 text-red-300 hover:bg-red-500/20'
-                      }`}
-                      aria-label={`Delete transcription ${entry.title}`}
+                        className={`absolute right-4 top-4 z-20 rounded-xl p-2 transition-opacity md:opacity-0 md:group-hover:opacity-100 ${t.dangerIconBtn}`}
+                      aria-label={`Delete transcript ${entry.title}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -258,7 +243,7 @@ export function TranscriptionLibraryPage({
                       onClick={() => onOpenTranscription(entry.transcriptionFolderPath)}
                       className="relative z-10 flex h-full flex-col gap-4 text-left"
                     >
-                      <div className={`rounded-[22px] border p-4 ${compactInsetSurfaceClassName}`}>
+                      <div className={`rounded-[22px] border p-4 ${t.compactInsetSurface}`}>
                         <div className="flex items-start gap-3">
                           <div className={`rounded-2xl p-3 ${t.button}`}>
                             <AudioLines className="h-5 w-5 text-white" />
@@ -267,23 +252,13 @@ export function TranscriptionLibraryPage({
                             <div className="flex flex-wrap gap-2">
                               <span
                                 className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] ${
-                                  entry.casePath
-                                    ? t.isPastel
-                                      ? 'border-emerald-200/60 bg-emerald-50/90 text-emerald-700'
-                                      : 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300'
-                                    : t.isPastel
-                                      ? 'border-cyan-200/60 bg-cyan-50/90 text-cyan-700'
-                                      : 'border-cyber-cyan-400/20 bg-cyber-cyan-500/10 text-cyber-cyan-300'
+                                  entry.casePath ? t.badgeCase : t.badgeVault
                                 }`}
                               >
                                 {entry.casePath ? 'Case linked' : 'Vault'}
                               </span>
                               <span
-                                className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] ${
-                                  t.isPastel
-                                    ? 'border-purple-200/60 bg-white/80 text-purple-600'
-                                    : 'border-white/10 bg-black/20 text-gray-200'
-                                }`}
+                                className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] ${t.eyebrowBadge}`}
                               >
                                 {entry.status}
                               </span>
@@ -293,34 +268,34 @@ export function TranscriptionLibraryPage({
                         </div>
                       </div>
 
-                      <div className={`rounded-[22px] border p-3 ${compactInsetSurfaceClassName}`}>
+                      <div className={`rounded-[22px] border p-3 ${t.compactInsetSurface}`}>
                         <div className="grid gap-3 sm:grid-cols-2">
-                          <div className={`rounded-[18px] px-4 py-3 ${t.isPastel ? 'bg-white/85' : 'bg-black/25'}`}>
+                          <div className={`rounded-[18px] px-4 py-3 ${t.statBox}`}>
                             <p className={`text-xs uppercase tracking-[0.22em] ${t.primary}`}>Sources</p>
                             <p className="mt-2 text-xl font-bold">{entry.sourceCount}</p>
                           </div>
-                          <div className={`rounded-[18px] px-4 py-3 ${t.isPastel ? 'bg-white/85' : 'bg-black/25'}`}>
+                          <div className={`rounded-[18px] px-4 py-3 ${t.statBox}`}>
                             <p className={`text-xs uppercase tracking-[0.22em] ${t.primary}`}>Updated</p>
-                            <div className={`mt-2 flex items-center gap-2 text-sm ${mutedTextClassName}`}>
+                            <div className={`mt-2 flex items-center gap-2 text-sm ${t.mutedText}`}>
                               <Clock3 className="h-4 w-4" />
                               <span>{formatRelativeTime(entry.modified)}</span>
                             </div>
                           </div>
                         </div>
 
-                        <div className={`mt-3 rounded-[18px] px-4 py-3 ${t.isPastel ? 'bg-white/82' : 'bg-black/20'}`}>
+                        <div className={`mt-3 rounded-[18px] px-4 py-3 ${t.metaBox}`}>
                           <p className={`text-xs uppercase tracking-[0.22em] ${t.primary}`}>Excerpt</p>
-                          <p className={`mt-2 line-clamp-3 text-sm ${mutedTextClassName}`}>
+                          <p className={`mt-2 line-clamp-3 text-sm ${t.mutedText}`}>
                             {entry.excerpt || 'No transcript excerpt yet.'}
                           </p>
                         </div>
 
-                        <div className={`mt-3 rounded-[18px] px-4 py-3 ${t.isPastel ? 'bg-white/82' : 'bg-black/20'}`}>
+                        <div className={`mt-3 rounded-[18px] px-4 py-3 ${t.metaBox}`}>
                           <div className="flex items-start gap-3">
                             <FolderOpen className={`mt-0.5 h-4 w-4 ${t.primary}`} />
                             <div>
                               <p className="text-sm font-semibold">Context</p>
-                              <p className={`text-sm ${mutedTextClassName}`}>
+                              <p className={`text-sm ${t.mutedText}`}>
                                 {entry.caseName || 'Vault global storage'}
                               </p>
                             </div>
@@ -328,7 +303,7 @@ export function TranscriptionLibraryPage({
                         </div>
                       </div>
 
-                      <div className={`mt-auto rounded-[20px] border px-4 py-3 ${compactInsetSurfaceClassName}`}>
+                      <div className={`mt-auto rounded-[20px] border px-4 py-3 ${t.compactInsetSurface}`}>
                         <div className="inline-flex items-center gap-2 text-sm font-semibold">
                           <span>Open workspace</span>
                           <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />

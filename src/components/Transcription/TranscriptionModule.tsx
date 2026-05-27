@@ -39,7 +39,7 @@ export function TranscriptionModule({
   const [pendingCasePath, setPendingCasePath] = useState<string | null>(null);
   const [pendingCaseName, setPendingCaseName] = useState<string | null>(null);
   const [newDialogDefaultTitle, setNewDialogDefaultTitle] = useState(
-    'Untitled Transcription'
+    'Untitled Transcript'
   );
   const handledInitialLaunchRef = useRef(false);
   const [isBootstrapping, setIsBootstrapping] = useState(false);
@@ -56,7 +56,7 @@ export function TranscriptionModule({
     const config = await window.electronAPI.getArchiveConfig();
     if (!config.archiveDrive) {
       toast.error(
-        'Configure your Vault archive drive in Settings before using Transcription.'
+        'Configure your Vault archive drive in Settings before using Transcript.'
       );
       return false;
     }
@@ -75,14 +75,14 @@ export function TranscriptionModule({
 
       try {
         const doc = await window.electronAPI.createTranscription(
-          title.trim() || 'Untitled Transcription',
+          title.trim() || 'Untitled Transcript',
           casePath ?? null,
           sourcePath ?? null
         );
         setShowNewDialog(false);
         openWorkspace(doc.transcriptionFolderPath);
       } catch (error) {
-        toast.error(getUserFriendlyError(error, { operation: 'creating transcription' }));
+        toast.error(getUserFriendlyError(error, { operation: 'creating transcript' }));
       }
     },
     [ensureVault, openWorkspace, toast]
@@ -107,7 +107,7 @@ export function TranscriptionModule({
       <div
         className={`flex min-h-screen items-center justify-center ${t.t.bg} ${t.t.primary}`}
       >
-        <p className={t.t.muted}>Preparing transcription workspace...</p>
+        <p className={t.t.muted}>Preparing transcript workspace...</p>
       </div>
     );
   }
@@ -139,7 +139,7 @@ export function TranscriptionModule({
         theme={theme}
         onBack={onExit}
         onNewWorkspace={() => {
-          setNewDialogDefaultTitle('Untitled Transcription');
+          setNewDialogDefaultTitle('Untitled Transcript');
           setPendingCasePath(null);
           setPendingCaseName(null);
           setShowNewDialog(true);
@@ -176,7 +176,7 @@ export function TranscriptionModule({
           setShowCreateCaseDialog(false);
         }}
         title="Assign to case"
-        subtitle="Store this transcription workspace inside a case folder"
+        subtitle="Store this transcript workspace inside a case folder"
         confirmLabel="Use this case"
         emptyStateHint="Create a case below or search your archive"
       />

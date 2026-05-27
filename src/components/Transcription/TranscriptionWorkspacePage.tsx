@@ -223,7 +223,7 @@ export function TranscriptionWorkspacePage({
         }
       }
     } catch (error) {
-      toast.error(getUserFriendlyError(error, { operation: 'loading transcription engine' }));
+      toast.error(getUserFriendlyError(error, { operation: 'loading transcript engine' }));
     } finally {
       setLoadingEngineState(false);
     }
@@ -235,7 +235,7 @@ export function TranscriptionWorkspacePage({
 
   const commitTitle = useCallback(() => {
     if (!document) return;
-    const nextTitle = titleDraft.trim() || 'Untitled Transcription';
+    const nextTitle = titleDraft.trim() || 'Untitled Transcript';
     setTitleDraft(nextTitle);
     if (nextTitle === document.title) return;
     updateDocument((previous) => ({ ...previous, title: nextTitle }));
@@ -248,9 +248,9 @@ export function TranscriptionWorkspacePage({
       const updatedDocument = { ...document, casePath };
       updateDocument(() => updatedDocument, { skipAutosave: true });
       await saveNow(updatedDocument);
-      toast.success('Transcription linked to case');
+      toast.success('Transcript linked to case');
     } catch (error) {
-      toast.error(getUserFriendlyError(error, { operation: 'linking transcription to case' }));
+      toast.error(getUserFriendlyError(error, { operation: 'linking transcript to case' }));
     }
   };
 
@@ -258,7 +258,7 @@ export function TranscriptionWorkspacePage({
     if (!document?.casePath) return;
     if (
       !confirm(
-        'Move this transcription back to the Vault library and unlink it from the current case?'
+        'Move this transcript back to the Vault library and unlink it from the current case?'
       )
     ) {
       return;
@@ -268,10 +268,10 @@ export function TranscriptionWorkspacePage({
       const updatedDocument = { ...document, casePath: null };
       updateDocument(() => updatedDocument, { skipAutosave: true });
       await saveNow(updatedDocument);
-      toast.success('Transcription moved to Vault library');
+      toast.success('Transcript moved to Vault library');
     } catch (error) {
       toast.error(
-        getUserFriendlyError(error, { operation: 'moving transcription to Vault library' })
+        getUserFriendlyError(error, { operation: 'moving transcript to Vault library' })
       );
     }
   };
@@ -293,9 +293,9 @@ export function TranscriptionWorkspacePage({
         );
         hasAppliedPreferredModelRef.current = true;
       }
-      toast.success('Vault transcription engine is ready');
+      toast.success('Vault transcript engine is ready');
     } catch (error) {
-      toast.error(getUserFriendlyError(error, { operation: 'starting transcription engine' }));
+      toast.error(getUserFriendlyError(error, { operation: 'starting transcript engine' }));
     } finally {
       setLoadingEngineState(false);
     }
@@ -318,7 +318,7 @@ export function TranscriptionWorkspacePage({
     }
 
     if (!engineStatus?.running) {
-      toast.error('Start the transcription engine before downloading models.');
+      toast.error('Start the transcript engine before downloading models.');
       return;
     }
 
@@ -356,7 +356,7 @@ export function TranscriptionWorkspacePage({
 
       toast.success(`Model installed at ${result.path}`);
     } catch (error) {
-      toast.error(getUserFriendlyError(error, { operation: 'downloading transcription model' }));
+      toast.error(getUserFriendlyError(error, { operation: 'downloading transcript model' }));
     } finally {
       setDownloadingModelId(null);
     }
@@ -505,12 +505,12 @@ export function TranscriptionWorkspacePage({
       setDocument(result);
 
       if (result.status === 'completed') {
-        toast.success('Transcription completed');
+        toast.success('Transcript completed');
       } else {
-        toast.error(result.lastError || 'Transcription did not complete successfully.');
+        toast.error(result.lastError || 'Transcript did not complete successfully.');
       }
     } catch (error) {
-      toast.error(getUserFriendlyError(error, { operation: 'running transcription' }));
+      toast.error(getUserFriendlyError(error, { operation: 'running transcript' }));
     } finally {
       setRunning(false);
     }
@@ -525,7 +525,7 @@ export function TranscriptionWorkspacePage({
       setDocument(latest);
       toast.info('Cancellation requested');
     } catch (error) {
-      toast.error(getUserFriendlyError(error, { operation: 'cancelling transcription' }));
+      toast.error(getUserFriendlyError(error, { operation: 'cancelling transcript' }));
     }
   };
 
@@ -609,7 +609,7 @@ export function TranscriptionWorkspacePage({
         </div>
         <div className="flex flex-1 items-center justify-center">
           <p className={ui.t.muted}>
-            {loading ? 'Loading transcription workspace...' : 'Transcription unavailable'}
+            {loading ? 'Loading transcript workspace...' : 'Transcript unavailable'}
           </p>
         </div>
       </div>
@@ -697,7 +697,7 @@ export function TranscriptionWorkspacePage({
         onClose={() => setShowCaseDialog(false)}
         onSelectCase={handleAssignCase}
         title="Assign to case"
-        subtitle="Link this transcription workspace to a case folder"
+        subtitle="Link this transcript workspace to a case folder"
         confirmLabel="Assign case"
         emptyStateHint="Create a case below or start one from the archive"
       />
