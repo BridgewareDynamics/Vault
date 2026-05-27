@@ -4650,6 +4650,22 @@ ipcMain.handle('list-transcription-models', async () => {
   }
 });
 
+ipcMain.handle('download-transcription-model', async (_event, modelId: string) => {
+  try {
+    if (typeof modelId !== 'string' || !modelId.trim()) {
+      throw new Error('A model id is required to download a transcription model.');
+    }
+    return await transcriptionEngine.downloadModel(modelId.trim());
+  } catch (error) {
+    logger.error('Failed to download transcription model:', error);
+    throw new Error(
+      `Failed to download transcription model: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
 ipcMain.handle('select-transcription-media', async () => {
   if (!mainWindow) return [];
 

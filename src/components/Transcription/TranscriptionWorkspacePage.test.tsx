@@ -78,8 +78,28 @@ describe('TranscriptionWorkspacePage', () => {
         modelType: 'parakeet',
         defaultSegmentLength: 90,
         supportsTimestamps: true,
+        cached: true,
+        cachePath: 'C:/Vault/models/nvidia/parakeet-tdt-0.6b-v2/parakeet-tdt-0.6b-v2.nemo',
+        installable: true,
+      },
+      {
+        key: 'Parakeet TDT 0.6B v3 - bfloat16',
+        name: 'Parakeet TDT 0.6B v3',
+        modelId: 'nvidia/parakeet-tdt-0.6b-v3',
+        precision: 'bfloat16',
+        modelType: 'parakeet',
+        defaultSegmentLength: 90,
+        supportsTimestamps: true,
+        installable: true,
       },
     ]);
+    mockElectronAPI.downloadTranscriptionModel.mockResolvedValue({
+      modelId: 'nvidia/parakeet-tdt-0.6b-v3',
+      path: 'C:/Vault/models/nvidia/parakeet-tdt-0.6b-v3/parakeet-tdt-0.6b-v3.nemo',
+      bundled: false,
+      cached: true,
+      cachePath: 'C:/Vault/models/nvidia/parakeet-tdt-0.6b-v3/parakeet-tdt-0.6b-v3.nemo',
+    });
     mockElectronAPI.runTranscription.mockResolvedValue(
       makeDocument({
         status: 'completed',
@@ -133,7 +153,6 @@ describe('TranscriptionWorkspacePage', () => {
     expect(await screen.findByDisplayValue('Transcript body')).toBeInTheDocument();
     expect(screen.getByText(/0\.00s\s*[–-]\s*5\.00s/)).toBeInTheDocument();
     expect(screen.getAllByText('Transcript body').length).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: /download/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Transcript text')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /engine/i })).toBeInTheDocument();
   });
@@ -157,5 +176,26 @@ describe('TranscriptionWorkspacePage', () => {
     });
 
     expect(await screen.findByDisplayValue('Completed transcript')).toBeInTheDocument();
+  });
+
+  it('downloads a missing model from the engine tab', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await screen.findByDisplayValue('Transcript body');
+    await user.click(screen.getByRole('button', { name: /engine/i }));
+
+    const downloadButton = await screen.findByRole('button', {
+      name: /download parakeet tdt 0\.6b v3/i,
+    });
+    await user.click(downloadButton);
+
+    await waitFor(() => {
+      expect(mockElectronAPI.downloadTranscriptionModel).toHaveBeenCalledWith(
+        'nvidia/parakeet-tdt-0.6b-v3'
+      );
+    });
+
+    expect(mockElectronAPI.listTranscriptionModels.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });

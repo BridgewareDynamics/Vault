@@ -5,9 +5,11 @@ import contextlib
 import io
 import os
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional
+from typing import Iterator, Optional
 
 
 def _resolve_repo_root() -> Path:
@@ -39,6 +41,17 @@ LOCAL_ONLY_RESOLUTION = (
     not in {"0", "false", "no"}
 )
 PARAKEET_V3_LOCAL_DIR = os.environ.get("VAULT_TRANSCRIPTION_PARAKEET_V3_DIR")
+HUB_OFFLINE_ENV_KEYS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+NEMO_MODEL_URLS = {
+    "nvidia/parakeet-tdt-0.6b-v2": (
+        "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2/resolve/main/"
+        "parakeet-tdt-0.6b-v2.nemo"
+    ),
+    "nvidia/parakeet-tdt-0.6b-v3": (
+        "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/resolve/main/"
+        "parakeet-tdt-0.6b-v3.nemo"
+    ),
+}
 
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 if LOCAL_ONLY_RESOLUTION:
@@ -174,6 +187,115 @@ def _patched_get_remote_nemo_size(model_id: str) -> int:
     return _original_get_remote_nemo_size(model_id)
 
 
+@contextlib.contextmanager
+def _hub_online_context() -> Iterator[None]:
+    saved = {key: os.environ.get(key) for key in HUB_OFFLINE_ENV_KEYS}
+    for key in HUB_OFFLINE_ENV_KEYS:
+        os.environ[key] = "0"
+    try:
+        yield
+    finally:
+        for key, value in saved.items():
+            if LOCAL_ONLY_RESOLUTION and value is None:
+                os.environ[key] = "1"
+            elif value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _download_http_file(url: str, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    partial_path = destination.with_suffix(f"{destination.suffix}.part")
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "VaultTranscription/1.0"},
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            total_bytes = int(response.headers.get("Content-Length", "0") or 0)
+            downloaded = 0
+            chunk_size = 1024 * 1024
+            with partial_path.open("wb") as handle:
+                while True:
+                    chunk = response.read(chunk_size)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+                    downloaded += len(chunk)
+                    if total_bytes > 0 and downloaded % (64 * chunk_size) < chunk_size:
+                        pct = min(100, int((downloaded / total_bytes) * 100))
+                        print(
+                            f"[TranscriptionEngine] Downloading model: {pct}%",
+                            flush=True,
+                        )
+    except urllib.error.URLError as error:
+        if partial_path.exists():
+            partial_path.unlink()
+        raise RuntimeError(f"Failed to download model from {url}: {error}") from error
+
+    if not partial_path.exists() or partial_path.stat().st_size <= 0:
+        raise RuntimeError(f"Download from {url} did not produce a file.")
+
+    partial_path.replace(destination)
+
+
+def _vault_download_model(model_id: str) -> str:
+    if model_id not in source_download_model.MODELS:
+        raise ValueError(f"Unknown model: {model_id}")
+
+    existing = _patched_find_local_model(model_id)
+    if existing:
+        return existing
+
+    filename = source_download_model.MODELS.get(model_id)
+    local_path = _patched_get_local_model_path(model_id)
+    if local_path is None:
+        raise ValueError(f"Unknown model: {model_id}")
+
+    if filename:
+        if local_path.is_file():
+            return str(local_path)
+
+        direct_url = NEMO_MODEL_URLS.get(model_id)
+        if direct_url:
+            print(
+                f"[TranscriptionEngine] Downloading {model_id}/{filename} to {local_path.parent}",
+                flush=True,
+            )
+            _download_http_file(direct_url, local_path)
+            if local_path.is_file():
+                size_mb = local_path.stat().st_size / 1024 / 1024
+                print(
+                    f"[TranscriptionEngine] Model cached at: {local_path} ({size_mb:.1f} MB)",
+                    flush=True,
+                )
+                return str(local_path)
+
+        with _hub_online_context():
+            from huggingface_hub import hf_hub_download
+
+            print(
+                f"[TranscriptionEngine] Downloading {model_id}/{filename} via Hugging Face Hub",
+                flush=True,
+            )
+            hf_hub_download(
+                repo_id=model_id,
+                filename=filename,
+                local_dir=str(local_path.parent),
+                local_files_only=False,
+                force_download=True,
+            )
+
+        if local_path.is_file():
+            return str(local_path)
+        raise RuntimeError(f"Download completed but file not found at {local_path}")
+
+    with _hub_online_context():
+        return source_download_model.download_model(model_id)
+
+
 def _patched_download_model_sync(model_id: str):
     if LOCAL_ONLY_RESOLUTION:
         raise _build_missing_model_error(model_id)
@@ -277,6 +399,10 @@ class TranscribePathRequest(BaseModel):
     segment_duration: Optional[int] = None
 
 
+class DownloadModelRequest(BaseModel):
+    model_id: str
+
+
 def _build_default_settings() -> TranscriptionSettings:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     default_model_name = (
@@ -322,6 +448,7 @@ def build_app():
             "cuda_available": torch.cuda.is_available(),
             "model_default": default_settings.model_key,
             "bundled_models_dir": str(BUNDLED_MODELS_ROOT),
+            "user_models_dir": str(USER_MODELS_ROOT),
             "local_only_resolution": LOCAL_ONLY_RESOLUTION,
             "runtime_mode": RUNTIME_MODE,
             "default_model_ready": _is_model_ready(default_settings.model_key.split(" - ")[0]),
@@ -345,8 +472,35 @@ def build_app():
                 "bundled_path": storage["bundled_path"],
                 "cached": storage["cached"],
                 "cache_path": storage["cache_path"],
+                "installable": info["model_id"] in source_download_model.MODELS,
             }
         return result
+
+    @app.post("/vault/download-model")
+    async def download_model_endpoint(request: DownloadModelRequest):
+        model_id = request.model_id.strip()
+        if not model_id:
+            raise HTTPException(status_code=400, detail="model_id is required")
+
+        try:
+            path = await asyncio.to_thread(_vault_download_model, model_id)
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        except Exception as error:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Model download failed: {error}",
+            ) from error
+
+        storage = _get_model_storage_status(model_id)
+        return {
+            "model_id": model_id,
+            "path": path,
+            "bundled": storage["bundled"],
+            "cached": storage["cached"],
+            "cache_path": storage["cache_path"],
+            "bundled_path": storage["bundled_path"],
+        }
 
     @app.post("/vault/transcribe-path")
     async def transcribe_path(request: TranscribePathRequest):

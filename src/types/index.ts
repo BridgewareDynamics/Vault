@@ -342,6 +342,16 @@ export interface TranscriptionEngineModel {
   bundledPath?: string;
   cached?: boolean;
   cachePath?: string;
+  installable?: boolean;
+}
+
+export interface TranscriptionModelDownloadResult {
+  modelId: string;
+  path: string;
+  bundled: boolean;
+  cached: boolean;
+  cachePath?: string;
+  bundledPath?: string;
 }
 
 export interface TranscriptionEngineStatus {
@@ -354,6 +364,7 @@ export interface TranscriptionEngineStatus {
   scriptPath?: string;
   contextRoot?: string;
   bundledModelsDirectory?: string;
+  userModelsDirectory?: string;
   deviceDefault?: 'cpu' | 'cuda';
   cudaBuilt?: boolean;
   cudaAvailable?: boolean;

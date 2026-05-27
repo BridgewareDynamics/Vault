@@ -311,6 +311,9 @@ declare global {
       startTranscriptionEngine: () => Promise<import('./index').TranscriptionEngineStatus>;
       stopTranscriptionEngine: () => Promise<{ success: boolean }>;
       listTranscriptionModels: () => Promise<import('./index').TranscriptionEngineModel[]>;
+      downloadTranscriptionModel: (
+        modelId: string
+      ) => Promise<import('./index').TranscriptionModelDownloadResult>;
       selectTranscriptionMedia: () => Promise<string[]>;
       listTranscriptions: () => Promise<import('./index').TranscriptionListEntry[]>;
       listCaseTranscriptions: (casePath: string) => Promise<import('./index').TranscriptionListEntry[]>;

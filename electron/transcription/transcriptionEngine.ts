@@ -21,6 +21,7 @@ export interface TranscriptionEngineStatus {
   scriptPath?: string;
   contextRoot?: string;
   bundledModelsDirectory?: string;
+  userModelsDirectory?: string;
   deviceDefault?: 'cpu' | 'cuda';
   cudaBuilt?: boolean;
   cudaAvailable?: boolean;
@@ -44,6 +45,16 @@ export interface TranscriptionEngineModel {
   bundledPath?: string;
   cached?: boolean;
   cachePath?: string;
+  installable?: boolean;
+}
+
+export interface TranscriptionModelDownloadResult {
+  modelId: string;
+  path: string;
+  bundled: boolean;
+  cached: boolean;
+  cachePath?: string;
+  bundledPath?: string;
 }
 
 export interface TranscribeMediaOptions {
@@ -69,6 +80,16 @@ interface RawEngineModel {
   bundled_path?: string;
   cached?: boolean;
   cache_path?: string;
+  installable?: boolean;
+}
+
+interface RawDownloadModelResponse {
+  model_id: string;
+  path: string;
+  bundled: boolean;
+  cached: boolean;
+  cache_path?: string;
+  bundled_path?: string;
 }
 
 interface RawTranscribeResponse {
@@ -93,6 +114,7 @@ interface RawEngineInfoResponse {
   cuda_available: boolean;
   model_default: string;
   bundled_models_dir: string;
+  user_models_dir?: string;
   local_only_resolution: boolean;
   runtime_mode: string;
   default_model_ready: boolean;
@@ -168,6 +190,8 @@ export class TranscriptionEngineManager {
           scriptPath: runtime.scriptPath,
           contextRoot: engineInfo.context_root,
           bundledModelsDirectory: engineInfo.bundled_models_dir,
+          userModelsDirectory:
+            engineInfo.user_models_dir ?? runtime.userModelsDirectory,
           deviceDefault:
             engineInfo.device_default === 'cuda' ? 'cuda' : 'cpu',
           cudaBuilt: engineInfo.cuda_built,
@@ -200,6 +224,7 @@ export class TranscriptionEngineManager {
       scriptPath: runtime.scriptPath,
       contextRoot: runtime.contextRoot,
       bundledModelsDirectory: runtime.bundledModelsDirectory,
+      userModelsDirectory: runtime.userModelsDirectory,
       runtimeMode: runtime.runtimeMode,
       localOnlyResolution: runtime.localOnlyResolution,
       error: this.lastError ?? undefined,
@@ -222,7 +247,27 @@ export class TranscriptionEngineManager {
       bundledPath: value.bundled_path,
       cached: value.cached,
       cachePath: value.cache_path,
+      installable: value.installable,
     }));
+  }
+
+  async downloadModel(modelId: string): Promise<TranscriptionModelDownloadResult> {
+    await this.ensureStarted();
+
+    const raw = await this.fetchJson<RawDownloadModelResponse>('/vault/download-model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_id: modelId }),
+    });
+
+    return {
+      modelId: raw.model_id,
+      path: raw.path,
+      bundled: raw.bundled,
+      cached: raw.cached,
+      cachePath: raw.cache_path,
+      bundledPath: raw.bundled_path,
+    };
   }
 
   async transcribeMedia(

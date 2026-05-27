@@ -16,7 +16,7 @@
     "build:all": "npm run build:electron && npm run build",
     "build:transcription-runtime": "node scripts/build-transcription-runtime.mjs",
     "preview": "vite preview",
-    "electron:dev": "concurrently \"npm run build:electron\" \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:dev": "npm run build:electron && concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build:clean": "node scripts/clean-release.js",
     "verify:transcription-runtime": "node scripts/verify-transcription-runtime.mjs",
     "electron:build": "npm run electron:build:clean && npm run build:transcription-runtime && npm run build:all && npm run verify:transcription-runtime && node scripts/electron-build.mjs",

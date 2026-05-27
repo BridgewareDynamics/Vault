@@ -31,6 +31,10 @@ import {
   type TranscriptionMediaSkimmerSelection,
 } from './TranscriptionMediaSkimmer';
 import { formatMediaTimestamp } from '../../../utils/transcriptionSegmentDefaults';
+import {
+  groupTranscriptionModelsByFamily,
+  type TranscriptionModelFamily,
+} from '../../../utils/transcriptionModelCatalog';
 
 type WorkspaceTab = 'pipeline' | 'engine' | 'settings';
 
@@ -59,6 +63,8 @@ export interface TranscriptionWorkspaceShellProps {
   onExport: () => void;
   onRefreshEngine: () => void;
   onStartEngine: () => void;
+  onDownloadModel: (modelId: string) => void;
+  downloadingModelId: string | null;
   onAddMedia: () => void;
   onSelectSource: (sourceId: string) => void;
   onRemoveSource: (sourceId: string) => void;
@@ -69,6 +75,76 @@ export interface TranscriptionWorkspaceShellProps {
   ) => void;
   onMediaSelectionChange: (selection: TranscriptionMediaSkimmerSelection) => void;
   onTranscriptChange: (text: string) => void;
+}
+
+function ModelFamilyRow({
+  ui,
+  family,
+  engineRunning,
+  downloading,
+  onDownload,
+}: {
+  ui: TranscriptionWorkspaceUi;
+  family: TranscriptionModelFamily;
+  engineRunning: boolean;
+  downloading: boolean;
+  onDownload: () => void;
+}) {
+  const canDownload = family.installable && !family.ready && engineRunning && !downloading;
+  const statusLabel = family.ready
+    ? family.bundled
+      ? 'Bundled'
+      : 'Installed'
+    : family.installable
+      ? 'Not installed'
+      : 'Unavailable';
+
+  return (
+    <div className={`rounded-lg border px-2 py-1.5 ${ui.inset}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-semibold">{family.name}</p>
+          <p className={`text-[10px] ${ui.t.muted}`}>{family.precisions.join(' · ')}</p>
+          <p className={`mt-0.5 truncate text-[10px] ${ui.t.muted}`}>{family.modelId}</p>
+        </div>
+        <span
+          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+            family.ready
+              ? 'text-emerald-400'
+              : family.installable
+                ? ui.t.isPastel
+                  ? 'text-amber-700'
+                  : 'text-amber-300'
+                : ui.t.muted
+          }`}
+        >
+          {statusLabel}
+        </span>
+      </div>
+      {family.ready && family.storagePath ? (
+        <p className={`mt-1 break-all text-[10px] ${ui.t.muted}`}>{family.storagePath}</p>
+      ) : null}
+      {family.installable && !family.ready ? (
+        <button
+          type="button"
+          onClick={onDownload}
+          disabled={!canDownload}
+          className={`mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${ui.surface}`}
+          aria-label={`Download ${family.name}`}
+        >
+          {downloading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3" />
+          )}
+          {downloading ? 'Downloading…' : 'Download model'}
+        </button>
+      ) : null}
+      {!engineRunning && family.installable && !family.ready ? (
+        <p className={`mt-1 text-[10px] ${ui.t.muted}`}>Start the engine before downloading.</p>
+      ) : null}
+    </div>
+  );
 }
 
 function StatusChip({
@@ -126,6 +202,8 @@ export function TranscriptionWorkspaceShell({
   onExport,
   onRefreshEngine,
   onStartEngine,
+  onDownloadModel,
+  downloadingModelId,
   onAddMedia,
   onSelectSource,
   onRemoveSource,
@@ -144,7 +222,8 @@ export function TranscriptionWorkspaceShell({
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('pipeline');
   const [showEngineDetails, setShowEngineDetails] = useState(false);
 
-  const readyModels = displayModels.filter((model) => model.bundled || model.cached);
+  const modelFamilies = groupTranscriptionModelsByFamily(displayModels);
+  const readyFamilies = modelFamilies.filter((family) => family.ready);
   const progressPct = Math.max(0, Math.min(100, document.progress.percentage || 0));
 
   const tabs: { id: WorkspaceTab; label: string; icon: typeof Zap }[] = [
@@ -458,35 +537,41 @@ export function TranscriptionWorkspaceShell({
 
                 <div
                   className={`rounded-2xl border p-3 ${ui.surface}`}
-                  aria-label="Bundled model catalog"
+                  aria-label="Transcription model library"
                 >
-                  <p className={`text-[10px] uppercase tracking-[0.2em] ${ui.t.primary}`}>Included with Vault</p>
-                  <p className={`mt-1 text-xs ${ui.t.muted}`}>Offline models bundled with this build.</p>
-                  <div className="mt-2 max-h-[min(220px,30vh)] space-y-1.5 overflow-y-auto pr-0.5">
-                    {readyModels.length === 0 ? (
-                      <p className={`rounded-lg px-2 py-2 text-xs ${ui.inset}`}>No local models detected.</p>
+                  <p className={`text-[10px] uppercase tracking-[0.2em] ${ui.t.primary}`}>Model library</p>
+                  <p className={`mt-1 text-xs ${ui.t.muted}`}>
+                    Download models to your Vault profile for offline transcription. Files are saved
+                    under your user data folder.
+                  </p>
+                  {engineStatus?.userModelsDirectory ? (
+                    <p className={`mt-1 break-all text-[10px] ${ui.t.muted}`}>
+                      {engineStatus.userModelsDirectory}
+                    </p>
+                  ) : null}
+                  <div className="mt-2 max-h-[min(280px,36vh)] space-y-1.5 overflow-y-auto pr-0.5">
+                    {modelFamilies.length === 0 ? (
+                      <p className={`rounded-lg px-2 py-2 text-xs ${ui.inset}`}>
+                        Start the engine to inspect available models.
+                      </p>
                     ) : (
-                      readyModels.map((model) => (
-                        <div key={model.key} className={`flex items-center justify-between gap-2 rounded-lg border px-2 py-1.5 ${ui.inset}`}>
-                          <div className="min-w-0">
-                            <p className="truncate text-[11px] font-semibold">{model.name}</p>
-                            <p className={`text-[10px] ${ui.t.muted}`}>{model.precision}</p>
-                          </div>
-                          <span
-                            className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                              model.bundled
-                                ? 'text-emerald-400'
-                                : ui.t.isPastel
-                                  ? 'text-purple-600'
-                                  : 'text-cyber-cyan-300'
-                            }`}
-                          >
-                            {model.bundled ? 'Bundled' : 'Local'}
-                          </span>
-                        </div>
+                      modelFamilies.map((family) => (
+                        <ModelFamilyRow
+                          key={family.modelId}
+                          ui={ui}
+                          family={family}
+                          engineRunning={!!engineStatus?.running}
+                          downloading={downloadingModelId === family.modelId}
+                          onDownload={() => onDownloadModel(family.modelId)}
+                        />
                       ))
                     )}
                   </div>
+                  {readyFamilies.length > 0 ? (
+                    <p className={`mt-2 text-[10px] ${ui.t.muted}`}>
+                      {readyFamilies.length} of {modelFamilies.length} model families ready locally.
+                    </p>
+                  ) : null}
                 </div>
               </div>
             )}

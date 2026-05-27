@@ -236,6 +236,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startTranscriptionEngine: () => ipcRenderer.invoke('start-transcription-engine'),
   stopTranscriptionEngine: () => ipcRenderer.invoke('stop-transcription-engine'),
   listTranscriptionModels: () => ipcRenderer.invoke('list-transcription-models'),
+  downloadTranscriptionModel: (modelId: string) =>
+    ipcRenderer.invoke('download-transcription-model', modelId),
   selectTranscriptionMedia: () => ipcRenderer.invoke('select-transcription-media'),
   listTranscriptions: () => ipcRenderer.invoke('list-transcriptions'),
   listCaseTranscriptions: (casePath: string) =>

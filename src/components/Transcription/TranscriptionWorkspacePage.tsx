@@ -141,6 +141,7 @@ export function TranscriptionWorkspacePage({
     () => !getCachedTranscriptionEngineStatus()
   );
   const [running, setRunning] = useState(false);
+  const [downloadingModelId, setDownloadingModelId] = useState<string | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const documentRef = useRef(document);
   documentRef.current = document;
@@ -297,6 +298,67 @@ export function TranscriptionWorkspacePage({
       toast.error(getUserFriendlyError(error, { operation: 'starting transcription engine' }));
     } finally {
       setLoadingEngineState(false);
+    }
+  };
+
+  const refreshModels = useCallback(async () => {
+    if (!window.electronAPI?.listTranscriptionModels) {
+      return [];
+    }
+
+    const nextModels = await window.electronAPI.listTranscriptionModels();
+    setModels(nextModels);
+    return nextModels;
+  }, []);
+
+  const handleDownloadModel = async (modelId: string) => {
+    if (!window.electronAPI?.downloadTranscriptionModel) {
+      toast.error('Model download is unavailable in this build.');
+      return;
+    }
+
+    if (!engineStatus?.running) {
+      toast.error('Start the transcription engine before downloading models.');
+      return;
+    }
+
+    try {
+      setDownloadingModelId(modelId);
+      const result = await window.electronAPI.downloadTranscriptionModel(modelId);
+      const nextModels = await refreshModels();
+
+      if (!result.cached && !result.bundled) {
+        toast.error('Download finished but the model is still not available locally.');
+        return;
+      }
+
+      const installedFamily = nextModels.find((model) => model.modelId === modelId);
+      if (installedFamily && documentRef.current) {
+        const preferredKey =
+          nextModels.find(
+            (model) =>
+              model.modelId === modelId &&
+              model.precision === documentRef.current?.settings.precision
+          )?.key ??
+          nextModels.find((model) => model.modelId === modelId)?.key;
+
+        if (preferredKey) {
+          updateDocument((previous) => ({
+            ...previous,
+            settings: {
+              ...previous.settings,
+              model: preferredKey,
+              precision: derivePrecisionFromModelKey(preferredKey),
+            },
+          }));
+        }
+      }
+
+      toast.success(`Model installed at ${result.path}`);
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'downloading transcription model' }));
+    } finally {
+      setDownloadingModelId(null);
     }
   };
 
@@ -599,6 +661,8 @@ export function TranscriptionWorkspacePage({
         onExport={handleExportTranscript}
         onRefreshEngine={() => void loadEngineState()}
         onStartEngine={() => void handleStartEngine()}
+        onDownloadModel={(modelId) => void handleDownloadModel(modelId)}
+        downloadingModelId={downloadingModelId}
         onAddMedia={handleAddMedia}
         onSelectSource={setSelectedSourceId}
         onRemoveSource={handleRemoveSource}

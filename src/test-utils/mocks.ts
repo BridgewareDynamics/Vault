@@ -64,6 +64,7 @@ export const mockElectronAPI = {
   startTranscriptionEngine: vi.fn(),
   stopTranscriptionEngine: vi.fn(),
   listTranscriptionModels: vi.fn(),
+  downloadTranscriptionModel: vi.fn(),
   selectTranscriptionMedia: vi.fn(),
   listTranscriptions: vi.fn(),
   listCaseTranscriptions: vi.fn(),
