@@ -3,7 +3,7 @@ import { isLightTheme } from './themeSemantics';
 
 /**
  * Shared landing / library / toolbar menu styling for Vault modules (Map, Transcript, etc.).
- * Pastel values match TranscriptionLandingPage — high-contrast gray text on white glass panels.
+ * Pastel and dark palettes use high-contrast text on opaque panels (sectionLabel, body, mutedText).
  */
 export const moduleMenuPastel = {
   bg: 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50',
@@ -11,14 +11,15 @@ export const moduleMenuPastel = {
   cardHover: 'hover:border-purple-300/60',
   button: 'bg-gradient-to-r from-purple-400 to-pink-400 text-white',
   panel:
-    'border-purple-200/40 bg-white/72 text-gray-800 shadow-[0_24px_80px_rgba(216,180,254,0.18)]',
+    'border-purple-200/40 bg-white/90 text-gray-900 shadow-[0_24px_80px_rgba(216,180,254,0.18)]',
   panelGradient: 'from-white/60 via-transparent to-purple-100/40',
-  mutedText: 'text-gray-600',
+  sectionLabel: 'font-semibold text-purple-800',
+  mutedText: 'text-gray-700',
   secondaryButton:
     'border-purple-200/60 bg-white/80 text-gray-700 hover:border-purple-300 hover:bg-white',
-  insetSurface: 'border-purple-200/35 bg-white/76',
-  softInsetSurface: 'border-purple-200/30 bg-white/70',
-  compactInsetSurface: 'border-purple-200/28 bg-white/74',
+  insetSurface: 'border-purple-200/35 bg-white/92 text-gray-900',
+  softInsetSurface: 'border-purple-200/30 bg-white/88 text-gray-800',
+  compactInsetSurface: 'border-purple-200/28 bg-white/90 text-gray-800',
   heroGlowPrimary: 'bg-fuchsia-200/50',
   heroGlowSecondary: 'bg-cyan-200/45',
   heroGlowGradient: 'from-fuchsia-200/50 via-purple-200/30 to-cyan-200/40',
@@ -27,7 +28,7 @@ export const moduleMenuPastel = {
   calloutLabel: 'text-purple-700',
   featurePill: 'border-purple-200/60 bg-purple-50/80 text-purple-700',
   eyebrowBadge: 'border-purple-200/60 bg-white/70 text-purple-600',
-  highlightRow: 'bg-white/80 text-gray-700',
+  highlightRow: 'bg-white/90 text-gray-800',
   highlightDot: 'bg-purple-400',
   cardHoverOverlay:
     'bg-gradient-to-br from-white/40 via-purple-100/30 to-cyan-100/30',
@@ -82,14 +83,15 @@ export const moduleMenuDark = {
   button: 'bg-gradient-to-r from-cyber-purple-600 to-cyber-cyan-600 text-white',
   /** Matches Transcript landing / library panels */
   panel:
-    'border-cyber-purple-500/25 bg-gray-950/65 text-white shadow-[0_24px_80px_rgba(15,23,42,0.65)]',
+    'border-cyber-purple-500/25 bg-gray-950/90 text-white shadow-[0_24px_80px_rgba(15,23,42,0.65)]',
   panelGradient: 'from-cyber-purple-500/10 via-transparent to-cyber-cyan-500/10',
-  mutedText: 'text-gray-300',
+  sectionLabel: 'font-semibold text-cyan-200',
+  mutedText: 'text-gray-200',
   secondaryButton:
     'border-white/10 bg-white/5 text-gray-200 hover:border-cyber-cyan-400/50 hover:bg-white/10',
-  insetSurface: 'border-white/10 bg-black/20',
-  softInsetSurface: 'border-white/10 bg-white/5',
-  compactInsetSurface: 'border-white/10 bg-white/5',
+  insetSurface: 'border-white/10 bg-gray-900/75 text-gray-100',
+  softInsetSurface: 'border-white/10 bg-gray-900/60 text-gray-100',
+  compactInsetSurface: 'border-white/10 bg-gray-900/65 text-gray-100',
   heroGlowPrimary: 'bg-cyber-purple-500/20',
   heroGlowSecondary: 'bg-cyber-cyan-500/15',
   heroGlowGradient:
@@ -99,12 +101,11 @@ export const moduleMenuDark = {
   calloutLabel: 'text-cyber-cyan-300',
   featurePill: 'border-cyber-cyan-400/25 bg-cyber-cyan-500/10 text-cyber-cyan-300',
   eyebrowBadge: 'border-cyber-cyan-400/20 bg-black/20 text-cyber-cyan-300',
-  highlightRow: 'bg-black/25 text-gray-200',
+  highlightRow: 'bg-black/40 text-gray-100',
   highlightDot: 'bg-cyber-cyan-400',
   cardHoverOverlay:
     'bg-gradient-to-br from-cyber-purple-500/10 via-transparent to-cyber-cyan-500/10',
-  heroHeading:
-    'bg-gradient-to-r from-white via-cyan-100 to-fuchsia-200 bg-clip-text text-transparent',
+  heroHeading: 'text-white',
   titleInput:
     'border-white/10 bg-black/20 text-white focus:border-cyber-cyan-400/50 focus:ring-2 focus:ring-cyber-cyan-400/20',
   editorHeader: 'border-white/10 bg-black/25 backdrop-blur-xl',

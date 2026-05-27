@@ -169,7 +169,7 @@ export function TranscriptionLandingPage({
             >
               <div className="space-y-5">
                 <div>
-                  <p className={`text-xs uppercase tracking-[0.3em] ${t.primary}`}>Why this feature</p>
+                  <p className={`text-xs uppercase tracking-[0.22em] ${t.sectionLabel}`}>Why this feature</p>
                   <h3 className={`mt-3 text-2xl font-bold ${t.heading}`}>A transcript command center built into Vault</h3>
                 </div>
 
@@ -189,8 +189,8 @@ export function TranscriptionLandingPage({
                             <Icon className="h-5 w-5 text-white" />
                           </div>
                           <div className="space-y-1">
-                            <h4 className="text-base font-semibold">{item.title}</h4>
-                            <p className={`text-sm leading-6 ${t.mutedText}`}>{item.description}</p>
+                            <h4 className={`text-base font-semibold ${t.heading}`}>{item.title}</h4>
+                            <p className={`text-sm leading-6 ${t.body}`}>{item.description}</p>
                           </div>
                         </div>
                       </motion.div>

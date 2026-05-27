@@ -170,7 +170,7 @@ export function MapLandingPage({ theme, onBack, onNewMap, onOpenLibrary }: MapLa
             >
               <div className="space-y-5">
                 <div>
-                  <p className={`text-xs uppercase tracking-[0.3em] ${t.primary}`}>Why Map works</p>
+                  <p className={`text-xs uppercase tracking-[0.22em] ${t.sectionLabel}`}>Why Map works</p>
                   <h3 className={`mt-3 text-2xl font-bold ${t.heading}`}>A cleaner launchpad for timeline work</h3>
                 </div>
 
@@ -192,7 +192,7 @@ export function MapLandingPage({ theme, onBack, onNewMap, onOpenLibrary }: MapLa
                           </div>
                           <div className="space-y-1">
                             <h4 className={`text-base font-semibold ${t.heading}`}>{item.title}</h4>
-                            <p className={`text-sm leading-6 ${t.mutedText}`}>{item.description}</p>
+                            <p className={`text-sm leading-6 ${t.body}`}>{item.description}</p>
                           </div>
                         </div>
                       </motion.div>

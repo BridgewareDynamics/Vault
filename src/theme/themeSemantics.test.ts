@@ -22,6 +22,8 @@ describe('themeSemantics', () => {
     const roles = getThemeTextRoles('brideware-purple');
     expect(roles.heading).toBe('text-white');
     expect(roles.body).toContain('gray-100');
+    expect(roles.muted).toContain('gray-300');
+    expect(roles.primary).toContain('cyan-200');
   });
 
   it('maps app themes to edge appearance palette keys', () => {
