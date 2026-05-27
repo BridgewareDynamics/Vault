@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { Plus, Tag, X, ChevronDown, ChevronUp, Sparkles, Filter, Trash2 } from 'lucide-react';
 import { CategoryTag, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { CategoryTag as CategoryTagComponent } from './CategoryTag';
 import { CategoryTagCreator } from './CategoryTagCreator';
 import { useSettingsContext } from '../../utils/settingsContext';
@@ -31,7 +32,7 @@ export function CategoryTagSelector({
   const [tagToDelete, setTagToDelete] = useState<CategoryTag | null>(null);
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   const handleCreateTag = async (name: string, color: string) => {
     const newTag = await onCreateTag(name, color);

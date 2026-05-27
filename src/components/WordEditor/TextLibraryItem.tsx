@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, ChevronDown, Trash2 } from 'lucide-react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
 
 interface TextFile {
@@ -28,7 +29,7 @@ export function TextLibraryItem({ file, onOpen, onEdit, onSaveAs, onDelete, isDe
   const arrowRef = useRef<HTMLButtonElement>(null);
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   // Close dropdown when clicking outside
   useEffect(() => {

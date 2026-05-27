@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useMemo } from 'react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 interface NeuralNetworkProps {
   theme?: Theme;
@@ -15,7 +16,7 @@ interface Node {
 }
 
 export function NeuralNetwork({ theme = 'brideware-purple', nodeCount = 15 }: NeuralNetworkProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
 

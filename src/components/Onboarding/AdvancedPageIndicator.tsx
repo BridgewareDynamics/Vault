@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 interface AdvancedPageIndicatorProps {
   currentPage: number;
@@ -8,7 +9,7 @@ interface AdvancedPageIndicatorProps {
 }
 
 export function AdvancedPageIndicator({ currentPage, totalPages, theme = 'brideware-purple' }: AdvancedPageIndicatorProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
   const progress = ((currentPage + 1) / totalPages) * 100;

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Shield, Image as ImageIcon } from 'lucide-react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
 
 interface PDFOptionsDropdownProps {
@@ -11,7 +12,7 @@ interface PDFOptionsDropdownProps {
 export function PDFOptionsDropdown({ onStartExtraction, onRunAudit }: PDFOptionsDropdownProps) {
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   
   return (
     <motion.div

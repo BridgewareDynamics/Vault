@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MapBlock, MapDocument, MapEdge } from '../types';
 import { buildChronology } from '../utils/mapChronology';
-import {
-  MAP_BLOCK_DEFAULT_SIZE,
-  MAP_BRANCH_BLOCK_DEFAULT_SIZE,
-  relayoutDocument,
-} from '../utils/mapLayout';
+import { getMapBlockSize, relayoutDocument } from '../utils/mapLayout';
 import { buildMapEdges } from '../utils/mapEdgeRouting';
 import { logger } from '../utils/logger';
 import { normalizeMapEdgeAppearance } from '../components/Map/mapEdgeAppearance';
@@ -23,7 +19,7 @@ function normalizeBlock(rawBlock: MapBlock): MapBlock {
       ...rawBlock,
       kind: 'branch',
       chronology: undefined,
-      size: rawBlock.size ?? { ...MAP_BRANCH_BLOCK_DEFAULT_SIZE },
+      size: getMapBlockSize({ ...rawBlock, kind: 'branch' }),
       positionLocked: false,
       branchSourceSide: rawBlock.branchSourceSide ?? rawBlock.branchSide,
       branchOrder: rawBlock.branchOrder ?? 0,
@@ -39,7 +35,7 @@ function normalizeBlock(rawBlock: MapBlock): MapBlock {
         tier: 'year',
         year: new Date().getFullYear(),
       }),
-    size: rawBlock.size ?? { ...MAP_BLOCK_DEFAULT_SIZE },
+    size: getMapBlockSize({ ...rawBlock, kind: 'timeline' }),
   };
 }
 

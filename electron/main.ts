@@ -5,6 +5,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
 import * as os from 'os';
+import { randomUUID } from 'crypto';
 import JSZip from 'jszip';
 import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive } from './utils/archiveConfig';
 import { generateFileThumbnail } from './utils/thumbnailGenerator';
@@ -19,12 +20,15 @@ import { migrateMetadataFilesToDatabase } from './database/migration';
 import { FileSystemWatcher } from './database/watcher';
 import { File } from './database/models';
 import * as mapStorage from './utils/mapStorage';
+import * as transcriptionStorage from './utils/transcriptionStorage';
+import { transcriptionEngine } from './transcription/transcriptionEngine';
 
 // Helper function to detect file type from path
-function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | 'other' {
+function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | 'audio' | 'other' {
   const ext = path.extname(filePath).toLowerCase();
   const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
   const videoExts = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv'];
+  const audioExts = ['.aac', '.amr', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav', '.wma'];
   
   if (ext === '.pdf') {
     return 'pdf';
@@ -32,6 +36,8 @@ function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | '
     return 'image';
   } else if (videoExts.includes(ext)) {
     return 'video';
+  } else if (audioExts.includes(ext)) {
+    return 'audio';
   } else {
     return 'other';
   }
@@ -490,6 +496,7 @@ app.on('window-all-closed', () => {
 // Cleanup file handles on app exit
 app.on('before-quit', async () => {
   await closeAllFileHandles();
+  await transcriptionEngine.stop();
   
   // Stop file watcher
   if (fileWatcher) {
@@ -2554,7 +2561,7 @@ ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: 
               name: fileName,
               path: destPath,
               size: stats.size,
-              type: fileType,
+              type: fileType === 'audio' ? 'other' : fileType,
               is_folder: 0,
               checksum,
               local_modified_at: stats.mtime.getTime(),
@@ -2609,7 +2616,7 @@ ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: 
             name: fileName,
             path: destPath,
             size: stats.size,
-            type: fileType,
+            type: fileType === 'audio' ? 'other' : fileType,
             is_folder: 0,
             checksum,
             local_modified_at: stats.mtime.getTime(),
@@ -3417,7 +3424,7 @@ ipcMain.handle('extract-pdf-from-archive', async (
                   name: page.fileName,
                   path: imagePath,
                   size: stats.size,
-                  type: fileType,
+                  type: fileType === 'audio' ? 'other' : fileType,
                   is_folder: 0,
                   parent_folder_id: folderRecord.id,
                   checksum,
@@ -4583,6 +4590,497 @@ ipcMain.handle(
       logger.error('Failed to export map PNG:', error);
       throw new Error(
         `Failed to export PNG: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+);
+
+// Transcription handlers
+ipcMain.handle('get-transcription-engine-status', async () => {
+  try {
+    return await transcriptionEngine.getStatus();
+  } catch (error) {
+    logger.error('Failed to get transcription engine status:', error);
+    throw new Error(
+      `Failed to get transcription engine status: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('start-transcription-engine', async () => {
+  try {
+    await transcriptionEngine.ensureStarted();
+    return await transcriptionEngine.getStatus();
+  } catch (error) {
+    logger.error('Failed to start transcription engine:', error);
+    throw new Error(
+      `Failed to start transcription engine: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('stop-transcription-engine', async () => {
+  try {
+    await transcriptionEngine.stop();
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to stop transcription engine:', error);
+    throw new Error(
+      `Failed to stop transcription engine: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('list-transcription-models', async () => {
+  try {
+    return await transcriptionEngine.listModels();
+  } catch (error) {
+    logger.error('Failed to list transcription models:', error);
+    throw new Error(
+      `Failed to list transcription models: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('select-transcription-media', async () => {
+  if (!mainWindow) return [];
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Media to Transcribe',
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      {
+        name: 'Audio & Video',
+        extensions: [
+          'aac',
+          'amr',
+          'asf',
+          'avi',
+          'flac',
+          'm4a',
+          'mkv',
+          'mp3',
+          'mp4',
+          'ogg',
+          'opus',
+          'wav',
+          'webm',
+          'wma',
+        ],
+      },
+    ],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return [];
+  }
+
+  return result.filePaths.filter((filePath) => {
+    if (!isSafePath(filePath)) return false;
+    const type = detectFileTypeFromPath(filePath);
+    return type === 'audio' || type === 'video';
+  });
+});
+
+ipcMain.handle('list-transcriptions', async () => {
+  try {
+    return await transcriptionStorage.listAllTranscriptions();
+  } catch (error) {
+    logger.error('Failed to list transcriptions:', error);
+    throw new Error(
+      `Failed to list transcriptions: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('list-case-transcriptions', async (event, casePath: string) => {
+  try {
+    return await transcriptionStorage.listCaseTranscriptions(casePath);
+  } catch (error) {
+    logger.error('Failed to list case transcriptions:', error);
+    throw new Error(
+      `Failed to list case transcriptions: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle(
+  'create-transcription',
+  async (
+    event,
+    title: string,
+    casePath?: string | null,
+    initialSourcePath?: string | null
+  ) => {
+    try {
+      const doc = await transcriptionStorage.createTranscription(
+        title,
+        casePath ?? null
+      );
+
+      if (!initialSourcePath) {
+        return doc;
+      }
+
+      const archiveDrive = await getArchiveDrive();
+      const normalizedArchiveDrive = archiveDrive
+        ? path.normalize(archiveDrive).toLowerCase()
+        : null;
+      const normalizedSourcePath = path.normalize(initialSourcePath).toLowerCase();
+      const isVaultSource =
+        !!normalizedArchiveDrive &&
+        normalizedSourcePath.startsWith(normalizedArchiveDrive);
+      const sourceCasePath =
+        (await findCasePathFromPath(initialSourcePath)) ?? casePath ?? null;
+      const sourceId = randomUUID();
+      let source: transcriptionStorage.TranscriptionSourceStored = {
+        id: sourceId,
+        fileName: path.basename(initialSourcePath),
+        originalPath: initialSourcePath,
+        mediaType: transcriptionStorage.detectTranscriptionMediaType(initialSourcePath),
+        origin: isVaultSource ? 'vault' : 'local',
+        casePath: sourceCasePath,
+      };
+
+      if (!isVaultSource) {
+        const copied = await transcriptionStorage.copySourceToTranscriptionAssets(
+          doc.transcriptionFolderPath,
+          initialSourcePath,
+          sourceId
+        );
+        source = {
+          ...source,
+          storedPath: copied.storedPath,
+          relativePath: copied.relativePath,
+        };
+      }
+
+      const nextDoc = {
+        ...doc,
+        sources: [source],
+      };
+      return await transcriptionStorage.saveTranscriptionDocument(nextDoc);
+    } catch (error) {
+      logger.error('Failed to create transcription:', error);
+      throw new Error(
+        `Failed to create transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'read-transcription',
+  async (event, transcriptionFolderPath: string) => {
+    try {
+      return await transcriptionStorage.readTranscriptionDocument(
+        transcriptionFolderPath
+      );
+    } catch (error) {
+      logger.error('Failed to read transcription:', error);
+      throw new Error(
+        `Failed to read transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'save-transcription',
+  async (
+    event,
+    document: transcriptionStorage.TranscriptionDocumentStored
+  ) => {
+    try {
+      return await transcriptionStorage.saveTranscriptionDocument(document);
+    } catch (error) {
+      logger.error('Failed to save transcription:', error);
+      throw new Error(
+        `Failed to save transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'delete-transcription',
+  async (event, transcriptionFolderPath: string) => {
+    try {
+      await transcriptionStorage.deleteTranscription(transcriptionFolderPath);
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to delete transcription:', error);
+      throw new Error(
+        `Failed to delete transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'rename-transcription',
+  async (event, transcriptionFolderPath: string, newTitle: string) => {
+    try {
+      return await transcriptionStorage.renameTranscription(
+        transcriptionFolderPath,
+        newTitle
+      );
+    } catch (error) {
+      logger.error('Failed to rename transcription:', error);
+      throw new Error(
+        `Failed to rename transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'copy-transcription-source-to-assets',
+  async (event, transcriptionFolderPath: string, sourcePath: string, sourceId: string) => {
+    try {
+      return await transcriptionStorage.copySourceToTranscriptionAssets(
+        transcriptionFolderPath,
+        sourcePath,
+        sourceId
+      );
+    } catch (error) {
+      logger.error('Failed to copy transcription source:', error);
+      throw new Error(
+        `Failed to copy transcription source: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'run-transcription',
+  async (
+    event,
+    options: {
+      transcriptionFolderPath: string;
+      sourcePath: string;
+      casePath?: string | null;
+      title?: string;
+      settings?: Partial<transcriptionStorage.TranscriptionEngineSettingsStored>;
+    }
+  ) => {
+    try {
+      let doc = await transcriptionStorage.readTranscriptionDocument(
+        options.transcriptionFolderPath
+      );
+
+      const archiveDrive = await getArchiveDrive();
+      const normalizedArchiveDrive = archiveDrive
+        ? path.normalize(archiveDrive).toLowerCase()
+        : null;
+      const normalizedSourcePath = path.normalize(options.sourcePath).toLowerCase();
+      const isVaultSource =
+        !!normalizedArchiveDrive &&
+        normalizedSourcePath.startsWith(normalizedArchiveDrive);
+      const linkedCasePath =
+        options.casePath ??
+        doc.casePath ??
+        (await findCasePathFromPath(options.sourcePath)) ??
+        null;
+      const sourceCasePath = (await findCasePathFromPath(options.sourcePath)) ?? linkedCasePath;
+
+      const nextSettings = {
+        ...doc.settings,
+        ...options.settings,
+      };
+
+      let source =
+        doc.sources.find(
+          (candidate) =>
+            candidate.originalPath === options.sourcePath ||
+            candidate.storedPath === options.sourcePath
+        ) ?? null;
+
+      if (!source) {
+        source = {
+          id: randomUUID(),
+          fileName: path.basename(options.sourcePath),
+          originalPath: options.sourcePath,
+          mediaType: transcriptionStorage.detectTranscriptionMediaType(
+            options.sourcePath
+          ),
+          origin: isVaultSource ? 'vault' : 'local',
+          casePath: sourceCasePath,
+        };
+      }
+
+      if (!isVaultSource && !source.storedPath) {
+        const copied = await transcriptionStorage.copySourceToTranscriptionAssets(
+          doc.transcriptionFolderPath,
+          options.sourcePath,
+          source.id
+        );
+        source = {
+          ...source,
+          storedPath: copied.storedPath,
+          relativePath: copied.relativePath,
+        };
+      }
+
+      const nextSources = [
+        source,
+        ...doc.sources.filter((candidate) => candidate.id !== source?.id),
+      ];
+
+      doc = await transcriptionStorage.saveTranscriptionDocument({
+        ...doc,
+        title: options.title?.trim() || doc.title,
+        casePath: linkedCasePath,
+        settings: nextSettings,
+        sources: nextSources,
+        status: 'processing',
+        progress: {
+          stage: 'booting',
+          current: 0,
+          total: 1,
+          percentage: 5,
+          statusMessage: 'Starting Vault transcription engine...',
+        },
+        lastError: undefined,
+      });
+
+      const sourcePathToProcess = source.storedPath ?? source.originalPath;
+      const precision =
+        nextSettings.precision ||
+        (nextSettings.model.includes(' - ')
+          ? nextSettings.model.split(' - ').slice(1).join(' - ')
+          : 'float32');
+      const response = await transcriptionEngine.transcribeMedia({
+        sourcePath: sourcePathToProcess,
+        model: nextSettings.model,
+        precision,
+        device: nextSettings.device,
+        outputFormat: nextSettings.outputFormat,
+        includeTimestamps: nextSettings.includeTimestamps,
+        segmentLength: nextSettings.segmentLength,
+        segmentDuration: nextSettings.segmentDuration,
+      });
+
+      const outputs = await transcriptionStorage.writeTranscriptOutputs(
+        doc.transcriptionFolderPath,
+        response.text,
+        response.segments
+      );
+
+      return await transcriptionStorage.saveTranscriptionDocument({
+        ...doc,
+        settings: {
+          ...nextSettings,
+          precision,
+        },
+        transcriptText: response.text,
+        transcriptFilePath: outputs.transcriptFilePath,
+        segments: response.segments,
+        segmentsFilePath: outputs.segmentsFilePath,
+        status: 'completed',
+        progress: {
+          stage: 'completed',
+          current: 1,
+          total: 1,
+          percentage: 100,
+          statusMessage: `Transcription completed in ${response.processing_time_seconds}s`,
+        },
+        summary: response.text,
+        lastError: undefined,
+      });
+    } catch (error) {
+      logger.error('Failed to run transcription:', error);
+
+      try {
+        const currentDocument = await transcriptionStorage.readTranscriptionDocument(
+          options.transcriptionFolderPath
+        );
+        const message =
+          error instanceof Error ? error.message : 'Unknown transcription error';
+        return await transcriptionStorage.saveTranscriptionDocument({
+          ...currentDocument,
+          status: message.toLowerCase().includes('cancel')
+            ? 'cancelled'
+            : 'failed',
+          progress: {
+            stage: message.toLowerCase().includes('cancelled')
+              ? 'cancelled'
+              : 'failed',
+            current: 0,
+            total: 1,
+            percentage: 0,
+            statusMessage: message,
+          },
+          lastError: message,
+        });
+      } catch (nestedError) {
+        logger.error('Failed to persist transcription failure state:', nestedError);
+      }
+
+      throw new Error(
+        `Failed to run transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'cancel-transcription-job',
+  async (event, transcriptionFolderPath?: string) => {
+    try {
+      await transcriptionEngine.cancelTranscription();
+
+      if (transcriptionFolderPath) {
+        const doc = await transcriptionStorage.readTranscriptionDocument(
+          transcriptionFolderPath
+        );
+        await transcriptionStorage.saveTranscriptionDocument({
+          ...doc,
+          status: 'cancelled',
+          progress: {
+            stage: 'cancelled',
+            current: 0,
+            total: 1,
+            percentage: 0,
+            statusMessage: 'Cancellation requested',
+          },
+          lastError: 'Cancellation requested',
+        });
+      }
+
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to cancel transcription job:', error);
+      throw new Error(
+        `Failed to cancel transcription job: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
       );
     }
   }

@@ -2,10 +2,13 @@ import { MapBlock, MapDocument } from '../types';
 import { compareSortKeys } from './mapChronology';
 import { buildChronologicalEdgesWithHandles, buildMapEdges } from './mapEdgeRouting';
 
-export const BLOCK_WIDTH = 200;
-export const BLOCK_HEIGHT = 200;
-export const BRANCH_BLOCK_WIDTH = 176;
-export const BRANCH_BLOCK_HEIGHT = 132;
+export const BLOCK_WIDTH = 280;
+export const BLOCK_HEIGHT = 186;
+export const BRANCH_BLOCK_WIDTH = 248;
+export const BRANCH_BLOCK_HEIGHT = 118;
+
+const LEGACY_TIMELINE_SIZES = [{ width: 200, height: 200 }];
+const LEGACY_BRANCH_SIZES = [{ width: 176, height: 132 }];
 const VERTICAL_GAP = 72;
 const HORIZONTAL_GAP = 104;
 const SNAKE_ROWS = 5;
@@ -32,11 +35,28 @@ export function isTimelineBlock(block: MapBlock): boolean {
   return block.kind !== 'branch';
 }
 
+function matchesLegacySize(
+  size: { width: number; height: number },
+  legacySizes: { width: number; height: number }[]
+): boolean {
+  return legacySizes.some(
+    (legacy) => legacy.width === size.width && legacy.height === size.height
+  );
+}
+
 export function getMapBlockSize(block: MapBlock): { width: number; height: number } {
+  const defaults = isBranchBlock(block)
+    ? MAP_BRANCH_BLOCK_DEFAULT_SIZE
+    : MAP_BLOCK_DEFAULT_SIZE;
+  const legacySizes = isBranchBlock(block) ? LEGACY_BRANCH_SIZES : LEGACY_TIMELINE_SIZES;
+
   if (block.size?.width && block.size?.height) {
+    if (matchesLegacySize(block.size, legacySizes)) {
+      return { ...defaults };
+    }
     return block.size;
   }
-  return isBranchBlock(block) ? { ...MAP_BRANCH_BLOCK_DEFAULT_SIZE } : { ...MAP_BLOCK_DEFAULT_SIZE };
+  return { ...defaults };
 }
 
 function normalizeLayoutBlock(block: MapBlock): MapBlock {

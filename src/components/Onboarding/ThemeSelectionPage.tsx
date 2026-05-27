@@ -3,8 +3,8 @@ import { memo } from 'react';
 import { ThemeSelector } from './ThemeSelector';
 import { CircularCheckbox } from './CircularCheckbox';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { HolographicEffect } from '../Shared/HolographicEffect';
-import { ScanLine } from '../Shared/ScanLine';
 
 interface ThemeSelectionPageProps {
   selectedTheme: Theme | null;
@@ -21,14 +21,12 @@ export const ThemeSelectionPage = memo(function ThemeSelectionPage({
   onToggleDontShowAgain,
   theme = 'brideware-purple',
 }: ThemeSelectionPageProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
   
   return (
     <div className="relative flex flex-col items-center justify-center h-full px-8 py-12 overflow-hidden">
-      <ScanLine theme={theme} speed={8} />
-      
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}

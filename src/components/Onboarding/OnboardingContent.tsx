@@ -2,16 +2,16 @@ import { motion } from 'framer-motion';
 import { memo } from 'react';
 import { FileText, FolderOpen, Shield, Map as MapIcon } from 'lucide-react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { HolographicEffect } from '../Shared/HolographicEffect';
 import { HexGrid } from '../Shared/HexGrid';
-import { NeuralNetwork } from '../Shared/NeuralNetwork';
 
 interface OnboardingContentProps {
   theme?: Theme;
 }
 
 export const OnboardingContent = memo(function OnboardingContent({ theme = 'brideware-purple' }: OnboardingContentProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
   const textColor = isPastel ? 'text-gray-800' : 'text-gray-300';
@@ -25,7 +25,6 @@ export const OnboardingContent = memo(function OnboardingContent({ theme = 'brid
     <div className="relative flex flex-col items-center justify-center h-full px-8 py-12 overflow-hidden">
       {/* Advanced Background Effects - Optimized counts */}
       <HexGrid theme={theme} density={20} />
-      <NeuralNetwork theme={theme} nodeCount={12} />
 
       {/* Main Content */}
       <motion.div
@@ -266,34 +265,6 @@ export const OnboardingContent = memo(function OnboardingContent({ theme = 'brid
           transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1], delay: 0.7 }}
           style={{ willChange: 'opacity' }}
         >
-          {/* Refined Vertical Scan Line - Constrained to cards area, going through center */}
-          <motion.div
-            className="absolute left-1/2 top-0 bottom-0 w-1 -translate-x-1/2 pointer-events-none hidden md:block"
-            style={{
-              background: `linear-gradient(
-                to bottom,
-                transparent 0%,
-                ${primaryRgba}0.1) 20%,
-                ${primaryRgba}0.4) 50%,
-                ${primaryRgba}0.1) 80%,
-                transparent 100%
-              )`,
-              boxShadow: `0 0 15px ${primaryRgba}0.5), 0 0 30px ${secondaryRgba}0.3)`,
-              height: '100%',
-            }}
-            initial={{ opacity: 0, scaleY: 0 }}
-            animate={{
-              opacity: [0, 0.6, 0.6, 0],
-              scaleY: [0, 1, 1, 0],
-            }}
-            transition={{
-              duration: 4,
-              repeat: Infinity,
-              delay: 1.8,
-              ease: 'easeInOut',
-              times: [0, 0.15, 0.85, 1],
-            }}
-          />
           {[
             { icon: FileText, title: 'PDF Extraction', description: 'Turn long documents into workable pages' },
             { icon: FolderOpen, title: 'Archive Management', description: 'Keep cases and source material organized' },

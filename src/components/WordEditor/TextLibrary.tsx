@@ -7,6 +7,7 @@ import { DeleteTextFileConfirmDialog } from './DeleteTextFileConfirmDialog';
 import { useArchiveContext } from '../../contexts/ArchiveContext';
 import { CaseNotesGallery } from './CaseNotesGallery';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
 
 // Hook to detect container width for responsive design
@@ -133,7 +134,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   const { currentCase } = useArchiveContext();
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   
   // Initialize loading state - will be updated based on whether we should show gallery
   // Start with true, will be set to false if we should show gallery

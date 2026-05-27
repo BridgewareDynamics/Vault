@@ -204,7 +204,7 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
         />
       </div>
 
-      <div className="relative z-10 flex min-h-screen flex-col">
+      <div className={`relative z-10 flex min-h-screen flex-col ${t.body}`}>
         <header className="border-b border-white/10 backdrop-blur-xl">
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 py-5">
             <button
@@ -222,7 +222,7 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
               </div>
               <div className="text-right">
                 <p className={`text-xs uppercase tracking-[0.28em] ${t.primary}`}>Map Workspace</p>
-                <h1 className="text-xl font-bold md:text-2xl">Map Library</h1>
+                <h1 className={`text-xl font-bold md:text-2xl ${t.heading}`}>Map Library</h1>
               </div>
             </div>
           </div>
@@ -309,7 +309,7 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
             >
               <div className={`rounded-[26px] border p-5 ${insetSurfaceClassName}`}>
                 <p className={`text-xs uppercase tracking-[0.28em] ${t.primary}`}>Command center</p>
-                <h3 className="mt-3 text-2xl font-bold">Find, filter, and sort with less wasted space.</h3>
+                <h3 className={`mt-3 text-2xl font-bold ${t.heading}`}>Find, filter, and sort with less wasted space.</h3>
                 <p className={`mt-3 text-sm leading-6 ${mutedTextClassName}`}>
                   Adjust the library view from one compact control surface, then use the recent-work panel and dense
                   collection grid below to move faster.
@@ -392,7 +392,7 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
                 <div className={`mx-auto w-fit rounded-3xl p-5 ${t.button}`}>
                   <MapIcon className="h-10 w-10 text-white" />
                 </div>
-                <h3 className="mt-6 text-3xl font-bold">Nothing matches this view yet.</h3>
+                <h3 className={`mt-6 text-3xl font-bold ${t.heading}`}>Nothing matches this view yet.</h3>
                 <p className={`mt-4 text-base leading-7 ${mutedTextClassName}`}>
                   {maps.length === 0
                     ? 'Create your first map to start building research timelines inside the Vault.'
@@ -439,7 +439,7 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
                           </div>
 
                           <div className="mt-4 space-y-3">
-                            <h3 className="text-3xl font-bold">{displayFeaturedMap.title}</h3>
+                            <h3 className={`text-3xl font-bold ${t.heading}`}>{displayFeaturedMap.title}</h3>
                             <p className={`text-sm leading-7 md:text-base ${mutedTextClassName}`}>
                               {displayFeaturedMap.caseName
                                 ? `Linked to ${displayFeaturedMap.caseName} and ready to reopen exactly where you left off.`
@@ -517,7 +517,7 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
                     <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
                       <div>
                         <p className={`text-xs uppercase tracking-[0.28em] ${t.primary}`}>Browse collection</p>
-                        <h3 className="mt-2 text-2xl font-bold">
+                        <h3 className={`mt-2 text-2xl font-bold ${t.heading}`}>
                           {collectionMaps.length > 0
                             ? `${collectionMaps.length}${displayFeaturedMap ? ' more' : ''} map${collectionMaps.length === 1 ? '' : 's'}`
                             : 'Only one map in view'}
@@ -598,7 +598,7 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
                                           {entry.casePath ? 'Case linked' : 'Vault'}
                                         </span>
                                       </div>
-                                      <h4 className="line-clamp-2 text-lg font-bold leading-6">{entry.title}</h4>
+                                      <h4 className={`line-clamp-2 text-lg font-bold leading-6 ${t.heading}`}>{entry.title}</h4>
                                     </div>
                                   </div>
                                 </div>

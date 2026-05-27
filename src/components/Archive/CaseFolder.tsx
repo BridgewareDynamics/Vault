@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Folder, Loader2, Trash2, Pencil, Image, Tag, Plus } from 'lucide-react';
 import { ArchiveCase, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { useState, useEffect } from 'react';
 import { logger } from '../../utils/logger';
 import { useCategoryTags } from '../../hooks/useCategoryTags';
@@ -24,7 +25,7 @@ export function CaseFolder({ caseItem, isExtracting = false, onClick, onDelete, 
   const categoryTag = getTagById(caseItem.categoryTagId);
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   // Load background image as data URL
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Toast as ToastType, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { X } from 'lucide-react';
 import { useSettingsContext } from '../../utils/settingsContext';
 
@@ -11,7 +12,7 @@ interface ToastProps {
 export function Toast({ toast, onDismiss }: ToastProps) {
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   const getToastStyles = () => {
     if (isPastel) {

@@ -12,8 +12,14 @@ import { Toolbar } from './components/Toolbar';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
 const MapModule = lazy(() => import('./components/Map/MapModule').then(module => ({ default: module.MapModule })));
+const TranscriptionModule = lazy(() =>
+  import('./components/Transcription/TranscriptionModule').then((module) => ({
+    default: module.TranscriptionModule,
+  }))
+);
 import { usePDFExtraction } from './hooks/usePDFExtraction';
 import { ConversionSettings } from './types';
+import { isLightTheme } from './theme/themeSemantics';
 import { ExtractedPage } from './types';
 import { Home } from 'lucide-react';
 import { logger } from './utils/logger';
@@ -39,8 +45,11 @@ function AppContent() {
   const [, setFolderName] = useState<string | undefined>(undefined);
   const [showArchive, setShowArchive] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [showTranscription, setShowTranscription] = useState(false);
   const [showSecurityChecker, setShowSecurityChecker] = useState(false);
   const [showPDFExtraction, setShowPDFExtraction] = useState(false);
+  const [transcriptionLaunchSourcePath, setTranscriptionLaunchSourcePath] = useState<string | null>(null);
+  const [transcriptionLaunchCasePath, setTranscriptionLaunchCasePath] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(true); // Default to true for new users
   const onboardingCompletedRef = useRef(false); // Track if onboarding was explicitly completed
 
@@ -475,6 +484,38 @@ function AppContent() {
     );
   }
 
+  if (showTranscription) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+              Loading Transcription...
+            </div>
+          }
+        >
+          <TranscriptionModule
+            theme={theme}
+            onExit={() => {
+              setShowTranscription(false);
+              setTranscriptionLaunchSourcePath(null);
+              setTranscriptionLaunchCasePath(null);
+            }}
+            initialSourcePath={transcriptionLaunchSourcePath}
+            initialCasePath={transcriptionLaunchCasePath}
+          />
+        </Suspense>
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+        />
+      </>
+    );
+  }
+
   // Show archive if requested
   if (showArchive) {
     // Always render the same structure to prevent ArchivePage from remounting
@@ -493,7 +534,7 @@ function AppContent() {
               fallback={
                 (() => {
                   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-                  const isPastel = theme === 'pastel';
+                  const isPastel = isLightTheme(theme);
                   
                   return (
                     <div className={`relative min-h-screen flex items-center justify-center overflow-hidden ${
@@ -584,7 +625,16 @@ function AppContent() {
                 })()
               }
             >
-              <ArchivePage key="archive-page" onBack={() => setShowArchive(false)} />
+              <ArchivePage
+                key="archive-page"
+                onBack={() => setShowArchive(false)}
+                onOpenTranscription={(sourcePath, casePath) => {
+                  setTranscriptionLaunchSourcePath(sourcePath);
+                  setTranscriptionLaunchCasePath(casePath);
+                  setShowArchive(false);
+                  setShowTranscription(true);
+                }}
+              />
             </Suspense>
           </div>
           
@@ -657,6 +707,11 @@ function AppContent() {
             onOpenSecurityChecker={() => setShowSecurityChecker(true)}
             onOpenPDFExtraction={() => setShowPDFExtraction(true)}
             onOpenMap={() => setShowMap(true)}
+            onOpenTranscription={() => {
+              setTranscriptionLaunchSourcePath(null);
+              setTranscriptionLaunchCasePath(null);
+              setShowTranscription(true);
+            }}
           />
         </div>
         <ToastContainer />
@@ -677,7 +732,7 @@ function AppContent() {
   if (selectedPdfPath && extractedPages.length === 0 && !isExtracting && !error) {
     // This shouldn't happen, but just in case
     const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-    const isPastel = theme === 'pastel';
+    const isPastel = isLightTheme(theme);
     
     return (
       <>

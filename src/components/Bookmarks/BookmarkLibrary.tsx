@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Bookmark as BookmarkIcon, ArrowLeft, Folder, Search } from 'lucide-react';
 import { Bookmark, BookmarkFolder, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { BookmarkCard } from './BookmarkCard';
 import { BookmarkFolderCard } from './BookmarkFolderCard';
 import { useToast } from '../Toast/ToastContext';
@@ -21,7 +22,7 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
   const toast = useToast();
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   const loadBookmarks = useCallback(async () => {
     if (!window.electronAPI) {

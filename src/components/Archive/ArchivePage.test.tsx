@@ -7,14 +7,17 @@ import { WordEditorProvider } from '../../contexts/WordEditorContext';
 import { SettingsProvider } from '../../utils/settingsContext';
 import * as useArchiveModule from '../../hooks/useArchive';
 import * as useArchiveExtractionModule from '../../hooks/useArchiveExtraction';
+import * as useCategoryTagsModule from '../../hooks/useCategoryTags';
 import { mockElectronAPI } from '../../test-utils/mocks';
 
 // Mock the hooks
 vi.mock('../../hooks/useArchive');
 vi.mock('../../hooks/useArchiveExtraction');
+vi.mock('../../hooks/useCategoryTags');
 
 describe('ArchivePage', () => {
   const mockOnBack = vi.fn();
+  const mockOnOpenTranscription = vi.fn();
 
   const defaultArchiveReturn = {
     archiveConfig: { archiveDrive: '/path/to/vault' },
@@ -29,16 +32,26 @@ describe('ArchivePage', () => {
     setSearchQuery: vi.fn(),
     selectArchiveDrive: vi.fn().mockResolvedValue(true),
     createCase: vi.fn().mockResolvedValue(true),
+    createFolder: vi.fn().mockResolvedValue(true),
     addFilesToCase: vi.fn().mockResolvedValue(true),
     deleteCase: vi.fn().mockResolvedValue(true),
     deleteFile: vi.fn().mockResolvedValue(true),
     renameFile: vi.fn().mockResolvedValue(true),
+    moveFileToFolder: vi.fn().mockResolvedValue(true),
     openFolder: vi.fn(),
     goBackToCase: vi.fn(),
     goBackToParentFolder: vi.fn(),
     navigateToFolder: vi.fn(),
     updateCaseBackgroundImage: vi.fn().mockResolvedValue(true),
+    updateFolderBackgroundImage: vi.fn().mockResolvedValue(true),
+    updateCaseDescription: vi.fn().mockResolvedValue(true),
     refreshFiles: vi.fn().mockResolvedValue(undefined),
+    refreshCases: vi.fn().mockResolvedValue(undefined),
+    selectedTagId: null,
+    setSelectedTagId: vi.fn(),
+    tags: [],
+    getTagById: vi.fn().mockReturnValue(null),
+    findFileInArchive: vi.fn().mockReturnValue(null),
   };
 
   const defaultExtractionReturn = {
@@ -52,9 +65,37 @@ describe('ArchivePage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.electronAPI = mockElectronAPI;
     (useArchiveModule.useArchive as any).mockReturnValue(defaultArchiveReturn);
     (useArchiveExtractionModule.useArchiveExtraction as any).mockReturnValue(defaultExtractionReturn);
+    (useCategoryTagsModule.useCategoryTags as any).mockReturnValue({
+      tags: [],
+      createTag: vi.fn(),
+      deleteTag: vi.fn(),
+      assignTagToCase: vi.fn(),
+      assignTagToFile: vi.fn(),
+      getTagById: vi.fn().mockReturnValue(null),
+    });
     mockElectronAPI.getArchiveConfig.mockResolvedValue({ archiveDrive: '/path/to/vault' });
+    mockElectronAPI.debugLog.mockResolvedValue(undefined);
+    mockElectronAPI.readFileData.mockResolvedValue({
+      data: 'base64data',
+      mimeType: 'image/png',
+      fileName: 'test.png',
+    });
+    mockElectronAPI.readPDFFile.mockResolvedValue('base64pdfdata');
+    mockElectronAPI.closePDFFileHandle.mockResolvedValue(undefined);
+    mockElectronAPI.listArchiveCases.mockResolvedValue([]);
+    mockElectronAPI.getSettings.mockResolvedValue({
+      hardwareAcceleration: true,
+      ramLimitMB: 2048,
+      fullscreen: false,
+      extractionQuality: 'high',
+      thumbnailSize: 200,
+      performanceMode: 'auto',
+      showOnboarding: true,
+      theme: 'brideware-purple',
+    });
   });
 
   const renderArchivePage = () => {
@@ -62,7 +103,10 @@ describe('ArchivePage', () => {
       <SettingsProvider>
         <ToastProvider>
           <WordEditorProvider>
-            <ArchivePage onBack={mockOnBack} />
+            <ArchivePage
+              onBack={mockOnBack}
+              onOpenTranscription={mockOnOpenTranscription}
+            />
           </WordEditorProvider>
         </ToastProvider>
       </SettingsProvider>
@@ -117,7 +161,7 @@ describe('ArchivePage', () => {
     await user.click(createButton);
     
     await waitFor(() => {
-      expect(screen.getByText('Name File')).toBeInTheDocument();
+      expect(screen.getByText('Create New Case')).toBeInTheDocument();
     });
   });
 
@@ -219,6 +263,35 @@ describe('ArchivePage', () => {
     expect(mockAddFilesToCase).toHaveBeenCalledWith('/path/to/case');
   });
 
+  it('should open transcription from a selected video file', async () => {
+    const user = userEvent.setup();
+
+    (useArchiveModule.useArchive as any).mockReturnValue({
+      ...defaultArchiveReturn,
+      currentCase: { name: 'Test Case', path: '/path/to/case' },
+      files: [
+        {
+          name: 'interview.mp4',
+          path: '/path/to/case/interview.mp4',
+          size: 1000,
+          modified: Date.now(),
+          type: 'video',
+          isFolder: false,
+        },
+      ],
+    });
+
+    renderArchivePage();
+
+    const transcribeButton = screen.getAllByLabelText('Transcribe media')[0];
+    await user.click(transcribeButton);
+
+    expect(mockOnOpenTranscription).toHaveBeenCalledWith(
+      '/path/to/case/interview.mp4',
+      '/path/to/case'
+    );
+  });
+
   it('should render back-to-parent button when inside a folder and call goBackToParentFolder on click', async () => {
     const user = userEvent.setup();
     const mockGoBackToParentFolder = vi.fn();
@@ -258,7 +331,7 @@ describe('ArchivePage', () => {
     await user.click(fileTile);
 
     // Close button from ArchiveFileViewer should be present
-    expect(screen.getByLabelText('Close')).toBeInTheDocument();
+    expect(screen.getByLabelText('Close viewer')).toBeInTheDocument();
   });
 
   it('should allow navigating to next file in viewer when multiple files exist', async () => {

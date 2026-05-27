@@ -568,7 +568,7 @@ export function useArchive() {
     });
   }, []);
 
-  const loadFileThumbnail = useCallback(async (filePath: string, fileType: 'image' | 'pdf' | 'video' | 'other') => {
+  const loadFileThumbnail = useCallback(async (filePath: string, fileType: 'image' | 'pdf' | 'video' | 'audio' | 'other') => {
     // Check global cache first - if thumbnail exists, use it immediately
     if (globalThumbnailCache.has(filePath)) {
       const cachedThumbnail = globalThumbnailCache.get(filePath)!;
@@ -740,7 +740,7 @@ export function useArchive() {
 
         // For files, determine type
         const ext = item.name.toLowerCase().split('.').pop() || '';
-        let type: 'image' | 'pdf' | 'video' | 'other' = 'other';
+        let type: 'image' | 'pdf' | 'video' | 'audio' | 'other' = 'other';
         
         if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) {
           type = 'image';
@@ -748,6 +748,8 @@ export function useArchive() {
           type = 'pdf';
         } else if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(ext)) {
           type = 'video';
+        } else if (['aac', 'amr', 'flac', 'm4a', 'mp3', 'ogg', 'opus', 'wav', 'wma'].includes(ext)) {
+          type = 'audio';
         }
 
         // Preserve thumbnail if available in cache
@@ -1413,7 +1415,7 @@ export function useArchive() {
             if (normalizedItemPath === normalizedTargetPath) {
               // Found the file!
               const ext = item.name.toLowerCase().split('.').pop() || '';
-              let type: 'image' | 'pdf' | 'video' | 'other' = 'other';
+              let type: 'image' | 'pdf' | 'video' | 'audio' | 'other' = 'other';
               
               if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) {
                 type = 'image';
@@ -1421,6 +1423,8 @@ export function useArchive() {
                 type = 'pdf';
               } else if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(ext)) {
                 type = 'video';
+              } else if (['aac', 'amr', 'flac', 'm4a', 'mp3', 'ogg', 'opus', 'wav', 'wma'].includes(ext)) {
+                type = 'audio';
               }
 
               const archiveFile: ArchiveFile = {

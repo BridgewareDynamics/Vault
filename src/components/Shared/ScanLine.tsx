@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 interface ScanLineProps {
   theme?: Theme;
@@ -7,7 +8,7 @@ interface ScanLineProps {
 }
 
 export function ScanLine({ theme = 'brideware-purple', speed = 8 }: ScanLineProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   
   return (

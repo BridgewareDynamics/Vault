@@ -23,6 +23,7 @@ import { CreateFolderDialog } from './CreateFolderDialog';
 import { ExtractionFolder } from './ExtractionFolder';
 import { CategoryTagSelector } from './CategoryTagSelector';
 import { ArchiveFile, ArchiveCase } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { ProgressBar } from '../ProgressBar';
 import { SecurityCheckerModal } from '../SecurityCheckerModal';
 import { PDFExtractionModal } from '../PDFExtractionModal';
@@ -35,9 +36,10 @@ import { Theme } from '../../types';
 
 interface ArchivePageProps {
   onBack: () => void;
+  onOpenTranscription: (sourcePath: string, casePath: string | null) => void;
 }
 
-export function ArchivePage({ onBack }: ArchivePageProps) {
+export function ArchivePage({ onBack, onOpenTranscription }: ArchivePageProps) {
   const {
     archiveConfig,
     cases,
@@ -81,7 +83,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const { currentCase: archiveContextCase, setCurrentCase: setArchiveContextCase } = useArchiveContext();
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   
   // Track if we've attempted to restore case from context (prevents multiple restorations)
   const hasRestoredCaseRef = useRef(false);
@@ -801,6 +803,10 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     setShowSecurityChecker(true);
   };
 
+  const handleTranscribeMedia = (file: ArchiveFile) => {
+    onOpenTranscription(file.path, currentCase?.path || null);
+  };
+
   const handleReportSaved = () => {
     // Refresh files to show the newly saved report
     if (currentCase) {
@@ -1426,6 +1432,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                               }}
                               onExtract={undefined} // No extraction inside folders
                               onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
+                              onTranscribe={item.type === 'audio' || item.type === 'video' ? () => handleTranscribeMedia(item) : undefined}
                               onRename={() => {
                                 setFileToRename(item);
                                 setShowRenameDialog(true);
@@ -1658,6 +1665,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     }}
                                     onExtract={item.type === 'pdf' ? () => handleExtractPDF(item) : undefined}
                                     onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
+                                    onTranscribe={item.type === 'audio' || item.type === 'video' ? () => handleTranscribeMedia(item) : undefined}
                                     onRename={() => {
                                       setFileToRename(item);
                                       setShowRenameDialog(true);
@@ -1853,6 +1861,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 }}
                                 onExtract={undefined}
                                 onRunAudit={undefined}
+                                onTranscribe={item.type === 'audio' || item.type === 'video' ? () => handleTranscribeMedia(item) : undefined}
                                 onRename={() => {
                                   setFileToRename(item);
                                   setShowRenameDialog(true);
@@ -2161,6 +2170,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         <ArchiveFileViewer
           file={selectedFile}
           files={files.filter(f => !f.isFolder)}
+          onTranscribe={(file) => handleTranscribeMedia(file)}
           onClose={() => {
             setSelectedFile(null);
             setInitialPage(undefined);

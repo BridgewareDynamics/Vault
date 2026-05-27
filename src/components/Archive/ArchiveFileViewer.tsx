@@ -1,7 +1,8 @@
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText, BookmarkPlus, Bookmark } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText, BookmarkPlus, Bookmark, AudioLines } from 'lucide-react';
 import { ArchiveFile, PDFDocument, PDFRenderTask, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { logger } from '../../utils/logger';
 import { setupPDFWorker } from '../../utils/pdfWorker';
 import { cleanupPDFBlobUrl } from '../../utils/pdfSource';
@@ -19,14 +20,15 @@ interface ArchiveFileViewerProps {
   onPrevious?: () => void;
   initialPage?: number;
   onInitialPageApplied?: () => void;
+  onTranscribe?: (file: ArchiveFile) => void;
 }
 
-export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, initialPage, onInitialPageApplied }: ArchiveFileViewerProps) {
+export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, initialPage, onInitialPageApplied, onTranscribe }: ArchiveFileViewerProps) {
   const { isOpen: isWordEditorOpen, setIsOpen: setWordEditorOpen, panelWidth, dividerPosition } = useWordEditor();
   const toast = useToast();
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const [isInlineMode, setIsInlineMode] = useState(false);
   const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
@@ -1130,6 +1132,20 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
           >
             <X size={20} />
           </button>
+
+          {(file.type === 'audio' || file.type === 'video') && onTranscribe && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onTranscribe(file);
+              }}
+              className="absolute top-4 right-20 z-40 text-white hover:text-cyber-cyan-300 transition-colors bg-black/70 backdrop-blur-sm rounded-full p-2 border border-cyber-cyan-500/50 hover:bg-gray-700/50"
+              aria-label="Open transcription workspace"
+              title="Transcribe media"
+            >
+              <AudioLines size={20} />
+            </button>
+          )}
 
           {/* Image Zoom Controls */}
           {file.type === 'image' && fileData && (

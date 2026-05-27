@@ -4,6 +4,7 @@ import { buildChronology } from './mapChronology';
 import {
   applyTimelineLayout,
   buildChronologicalEdges,
+  getMapBlockSize,
   relayoutDocument,
   MAP_BLOCK_DEFAULT_SIZE,
   MAP_BRANCH_BLOCK_DEFAULT_SIZE,
@@ -67,6 +68,17 @@ describe('mapLayout', () => {
     expect(laid[0].position.x).toBe(laid[4].position.x);
     expect(laid[5].position.x).toBeGreaterThan(laid[4].position.x);
     expect(laid[5].position.y).toBe(laid[4].position.y);
+  });
+
+  it('upgrades legacy default block sizes to the current rectangle defaults', () => {
+    const legacyTimeline = makeBlock('legacy-timeline', 2000);
+    legacyTimeline.size = { width: 200, height: 200 };
+
+    const legacyBranch = makeBranch('legacy-branch', 'legacy-timeline', 'left');
+    legacyBranch.size = { width: 176, height: 132 };
+
+    expect(getMapBlockSize(legacyTimeline)).toEqual(MAP_BLOCK_DEFAULT_SIZE);
+    expect(getMapBlockSize(legacyBranch)).toEqual(MAP_BRANCH_BLOCK_DEFAULT_SIZE);
   });
 
   it('keeps the first timeline column clear of the canvas toolbar', () => {

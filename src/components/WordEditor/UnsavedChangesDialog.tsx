@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 interface UnsavedChangesDialogProps {
   isOpen: boolean;
@@ -17,7 +18,7 @@ export function UnsavedChangesDialog({
   onCancel,
   theme = 'brideware-purple',
 }: UnsavedChangesDialogProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   if (!isOpen) return null;
 
   return (

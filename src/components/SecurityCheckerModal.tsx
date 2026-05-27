@@ -8,6 +8,7 @@ import { CaseSelectionDialog } from './Archive/CaseSelectionDialog';
 import { AuditSaveOptionsDialog, AuditSaveOption } from './AuditSaveOptionsDialog';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme, ArchiveFile } from '../types';
+import { isLightTheme } from '../theme/themeSemantics';
 
 interface SecurityCheckerModalProps {
   isOpen: boolean;
@@ -34,7 +35,7 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
   const [showAuditSaveDialog, setShowAuditSaveDialog] = useState(false);
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   const handleSelectFile = async () => {
     try {

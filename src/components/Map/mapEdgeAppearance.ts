@@ -1,4 +1,5 @@
 import { MapBlock, MapEdgeAppearance, MapEdgeKind, MapEdgeStyle } from '../../types';
+import { isPastelPalette } from '../../theme/themeSemantics';
 import { mixHexColors, normalizeMapBlockColor, resolveMapBlockColor } from './mapBlockColors';
 
 type MapEdgeTheme = 'pastel' | 'dark';
@@ -105,7 +106,7 @@ export function resolveMapEdgeRenderStyle(options: {
     return {
       strokeColor: startColor,
       glowColor:
-        options.theme === 'pastel'
+        isPastelPalette(options.theme)
           ? mixHexColors(glowBase, '#FFFFFF', 0.18)
           : mixHexColors(glowBase, '#111827', 0.12),
       gradientStartColor: startColor,
@@ -118,7 +119,7 @@ export function resolveMapEdgeRenderStyle(options: {
     const strokeColor = appearance.strokeColor ?? themePalette.strokeColor;
     const glowColor =
       appearance.glowColor ??
-      (options.theme === 'pastel'
+      (isPastelPalette(options.theme)
         ? mixHexColors(strokeColor, '#FFFFFF', 0.28)
         : mixHexColors(strokeColor, '#111827', 0.18));
 

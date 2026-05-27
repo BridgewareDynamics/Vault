@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnimatedGrid } from '../Shared/AnimatedGrid';
 import { ParticleBackground } from '../Shared/ParticleBackground';
-import { LightRays } from '../Shared/LightRays';
 import { OnboardingContent } from './OnboardingContent';
 import { FeaturesPage } from './FeaturesPage';
 import { CapabilitiesPage } from './CapabilitiesPage';
@@ -12,8 +11,6 @@ import { MapWorkspacePage } from './MapWorkspacePage';
 import { ThemeSelectionPage } from './ThemeSelectionPage';
 import { AdvancedPageIndicator } from './AdvancedPageIndicator';
 import { Theme } from '../../types';
-import { ScanLine } from '../Shared/ScanLine';
-
 interface OnboardingModalProps {
   onComplete: (theme: Theme, dontShowAgain: boolean) => void;
 }
@@ -144,9 +141,6 @@ export const OnboardingModal = memo(function OnboardingModal({ onComplete }: Onb
       <div className={`absolute inset-0 bg-gradient-to-br ${bgGradient}`} style={{ willChange: 'auto' }}>
         <AnimatedGrid theme={currentTheme} />
         <ParticleBackground theme={currentTheme} particleCount={40} />
-        <LightRays theme={currentTheme} rayCount={8} />
-        {/* Only show global ScanLine on pages other than the first page */}
-        {currentPage !== 0 && <ScanLine theme={currentTheme} speed={15} />}
       </div>
 
       {/* Modal Content */}

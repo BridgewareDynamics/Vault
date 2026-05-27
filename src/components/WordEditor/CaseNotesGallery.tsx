@@ -5,6 +5,7 @@ import { useToast } from '../Toast/ToastContext';
 import { useCategoryTags } from '../../hooks/useCategoryTags';
 import { CategoryTag } from '../Archive/CategoryTag';
 import { ArchiveCase, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { NewFileNameDialog } from './NewFileNameDialog';
 import { DeleteTextFileConfirmDialog } from './DeleteTextFileConfirmDialog';
 import { useSettingsContext } from '../../utils/settingsContext';
@@ -36,7 +37,7 @@ export function CaseNotesGallery({ onSelectCase, onClose, onOpenFile, onNewFile,
   const { getTagById } = useCategoryTags();
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   useEffect(() => {
     loadCases();
@@ -513,7 +514,7 @@ function CaseNotesView({ casePath, caseName: _caseName, onOpenFile, onNewFile: _
   const toast = useToast();
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   useEffect(() => {
     loadFiles();

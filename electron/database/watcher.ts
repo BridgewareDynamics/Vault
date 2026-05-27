@@ -304,8 +304,15 @@ export class FileSystemWatcher {
    */
   private async syncFileToDatabase(filePath: string, parentDir: string): Promise<boolean> {
     try {
-      const stats = await fs.promises.stat(filePath);
       const fileName = path.basename(filePath);
+      if (
+        fileName === 'transcription.vault-transcription.json' ||
+        filePath.includes(`${path.sep}.transcriptions${path.sep}`)
+      ) {
+        return false;
+      }
+
+      const stats = await fs.promises.stat(filePath);
       const fileType = this.detectFileType(fileName);
       const checksum = await this.db.calculateChecksum(filePath);
       const fileId = this.db.generateId(filePath);

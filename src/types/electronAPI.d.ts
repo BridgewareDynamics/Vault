@@ -306,6 +306,44 @@ declare global {
         pngBase64: string;
         destFilePath?: string;
       }) => Promise<{ success: boolean; filePath: string }>;
+      // Transcription API
+      getTranscriptionEngineStatus: () => Promise<import('./index').TranscriptionEngineStatus>;
+      startTranscriptionEngine: () => Promise<import('./index').TranscriptionEngineStatus>;
+      stopTranscriptionEngine: () => Promise<{ success: boolean }>;
+      listTranscriptionModels: () => Promise<import('./index').TranscriptionEngineModel[]>;
+      selectTranscriptionMedia: () => Promise<string[]>;
+      listTranscriptions: () => Promise<import('./index').TranscriptionListEntry[]>;
+      listCaseTranscriptions: (casePath: string) => Promise<import('./index').TranscriptionListEntry[]>;
+      createTranscription: (
+        title: string,
+        casePath?: string | null,
+        initialSourcePath?: string | null
+      ) => Promise<import('./index').TranscriptionDocument>;
+      readTranscription: (transcriptionFolderPath: string) => Promise<import('./index').TranscriptionDocument>;
+      saveTranscription: (document: import('./index').TranscriptionDocument) => Promise<import('./index').TranscriptionDocument>;
+      deleteTranscription: (transcriptionFolderPath: string) => Promise<{ success: boolean }>;
+      renameTranscription: (
+        transcriptionFolderPath: string,
+        newTitle: string
+      ) => Promise<import('./index').TranscriptionDocument>;
+      copyTranscriptionSourceToAssets: (
+        transcriptionFolderPath: string,
+        sourcePath: string,
+        sourceId: string
+      ) => Promise<{
+        relativePath: string;
+        storedPath: string;
+        fileName: string;
+        mediaType: import('./index').TranscriptionMediaType;
+      }>;
+      runTranscription: (options: {
+        transcriptionFolderPath: string;
+        sourcePath: string;
+        casePath?: string | null;
+        title?: string;
+        settings?: Partial<import('./index').TranscriptionEngineSettings>;
+      }) => Promise<import('./index').TranscriptionDocument>;
+      cancelTranscriptionJob: (transcriptionFolderPath?: string) => Promise<{ success: boolean }>;
     };
   }
 }

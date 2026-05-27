@@ -2,15 +2,16 @@ import { motion } from 'framer-motion';
 import { memo } from 'react';
 import { GraduationCap, Briefcase, FileSearch, Users, BookOpen, Target } from 'lucide-react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { HolographicEffect } from '../Shared/HolographicEffect';
-import { NeuralNetwork } from '../Shared/NeuralNetwork';
+import { HexGrid } from '../Shared/HexGrid';
 
 interface CapabilitiesPageProps {
   theme?: Theme;
 }
 
 export const CapabilitiesPage = memo(function CapabilitiesPage({ theme = 'brideware-purple' }: CapabilitiesPageProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
   const cardBg = isPastel 
@@ -58,8 +59,8 @@ export const CapabilitiesPage = memo(function CapabilitiesPage({ theme = 'bridew
 
   return (
     <div className="relative flex flex-col items-center justify-center h-full px-8 py-12 overflow-hidden">
-      <NeuralNetwork theme={theme} nodeCount={15} />
-      
+      <HexGrid theme={theme} density={18} />
+
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}

@@ -109,7 +109,7 @@ export function MapLandingPage({ theme, onBack, onNewMap, onOpenLibrary }: MapLa
         />
       </div>
 
-      <div className="relative z-10 flex min-h-screen flex-col">
+      <div className={`relative z-10 flex min-h-screen flex-col ${t.body}`}>
         <header className="border-b border-white/10 backdrop-blur-xl">
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 py-5">
             <button
@@ -128,7 +128,7 @@ export function MapLandingPage({ theme, onBack, onNewMap, onOpenLibrary }: MapLa
               </div>
               <div className="text-right">
                 <p className={`text-xs uppercase tracking-[0.28em] ${t.primary}`}>Map Workspace</p>
-                <h1 className="text-xl font-bold md:text-2xl">Research Maps</h1>
+                <h1 className={`text-xl font-bold md:text-2xl ${t.heading}`}>Research Maps</h1>
               </div>
             </div>
           </div>
@@ -201,7 +201,7 @@ export function MapLandingPage({ theme, onBack, onNewMap, onOpenLibrary }: MapLa
               <div className="space-y-5">
                 <div>
                   <p className={`text-xs uppercase tracking-[0.3em] ${t.primary}`}>Why Map works</p>
-                  <h3 className="mt-3 text-2xl font-bold">A cleaner launchpad for timeline work</h3>
+                  <h3 className={`mt-3 text-2xl font-bold ${t.heading}`}>A cleaner launchpad for timeline work</h3>
                 </div>
 
                 <div className="grid gap-4">
@@ -221,7 +221,7 @@ export function MapLandingPage({ theme, onBack, onNewMap, onOpenLibrary }: MapLa
                             <Icon className="h-5 w-5 text-white" />
                           </div>
                           <div className="space-y-1">
-                            <h4 className="text-base font-semibold">{item.title}</h4>
+                            <h4 className={`text-base font-semibold ${t.heading}`}>{item.title}</h4>
                             <p className={`text-sm leading-6 ${mutedTextClassName}`}>{item.description}</p>
                           </div>
                         </div>
@@ -292,7 +292,7 @@ export function MapLandingPage({ theme, onBack, onNewMap, onOpenLibrary }: MapLa
                       </div>
 
                       <div className="space-y-3">
-                        <h3 className="text-2xl font-bold">{card.title}</h3>
+                        <h3 className={`text-2xl font-bold ${t.heading}`}>{card.title}</h3>
                         <p className={`text-sm leading-7 md:text-base ${mutedTextClassName}`}>{card.description}</p>
                       </div>
 

@@ -420,7 +420,7 @@ export function CreateBlockDialog({
             }`}
           >
             <div>
-              <h2 id="create-block-title" className="text-2xl font-bold flex items-center gap-2">
+              <h2 id="create-block-title" className={`text-2xl font-bold flex items-center gap-2 ${t.heading}`}>
                 <HeaderIcon className={`w-6 h-6 ${t.primary}`} />
                 {dialogTitle}
               </h2>

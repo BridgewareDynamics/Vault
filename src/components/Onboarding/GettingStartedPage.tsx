@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { memo } from 'react';
 import { FileText, FolderOpen, Shield, Map as MapIcon } from 'lucide-react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { HolographicEffect } from '../Shared/HolographicEffect';
 import { HexGrid } from '../Shared/HexGrid';
 
@@ -10,7 +11,7 @@ interface GettingStartedPageProps {
 }
 
 export const GettingStartedPage = memo(function GettingStartedPage({ theme = 'brideware-purple' }: GettingStartedPageProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
   const cardBg = isPastel 
@@ -96,18 +97,6 @@ export const GettingStartedPage = memo(function GettingStartedPage({ theme = 'br
 
         {/* Steps */}
         <div className="relative">
-          {/* Connection Line */}
-          <motion.div
-            className="absolute left-1/2 top-0 bottom-0 w-1 -translate-x-1/2 hidden md:block"
-            style={{
-              background: `linear-gradient(to bottom, ${primaryRgba}0.3), ${secondaryRgba}0.5), ${primaryRgba}0.3))`,
-              boxShadow: `0 0 20px ${primaryRgba}0.5)`,
-            }}
-            initial={{ scaleY: 0 }}
-            animate={{ scaleY: 1 }}
-            transition={{ duration: 1.5, delay: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
-          />
-
           <div className="space-y-12">
             {steps.map((step, index) => {
               const Icon = step.icon;

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 interface HexGridProps {
   theme?: Theme;
@@ -7,7 +8,7 @@ interface HexGridProps {
 }
 
 export function HexGrid({ theme = 'brideware-purple', density = 20 }: HexGridProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
   

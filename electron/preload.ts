@@ -231,6 +231,47 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('export-map-to-directory', mapFolderPath, destDirectory),
   exportMapPng: (options: { mapFolderPath: string; pngBase64: string; destFilePath?: string }) =>
     ipcRenderer.invoke('export-map-png', options),
+  // Transcription API
+  getTranscriptionEngineStatus: () => ipcRenderer.invoke('get-transcription-engine-status'),
+  startTranscriptionEngine: () => ipcRenderer.invoke('start-transcription-engine'),
+  stopTranscriptionEngine: () => ipcRenderer.invoke('stop-transcription-engine'),
+  listTranscriptionModels: () => ipcRenderer.invoke('list-transcription-models'),
+  selectTranscriptionMedia: () => ipcRenderer.invoke('select-transcription-media'),
+  listTranscriptions: () => ipcRenderer.invoke('list-transcriptions'),
+  listCaseTranscriptions: (casePath: string) =>
+    ipcRenderer.invoke('list-case-transcriptions', casePath),
+  createTranscription: (
+    title: string,
+    casePath?: string | null,
+    initialSourcePath?: string | null
+  ) => ipcRenderer.invoke('create-transcription', title, casePath, initialSourcePath),
+  readTranscription: (transcriptionFolderPath: string) =>
+    ipcRenderer.invoke('read-transcription', transcriptionFolderPath),
+  saveTranscription: (document: unknown) => ipcRenderer.invoke('save-transcription', document),
+  deleteTranscription: (transcriptionFolderPath: string) =>
+    ipcRenderer.invoke('delete-transcription', transcriptionFolderPath),
+  renameTranscription: (transcriptionFolderPath: string, newTitle: string) =>
+    ipcRenderer.invoke('rename-transcription', transcriptionFolderPath, newTitle),
+  copyTranscriptionSourceToAssets: (
+    transcriptionFolderPath: string,
+    sourcePath: string,
+    sourceId: string
+  ) =>
+    ipcRenderer.invoke(
+      'copy-transcription-source-to-assets',
+      transcriptionFolderPath,
+      sourcePath,
+      sourceId
+    ),
+  runTranscription: (options: {
+    transcriptionFolderPath: string;
+    sourcePath: string;
+    casePath?: string | null;
+    title?: string;
+    settings?: Record<string, unknown>;
+  }) => ipcRenderer.invoke('run-transcription', options),
+  cancelTranscriptionJob: (transcriptionFolderPath?: string) =>
+    ipcRenderer.invoke('cancel-transcription-job', transcriptionFolderPath),
 });
 
 // Type declaration for TypeScript

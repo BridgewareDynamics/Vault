@@ -73,7 +73,7 @@ export interface ArchiveFile {
   size: number;
   modified: number;
   thumbnail?: string;
-  type: 'image' | 'pdf' | 'video' | 'other';
+  type: 'image' | 'pdf' | 'video' | 'audio' | 'other';
   isFolder?: boolean;
   folderType?: 'extraction' | 'case';
   parentPdfName?: string; // Name of the parent PDF file this folder was created from
@@ -238,5 +238,129 @@ export interface MapListEntry {
   caseName?: string;
   modified: number;
   blockCount: number;
+}
+
+// Transcription Types
+export type TranscriptionDocumentStatus =
+  | 'draft'
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export type TranscriptionMediaType = 'audio' | 'video';
+export type TranscriptionOutputFormat = 'txt' | 'srt' | 'vtt' | 'json';
+
+export interface TranscriptionMediaSelection {
+  sourceId: string;
+  startSeconds: number;
+  endSeconds: number;
+  totalDurationSeconds: number;
+}
+
+export interface TranscriptionEngineSettings {
+  model: string;
+  precision: string;
+  device: 'cpu' | 'cuda';
+  outputFormat: TranscriptionOutputFormat;
+  includeTimestamps: boolean;
+  segmentLength: number;
+  segmentDuration: number;
+  curateText: boolean;
+  batchRecursive: boolean;
+  mediaSelection?: TranscriptionMediaSelection | null;
+}
+
+export interface TranscriptionProgress {
+  stage: 'idle' | 'booting' | 'queued' | 'processing' | 'saving' | 'completed' | 'failed' | 'cancelled';
+  current: number;
+  total: number;
+  percentage: number;
+  statusMessage?: string;
+}
+
+export interface TranscriptionSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface TranscriptionSource {
+  id: string;
+  fileName: string;
+  originalPath: string;
+  storedPath?: string;
+  relativePath?: string;
+  mediaType: TranscriptionMediaType;
+  origin: 'vault' | 'local';
+  casePath?: string | null;
+}
+
+export interface TranscriptionDocument {
+  id: string;
+  title: string;
+  version: 1;
+  createdAt: number;
+  updatedAt: number;
+  casePath: string | null;
+  transcriptionFolderPath: string;
+  status: TranscriptionDocumentStatus;
+  progress: TranscriptionProgress;
+  settings: TranscriptionEngineSettings;
+  sources: TranscriptionSource[];
+  transcriptText: string;
+  transcriptFilePath?: string;
+  segments: TranscriptionSegment[];
+  segmentsFilePath?: string;
+  summary?: string;
+  lastError?: string;
+}
+
+export interface TranscriptionListEntry {
+  id: string;
+  title: string;
+  transcriptionFolderPath: string;
+  casePath: string | null;
+  caseName?: string;
+  modified: number;
+  sourceCount: number;
+  status: TranscriptionDocumentStatus;
+  excerpt?: string;
+}
+
+export interface TranscriptionEngineModel {
+  key: string;
+  name: string;
+  modelId: string;
+  precision: string;
+  modelType: string;
+  averageVramUsage?: string;
+  defaultSegmentLength: number;
+  supportsTimestamps: boolean;
+  bundled?: boolean;
+  bundledPath?: string;
+  cached?: boolean;
+  cachePath?: string;
+}
+
+export interface TranscriptionEngineStatus {
+  available: boolean;
+  running: boolean;
+  port?: number;
+  serverUrl?: string;
+  pythonCommand?: string;
+  pythonExecutable?: string;
+  scriptPath?: string;
+  contextRoot?: string;
+  bundledModelsDirectory?: string;
+  deviceDefault?: 'cpu' | 'cuda';
+  cudaBuilt?: boolean;
+  cudaAvailable?: boolean;
+  runtimeMode?: 'source' | 'bundled' | 'packaged';
+  localOnlyResolution?: boolean;
+  defaultModelKey?: string;
+  defaultModelReady?: boolean;
+  error?: string;
 }
 

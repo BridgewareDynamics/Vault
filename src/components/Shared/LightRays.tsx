@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useMemo } from 'react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 // Generate light rays
 const generateLightRays = (count: number) => {
@@ -18,7 +19,7 @@ interface LightRaysProps {
 
 export function LightRays({ rayCount = 8, theme = 'brideware-purple' }: LightRaysProps) {
   const lightRays = useMemo(() => generateLightRays(rayCount), [rayCount]);
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
 
   return (

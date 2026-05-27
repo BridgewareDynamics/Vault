@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 interface CircularCheckboxProps {
   checked: boolean;
@@ -10,7 +11,7 @@ interface CircularCheckboxProps {
 }
 
 export function CircularCheckbox({ checked, onChange, label, theme = 'brideware-purple' }: CircularCheckboxProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
   const textColor = isPastel ? 'text-gray-700' : 'text-gray-300';

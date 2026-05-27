@@ -125,6 +125,12 @@ The Vault is a desktop research workspace for investigators, researchers, and pr
    
    # Build both
    npm run build:all
+
+   # Stage the bundled offline transcription runtime (Windows)
+   npm run build:transcription-runtime
+
+   # Verify the staged transcription runtime before packaging
+   npm run verify:transcription-runtime
    
    # Preview production build
    npm run preview
@@ -147,7 +153,9 @@ The Vault is a desktop research workspace for investigators, researchers, and pr
    ```
    This command will:
    - Clean previous release builds
+   - Stage the bundled offline transcription runtime for Windows packaging
    - Build both frontend and Electron main process
+   - Smoke-test the staged transcription runtime
    - Create platform-specific installers:
      - **Windows**: Creates an NSIS installer (`.exe`) in `release/`
      - **macOS**: Creates a DMG file in `release/`
@@ -160,6 +168,12 @@ The Vault is a desktop research workspace for investigators, researchers, and pr
 
 3. **Individual build steps** (if needed)
    ```bash
+   # Stage the bundled offline transcription runtime
+   npm run build:transcription-runtime
+
+   # Verify the staged runtime
+   npm run verify:transcription-runtime
+
    # Build frontend only
    npm run build
    
@@ -170,6 +184,25 @@ The Vault is a desktop research workspace for investigators, researchers, and pr
    npm run build:all
    ```
 
+### Bundled Transcription Runtime
+
+The transcription feature now supports a staged Windows runtime under `build/transcription-runtime/`. That staging step prepares:
+
+- an embedded Python runtime in `build/transcription-runtime/python/`
+- the adapted transcription backend in `build/transcription-runtime/context/`
+- a bundled default model in `build/transcription-runtime/models/`
+- a runtime manifest used by the packaged Electron app
+
+The production packaging flow uses this staged runtime instead of the raw source folders so first-launch transcription can work without a system Python install.
+
+Useful environment overrides for the runtime build:
+
+- `VAULT_TRANSCRIPTION_PYTHON_VERSION`
+- `VAULT_TRANSCRIPTION_PYTHON_EMBED_URL`
+- `VAULT_TRANSCRIPTION_GET_PIP_URL`
+- `VAULT_TRANSCRIPTION_DEFAULT_MODEL_PATH`
+- `VAULT_TRANSCRIPTION_DEFAULT_MODEL_URL`
+
 ### Project Structure
 
 ```text
@@ -177,6 +210,7 @@ Vault/
 ├── electron/                    # Electron main process
 │   ├── main.ts                  # IPC handlers and app orchestration
 │   ├── preload.ts               # Typed renderer bridge
+│   ├── transcription/           # Bundled transcription sidecar entry points
 │   ├── database/                # Database integration and file watching
 │   └── utils/
 │       ├── archiveConfig.ts     # Vault configuration

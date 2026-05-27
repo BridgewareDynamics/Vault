@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { FolderOpen } from 'lucide-react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
 
 interface ArchiveDriveDialogProps {
@@ -12,7 +13,7 @@ interface ArchiveDriveDialogProps {
 export function ArchiveDriveDialog({ isOpen, onClose, onConfirm }: ArchiveDriveDialogProps) {
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   
   if (!isOpen) return null;
 

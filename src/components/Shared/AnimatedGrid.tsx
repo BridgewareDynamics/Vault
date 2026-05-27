@@ -1,12 +1,13 @@
 import { motion } from 'framer-motion';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 interface AnimatedGridProps {
   theme?: Theme;
 }
 
 export function AnimatedGrid({ theme = 'brideware-purple' }: AnimatedGridProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   
   return (

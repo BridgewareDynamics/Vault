@@ -1,9 +1,11 @@
 ﻿import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { FileText, FolderOpen, Map as MapIcon, Shield, type LucideIcon, Zap } from 'lucide-react';
+import { FileText, FolderOpen, Map as MapIcon, Mic2, Shield, type LucideIcon, Zap } from 'lucide-react';
 import { ActionToolbar } from './ActionToolbar';
+import { MenuGridBeamNetwork, MenuLightConduit } from './Welcome/MenuEnergyConnector';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
+import { isLightTheme } from '../theme/themeSemantics';
 
 const getAssetPath = (path: string) => {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
@@ -16,6 +18,7 @@ interface WelcomeScreenProps {
   onOpenSecurityChecker: () => void;
   onOpenPDFExtraction?: () => void;
   onOpenMap?: () => void;
+  onOpenTranscription?: () => void;
 }
 
 interface WelcomeCardPastelPalette {
@@ -69,27 +72,20 @@ const generateParticles = (count: number) =>
     duration: Math.random() * 10 + 15,
   }));
 
-const generateLightRays = (count: number) =>
-  Array.from({ length: count }, (_, i) => ({
-    id: i,
-    angle: (360 / count) * i,
-    delay: i * 0.5,
-  }));
-
 export function WelcomeScreen({
   onSelectFile,
   onOpenArchive,
   onOpenSecurityChecker,
   onOpenPDFExtraction,
   onOpenMap,
+  onOpenTranscription,
 }: WelcomeScreenProps) {
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'pastel';
   const particles = useMemo(() => generateParticles(50), []);
-  const lightRays = useMemo(() => generateLightRays(8), []);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const bgGradient = isPastel
     ? 'from-slate-50 via-pink-50/30 to-slate-50'
     : 'from-gray-950 via-purple-950/50 to-gray-950';
@@ -287,6 +283,55 @@ export function WelcomeScreen({
       : []),
   ];
 
+  const transcriptionCard: WelcomeMenuCardConfig | null = onOpenTranscription
+    ? {
+        key: 'transcription',
+        title: 'Transcription',
+        description: 'Audio and video speech workflows for Vault case media',
+        actionLabel: 'Launch Engine',
+        onClick: onOpenTranscription,
+        icon: Mic2,
+        actionIcon: Zap,
+        delay: 0.95,
+        pastel: {
+          borderClassName: 'border-fuchsia-200/40',
+          cardShadow: '0 4px 24px rgba(216, 180, 254, 0.18), 0 0 0 1px rgba(216, 180, 254, 0.1)',
+          glowBackground: 'radial-gradient(circle at center, rgba(216, 180, 254, 0.18) 0%, transparent 72%)',
+          glowShadow: '0 0 34px rgba(216, 180, 254, 0.24)',
+          overlayClassName: 'bg-gradient-to-br from-fuchsia-50/35 via-purple-50/25 to-blue-50/30',
+          iconPulse: [
+            'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.24))',
+            'drop-shadow(0 4px 12px rgba(216, 180, 254, 0.34))',
+            'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.24))',
+          ],
+          iconGlowClassName: 'bg-gradient-to-br from-fuchsia-200/40 via-purple-200/40 to-blue-200/40',
+          iconWrapperClassName: 'bg-gradient-to-br from-fuchsia-100/80 to-purple-100/80 border-2 border-fuchsia-200/30',
+          iconClassName: 'text-fuchsia-500',
+          actionIconClassName: 'text-fuchsia-500',
+        },
+        dark: {
+          beamBackground:
+            'linear-gradient(to right, transparent 0%, rgba(236, 72, 153, 0.55) 18%, rgba(139, 92, 246, 0.82) 50%, rgba(34, 211, 238, 0.6) 82%, transparent 100%)',
+          beamBoxShadow: '0 0 12px rgba(236, 72, 153, 0.32), 0 0 28px rgba(34, 211, 238, 0.18)',
+          frameBackgroundImage:
+            'linear-gradient(45deg, rgba(236, 72, 153, 0.94), rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.94))',
+          buttonShadow: '0 0 32px rgba(236, 72, 153, 0.2), inset 0 0 28px rgba(34, 211, 238, 0.08)',
+          glowBackground: 'radial-gradient(circle at center, rgba(236, 72, 153, 0.2) 0%, transparent 70%)',
+          glowShadow: '0 0 42px rgba(236, 72, 153, 0.4), 0 0 62px rgba(34, 211, 238, 0.26)',
+          iconPulse: [
+            'drop-shadow(0 0 15px rgba(236, 72, 153, 0.56))',
+            'drop-shadow(0 0 25px rgba(34, 211, 238, 0.82))',
+            'drop-shadow(0 0 15px rgba(236, 72, 153, 0.56))',
+          ],
+          iconGlowClassName: 'bg-gradient-to-br from-fuchsia-500 to-cyan-500',
+          iconWrapperClassName: 'bg-gradient-to-br from-fuchsia-500/90 to-cyan-500/90 border border-fuchsia-300/40',
+          iconClassName: 'text-white',
+          titleClassName: 'bg-gradient-to-r from-fuchsia-300 via-violet-300 to-cyan-300 bg-clip-text text-transparent',
+          actionIconClassName: 'text-fuchsia-300',
+        },
+      }
+    : null;
+
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
       setMousePosition({ x: event.clientX, y: event.clientY });
@@ -297,7 +342,10 @@ export function WelcomeScreen({
   }, []);
 
   return (
-    <div className={`relative flex flex-col min-h-screen bg-gradient-to-br ${bgGradient} overflow-hidden`}>
+    <div
+      className={`relative flex flex-col min-h-screen bg-gradient-to-br ${bgGradient} overflow-x-hidden`}
+      style={{ overflowAnchor: 'none' }}
+    >
       <motion.div
         className="absolute inset-0"
         initial={{ opacity: 0 }}
@@ -366,37 +414,6 @@ export function WelcomeScreen({
         ))}
       </div>
 
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {lightRays.map((ray) => (
-          <motion.div
-            key={ray.id}
-            className="absolute top-1/2 left-1/2 w-1 h-1/2 origin-top"
-            style={{
-              transform: `rotate(${ray.angle}deg)`,
-              transformOrigin: 'top center',
-              background: `linear-gradient(to bottom, ${primaryRgba}0.3), transparent)`,
-              boxShadow: `0 0 20px ${primaryRgba}0.5)`,
-            }}
-            initial={{ opacity: 0, scaleY: 0.3 }}
-            animate={{ opacity: [0, 0.2, 0.5, 0.2], scaleY: [0.3, 0.6, 1, 0.6] }}
-            transition={{
-              opacity: {
-                duration: 1,
-                ease: [0.25, 0.1, 0.25, 1],
-                delay: 0.4 + ray.delay * 0.1,
-                times: [0, 0.2, 0.5, 1],
-              },
-              scaleY: {
-                duration: 5,
-                repeat: Infinity,
-                delay: 1.4 + ray.delay,
-                ease: [0.4, 0, 0.6, 1],
-              },
-            }}
-          />
-        ))}
-      </div>
-
       <motion.div
         className="absolute w-96 h-96 rounded-full pointer-events-none"
         style={{
@@ -412,41 +429,6 @@ export function WelcomeScreen({
           scale: { duration: 3, repeat: Infinity, ease: [0.4, 0, 0.6, 1], delay: 1.3 },
         }}
       />
-
-      {isPastel ? (
-        <motion.div
-          className="absolute pointer-events-none z-0"
-          style={{
-            background:
-              'linear-gradient(to right, transparent 0%, rgba(216, 180, 254, 0.3) 20%, rgba(216, 180, 254, 0.4) 50%, rgba(216, 180, 254, 0.3) 80%, transparent 100%)',
-            height: '1px',
-            top: 'calc(50% + 180px)',
-            left: '50%',
-            width: 'calc(min(100% - 4rem, 80rem) - 2rem)',
-            maxWidth: 'calc(80rem - 2rem)',
-            boxShadow: '0 0 8px rgba(216, 180, 254, 0.2), 0 0 16px rgba(216, 180, 254, 0.1)',
-          }}
-          initial={{ opacity: 0, scaleX: 0, x: '-50%', y: '-50%' }}
-          animate={{ opacity: 1, scaleX: 1, x: '-50%', y: '-50%' }}
-          transition={{ duration: 1, ease: [0.25, 0.1, 0.25, 1], delay: 0.65 }}
-        />
-      ) : (
-        <motion.div
-          className="absolute pointer-events-none z-0"
-          style={{
-            background: `linear-gradient(to right, transparent 0%, ${primaryRgba}0.6) 20%, ${primaryRgba}0.8) 50%, ${primaryRgba}0.6) 80%, transparent 100%)`,
-            height: '2px',
-            top: 'calc(50% + 180px)',
-            left: '50%',
-            width: 'calc(min(100% - 4rem, 80rem) - 2rem)',
-            maxWidth: 'calc(80rem - 2rem)',
-            boxShadow: `0 0 10px ${primaryRgba}0.9), 0 0 20px ${primaryRgba}0.5), 0 0 30px ${primaryRgba}0.3)`,
-          }}
-          initial={{ opacity: 0, scaleX: 0, filter: 'blur(10px)', x: '-50%', y: '-50%' }}
-          animate={{ opacity: 1, scaleX: 1, filter: 'blur(0px)', x: '-50%', y: '-50%' }}
-          transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.65 }}
-        />
-      )}
 
       <motion.div
         className={`relative z-10 w-full px-8 pt-8 pb-6 ${
@@ -576,21 +558,25 @@ export function WelcomeScreen({
         </div>
       </motion.div>
 
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 py-12">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-start px-8 py-12 md:py-16">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 }}
-          className="text-center space-y-16 max-w-7xl w-full"
+          className="text-center max-w-7xl w-full pb-16"
         >
-          <motion.div
-            initial={{ scale: 0.96, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 1, ease: [0.25, 0.1, 0.25, 1], delay: 0.35 }}
-            className="flex justify-center mb-8"
+          <div
+            className="relative flex w-full flex-col items-center overflow-hidden"
+            style={{ height: 256 + 64 - 40 }}
           >
-            {isPastel ? (
-              <div className="relative w-64 h-64 flex items-center justify-center">
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 1, ease: [0.25, 0.1, 0.25, 1], delay: 0.35 }}
+              className="flex justify-center"
+            >
+              {isPastel ? (
+                <div className="relative w-64 h-64 flex items-center justify-center overflow-hidden rounded-full">
                 <motion.div
                   className="absolute inset-0 border-4 border-purple-200/30 rounded-full"
                   initial={{ opacity: 0, scale: 0.96 }}
@@ -637,7 +623,7 @@ export function WelcomeScreen({
                 />
                 <motion.img
                   src={getAssetPath('vault-icon.png')}
-                  alt="Vault"
+                  alt="The Vault"
                   className="w-52 h-52 relative z-10"
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{
@@ -657,9 +643,9 @@ export function WelcomeScreen({
                     filter: { duration: 5, repeat: Infinity, ease: [0.4, 0, 0.6, 1], delay: 0.95 },
                   }}
                 />
-              </div>
-            ) : (
-              <div className="relative w-64 h-64 flex items-center justify-center">
+                </div>
+              ) : (
+                <div className="relative w-64 h-64 flex items-center justify-center overflow-hidden rounded-full">
                 <motion.div
                   className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full"
                   initial={{ opacity: 0, scale: 0.96 }}
@@ -703,7 +689,7 @@ export function WelcomeScreen({
                 />
                 <motion.img
                   src={getAssetPath('vault-icon.png')}
-                  alt="Vault"
+                  alt="The Vault"
                   className="w-52 h-52 relative z-10"
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{
@@ -723,11 +709,30 @@ export function WelcomeScreen({
                     filter: { duration: 4, repeat: Infinity, ease: [0.4, 0, 0.6, 1], delay: 0.95 },
                   }}
                 />
-              </div>
-            )}
-          </motion.div>
+                </div>
+              )}
+            </motion.div>
 
-          <div className={`grid grid-cols-1 md:grid-cols-2 ${actionCards.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-8`}>
+            <MenuLightConduit
+              isPastel={isPastel}
+              primaryRgba={primaryRgba}
+              secondaryRgba={secondaryRgba}
+            />
+          </div>
+
+          <div className="relative w-full max-w-7xl overflow-hidden">
+            <MenuGridBeamNetwork
+              isPastel={isPastel}
+              primaryRgba={primaryRgba}
+              secondaryRgba={secondaryRgba}
+              columnCount={actionCards.length === 4 ? 4 : 3}
+            />
+
+            <div
+              className={`relative z-10 grid grid-cols-1 md:grid-cols-2 ${
+                actionCards.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+              } gap-8 lg:pt-10`}
+            >
             {actionCards.map((card) => {
               const Icon = card.icon;
               const ActionIcon = card.actionIcon;
@@ -853,6 +858,204 @@ export function WelcomeScreen({
                 </motion.div>
               );
             })}
+            </div>
+
+          {transcriptionCard ? (
+            <div className="mx-auto mt-10 flex w-full max-w-5xl flex-col items-center">
+              <div
+                className={`grid w-full grid-cols-1 ${
+                  actionCards.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+                }`}
+              >
+                <div
+                  className={`${
+                    actionCards.length === 4
+                      ? 'lg:col-start-2 lg:col-span-2'
+                      : 'lg:col-start-1 lg:col-span-3'
+                  }`}
+                >
+                  {(() => {
+                    const card = transcriptionCard;
+                    const Icon = card.icon;
+                    const ActionIcon = card.actionIcon;
+
+                    return (
+                      <motion.div
+                        key={card.key}
+                        initial={{ opacity: 0, scale: 0.96, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        transition={{
+                          duration: 0.9,
+                          ease: [0.25, 0.1, 0.25, 1],
+                          delay: card.delay,
+                        }}
+                        className="relative group"
+                      >
+                        {isPastel ? (
+                          <motion.button
+                            whileHover={{
+                              scale: 1.01,
+                              y: -3,
+                              transition: {
+                                duration: 0.3,
+                                ease: [0.4, 0, 0.2, 1],
+                              },
+                            }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={card.onClick}
+                            className={`w-full relative overflow-hidden rounded-3xl bg-white/85 backdrop-blur-xl shadow-lg border-2 transition-all duration-300 z-10 ${card.pastel.borderClassName}`}
+                            style={{ boxShadow: card.pastel.cardShadow }}
+                          >
+                            <motion.div
+                              className="absolute inset-0 rounded-3xl pointer-events-none"
+                              initial={{ opacity: 0 }}
+                              whileHover={{ opacity: 1, transition: { duration: 0.3 } }}
+                              style={{
+                                background: card.pastel.glowBackground,
+                                boxShadow: card.pastel.glowShadow,
+                              }}
+                            />
+                            <motion.div
+                              className={`absolute inset-0 rounded-3xl ${card.pastel.overlayClassName}`}
+                              initial={{ opacity: 0 }}
+                              whileHover={{ opacity: 1 }}
+                              transition={{ duration: 0.3 }}
+                            />
+                            <div className="relative z-10 p-10 md:p-12 flex flex-col items-center gap-6">
+                              <motion.div
+                                className="relative"
+                                animate={{ filter: card.pastel.iconPulse }}
+                                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                              >
+                                <div className={`absolute inset-0 rounded-3xl blur-xl ${card.pastel.iconGlowClassName}`}></div>
+                                <motion.div
+                                  className={`relative p-6 rounded-3xl shadow-md ${card.pastel.iconWrapperClassName}`}
+                                  whileHover={{
+                                    scale: 1.08,
+                                    rotate: [0, -1, 1, -1, 1, 0],
+                                    transition: {
+                                      duration: 0.4,
+                                      ease: 'easeOut',
+                                    },
+                                  }}
+                                >
+                                  <Icon className={`w-12 h-12 ${card.pastel.iconClassName}`} />
+                                </motion.div>
+                              </motion.div>
+                              <div className="text-center max-w-2xl">
+                                <h3 className="text-3xl font-bold mb-2 text-gray-800">{card.title}</h3>
+                                <p className="text-base text-gray-600">{card.description}</p>
+                              </div>
+                              <motion.div
+                                className="flex items-center gap-3 text-gray-700 font-semibold text-lg"
+                                whileHover={{ scale: 1.05 }}
+                              >
+                                <ActionIcon className={`w-5 h-5 ${card.pastel.actionIconClassName}`} />
+                                <span>{card.actionLabel}</span>
+                              </motion.div>
+                            </div>
+                          </motion.button>
+                        ) : (
+                          <>
+                            <div
+                              className="absolute -inset-[2px] pointer-events-none z-0 rounded-3xl"
+                              style={{
+                                background: card.dark.beamBackground,
+                                padding: '2px',
+                                WebkitMask:
+                                  'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                                WebkitMaskComposite: 'xor',
+                                mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                                maskComposite: 'exclude',
+                                boxShadow: card.dark.beamBoxShadow,
+                              }}
+                            />
+                            <motion.div
+                              className="rounded-3xl p-[3px]"
+                              style={{
+                                backgroundImage: card.dark.frameBackgroundImage,
+                                backgroundSize: '200% 200%',
+                              }}
+                              animate={{
+                                backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+                              }}
+                              transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                            >
+                              <motion.button
+                                whileHover={{
+                                  scale: 1.02,
+                                  y: -4,
+                                  transition: {
+                                    duration: 0.2,
+                                    ease: [0.4, 0, 0.2, 1],
+                                  },
+                                }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={card.onClick}
+                                className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10"
+                                style={{ boxShadow: card.dark.buttonShadow }}
+                              >
+                                <motion.div
+                                  className="absolute inset-0 rounded-3xl pointer-events-none"
+                                  initial={{ opacity: 0 }}
+                                  whileHover={{ opacity: 1, transition: { duration: 0.2 } }}
+                                  style={{
+                                    background: card.dark.glowBackground,
+                                    boxShadow: card.dark.glowShadow,
+                                  }}
+                                />
+                                <motion.div
+                                  className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-transparent"
+                                  initial={{ opacity: 0 }}
+                                  whileHover={{ opacity: 1 }}
+                                  transition={{ duration: 0.2 }}
+                                />
+                                <div className="relative z-10 p-10 md:p-12 flex flex-col items-center gap-6">
+                                  <motion.div
+                                    className="relative"
+                                    animate={{ filter: card.dark.iconPulse }}
+                                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                                  >
+                                    <div className={`absolute inset-0 rounded-3xl blur-2xl opacity-60 ${card.dark.iconGlowClassName}`}></div>
+                                    <motion.div
+                                      className={`relative p-6 rounded-3xl shadow-2xl ${card.dark.iconWrapperClassName}`}
+                                      whileHover={{
+                                        scale: 1.1,
+                                        rotate: [0, -2, 2, -2, 2, 0],
+                                        transition: {
+                                          duration: 0.3,
+                                          ease: 'easeOut',
+                                        },
+                                      }}
+                                    >
+                                      <Icon className={`w-12 h-12 ${card.dark.iconClassName}`} />
+                                    </motion.div>
+                                  </motion.div>
+                                  <div className="text-center max-w-2xl">
+                                    <h3 className={`text-3xl font-bold mb-2 ${card.dark.titleClassName}`}>
+                                      {card.title}
+                                    </h3>
+                                    <p className="text-base text-gray-300">{card.description}</p>
+                                  </div>
+                                  <motion.div
+                                    className="flex items-center gap-3 text-white font-semibold text-lg"
+                                    whileHover={{ scale: 1.1 }}
+                                  >
+                                    <ActionIcon className={`w-5 h-5 ${card.dark.actionIconClassName}`} />
+                                    <span>{card.actionLabel}</span>
+                                  </motion.div>
+                                </div>
+                              </motion.button>
+                            </motion.div>
+                          </>
+                        )}
+                      </motion.div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          ) : null}
           </div>
         </motion.div>
       </div>

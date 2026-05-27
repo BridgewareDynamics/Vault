@@ -16,6 +16,15 @@
     "build/icon.ico",
     "build/icon.png"
   ],
+  "extraResources": [
+    {
+      "from": "build/transcription-runtime-bundled",
+      "to": "transcription-runtime",
+      "filter": [
+        "**/*"
+      ]
+    }
+  ],
   "win": {
     "target": "nsis",
     "icon": "build/icon.ico",

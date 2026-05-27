@@ -305,22 +305,24 @@ export function MapVaultLibraryPanel({
   }
 
   const handleAttach = (file: ArchiveFile) => {
+    const attachmentType = file.type === 'audio' ? 'other' : file.type;
     onAttachFile(
       createPendingMapAttachment({
         sourcePath: file.path,
         origin: 'vault',
         fileName: file.name,
-        type: file.type,
+        type: attachmentType,
       })
     );
   };
 
   const handleFileDragStart = (event: DragEvent<HTMLLIElement>, file: ArchiveFile) => {
+    const attachmentType = file.type === 'audio' ? 'other' : file.type;
     const payload = createPendingMapAttachment({
       sourcePath: file.path,
       origin: 'vault',
       fileName: file.name,
-      type: file.type,
+      type: attachmentType,
     });
 
     event.dataTransfer.effectAllowed = 'copy';
@@ -329,11 +331,12 @@ export function MapVaultLibraryPanel({
   };
 
   const handlePreviewDragStart = (event: DragEvent<HTMLDivElement>, file: ArchiveFile) => {
+    const attachmentType = file.type === 'audio' ? 'other' : file.type;
     const payload = createPendingMapAttachment({
       sourcePath: file.path,
       origin: 'vault',
       fileName: file.name,
-      type: file.type,
+      type: attachmentType,
     });
 
     event.dataTransfer.effectAllowed = 'copy';

@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
 import { useState, useRef, useEffect } from 'react';
 import { ArchiveFile, CategoryTag, Theme } from '../../types';
-import { FileText, Image, Video, File, Trash2, Play, ChevronDown, Pencil, Tag } from 'lucide-react';
+import { isLightTheme } from '../../theme/themeSemantics';
+import { AudioLines, FileText, Image, Video, File, Trash2, Play, ChevronDown, Pencil, Tag } from 'lucide-react';
 import { PDFOptionsDropdown } from './PDFOptionsDropdown';
 import { CategoryTag as CategoryTagComponent } from './CategoryTag';
 import { useSettingsContext } from '../../utils/settingsContext';
@@ -17,15 +18,16 @@ interface ArchiveFileItemProps {
   caseTag?: CategoryTag | null;
   onTagClick?: () => void;
   onRunAudit?: () => void;
+  onTranscribe?: () => void;
 }
 
-export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd, caseTag, onTagClick, onRunAudit }: ArchiveFileItemProps) {
+export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd, caseTag, onTagClick, onRunAudit, onTranscribe }: ArchiveFileItemProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLButtonElement>(null);
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -56,6 +58,8 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
         return <FileText className="w-8 h-8 text-red-400" aria-hidden="true" />;
       case 'video':
         return <Video className="w-8 h-8 text-blue-400" aria-hidden="true" />;
+      case 'audio':
+        return <AudioLines className={`w-8 h-8 ${isPastel ? 'text-fuchsia-500' : 'text-cyber-cyan-400'}`} aria-hidden="true" />;
       default:
         return <File className={`w-8 h-8 ${isPastel ? 'text-gray-500' : 'text-gray-400'}`} aria-hidden="true" />;
     }
@@ -206,6 +210,23 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                 <Play className="w-5 h-5 text-white" aria-hidden="true" />
               </button>
             )}
+            {(file.type === 'audio' || file.type === 'video') && onTranscribe && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTranscribe();
+                }}
+                className={`p-2 rounded-full backdrop-blur-sm ${
+                  isPastel
+                    ? 'bg-fuchsia-400/90 hover:bg-fuchsia-400'
+                    : 'bg-cyber-cyan-500/90 hover:bg-cyber-cyan-500'
+                }`}
+                aria-label="Transcribe media"
+                title="Transcribe media"
+              >
+                <AudioLines className="w-5 h-5 text-white" aria-hidden="true" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -240,6 +261,25 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                     isPastel
                       ? 'text-gray-600 hover:text-pink-500'
                       : 'text-gray-300 hover:text-cyber-purple-400'
+                  }`} aria-hidden="true" />
+                </button>
+              )}
+              {(file.type === 'audio' || file.type === 'video') && onTranscribe && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTranscribe();
+                  }}
+                  className={`flex-shrink-0 p-2 rounded-lg transition-all ${
+                    isPastel ? 'hover:bg-pink-100/60' : 'hover:bg-gray-700/60'
+                  }`}
+                  aria-label="Transcribe media"
+                  title="Transcribe media"
+                >
+                  <AudioLines className={`w-4 h-4 ${
+                    isPastel
+                      ? 'text-gray-600 hover:text-fuchsia-500'
+                      : 'text-gray-300 hover:text-cyber-cyan-400'
                   }`} aria-hidden="true" />
                 </button>
               )}

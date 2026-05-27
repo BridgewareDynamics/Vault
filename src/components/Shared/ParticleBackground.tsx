@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useMemo } from 'react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 // Generate particles for background
 const generateParticles = (count: number) => {
@@ -23,7 +24,7 @@ interface ParticleBackgroundProps {
 
 export function ParticleBackground({ particleCount = 50, theme = 'brideware-purple' }: ParticleBackgroundProps) {
   const particles = useMemo(() => generateParticles(particleCount), [particleCount]);
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
 
   return (

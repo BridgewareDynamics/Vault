@@ -3,6 +3,7 @@ import { Settings, FileText } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
+import { isLightTheme } from '../theme/themeSemantics';
 
 interface ActionToolbarProps {
   hideWordEditorButton?: boolean;
@@ -13,7 +14,7 @@ export function ActionToolbar({ hideWordEditorButton = false, onSettingsClick }:
   const { settings, loading } = useSettings();
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   const handleSettingsClick = () => {
     if (onSettingsClick) {

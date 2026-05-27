@@ -1,3 +1,4 @@
+import { isPastelPalette } from '../../theme/themeSemantics';
 import type { CSSProperties } from 'react';
 
 const HEX_COLOR_REGEX = /^#?[0-9a-fA-F]{6}$/;
@@ -168,10 +169,10 @@ export function resolveMapBlockColor(config: MapBlockColorConfig): {
 export function getMapBlockMinimapColor(config: MapBlockColorConfig, theme: 'pastel' | 'dark'): string {
   const normalized = resolveMapBlockColor(config).surfaceColor;
   if (!normalized) {
-    return theme === 'pastel' ? '#C4B5FD' : '#8B5CF6';
+    return isPastelPalette(theme) ? '#C4B5FD' : '#8B5CF6';
   }
 
-  return theme === 'pastel' ? mixHexColors(normalized, '#FFFFFF', 0.18) : mixHexColors(normalized, '#111827', 0.12);
+  return isPastelPalette(theme) ? mixHexColors(normalized, '#FFFFFF', 0.18) : mixHexColors(normalized, '#111827', 0.12);
 }
 
 export function getMapBlockSurfaceStyle(
@@ -186,7 +187,7 @@ export function getMapBlockSurfaceStyle(
     return undefined;
   }
 
-  const isPastel = options.theme === 'pastel';
+  const isPastel = isPastelPalette(options.theme);
   const baseColor = surfaceColor ?? accentColor ?? borderColor;
   const edgeColor = borderColor ?? accentColor ?? surfaceColor;
   if (!baseColor || !edgeColor) {

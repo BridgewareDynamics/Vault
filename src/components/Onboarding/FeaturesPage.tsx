@@ -2,15 +2,15 @@ import { motion } from 'framer-motion';
 import { memo } from 'react';
 import { FileText, FolderOpen, Shield, Search, Layers, Settings, Map as MapIcon } from 'lucide-react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { HolographicEffect } from '../Shared/HolographicEffect';
-import { ScanLine } from '../Shared/ScanLine';
 
 interface FeaturesPageProps {
   theme?: Theme;
 }
 
 export const FeaturesPage = memo(function FeaturesPage({ theme = 'brideware-purple' }: FeaturesPageProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
   const cardBg = isPastel 
@@ -56,8 +56,6 @@ export const FeaturesPage = memo(function FeaturesPage({ theme = 'brideware-purp
 
   return (
     <div className="relative flex flex-col items-center justify-center h-full px-8 py-12 overflow-hidden">
-      <ScanLine theme={theme} speed={12} />
-      
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}

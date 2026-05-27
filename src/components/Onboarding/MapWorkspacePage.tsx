@@ -2,9 +2,9 @@ import { motion } from 'framer-motion';
 import { memo } from 'react';
 import { CalendarDays, FolderOpen, Link2, Map as MapIcon, Paperclip } from 'lucide-react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { HolographicEffect } from '../Shared/HolographicEffect';
 import { HexGrid } from '../Shared/HexGrid';
-import { ScanLine } from '../Shared/ScanLine';
 
 interface MapWorkspacePageProps {
   theme?: Theme;
@@ -33,7 +33,7 @@ const workflowSteps = ['Extract', 'Archive', 'Map', 'Audit'];
 export const MapWorkspacePage = memo(function MapWorkspacePage({
   theme = 'brideware-purple',
 }: MapWorkspacePageProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
   const cardBg = isPastel
@@ -43,7 +43,6 @@ export const MapWorkspacePage = memo(function MapWorkspacePage({
   return (
     <div className="relative flex flex-col items-center justify-center h-full px-8 py-12 overflow-hidden">
       <HexGrid theme={theme} density={18} />
-      <ScanLine theme={theme} speed={10} />
 
       <motion.div
         initial={{ opacity: 0, y: 15 }}

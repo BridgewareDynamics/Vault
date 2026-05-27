@@ -39,6 +39,10 @@ Thumbs.db
 
 # Electron
 # Note: build/ directory is kept for production build assets
+build/transcription-runtime/
+build/transcription-runtime-bundled/
+build/transcription-runtime-temp/
+build/transcription-runtime-user-models/
 
 # Python
 __pycache__/
@@ -49,6 +53,12 @@ __pycache__/
 *.egg-info/
 dist/
 *.egg
+
+# Downloaded transcription source/model bundles
+context/Elegant-Transcriber-main.zip
+context/Elegant-Transcriber-main/
+context/parakeet-tdt-0.6b-v2.nemo
+context/parakeet/
 
 
 

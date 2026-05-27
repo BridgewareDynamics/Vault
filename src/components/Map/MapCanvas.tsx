@@ -31,6 +31,7 @@ import {
   MapEdgeStyle,
   Theme,
 } from '../../types';
+import { isLightTheme, toEdgeAppearanceTheme } from '../../theme/themeSemantics';
 import { MapBlockNode, type MapBlockNodeData } from './MapBlockNode';
 import { useMapTheme } from './mapTheme';
 import { getMapBlockMinimapColor } from './mapBlockColors';
@@ -373,7 +374,7 @@ function blocksToNodes(
   onEditColor: (id: string) => void,
   onCreateBranch: (id: string, side: MapBranchSide, sourceSide: MapCanvasSide) => void
 ): Node<MapBlockNodeData>[] {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   return blocks.map((block) => ({
     id: block.id,
     type: 'mapBlock',
@@ -476,7 +477,7 @@ function flowEdgesFromDocument(doc: MapDocument, theme: Theme): MapStyledFlowEdg
   const enriched = enrichEdgesWithHandles(doc.blocks, doc.edges);
   const routed = buildFlowEdgesFromBlocks(doc.blocks, enriched, doc.defaultEdgeStyle);
   const blockById = new Map(doc.blocks.map((block) => [block.id, block]));
-  const edgeTheme = theme === 'pastel' ? 'pastel' : 'dark';
+  const edgeTheme = toEdgeAppearanceTheme(theme);
 
   return routed.map((e) => ({
     id: e.id,
@@ -536,7 +537,7 @@ export function getMiniMapNodeColor(block: MapBlock | undefined, theme: Theme): 
       borderColor: block?.borderColor,
       legacyColor: block?.color,
     },
-    theme === 'pastel' ? 'pastel' : 'dark'
+    toEdgeAppearanceTheme(theme)
   );
 }
 

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Check, Palette } from 'lucide-react';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { HolographicEffect } from '../Shared/HolographicEffect';
 
 interface ThemeSelectorProps {
@@ -10,7 +11,7 @@ interface ThemeSelectorProps {
 }
 
 export function ThemeSelector({ selectedTheme, onSelectTheme, theme = 'brideware-purple' }: ThemeSelectorProps) {
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
   

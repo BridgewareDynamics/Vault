@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { Maximize2, FileText, File, Film, Trash2, Pencil, Plus, PaintBucket } from 'lucide-react';
 import { MapBlock, MapBranchSide, MapCanvasSide } from '../../types';
+import { isPastelPalette } from '../../theme/themeSemantics';
 import { formatChronologyLabel } from '../../utils/mapChronology';
 import type { MapHandleSide } from '../../utils/mapEdgeRouting';
 import {
@@ -55,7 +56,7 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
     branchButtons,
     occupiedSides,
   } = data;
-  const isPastel = theme === 'pastel';
+  const isPastel = isPastelPalette(theme);
   const isBranch = block.kind === 'branch';
   const [thumb, setThumb] = useState<string | null>(null);
   const resolvedColors = resolveMapBlockColor({
@@ -301,7 +302,9 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
         </span>
         {block.title && (
           <span
-            className={`text-sm font-bold truncate mb-1 ${isPastel ? 'text-gray-800' : 'text-white'}`}
+            className={`block text-sm font-bold leading-snug mb-1 break-words whitespace-normal ${
+              isPastel ? 'text-gray-800' : 'text-white'
+            }`}
             style={titleColor ? { color: titleColor } : undefined}
           >
             {block.title}
@@ -316,7 +319,7 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
                   style={{
                     color: bodyColor,
                     display: '-webkit-box',
-                    WebkitLineClamp: 4,
+                    WebkitLineClamp: 5,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                   }}
@@ -359,14 +362,14 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
           </>
         ) : (
           <>
-            <div className="mb-2 min-h-[2.5rem]">
+            <div className="mb-2 min-h-[3rem]">
               {hasNotes ? (
                 <span
                   className={`block text-[10px] leading-4 ${isPastel ? 'text-gray-600' : 'text-gray-300'}`}
                   style={{
                     color: bodyColor,
                     display: '-webkit-box',
-                    WebkitLineClamp: 2,
+                    WebkitLineClamp: 3,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                   }}

@@ -46,6 +46,8 @@ vi.mock('./mapTheme', () => ({
     bg: 'bg-gray-950',
     card: 'bg-gray-900 text-white border-white/10',
     button: 'bg-purple-600 text-white',
+    heading: 'text-white',
+    body: 'text-gray-100',
     muted: 'text-gray-400',
     primary: 'text-cyan-300',
     isPastel: false,

@@ -6,14 +6,25 @@ import { CategoryTag } from './CategoryTag';
 import { useCategoryTags } from '../../hooks/useCategoryTags';
 import { useSettingsContext } from '../../utils/settingsContext';
 import { Theme } from '../../types';
+import { getThemeTextRoles, isLightTheme } from '../../theme/themeSemantics';
 
 interface CaseNameDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (caseName: string, description: string, categoryTagId?: string) => void;
+  /** Render above case selection (z-[70]). */
+  elevated?: boolean;
+  /** Render above elevated case selection (z-[90]). */
+  superElevated?: boolean;
 }
 
-export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogProps) {
+export function CaseNameDialog({
+  isOpen,
+  onClose,
+  onConfirm,
+  elevated = false,
+  superElevated = false,
+}: CaseNameDialogProps) {
   const [caseName, setCaseName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
@@ -21,7 +32,8 @@ export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogPro
   const { tags, createTag, deleteTag } = useCategoryTags();
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
+  const text = getThemeTextRoles(theme);
 
   useEffect(() => {
     if (isOpen) {
@@ -79,9 +91,9 @@ export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogPro
               onClose();
             }
           }}
-          className={`fixed inset-0 z-50 backdrop-blur-sm flex items-center justify-center p-4 ${
-            isPastel ? 'bg-black/40' : 'bg-black/80'
-          }`}
+          className={`fixed inset-0 backdrop-blur-sm flex items-center justify-center p-4 ${
+            superElevated ? 'z-[90]' : elevated ? 'z-[70]' : 'z-50'
+          } ${isPastel ? 'bg-black/40' : 'bg-black/80'}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="case-name-dialog-title"
@@ -93,7 +105,7 @@ export function CaseNameDialog({ isOpen, onClose, onConfirm }: CaseNameDialogPro
             transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            className={`relative rounded-2xl border-2 shadow-2xl p-8 max-w-lg w-full backdrop-blur-xl ${
+            className={`relative rounded-2xl border-2 shadow-2xl p-8 max-w-lg w-full backdrop-blur-xl ${text.body} ${
               isPastel
                 ? 'bg-gradient-to-br from-white/95 via-pink-50/40 to-white/95 border-pink-200/40'
                 : 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 border-cyber-purple-400/40'

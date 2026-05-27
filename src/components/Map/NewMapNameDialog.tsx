@@ -138,7 +138,7 @@ export function NewMapNameDialog({
           exit={{ scale: 0.94, opacity: 0, y: 12 }}
           transition={{ type: 'spring', stiffness: 360, damping: 28 }}
           onClick={(e) => e.stopPropagation()}
-          className={`w-full max-w-5xl overflow-hidden rounded-[32px] border shadow-2xl ${
+          className={`w-full max-w-5xl overflow-hidden rounded-[32px] border shadow-2xl ${t.body} ${
             t.isPastel
               ? 'border-pink-200/60 bg-gradient-to-br from-white via-pink-50/90 to-slate-50'
               : 'border-cyber-purple-500/40 bg-gradient-to-br from-gray-900 via-gray-950 to-black'
@@ -171,7 +171,7 @@ export function NewMapNameDialog({
                     <MapIcon className={`h-4 w-4 ${t.primary}`} />
                     <p className={`text-xs font-semibold uppercase tracking-[0.26em] ${t.primary}`}>New map</p>
                   </div>
-                  <h2 id="new-map-dialog-title" className="mt-2 text-2xl font-bold">
+                  <h2 id="new-map-dialog-title" className={`mt-2 text-2xl font-bold ${t.heading}`}>
                     Launch a premium chronology workspace
                   </h2>
                   <p className={`mt-2 text-sm ${t.muted}`}>
@@ -213,7 +213,7 @@ export function NewMapNameDialog({
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className={`text-xs font-semibold uppercase tracking-[0.24em] ${t.primary}`}>Title setup</p>
-                      <h3 className="mt-2 text-2xl font-bold">Name the workspace before the editor opens.</h3>
+                      <h3 className={`mt-2 text-2xl font-bold ${t.heading}`}>Name the workspace before the editor opens.</h3>
                     </div>
                     <div className={`rounded-2xl p-3 ${t.button}`}>
                       <MapIcon className="h-5 w-5 text-white" />
@@ -273,7 +273,7 @@ export function NewMapNameDialog({
                     <Wand2 className={`h-4 w-4 ${t.primary}`} />
                     <p className={`text-xs font-semibold uppercase tracking-[0.24em] ${t.primary}`}>Naming prompts</p>
                   </div>
-                  <h3 className="mt-3 text-xl font-bold">Choose a direction, then refine the title.</h3>
+                  <h3 className={`mt-3 text-xl font-bold ${t.heading}`}>Choose a direction, then refine the title.</h3>
                   <p className={`mt-2 text-sm leading-6 ${t.muted}`}>
                     These prompts only seed the title and preview. The map still opens as a blank workspace for your
                     own chronology.
@@ -318,7 +318,7 @@ export function NewMapNameDialog({
                               <Icon className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-semibold">{prompt.title}</h4>
+                              <h4 className={`font-semibold ${t.heading}`}>{prompt.title}</h4>
                               <p className={`mt-1 text-xs uppercase tracking-[0.2em] ${isSelected ? 'text-white/80' : t.primary}`}>
                                 {prompt.subtitle}
                               </p>
@@ -368,7 +368,7 @@ export function NewMapNameDialog({
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className={`text-xs font-semibold uppercase tracking-[0.26em] ${t.primary}`}>Live preview</p>
-                      <h3 className="mt-3 text-2xl font-bold">Creation dashboard</h3>
+                      <h3 className={`mt-3 text-2xl font-bold ${t.heading}`}>Creation dashboard</h3>
                       <p className={`mt-2 text-sm leading-6 ${t.muted}`}>
                         A polished summary of what the new workspace will feel like the moment it opens.
                       </p>
@@ -387,7 +387,7 @@ export function NewMapNameDialog({
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className={`text-xs uppercase tracking-[0.24em] ${t.primary}`}>Workspace title</p>
-                        <h3 className="mt-2 break-words text-3xl font-bold leading-tight">{normalizedName}</h3>
+                        <h3 className={`mt-2 break-words text-3xl font-bold leading-tight ${t.heading}`}>{normalizedName}</h3>
                         <p className={`mt-2 text-sm ${t.muted}`}>Folder hint: `{mapSlug}`</p>
                       </div>
                     </div>

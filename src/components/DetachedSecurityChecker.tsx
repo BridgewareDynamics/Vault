@@ -5,6 +5,7 @@ import { useToast } from './Toast/ToastContext';
 import { CaseSelectionDialog } from './Archive/CaseSelectionDialog';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
+import { isLightTheme } from '../theme/themeSemantics';
 
 interface PdfAuditState {
   pdfPath: string | null;
@@ -36,7 +37,7 @@ export function DetachedSecurityChecker() {
   const [showCaseSelectionDialog, setShowCaseSelectionDialog] = useState(false);
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   
   // Local state for audit when detaching during an audit
   const [localIsAuditing, setLocalIsAuditing] = useState(false);

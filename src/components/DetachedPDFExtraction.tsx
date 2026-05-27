@@ -7,6 +7,7 @@ import { PDFExtractionProgress } from './PDFExtractionProgress';
 import { PDFExtractionResults } from './PDFExtractionResults';
 import { PDFExtractionSaveOptions } from './PDFExtractionSaveOptions';
 import { ConversionSettings, ExtractedPage, Theme } from '../types';
+import { isLightTheme } from '../theme/themeSemantics';
 import { useSettingsContext } from '../utils/settingsContext';
 
 interface PdfExtractionState {
@@ -55,7 +56,7 @@ export function DetachedPDFExtraction() {
   const toast = useToast();
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   // Use hook state if available, otherwise use local state
   const finalIsExtracting = isExtracting || localIsExtracting;

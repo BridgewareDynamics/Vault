@@ -1,6 +1,7 @@
 import { AlignLeft, AlignCenter, AlignRight, AlignJustify, Bold, Italic, Underline, Undo2, Redo2 } from 'lucide-react';
 import { useSettingsContext } from '../../utils/settingsContext';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 interface WordEditorToolbarProps {
   fontSize: number;
@@ -27,7 +28,7 @@ export function WordEditorToolbar({
 }: WordEditorToolbarProps) {
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   const fontSizes = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72];
 

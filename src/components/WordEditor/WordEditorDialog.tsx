@@ -6,6 +6,7 @@ import { useArchiveContext } from '../../contexts/ArchiveContext';
 import { isValidFileName } from '../../utils/pathValidator';
 import { CaseSelectionDialog } from './CaseSelectionDialog';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
 
 interface TextFile {
@@ -37,7 +38,7 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
   const { currentCase } = useArchiveContext();
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   useEffect(() => {
     if (isOpen) {

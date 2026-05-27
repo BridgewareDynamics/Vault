@@ -12,6 +12,7 @@ import { calculateTextStats } from '../../utils/textStats';
 import { Save, FilePlus } from 'lucide-react';
 import { useSettingsContext } from '../../utils/settingsContext';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 export interface WordEditorHandle {
   getContent: () => string;
@@ -56,7 +57,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
   const saveMenuRef = useRef<HTMLDivElement>(null);
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   
   // Debounced localStorage save function
   const debouncedSaveDraft = useRef(

@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WordEditorToolbar } from './WordEditorToolbar';
+import { SettingsProvider } from '../../utils/settingsContext';
+
+function renderWithProviders(ui: React.ReactElement) {
+  return render(<SettingsProvider>{ui}</SettingsProvider>);
+}
 
 describe('WordEditorToolbar', () => {
   const mockOnFontSizeChange = vi.fn();
@@ -14,11 +19,18 @@ describe('WordEditorToolbar', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // WordEditorToolbar reads theme from SettingsProvider.
+    // Provide a minimal electronAPI mock so SettingsProvider can load defaults.
+    (window as any).electronAPI = {
+      getSettings: vi.fn().mockResolvedValue({ theme: 'brideware-purple' }),
+      updateSettings: vi.fn().mockResolvedValue({ theme: 'brideware-purple' }),
+    };
   });
 
   describe('Font Size', () => {
     it('should render font size selector', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -31,7 +43,7 @@ describe('WordEditorToolbar', () => {
     });
 
     it('should display current font size', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={18}
           textAlign="left"
@@ -46,7 +58,7 @@ describe('WordEditorToolbar', () => {
 
     it('should call onFontSizeChange when font size changes', async () => {
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -63,7 +75,7 @@ describe('WordEditorToolbar', () => {
     });
 
     it('should have all font size options', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -82,7 +94,7 @@ describe('WordEditorToolbar', () => {
 
   describe('Text Alignment', () => {
     it('should render all alignment buttons', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -98,7 +110,7 @@ describe('WordEditorToolbar', () => {
     });
 
     it('should highlight active alignment', () => {
-      const { rerender } = render(
+      const { rerender } = renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -111,12 +123,14 @@ describe('WordEditorToolbar', () => {
       expect(leftButton.className).toContain('bg-cyber-purple-500/20');
 
       rerender(
-        <WordEditorToolbar
-          fontSize={14}
-          textAlign="center"
-          onFontSizeChange={mockOnFontSizeChange}
-          onAlignmentChange={mockOnAlignmentChange}
-        />
+        <SettingsProvider>
+          <WordEditorToolbar
+            fontSize={14}
+            textAlign="center"
+            onFontSizeChange={mockOnFontSizeChange}
+            onAlignmentChange={mockOnAlignmentChange}
+          />
+        </SettingsProvider>
       );
 
       const centerButton = screen.getByLabelText('Align center');
@@ -125,7 +139,7 @@ describe('WordEditorToolbar', () => {
 
     it('should call onAlignmentChange when alignment button is clicked', async () => {
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -143,7 +157,7 @@ describe('WordEditorToolbar', () => {
 
     it('should handle all alignment options', async () => {
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -170,7 +184,7 @@ describe('WordEditorToolbar', () => {
 
   describe('Formatting Buttons', () => {
     it('should render bold button when onToggleBold is provided', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -184,7 +198,7 @@ describe('WordEditorToolbar', () => {
     });
 
     it('should not render bold button when onToggleBold is not provided', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -198,7 +212,7 @@ describe('WordEditorToolbar', () => {
 
     it('should call onToggleBold when bold button is clicked', async () => {
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -215,7 +229,7 @@ describe('WordEditorToolbar', () => {
     });
 
     it('should render italic button when onToggleItalic is provided', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -230,7 +244,7 @@ describe('WordEditorToolbar', () => {
 
     it('should call onToggleItalic when italic button is clicked', async () => {
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -247,7 +261,7 @@ describe('WordEditorToolbar', () => {
     });
 
     it('should render underline button when onToggleUnderline is provided', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -262,7 +276,7 @@ describe('WordEditorToolbar', () => {
 
     it('should call onToggleUnderline when underline button is clicked', async () => {
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -279,7 +293,7 @@ describe('WordEditorToolbar', () => {
     });
 
     it('should render all formatting buttons when all handlers are provided', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -299,7 +313,7 @@ describe('WordEditorToolbar', () => {
 
   describe('Undo/Redo', () => {
     it('should render undo button when onUndo is provided', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -313,7 +327,7 @@ describe('WordEditorToolbar', () => {
     });
 
     it('should not render undo button when onUndo is not provided', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -327,7 +341,7 @@ describe('WordEditorToolbar', () => {
 
     it('should call onUndo when undo button is clicked', async () => {
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -344,7 +358,7 @@ describe('WordEditorToolbar', () => {
     });
 
     it('should render redo button when onRedo is provided', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -359,7 +373,7 @@ describe('WordEditorToolbar', () => {
 
     it('should call onRedo when redo button is clicked', async () => {
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"
@@ -376,7 +390,7 @@ describe('WordEditorToolbar', () => {
     });
 
     it('should render both undo and redo when both handlers are provided', () => {
-      render(
+      renderWithProviders(
         <WordEditorToolbar
           fontSize={14}
           textAlign="left"

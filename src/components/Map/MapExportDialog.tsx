@@ -43,7 +43,7 @@ export function MapExportDialog({
           className={`rounded-2xl border-2 p-6 max-w-sm w-full ${t.card}`}
         >
           <div className="flex justify-between mb-4">
-            <h2 className="text-lg font-bold">Export Map</h2>
+            <h2 className={`text-lg font-bold ${t.heading}`}>Export Map</h2>
             <button type="button" onClick={onClose}>
               <X className="w-5 h-5" />
             </button>

@@ -10,6 +10,7 @@ import { WordEditorErrorBoundary } from './WordEditorErrorBoundary';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { useSettingsContext } from '../../utils/settingsContext';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 export function DetachedWordEditor() {
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -26,7 +27,7 @@ export function DetachedWordEditor() {
   const toast = useToast();
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   useEffect(() => {
     // The main process will send data via webContents.send

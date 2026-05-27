@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Folder, Trash2, Pencil, Image } from 'lucide-react';
 import { ArchiveFile, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { useState, useEffect } from 'react';
 import { logger } from '../../utils/logger';
 import { useSettingsContext } from '../../utils/settingsContext';
@@ -31,7 +32,7 @@ export function RegularFolder({
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | undefined>(undefined);
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   // Load background image as data URL
   useEffect(() => {

@@ -11,6 +11,7 @@ import { debugLog } from '../../utils/debugLogger';
 import { WordEditorErrorBoundary } from './WordEditorErrorBoundary';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
 
 const MIN_WIDTH = 400;
@@ -38,7 +39,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   const { currentCase } = useArchiveContext();
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
   const resizeStartXRef = useRef<number>(0);
   const resizeStartWidthRef = useRef<number>(500);
   const hasAutoOpenedLibraryRef = useRef(false); // Track if we've auto-opened library for this panel session

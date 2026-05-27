@@ -9,6 +9,7 @@ import { WordEditorPanel } from '../WordEditor/WordEditorPanel';
 import { WordEditorDialog } from '../WordEditor/WordEditorDialog';
 import { useWordEditor } from '../../contexts/WordEditorContext';
 import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 
 interface SettingsPanelProps {
   hideWordEditorButton?: boolean;
@@ -277,7 +278,7 @@ export function SettingsPanel({
 
   // Theme-aware styling
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   return (
     <>

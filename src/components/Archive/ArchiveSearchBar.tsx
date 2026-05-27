@@ -3,6 +3,7 @@ import { Search, X, Tag, ChevronDown, Filter } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { CategoryTag as CategoryTagComponent } from './CategoryTag';
 import { CategoryTag, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
 
 interface ArchiveSearchBarProps {
@@ -20,7 +21,7 @@ export function ArchiveSearchBar({ value, onChange, placeholder = 'Search...', t
   const buttonRef = useRef<HTMLButtonElement>(null);
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   // Close dropdown when clicking outside
   useEffect(() => {

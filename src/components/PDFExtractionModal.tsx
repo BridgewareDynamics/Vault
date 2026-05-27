@@ -17,6 +17,7 @@ import { PDFExtractionProgress } from './PDFExtractionProgress';
 import { PDFExtractionResults } from './PDFExtractionResults';
 import { PDFExtractionSaveOptions } from './PDFExtractionSaveOptions';
 import { ConversionSettings, ExtractedPage } from '../types';
+import { isLightTheme } from '../theme/themeSemantics';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
 
@@ -63,7 +64,7 @@ export function PDFExtractionModal({
   const toast = useToast();
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
-  const isPastel = theme === 'pastel';
+  const isPastel = isLightTheme(theme);
 
   // Restore preview page when extracted pages are available
   useEffect(() => {
