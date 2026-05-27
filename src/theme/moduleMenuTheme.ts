@@ -151,7 +151,7 @@ export const moduleMenuDark = {
   },
 } as const;
 
-export type ModuleMenuThemeTokens = typeof moduleMenuPastel;
+export type ModuleMenuThemeTokens = typeof moduleMenuPastel | typeof moduleMenuDark;
 
 export function getModuleMenuTheme(theme: Theme): ModuleMenuThemeTokens {
   return isLightTheme(theme) ? moduleMenuPastel : moduleMenuDark;

@@ -46,7 +46,13 @@
     "createStartMenuShortcut": true,
     "installerIcon": "build/icon.ico",
     "uninstallerIcon": "build/icon.ico",
-    "installerHeaderIcon": "build/icon.ico"
+    "installerHeaderIcon": "build/icon.ico",
+    "installerLanguages": ["en_US"],
+    "warningsAsErrors": false,
+    "customNsisBinary": {
+      "url": "https://github.com/SoundSafari/NSISBI-ElectronBuilder/releases/download/1.0.0/nsisbi-electronbuilder-3.10.3.7z",
+      "checksum": "WRmZUsACjIc2s7bvsFGFRofK31hfS7riPlcfI1V9uFB2Q8s7tidgI/9U16+X0I9X2ZhNxi8N7Z3gKvm6ojvLvg=="
+    }
   },
   "mac": {
     "target": "dmg",

@@ -20,8 +20,6 @@ const PULSE_DELAY = 1.5;
 export const MENU_HERO_BEAM_OVERLAP = 64;
 /** Default bus center when overlapping hero (icon bottom ≈ 268px, bus ≈ 292px). */
 export const MENU_DEFAULT_BUS_OFFSET_TOP = 76;
-const HORIZONTAL_BUS_HEIGHT = 32;
-
 const BEAM = {
   trunkFilament: 2,
   trunkHalo: 10,
@@ -429,8 +427,8 @@ export function MenuLightConduit({ isPastel, primaryRgba, secondaryRgba, classNa
     <div
       className={`absolute left-1/2 flex w-full -translate-x-1/2 justify-center overflow-hidden pointer-events-none ${className}`}
       style={{
-        top: 256 - HERO_BEAM_OVERLAP,
-        height: HERO_BEAM_OVERLAP + 64,
+        top: 256 - MENU_HERO_BEAM_OVERLAP,
+        height: MENU_HERO_BEAM_OVERLAP + 64,
       }}
       aria-hidden
     >

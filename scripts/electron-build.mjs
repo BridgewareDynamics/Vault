@@ -54,6 +54,9 @@ delete env.CSC_IDENTITY_NAME;
 env.SKIP_NOTARIZATION = 'true';
 
 console.log('✓ Code signing disabled via environment variables');
+console.log(
+  'ℹ Using NSISBI for Windows installer (standard NSIS cannot mmap packages > ~2GB; bundled transcription runtime is larger).'
+);
 console.log('🔄 Starting electron-builder...\n');
 
 // Spawn electron-builder

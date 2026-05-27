@@ -556,37 +556,6 @@ export function TranscriptionWorkspacePage({
     [document?.settings.model, models]
   );
 
-  const displayModels = useMemo(
-    () =>
-      models.length > 0 || !document
-        ? models
-        : [
-            {
-              key: document.settings.model,
-              name: document.settings.model,
-              modelId: '',
-              precision: document.settings.precision,
-              modelType: 'parakeet',
-              defaultSegmentLength: document.settings.segmentLength,
-              supportsTimestamps: true,
-              bundled:
-                engineStatus?.defaultModelKey === document.settings.model &&
-                !!engineStatus.defaultModelReady,
-              cached:
-                engineStatus?.defaultModelKey === document.settings.model &&
-                !!engineStatus.defaultModelReady,
-            },
-          ],
-    [
-      document?.settings.model,
-      document?.settings.precision,
-      document?.settings.segmentLength,
-      engineStatus?.defaultModelKey,
-      engineStatus?.defaultModelReady,
-      models,
-    ]
-  );
-
   const deviceOptions = useMemo(
     () =>
       engineStatus?.deviceDefault === 'cuda'
@@ -602,7 +571,7 @@ export function TranscriptionWorkspacePage({
     return (
       <div className={`flex h-screen flex-col ${ui.t.bg}`}>
         <div
-          className={`flex items-center justify-between border-b px-4 py-3 ${ui.t.border}`}
+          className={`flex items-center justify-between border-b px-4 py-3 ${ui.t.headerBorder}`}
         >
           <div className="h-8 w-48 animate-pulse rounded-lg bg-white/10" />
           <div className="h-8 w-24 animate-pulse rounded-lg bg-white/10" />

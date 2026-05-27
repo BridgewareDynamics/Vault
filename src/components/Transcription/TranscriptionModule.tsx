@@ -105,9 +105,9 @@ export function TranscriptionModule({
   if (isBootstrapping && screen !== 'workspace') {
     return (
       <div
-        className={`flex min-h-screen items-center justify-center ${t.t.bg} ${t.t.primary}`}
+        className={`flex min-h-screen items-center justify-center ${t.bg} ${t.primary}`}
       >
-        <p className={t.t.muted}>Preparing transcript workspace...</p>
+        <p className={t.mutedText}>Preparing transcript workspace...</p>
       </div>
     );
   }
