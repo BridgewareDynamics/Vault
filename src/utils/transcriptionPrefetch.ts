@@ -12,7 +12,10 @@ let engineStatusCache: TranscriptionEngineStatus | null = null;
 let engineStatusInflight: Promise<TranscriptionEngineStatus | null> | null = null;
 
 let libraryListCache: TranscriptionListEntry[] | null = null;
+let libraryListCachedAt = 0;
 let libraryListInflight: Promise<TranscriptionListEntry[] | null> | null = null;
+
+export const TRANSCRIPTION_LIBRARY_CACHE_TTL_MS = 30_000;
 
 export function loadTranscriptionModule() {
   if (!transcriptionModuleImport) {
@@ -62,12 +65,23 @@ export function getCachedTranscriptionLibrary(): TranscriptionListEntry[] | null
   return libraryListCache;
 }
 
-export async function prefetchTranscriptionLibrary(): Promise<TranscriptionListEntry[] | null> {
+export function isTranscriptionLibraryCacheFresh(
+  maxAgeMs = TRANSCRIPTION_LIBRARY_CACHE_TTL_MS
+): boolean {
+  if (!libraryListCache || libraryListCachedAt === 0) {
+    return false;
+  }
+  return Date.now() - libraryListCachedAt < maxAgeMs;
+}
+
+export async function prefetchTranscriptionLibrary(options?: {
+  force?: boolean;
+}): Promise<TranscriptionListEntry[] | null> {
   if (!window.electronAPI?.listTranscriptions) {
     return null;
   }
 
-  if (libraryListCache) {
+  if (!options?.force && isTranscriptionLibraryCacheFresh()) {
     return libraryListCache;
   }
 
@@ -76,6 +90,7 @@ export async function prefetchTranscriptionLibrary(): Promise<TranscriptionListE
       .listTranscriptions()
       .then((list) => {
         libraryListCache = list;
+        libraryListCachedAt = Date.now();
         return list;
       })
       .catch(() => null)
@@ -89,6 +104,7 @@ export async function prefetchTranscriptionLibrary(): Promise<TranscriptionListE
 
 export function setCachedTranscriptionLibrary(list: TranscriptionListEntry[] | null) {
   libraryListCache = list;
+  libraryListCachedAt = list ? Date.now() : 0;
 }
 
 /** Warm module chunk + lightweight main-process status while the user is still on Welcome. */

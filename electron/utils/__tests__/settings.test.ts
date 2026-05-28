@@ -47,6 +47,8 @@ describe('settings', () => {
     extractionQuality: 'high',
     thumbnailSize: 200,
     performanceMode: 'auto',
+    showOnboarding: true,
+    theme: 'brideware-purple',
   };
 
   beforeEach(() => {
@@ -76,6 +78,8 @@ describe('settings', () => {
         extractionQuality: 'medium',
         thumbnailSize: 300,
         performanceMode: 'high',
+        showOnboarding: true,
+        theme: 'brideware-purple',
       };
       (fs.readFile as any).mockResolvedValue(JSON.stringify(mockSettings));
 
@@ -148,6 +152,30 @@ describe('settings', () => {
 
       expect(settings1).toEqual(settings2);
       expect(fs.readFile).toHaveBeenCalledTimes(1); // Should only read once
+    });
+
+    it('should respect showOnboarding false when user dismissed onboarding', async () => {
+      const mockSettings = {
+        ...defaultSettings,
+        showOnboarding: false,
+        theme: 'brideware-purple',
+      };
+      (fs.readFile as any).mockResolvedValue(JSON.stringify(mockSettings));
+
+      const settings = await loadSettings();
+
+      expect(settings.showOnboarding).toBe(false);
+    });
+
+    it('should default showOnboarding to true when field is missing', async () => {
+      const mockSettings = { ...defaultSettings };
+      (fs.readFile as any).mockResolvedValue(JSON.stringify(mockSettings));
+      (fs.writeFile as any).mockResolvedValue(undefined);
+      (fs.rename as any).mockResolvedValue(undefined);
+
+      const settings = await loadSettings();
+
+      expect(settings.showOnboarding).toBe(true);
     });
   });
 

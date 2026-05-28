@@ -11,7 +11,13 @@ import { ImageViewer } from './components/ImageViewer';
 import { Toolbar } from './components/Toolbar';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
-const MapModule = lazy(() => import('./components/Map/MapModule').then(module => ({ default: module.MapModule })));
+const MapModule = lazy(() =>
+  import('./utils/mapPrefetch').then(({ loadMapModule }) =>
+    loadMapModule().then((module) => ({
+      default: module.MapModule,
+    }))
+  )
+);
 const TranscriptionModule = lazy(() =>
   import('./utils/transcriptionPrefetch').then(({ loadTranscriptionModule }) =>
     loadTranscriptionModule().then((module) => ({
@@ -40,6 +46,7 @@ import {
   prefetchTranscriptionModule,
   warmTranscriptionEntry,
 } from './utils/transcriptionPrefetch';
+import { prefetchMapModule } from './utils/mapPrefetch';
 import './App.css';
 
 function AppContent() {
@@ -713,7 +720,10 @@ function AppContent() {
             onOpenArchive={() => setShowArchive(true)}
             onOpenSecurityChecker={() => setShowSecurityChecker(true)}
             onOpenPDFExtraction={() => setShowPDFExtraction(true)}
-            onOpenMap={() => setShowMap(true)}
+            onOpenMap={() => {
+              void prefetchMapModule();
+              setShowMap(true);
+            }}
             onOpenTranscription={() => {
               void prefetchTranscriptionModule();
               setTranscriptionLaunchSourcePath(null);

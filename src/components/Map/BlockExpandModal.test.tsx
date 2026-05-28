@@ -73,4 +73,23 @@ describe('BlockExpandModal', () => {
     await user.click(screen.getByRole('button', { name: 'Close expanded block' }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('removes evidence when the delete button is clicked', async () => {
+    const user = userEvent.setup();
+    const onRemoveEvidence = vi.fn();
+
+    render(
+      <BlockExpandModal
+        isOpen
+        block={makeBlock()}
+        theme="dark"
+        onClose={vi.fn()}
+        onNotesChange={vi.fn()}
+        onRemoveEvidence={onRemoveEvidence}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Remove exhibit-a.pdf' }));
+    expect(onRemoveEvidence).toHaveBeenCalledWith('block-1', 'att-1');
+  });
 });

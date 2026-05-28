@@ -104,15 +104,8 @@ export async function loadSettings(): Promise<AppSettings> {
     // If it exists and is true, show it
     const hasShowOnboardingField = 'showOnboarding' in parsed;
     
-    // TEMPORARY: Force show onboarding for testing - remove this after confirming it works
-    // For now, always show onboarding if field doesn't exist or if it's true
     if (!hasShowOnboardingField) {
-      // Field doesn't exist - this is a migration case, default to true
-      parsed.showOnboarding = true;
-    } else if (parsed.showOnboarding === false) {
-      // Field exists and is false - but for testing, let's show it once
-      // TODO: Remove this after testing - should respect false
-      console.log('[Settings] showOnboarding is false, but showing for testing');
+      // Field doesn't exist - migration case for existing users, default to showing onboarding
       parsed.showOnboarding = true;
     }
     

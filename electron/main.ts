@@ -73,6 +73,15 @@ async function findCasePathFromPath(filePath: string): Promise<string | null> {
 }
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
+function getDevServerUrl(query = ''): string {
+  const base = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+  if (!query) {
+    return base;
+  }
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}${query.replace(/^\?/, '')}`;
+}
+
 // Enable hardware acceleration command line switches
 // These must be set before app is ready
 app.commandLine.appendSwitch('enable-gpu-rasterization');
@@ -376,7 +385,7 @@ async function createWindow() {
       // Wait for Vite to be ready, then load
       const loadDevServer = () => {
         if (!mainWindow) return; // Window was closed
-        mainWindow.loadURL('http://localhost:5173').catch((err) => {
+        mainWindow.loadURL(getDevServerUrl()).catch((err) => {
           logger.error('Failed to load Vite dev server, retrying...', err);
           // Retry after 1 second
           setTimeout(loadDevServer, 1000);
@@ -3886,7 +3895,7 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
     
     // Load the app
     if (isDev) {
-      wordEditorWindow.loadURL('http://localhost:5173?editor=detached').catch((err) => {
+      wordEditorWindow.loadURL(getDevServerUrl('editor=detached')).catch((err) => {
         logger.error('Failed to load dev server in word editor window:', err);
       });
     } else {
@@ -4066,7 +4075,7 @@ ipcMain.handle('create-pdf-audit-window', async (event, options: {
     
     // Load the app
     if (isDev) {
-      pdfAuditWindow.loadURL('http://localhost:5173?audit=detached').catch((err) => {
+      pdfAuditWindow.loadURL(getDevServerUrl('audit=detached')).catch((err) => {
         logger.error('Failed to load dev server in PDF audit window:', err);
       });
     } else {
@@ -4277,7 +4286,7 @@ ipcMain.handle('create-pdf-extraction-window', async (event, options: {
     
     // Load the app
     if (isDev) {
-      pdfExtractionWindow.loadURL('http://localhost:5173?extraction=detached').catch((err) => {
+      pdfExtractionWindow.loadURL(getDevServerUrl('extraction=detached')).catch((err) => {
         logger.error('Failed to load dev server in PDF extraction window:', err);
       });
     } else {

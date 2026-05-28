@@ -719,6 +719,7 @@ export function MapVaultLibraryPanel({
           file={viewerFile}
           files={[viewerFile]}
           onClose={() => setViewerFile(null)}
+          overlayZIndex={80}
         />
       )}
     </div>

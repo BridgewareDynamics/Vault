@@ -34,6 +34,7 @@ import {
 import { isLightTheme, toEdgeAppearanceTheme } from '../../theme/themeSemantics';
 import { MapBlockNode, type MapBlockNodeData } from './MapBlockNode';
 import { useMapTheme } from './mapTheme';
+import { getEffectiveBlockAttachments, PendingMapAttachment, findMapBlockIdFromDropPoint, isMapAttachmentDrag, parseDropPendingAttachments } from './mapAttachmentUtils';
 import { getMapBlockMinimapColor } from './mapBlockColors';
 import { MapEdgeColorPicker } from './MapEdgeColorPicker';
 import { MapStyledEdge, type MapStyledFlowEdge } from './MapStyledEdge';
@@ -65,6 +66,7 @@ interface MapCanvasProps {
   onEditBlock: (blockId: string) => void;
   onEditBlockColor: (blockId: string) => void;
   onCreateBranch: (blockId: string, side: MapBranchSide, sourceSide: MapCanvasSide) => void;
+  onAttachEvidence: (blockId: string, additions: PendingMapAttachment[]) => void;
   onNewBlock: () => void;
   onEdgeStyleChange: (style: MapEdgeStyle) => void;
   onEdgeAppearanceChange: (appearance: MapEdgeAppearance) => void;
@@ -326,7 +328,8 @@ function blocksToNodes(
   onDelete: (id: string) => void,
   onEdit: (id: string) => void,
   onEditColor: (id: string) => void,
-  onCreateBranch: (id: string, side: MapBranchSide, sourceSide: MapCanvasSide) => void
+  onCreateBranch: (id: string, side: MapBranchSide, sourceSide: MapCanvasSide) => void,
+  onAttachEvidence: (blockId: string, additions: PendingMapAttachment[]) => void
 ): Node<MapBlockNodeData>[] {
   const isPastel = isLightTheme(theme);
   return blocks.map((block) => ({
@@ -335,6 +338,7 @@ function blocksToNodes(
     position: block.position,
     data: {
       block,
+      effectiveAttachments: getEffectiveBlockAttachments(block, blocks),
       theme: isPastel ? 'pastel' : 'dark',
       onExpand,
       onPreview,
@@ -342,6 +346,7 @@ function blocksToNodes(
       onEdit,
       onEditColor,
       onCreateBranch,
+      onAttachEvidence: (additions) => onAttachEvidence(block.id, additions),
       branchButtons: branchButtonMap.get(block.id) ?? [],
       occupiedSides: occupiedSideMap.get(block.id) ?? [],
     },
@@ -508,6 +513,7 @@ export function MapCanvas({
   onEditBlock,
   onEditBlockColor,
   onCreateBranch,
+  onAttachEvidence,
   onNewBlock,
   onEdgeStyleChange,
   onEdgeAppearanceChange,
@@ -526,8 +532,17 @@ export function MapCanvas({
       onEdit: onEditBlock,
       onEditColor: onEditBlockColor,
       onCreateBranch,
+      onAttachEvidence,
     }),
-    [onExpandBlock, onPreviewBlock, onDeleteBlock, onEditBlock, onEditBlockColor, onCreateBranch]
+    [
+      onExpandBlock,
+      onPreviewBlock,
+      onDeleteBlock,
+      onEditBlock,
+      onEditBlockColor,
+      onCreateBranch,
+      onAttachEvidence,
+    ]
   );
 
   const nodeAffordances = useMemo(
@@ -547,7 +562,8 @@ export function MapCanvas({
         blockCallbacks.onDelete,
         blockCallbacks.onEdit,
         blockCallbacks.onEditColor,
-        blockCallbacks.onCreateBranch
+        blockCallbacks.onCreateBranch,
+        blockCallbacks.onAttachEvidence
       ),
     [document.blocks, nodeAffordances, theme, blockCallbacks]
   );
@@ -577,7 +593,8 @@ export function MapCanvas({
         blockCallbacks.onDelete,
         blockCallbacks.onEdit,
         blockCallbacks.onEditColor,
-        blockCallbacks.onCreateBranch
+        blockCallbacks.onCreateBranch,
+        blockCallbacks.onAttachEvidence
       )
     );
     setEdges(flowEdgesFromDocument(document, theme));
@@ -612,8 +629,44 @@ export function MapCanvas({
     [document, onBlocksChange, setEdges, theme]
   );
 
+  const handleCanvasDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (!isMapAttachmentDrag(event.dataTransfer)) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleCanvasDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (!isMapAttachmentDrag(event.dataTransfer)) {
+        return;
+      }
+
+      const additions = parseDropPendingAttachments(event.dataTransfer);
+      if (additions.length === 0) {
+        return;
+      }
+
+      const blockId = findMapBlockIdFromDropPoint(event.clientX, event.clientY);
+      if (!blockId) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      onAttachEvidence(blockId, additions);
+    },
+    [onAttachEvidence]
+  );
+
   return (
-    <div className="w-full h-full map-canvas-root" style={{ background: 'transparent' }}>
+    <div
+      className="w-full h-full map-canvas-root"
+      style={{ background: 'transparent' }}
+      onDragOver={handleCanvasDragOver}
+      onDrop={handleCanvasDrop}
+    >
       <ReactFlow<Node<MapBlockNodeData>, MapStyledFlowEdge>
         nodes={nodes}
         edges={edges}

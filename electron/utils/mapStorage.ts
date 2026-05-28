@@ -5,6 +5,13 @@ import { existsSync } from 'fs';
 import { getArchiveDrive } from './archiveConfig';
 import { isSafePath } from './pathValidator';
 import { logger } from './logger';
+import {
+  countTopLevelArrayObjects,
+  extractJsonNullableStringField,
+  extractJsonStringField,
+  LIST_SCAN_CONCURRENCY,
+  mapWithConcurrency,
+} from './listScanUtils';
 
 export const MAP_JSON_FILENAME = 'map.vault-map.json';
 export const MAP_ASSETS_DIR = 'assets';
@@ -158,16 +165,21 @@ async function scanMapFolder(mapFolderPath: string, casePath: string | null, cas
   const jsonPath = getMapJsonPath(mapFolderPath);
   if (!existsSync(jsonPath)) return null;
   try {
-    const doc = await readMapDocument(mapFolderPath);
-    const stats = await fs.stat(jsonPath);
+    const [raw, stats] = await Promise.all([
+      fs.readFile(jsonPath, 'utf8'),
+      fs.stat(jsonPath),
+    ]);
+    const id = extractJsonStringField(raw, 'id') ?? path.basename(mapFolderPath);
+    const title = extractJsonStringField(raw, 'title') ?? 'Untitled Map';
+    const docCasePath = extractJsonNullableStringField(raw, 'casePath');
     return {
-      id: doc.id,
-      title: doc.title,
+      id,
+      title,
       mapFolderPath,
-      casePath: doc.casePath ?? casePath,
+      casePath: docCasePath ?? casePath,
       caseName,
       modified: stats.mtimeMs,
-      blockCount: Array.isArray(doc.blocks) ? doc.blocks.length : 0,
+      blockCount: countTopLevelArrayObjects(raw, 'blocks'),
     };
   } catch (error) {
     logger.warn(`Failed to read map at ${mapFolderPath}:`, error);
@@ -179,13 +191,13 @@ export async function listMapsInDirectory(basePath: string, casePath: string | n
   if (!isSafePath(basePath)) return [];
   try {
     const entries = await fs.readdir(basePath, { withFileTypes: true });
-    const results: MapListEntryStored[] = [];
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+    const folders = entries.filter(
+      (entry) => entry.isDirectory() && !entry.name.startsWith('.')
+    );
+    const results = await mapWithConcurrency(folders, LIST_SCAN_CONCURRENCY, async (entry) => {
       const mapFolderPath = path.join(basePath, entry.name);
-      const item = await scanMapFolder(mapFolderPath, casePath, caseName);
-      if (item) results.push(item);
-    }
+      return scanMapFolder(mapFolderPath, casePath, caseName);
+    });
     return results.sort((a, b) => b.modified - a.modified);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -197,29 +209,44 @@ export async function listMapsInDirectory(basePath: string, casePath: string | n
 
 export async function listAllMaps(): Promise<MapListEntryStored[]> {
   const libraryPath = await getMapLibraryPath();
-  const globalMaps = await listMapsInDirectory(libraryPath, null);
   const archiveDrive = await getArchiveDrive();
-  if (!archiveDrive) return globalMaps;
 
-  const caseMaps: MapListEntryStored[] = [];
-  try {
-    const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'MapLibrary' || entry.name === 'TextLibrary') {
-        continue;
-      }
-      const casePath = path.join(archiveDrive, entry.name);
-      const mapsPath = getCaseMapsPath(casePath);
-      const maps = await listMapsInDirectory(mapsPath, casePath, entry.name);
-      caseMaps.push(...maps);
-    }
-  } catch (error) {
-    logger.warn('Failed to scan case maps:', error);
-  }
+  const [globalMaps, caseMaps] = await Promise.all([
+    listMapsInDirectory(libraryPath, null),
+    archiveDrive ? scanCaseMaps(archiveDrive) : Promise.resolve([] as MapListEntryStored[]),
+  ]);
 
   const combined = [...globalMaps, ...caseMaps];
   combined.sort((a, b) => b.modified - a.modified);
   return combined;
+}
+
+async function scanCaseMaps(archiveDrive: string): Promise<MapListEntryStored[]> {
+  try {
+    const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
+    const caseFolders = entries.filter(
+      (entry) =>
+        entry.isDirectory() &&
+        !entry.name.startsWith('.') &&
+        entry.name !== 'MapLibrary' &&
+        entry.name !== 'TextLibrary'
+    );
+
+    const caseResults = await mapWithConcurrency(
+      caseFolders,
+      LIST_SCAN_CONCURRENCY,
+      async (entry) => {
+        const casePath = path.join(archiveDrive, entry.name);
+        const mapsPath = getCaseMapsPath(casePath);
+        return listMapsInDirectory(mapsPath, casePath, entry.name);
+      }
+    );
+
+    return caseResults.flat();
+  } catch (error) {
+    logger.warn('Failed to scan case maps:', error);
+    return [];
+  }
 }
 
 export async function listCaseMaps(casePath: string): Promise<MapListEntryStored[]> {

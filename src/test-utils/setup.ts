@@ -6,11 +6,9 @@ import { mockElectronAPI } from './mocks';
 // Mock Electron API globally
 global.window.electronAPI = mockElectronAPI;
 
-// Mock framer-motion to avoid animation delays in tests
-// Filter out framer-motion specific props to prevent React warnings
-const createMotionComponent = (Component: string) => {
+// Mock framer-motion with lightweight stubs so tests do not load the full animation library.
+const createMotionComponent = (component: string) => {
   return React.forwardRef<any, any>(({ children, ...props }, ref) => {
-    // Filter out framer-motion specific props
     const {
       initial,
       animate,
@@ -34,41 +32,34 @@ const createMotionComponent = (Component: string) => {
       layoutRoot,
       ...domProps
     } = props;
-    
-    return React.createElement(Component, { ...domProps, ref }, children);
+
+    return React.createElement(component, { ...domProps, ref }, children);
   });
 };
 
-vi.mock('framer-motion', async (importOriginal) => {
-  const React = await import('react');
-  const actual = await importOriginal<typeof import('framer-motion')>();
-  
-  // Create a mock motion value that behaves like the real one
+vi.mock('framer-motion', () => {
   const createMockMotionValue = (initial: number) => {
     let currentValue = initial;
     const listeners = new Set<(value: number) => void>();
-    
+
     return {
       get: () => currentValue,
       set: (value: number) => {
         currentValue = value;
-        listeners.forEach(listener => listener(value));
+        listeners.forEach((listener) => listener(value));
       },
       onChange: (callback: (value: number) => void) => {
         listeners.add(callback);
         return () => listeners.delete(callback);
       },
-      // Add other methods that might be used
       on: () => () => {},
       off: () => {},
       stop: () => {},
     };
   };
-  
+
   return {
-    ...actual,
     motion: {
-      ...actual.motion,
       div: createMotionComponent('div'),
       button: createMotionComponent('button'),
       img: createMotionComponent('img'),

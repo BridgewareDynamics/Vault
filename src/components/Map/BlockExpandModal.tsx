@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect, useMemo, type CSSProperties } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo, type CSSProperties, type DragEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -12,12 +12,14 @@ import {
   ImageIcon,
   File,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { MapBlock, MapAttachment, ArchiveFile, Theme } from '../../types';
 import { LexicalEditor, LexicalEditorHandle } from '../WordEditor/LexicalEditor';
 import { ArchiveFileViewer } from '../Archive/ArchiveFileViewer';
 import { formatChronologyLabel } from '../../utils/mapChronology';
 import { useMapTheme } from './mapTheme';
+import { getEffectiveBlockAttachments, isMapAttachmentDrag, parseDropPendingAttachments, PendingMapAttachment } from './mapAttachmentUtils';
 import {
   getMapBlockSurfaceStyle,
   mixHexColors,
@@ -28,9 +30,12 @@ import {
 interface BlockExpandModalProps {
   isOpen: boolean;
   block: MapBlock | null;
+  allBlocks?: MapBlock[];
   theme: Theme;
   onClose: () => void;
   onNotesChange: (blockId: string, notesHtml: string) => void;
+  onAttachEvidence?: (blockId: string, additions: PendingMapAttachment[]) => void;
+  onRemoveEvidence?: (blockId: string, attachmentId: string) => void;
 }
 
 function stripNotesHtml(html: string): string {
@@ -79,11 +84,13 @@ function AttachmentCard({
   isPastel,
   accentColor,
   onOpen,
+  onRemove,
 }: {
   attachment: MapAttachment;
   isPastel: boolean;
   accentColor?: string;
   onOpen: () => void;
+  onRemove?: () => void;
 }) {
   const [thumb, setThumb] = useState<string | null>(null);
 
@@ -113,15 +120,35 @@ function AttachmentCard({
     : undefined;
 
   return (
-    <motion.button
-      type="button"
+    <motion.div
       layout
-      whileHover={{ y: -2, scale: 1.01 }}
-      whileTap={{ scale: 0.99 }}
-      onClick={onOpen}
-      className={`group w-full text-left rounded-xl border overflow-hidden transition-colors ${cardBorder} ${cardBg} hover:border-opacity-100`}
+      className={`group relative w-full rounded-xl border overflow-hidden transition-colors ${cardBorder} ${cardBg}`}
       style={hoverGlow}
     >
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove();
+          }}
+          aria-label={`Remove ${attachment.fileName}`}
+          className={`absolute top-2 left-2 z-10 rounded-full p-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ${
+            isPastel
+              ? 'bg-white/95 text-red-500 hover:bg-red-50'
+              : 'bg-gray-900/90 text-red-400 hover:bg-red-500/20'
+          }`}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+      <motion.button
+        type="button"
+        whileHover={{ y: -2, scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        onClick={onOpen}
+        className="w-full text-left hover:border-opacity-100"
+      >
       <div
         className={`relative h-28 flex items-center justify-center overflow-hidden ${
           isPastel ? 'bg-gradient-to-br from-purple-50 to-pink-50' : 'bg-gradient-to-br from-gray-900 to-purple-950/60'
@@ -161,20 +188,25 @@ function AttachmentCard({
           {getAttachmentTypeLabel(attachment.type)}
         </p>
       </div>
-    </motion.button>
+      </motion.button>
+    </motion.div>
   );
 }
 
 export function BlockExpandModal({
   isOpen,
   block,
+  allBlocks = [],
   theme,
   onClose,
   onNotesChange,
+  onAttachEvidence,
+  onRemoveEvidence,
 }: BlockExpandModalProps) {
   const t = useMapTheme(theme);
   const editorRef = useRef<LexicalEditorHandle>(null);
   const [viewerFile, setViewerFile] = useState<ArchiveFile | null>(null);
+  const [isEvidenceDropTarget, setIsEvidenceDropTarget] = useState(false);
 
   const openAttachment = useCallback((vaultPath: string, fileName: string, type: ArchiveFile['type']) => {
     const file: ArchiveFile = {
@@ -198,15 +230,61 @@ export function BlockExpandModal({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isOpen, onClose, viewerFile]);
 
+  const evidenceAttachments = useMemo(() => {
+    if (!block) {
+      return [];
+    }
+    return getEffectiveBlockAttachments(block, allBlocks);
+  }, [allBlocks, block]);
+
   const stats = useMemo(() => {
     if (!block) return { words: 0, chars: 0, attachments: 0 };
     const plain = stripNotesHtml(block.notesHtml);
     return {
       words: countWords(plain),
       chars: plain.length,
-      attachments: block.attachments.length,
+      attachments: evidenceAttachments.length,
     };
-  }, [block]);
+  }, [block, evidenceAttachments.length]);
+
+  const handleEvidenceDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!onAttachEvidence || !block || !isMapAttachmentDrag(event.dataTransfer)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'copy';
+      setIsEvidenceDropTarget(true);
+    },
+    [block, onAttachEvidence]
+  );
+
+  const handleEvidenceDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    const related = event.relatedTarget;
+    if (related instanceof Element && event.currentTarget.contains(related)) {
+      return;
+    }
+    setIsEvidenceDropTarget(false);
+  }, []);
+
+  const handleEvidenceDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      setIsEvidenceDropTarget(false);
+      if (!onAttachEvidence || !block || !isMapAttachmentDrag(event.dataTransfer)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const additions = parseDropPendingAttachments(event.dataTransfer);
+      if (additions.length > 0) {
+        onAttachEvidence(block.id, additions);
+      }
+    },
+    [block, onAttachEvidence]
+  );
 
   if (!block) return null;
 
@@ -295,6 +373,9 @@ export function BlockExpandModal({
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
               transition={{ type: 'spring', stiffness: 380, damping: 32 }}
               onClick={(e) => e.stopPropagation()}
+              onDragOver={handleEvidenceDragOver}
+              onDragLeave={handleEvidenceDragLeave}
+              onDrop={handleEvidenceDrop}
               className={`relative z-10 w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden rounded-3xl border-2 shadow-2xl ${panelShell}`}
             >
               <header
@@ -421,30 +502,54 @@ export function BlockExpandModal({
                     <span className={`text-xs font-medium ${t.muted}`}>{stats.attachments} total</span>
                   </div>
 
-                  <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 sm:px-6 sm:pb-6">
-                    {block.attachments.length === 0 ? (
+                  <div
+                    className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 sm:px-6 sm:pb-6"
+                    onDragOver={handleEvidenceDragOver}
+                    onDragLeave={handleEvidenceDragLeave}
+                    onDrop={handleEvidenceDrop}
+                  >
+                    {evidenceAttachments.length === 0 ? (
                       <div
-                        className={`flex h-full min-h-[200px] flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center ${
-                          t.isPastel
-                            ? 'border-pink-200/70 bg-white/50 text-gray-500'
-                            : 'border-cyber-purple-500/30 bg-gray-950/40 text-gray-400'
+                        className={`flex h-full min-h-[200px] flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center transition-colors ${
+                          isEvidenceDropTarget
+                            ? t.isPastel
+                              ? 'border-purple-400 bg-purple-50/80 text-purple-700'
+                              : 'border-cyber-cyan-400 bg-cyber-cyan-500/10 text-cyber-cyan-200'
+                            : t.isPastel
+                              ? 'border-pink-200/70 bg-white/50 text-gray-500'
+                              : 'border-cyber-purple-500/30 bg-gray-950/40 text-gray-400'
                         }`}
                       >
                         <Paperclip className={`mb-3 h-10 w-10 opacity-40 ${sectionLabel}`} />
-                        <p className="text-sm font-medium">No evidence attached yet</p>
+                        <p className="text-sm font-medium">Drop files here to attach evidence</p>
                         <p className={`mt-1 max-w-[14rem] text-xs leading-relaxed ${t.muted}`}>
-                          Add files from the block editor to build a visual dossier here.
+                          {isBranch
+                            ? 'Files dropped here are shared with the connected timeline block.'
+                            : 'Drag files from File Explorer, or use Add local files in the block editor.'}
                         </p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                        {block.attachments.map((att) => (
+                      <div
+                        className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1 rounded-2xl transition-colors ${
+                          isEvidenceDropTarget
+                            ? t.isPastel
+                              ? 'ring-2 ring-purple-300 ring-offset-2 ring-offset-white/80'
+                              : 'ring-2 ring-cyber-cyan-400/50 ring-offset-2 ring-offset-gray-950'
+                            : ''
+                        }`}
+                      >
+                        {evidenceAttachments.map((att) => (
                           <AttachmentCard
                             key={att.id}
                             attachment={att}
                             isPastel={t.isPastel}
                             accentColor={accentColor}
                             onOpen={() => openAttachment(att.vaultPath, att.fileName, att.type)}
+                            onRemove={
+                              onRemoveEvidence && block
+                                ? () => onRemoveEvidence(block.id, att.id)
+                                : undefined
+                            }
                           />
                         ))}
                       </div>
@@ -470,6 +575,7 @@ export function BlockExpandModal({
           file={viewerFile}
           files={[viewerFile]}
           onClose={() => setViewerFile(null)}
+          overlayZIndex={100}
         />
       )}
     </>

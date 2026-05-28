@@ -7,6 +7,7 @@ import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
 import { isLightTheme } from '../theme/themeSemantics';
 import { warmTranscriptionEntry } from '../utils/transcriptionPrefetch';
+import { warmMapEntry } from '../utils/mapPrefetch';
 
 const getAssetPath = (path: string) => {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
@@ -87,11 +88,19 @@ export function WelcomeScreen({
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    if (!onOpenTranscription) {
+    const warmers: Array<() => void> = [];
+    if (onOpenTranscription) {
+      warmers.push(warmTranscriptionEntry);
+    }
+    if (onOpenMap) {
+      warmers.push(warmMapEntry);
+    }
+
+    if (warmers.length === 0) {
       return;
     }
 
-    const warm = () => warmTranscriptionEntry();
+    const warm = () => warmers.forEach((run) => run());
     const idleId =
       typeof window.requestIdleCallback === 'function'
         ? window.requestIdleCallback(warm, { timeout: 2500 })
@@ -107,7 +116,7 @@ export function WelcomeScreen({
         window.clearTimeout(timeoutId);
       }
     };
-  }, [onOpenTranscription]);
+  }, [onOpenMap, onOpenTranscription]);
 
   const isPastel = isLightTheme(theme);
   const bgGradient = isPastel
@@ -764,6 +773,7 @@ export function WelcomeScreen({
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{ duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: card.delay }}
                   className="relative group"
+                  onPointerEnter={card.key === 'map' ? warmMapEntry : undefined}
                 >
                   {isPastel ? (
                     <motion.button

@@ -19,6 +19,8 @@ import { useTranscriptionTheme } from './transcriptionTheme';
 import { DeleteTranscriptionDialog } from './DeleteTranscriptionDialog';
 import {
   getCachedTranscriptionLibrary,
+  isTranscriptionLibraryCacheFresh,
+  prefetchTranscriptionLibrary,
   setCachedTranscriptionLibrary,
 } from '../../utils/transcriptionPrefetch';
 
@@ -62,8 +64,14 @@ export function TranscriptionLibraryPage({
   const [entryPendingDelete, setEntryPendingDelete] = useState<TranscriptionListEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const loadItems = async () => {
+  const loadItems = async (options?: { force?: boolean }) => {
     if (!window.electronAPI?.listTranscriptions) {
+      setLoading(false);
+      return;
+    }
+
+    if (!options?.force && isTranscriptionLibraryCacheFresh()) {
+      setItems(getCachedTranscriptionLibrary() ?? []);
       setLoading(false);
       return;
     }
@@ -71,10 +79,13 @@ export function TranscriptionLibraryPage({
     if (!getCachedTranscriptionLibrary()) {
       setLoading(true);
     }
+
     try {
-      const list = await window.electronAPI.listTranscriptions();
-      setItems(list);
-      setCachedTranscriptionLibrary(list);
+      const list = await prefetchTranscriptionLibrary({ force: options?.force });
+      if (list) {
+        setItems(list);
+        setCachedTranscriptionLibrary(list);
+      }
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'loading transcripts' }));
     } finally {
@@ -106,7 +117,7 @@ export function TranscriptionLibraryPage({
       await window.electronAPI.deleteTranscription(entryPendingDelete.transcriptionFolderPath);
       toast.success('Transcript deleted');
       setEntryPendingDelete(null);
-      await loadItems();
+      await loadItems({ force: true });
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'deleting transcript' }));
     } finally {

@@ -21,9 +21,20 @@ interface ArchiveFileViewerProps {
   initialPage?: number;
   onInitialPageApplied?: () => void;
   onTranscribe?: (file: ArchiveFile) => void;
+  overlayZIndex?: number;
 }
 
-export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, initialPage, onInitialPageApplied, onTranscribe }: ArchiveFileViewerProps) {
+export function ArchiveFileViewer({
+  file,
+  files,
+  onClose,
+  onNext,
+  onPrevious,
+  initialPage,
+  onInitialPageApplied,
+  onTranscribe,
+  overlayZIndex = 50,
+}: ArchiveFileViewerProps) {
   const { isOpen: isWordEditorOpen, setIsOpen: setWordEditorOpen, panelWidth, dividerPosition } = useWordEditor();
   const toast = useToast();
   const { settings: appSettings } = useSettingsContext();
@@ -1089,8 +1100,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
             handleClose();
           }
         }}
-        className="fixed inset-y-0 left-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-0 transition-all duration-300"
+        className="fixed inset-y-0 left-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-0 transition-all duration-300"
         style={{
+          zIndex: overlayZIndex,
           // When editor is open in inline mode (archive visible), constrain to archive section width
           // When editor is open in overlay mode (archive not visible), leave space for panel on right
           width: isWordEditorOpen 

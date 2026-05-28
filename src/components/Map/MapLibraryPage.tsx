@@ -17,6 +17,12 @@ import { ScanLine } from '../Shared/ScanLine';
 import { useToast } from '../Toast/ToastContext';
 import { useMapTheme } from './mapTheme';
 import { DeleteMapDialog } from './DeleteMapDialog';
+import {
+  getCachedMapLibrary,
+  isMapLibraryCacheFresh,
+  prefetchMapLibrary,
+  setCachedMapLibrary,
+} from '../../utils/mapPrefetch';
 
 type MapLibraryFilter = 'all' | 'global' | 'case';
 type MapSortMode = 'recent' | 'name' | 'blocks';
@@ -71,23 +77,35 @@ function sortMaps(maps: MapListEntry[], sortMode: MapSortMode) {
 export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps) {
   const t = useMapTheme(theme);
   const toast = useToast();
-  const [maps, setMaps] = useState<MapListEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [maps, setMaps] = useState<MapListEntry[]>(() => getCachedMapLibrary() ?? []);
+  const [loading, setLoading] = useState(() => !getCachedMapLibrary());
   const [filter, setFilter] = useState<MapLibraryFilter>('all');
   const [sortMode, setSortMode] = useState<MapSortMode>('recent');
   const [query, setQuery] = useState('');
   const [mapPendingDelete, setMapPendingDelete] = useState<MapListEntry | null>(null);
 
-  const loadMaps = async () => {
+  const loadMaps = async (options?: { force?: boolean }) => {
     if (!window.electronAPI?.listMaps) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (!options?.force && isMapLibraryCacheFresh()) {
+      setMaps(getCachedMapLibrary() ?? []);
+      setLoading(false);
+      return;
+    }
+
+    if (!getCachedMapLibrary()) {
+      setLoading(true);
+    }
+
     try {
-      const list = await window.electronAPI.listMaps();
-      setMaps(list as MapListEntry[]);
+      const list = await prefetchMapLibrary({ force: options?.force });
+      if (list) {
+        setMaps(list);
+        setCachedMapLibrary(list);
+      }
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'loading maps' }));
     } finally {
@@ -165,7 +183,7 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
       await window.electronAPI.deleteMap(mapPendingDelete.mapFolderPath);
       toast.success('Map deleted');
       setMapPendingDelete(null);
-      await loadMaps();
+      await loadMaps({ force: true });
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'deleting map' }));
     }

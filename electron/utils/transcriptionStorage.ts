@@ -5,6 +5,13 @@ import { existsSync } from 'fs';
 import { getArchiveDrive } from './archiveConfig';
 import { isSafePath } from './pathValidator';
 import { logger } from './logger';
+import {
+  countTopLevelArrayObjects,
+  extractJsonNullableStringField,
+  extractJsonStringField,
+  LIST_SCAN_CONCURRENCY,
+  mapWithConcurrency,
+} from './listScanUtils';
 
 export const TRANSCRIPTION_JSON_FILENAME = 'transcription.vault-transcription.json';
 export const TRANSCRIPTION_ASSETS_DIR = 'assets';
@@ -315,18 +322,27 @@ async function scanTranscriptionFolder(
   if (!existsSync(jsonPath)) return null;
 
   try {
-    const doc = await readTranscriptionDocument(transcriptionFolderPath);
-    const stats = await fs.stat(jsonPath);
+    const [raw, stats] = await Promise.all([
+      fs.readFile(jsonPath, 'utf8'),
+      fs.stat(jsonPath),
+    ]);
+    const id = extractJsonStringField(raw, 'id') ?? path.basename(transcriptionFolderPath);
+    const title = extractJsonStringField(raw, 'title') ?? 'Untitled Transcript';
+    const docCasePath = extractJsonNullableStringField(raw, 'casePath');
+    const status = (extractJsonStringField(raw, 'status') ??
+      'draft') as TranscriptionDocumentStatus;
+    const summary = extractJsonStringField(raw, 'summary') ?? '';
+
     return {
-      id: doc.id,
-      title: doc.title,
+      id,
+      title,
       transcriptionFolderPath,
-      casePath: doc.casePath ?? casePath,
+      casePath: docCasePath ?? casePath,
       caseName,
       modified: stats.mtimeMs,
-      sourceCount: Array.isArray(doc.sources) ? doc.sources.length : 0,
-      status: doc.status,
-      excerpt: doc.summary || summarizeTranscript(doc.transcriptText),
+      sourceCount: countTopLevelArrayObjects(raw, 'sources'),
+      status,
+      excerpt: summary,
     };
   } catch (error) {
     logger.warn(`Failed to read transcription at ${transcriptionFolderPath}:`, error);
@@ -343,20 +359,13 @@ export async function listTranscriptionsInDirectory(
 
   try {
     const entries = await fs.readdir(basePath, { withFileTypes: true });
-    const results: TranscriptionListEntryStored[] = [];
-
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+    const folders = entries.filter(
+      (entry) => entry.isDirectory() && !entry.name.startsWith('.')
+    );
+    const results = await mapWithConcurrency(folders, LIST_SCAN_CONCURRENCY, async (entry) => {
       const transcriptionFolderPath = path.join(basePath, entry.name);
-      const item = await scanTranscriptionFolder(
-        transcriptionFolderPath,
-        casePath,
-        caseName
-      );
-      if (item) {
-        results.push(item);
-      }
-    }
+      return scanTranscriptionFolder(transcriptionFolderPath, casePath, caseName);
+    });
 
     return results.sort((a, b) => b.modified - a.modified);
   } catch (error) {
@@ -369,40 +378,49 @@ export async function listTranscriptionsInDirectory(
 
 export async function listAllTranscriptions(): Promise<TranscriptionListEntryStored[]> {
   const libraryPath = await getTranscriptionLibraryPath();
-  const globalTranscriptions = await listTranscriptionsInDirectory(libraryPath, null);
   const archiveDrive = await getArchiveDrive();
-  if (!archiveDrive) return globalTranscriptions;
 
-  const caseTranscriptions: TranscriptionListEntryStored[] = [];
-  try {
-    const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
-    for (const entry of entries) {
-      if (
-        !entry.isDirectory() ||
-        entry.name.startsWith('.') ||
-        entry.name === 'MapLibrary' ||
-        entry.name === 'TextLibrary' ||
-        entry.name === 'TranscriptionLibrary'
-      ) {
-        continue;
-      }
-
-      const casePath = path.join(archiveDrive, entry.name);
-      const transcriptionsPath = getCaseTranscriptionsPath(casePath);
-      const items = await listTranscriptionsInDirectory(
-        transcriptionsPath,
-        casePath,
-        entry.name
-      );
-      caseTranscriptions.push(...items);
-    }
-  } catch (error) {
-    logger.warn('Failed to scan case transcriptions:', error);
-  }
+  const [globalTranscriptions, caseTranscriptions] = await Promise.all([
+    listTranscriptionsInDirectory(libraryPath, null),
+    archiveDrive
+      ? scanCaseTranscriptions(archiveDrive)
+      : Promise.resolve([] as TranscriptionListEntryStored[]),
+  ]);
 
   const combined = [...globalTranscriptions, ...caseTranscriptions];
   combined.sort((a, b) => b.modified - a.modified);
   return combined;
+}
+
+async function scanCaseTranscriptions(
+  archiveDrive: string
+): Promise<TranscriptionListEntryStored[]> {
+  try {
+    const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
+    const caseFolders = entries.filter(
+      (entry) =>
+        entry.isDirectory() &&
+        !entry.name.startsWith('.') &&
+        entry.name !== 'MapLibrary' &&
+        entry.name !== 'TextLibrary' &&
+        entry.name !== 'TranscriptionLibrary'
+    );
+
+    const caseResults = await mapWithConcurrency(
+      caseFolders,
+      LIST_SCAN_CONCURRENCY,
+      async (entry) => {
+        const casePath = path.join(archiveDrive, entry.name);
+        const transcriptionsPath = getCaseTranscriptionsPath(casePath);
+        return listTranscriptionsInDirectory(transcriptionsPath, casePath, entry.name);
+      }
+    );
+
+    return caseResults.flat();
+  } catch (error) {
+    logger.warn('Failed to scan case transcriptions:', error);
+    return [];
+  }
 }
 
 export async function listCaseTranscriptions(

@@ -26,10 +26,14 @@ import { LexicalEditor, LexicalEditorHandle } from '../WordEditor/LexicalEditor'
 import { MapVaultLibraryPanel } from './MapVaultLibraryPanel';
 import {
   createPendingMapAttachment,
+  getEffectiveBlockAttachments,
+  getEvidenceOwnerBlockId,
+  isMapAttachmentDrag,
   isSavedMapAttachmentCopy,
-  MAP_VAULT_DRAG_MIME,
   mergePendingMapAttachments,
+  parseDropPendingAttachments,
   PendingMapAttachment,
+  resolvePendingAttachmentsToMapAttachments,
 } from './mapAttachmentUtils';
 
 interface CreateBlockDialogProps {
@@ -40,6 +44,7 @@ interface CreateBlockDialogProps {
   linkedCasePath?: string | null;
   onSubmit: (block: MapBlock) => void;
   blockToEdit?: MapBlock | null;
+  allBlocks?: MapBlock[];
   initialSection?: SectionId;
   branchContext?: {
     parentBlockId: string;
@@ -58,6 +63,8 @@ const TIERS: { id: MapDateTier; label: string; description: string }[] = [
 ];
 
 type SectionId = 'timeline' | 'details' | 'files' | 'notes';
+
+const EMPTY_MAP_BLOCKS: MapBlock[] = [];
 
 const DEFAULT_FORM = {
   tier: 'year' as MapDateTier,
@@ -101,6 +108,7 @@ export function CreateBlockDialog({
   linkedCasePath,
   onSubmit,
   blockToEdit,
+  allBlocks = EMPTY_MAP_BLOCKS,
   initialSection,
   branchContext,
 }: CreateBlockDialogProps) {
@@ -131,14 +139,25 @@ export function CreateBlockDialog({
   useEffect(() => {
     if (isOpen) {
       setForm(buildFormFromBlock(blockToEdit));
-      setExistingAttachments(blockToEdit?.attachments ?? []);
+      const evidenceSourceBlock =
+        blockToEdit && isBranchMode
+          ? allBlocks.find(
+              (candidate) =>
+                candidate.id === getEvidenceOwnerBlockId(blockToEdit, allBlocks)
+            ) ?? blockToEdit
+          : blockToEdit;
+      setExistingAttachments(
+        evidenceSourceBlock
+          ? getEffectiveBlockAttachments(evidenceSourceBlock, allBlocks)
+          : []
+      );
       setSection(initialSection ?? (isBranchMode ? 'details' : 'timeline'));
       setError(null);
       setEditorKey(`${blockToEdit?.id ?? 'new'}-${Date.now()}`);
       setShowCaseLibrary(false);
       setIsVaultDropTarget(false);
     }
-  }, [isOpen, blockToEdit, initialSection, isBranchMode]);
+  }, [isOpen, blockToEdit, initialSection, isBranchMode, allBlocks]);
 
   const { tier, eraLabel, phaseLabel, year, month, day, title, surfaceColor, borderColor, pendingFiles } = form;
 
@@ -217,8 +236,8 @@ export function CreateBlockDialog({
     setExistingAttachments((prev) => prev.filter((attachment) => attachment.id !== attachmentId));
   };
 
-  const handleVaultDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (!event.dataTransfer.types.includes(MAP_VAULT_DRAG_MIME)) {
+  const handleAttachmentDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!isMapAttachmentDrag(event.dataTransfer)) {
       return;
     }
 
@@ -227,22 +246,22 @@ export function CreateBlockDialog({
     setIsVaultDropTarget(true);
   };
 
-  const handleVaultDrop = (event: DragEvent<HTMLDivElement>) => {
-    const payload = event.dataTransfer.getData(MAP_VAULT_DRAG_MIME);
+  const handleAttachmentDrop = (event: DragEvent<HTMLDivElement>) => {
     setIsVaultDropTarget(false);
 
-    if (!payload) {
+    if (!isMapAttachmentDrag(event.dataTransfer)) {
       return;
     }
 
     event.preventDefault();
 
-    try {
-      const attachment = JSON.parse(payload) as PendingMapAttachment;
-      handleAttachVaultFile(attachment);
-    } catch {
-      setError('Could not attach the Vault file. Try clicking Attach instead.');
+    const additions = parseDropPendingAttachments(event.dataTransfer);
+    if (additions.length === 0) {
+      setError('Could not attach the dropped file. Try using Add local files instead.');
+      return;
     }
+
+    addPendingFiles(additions);
   };
 
   const handleSubmit = async () => {
@@ -256,36 +275,7 @@ export function CreateBlockDialog({
     setError(null);
     try {
       const notesHtml = notesRef.current?.getContent() ?? form.notesHtml;
-      const attachments: MapAttachment[] = [];
-
-      for (const pendingFile of pendingFiles) {
-        const attachmentId = randomUUID();
-        if (pendingFile.origin === 'vault') {
-          attachments.push({
-            id: attachmentId,
-            fileName: pendingFile.fileName,
-            relativePath: pendingFile.sourcePath,
-            vaultPath: pendingFile.sourcePath,
-            type: pendingFile.type,
-          });
-          continue;
-        }
-
-        if (window.electronAPI?.copyMapAttachmentToAssets) {
-          const copied = await window.electronAPI.copyMapAttachmentToAssets(
-            mapFolderPath,
-            pendingFile.sourcePath,
-            attachmentId
-          );
-          attachments.push({
-            id: attachmentId,
-            fileName: copied.fileName,
-            relativePath: copied.relativePath,
-            vaultPath: copied.vaultPath,
-            type: copied.type,
-          });
-        }
-      }
+      const attachments = await resolvePendingAttachmentsToMapAttachments(pendingFiles, mapFolderPath);
 
       const block: MapBlock = isBranchMode
         ? {
@@ -621,9 +611,9 @@ export function CreateBlockDialog({
               <div className="space-y-4">
                 <div
                   aria-label="Block attachment drop zone"
-                  onDragOver={handleVaultDragOver}
+                  onDragOver={handleAttachmentDragOver}
                   onDragLeave={() => setIsVaultDropTarget(false)}
-                  onDrop={handleVaultDrop}
+                  onDrop={handleAttachmentDrop}
                   className={`rounded-2xl border-2 border-dashed p-4 transition-colors ${
                     isVaultDropTarget
                       ? t.isPastel
@@ -653,7 +643,9 @@ export function CreateBlockDialog({
                     </button>
                   </div>
                   <p className={`text-xs mt-3 text-center ${t.muted}`}>
-                    Use the picker or drag from the Vault case library to attach a live PDF link.
+                    {isBranchMode
+                      ? 'Drop files here, pick local files, or browse the Vault library. Evidence is shared with the connected timeline block.'
+                      : 'Drop files from your computer, pick local files, or drag from the Vault case library to attach evidence.'}
                   </p>
                 </div>
                 {existingAttachments.length === 0 && pendingFiles.length === 0 ? (

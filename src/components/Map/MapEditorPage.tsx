@@ -24,6 +24,13 @@ import { BlockExpandModal } from './BlockExpandModal';
 import { MapExportDialog } from './MapExportDialog';
 import { DeleteBlockDialog } from './DeleteBlockDialog';
 import { normalizeMapEdgeAppearance } from './mapEdgeAppearance';
+import {
+  appendEvidenceAttachmentsToBlocks,
+  assignEvidenceAttachmentsToBlocks,
+  PendingMapAttachment,
+  removeEvidenceAttachmentFromBlocks,
+  resolvePendingAttachmentsToMapAttachments,
+} from './mapAttachmentUtils';
 
 interface MapEditorPageProps {
   theme: Theme;
@@ -128,13 +135,18 @@ export function MapEditorPage({
               ).length
             : undefined;
 
+        const blockToInsert =
+          block.kind === 'branch' ? { ...block, branchOrder, attachments: [] } : block;
+        const blocksWithInsert = [...prev.blocks, blockToInsert];
+        const blocks =
+          block.attachments.length > 0
+            ? assignEvidenceAttachmentsToBlocks(blocksWithInsert, blockToInsert.id, block.attachments)
+            : blocksWithInsert;
+
         return relayoutDocument(
           {
             ...prev,
-            blocks: [
-              ...prev.blocks,
-              block.kind === 'branch' ? { ...block, branchOrder } : block,
-            ],
+            blocks,
           },
           false
         );
@@ -362,6 +374,7 @@ export function MapEditorPage({
                   ...updatedBlock,
                   size: existingBlock.size,
                   positionLocked: false,
+                  attachments: [],
                 }
               : {
                   ...updatedBlock,
@@ -370,9 +383,18 @@ export function MapEditorPage({
                   positionLocked: existingBlock.positionLocked,
                 };
 
-        const blocks = prev.blocks.map((block) =>
+        let blocks = prev.blocks.map((block) =>
           block.id === updatedBlock.id ? nextBlock : block
         );
+
+        if (updatedBlock.attachments.length > 0 || updatedBlock.kind === 'branch') {
+          blocks = assignEvidenceAttachmentsToBlocks(
+            blocks,
+            updatedBlock.id,
+            updatedBlock.attachments
+          );
+        }
+
         return relayoutDocument({ ...prev, blocks }, false);
       });
 
@@ -380,6 +402,53 @@ export function MapEditorPage({
       setBranchDraft(null);
       setDialogInitialSection(undefined);
       toast.success('Block updated');
+    },
+    [document, toast, updateDocument]
+  );
+
+  const handleAttachEvidenceToBlock = useCallback(
+    async (blockId: string, additions: PendingMapAttachment[]) => {
+      if (!document || additions.length === 0) {
+        return;
+      }
+
+      try {
+        const resolvedAttachments = await resolvePendingAttachmentsToMapAttachments(
+          additions,
+          document.mapFolderPath
+        );
+
+        if (resolvedAttachments.length === 0) {
+          return;
+        }
+
+        updateDocument((prev) => {
+          const blocks = appendEvidenceAttachmentsToBlocks(prev.blocks, blockId, resolvedAttachments);
+          return relayoutDocument({ ...prev, blocks }, false);
+        });
+
+        toast.success(
+          `${resolvedAttachments.length} file${resolvedAttachments.length === 1 ? '' : 's'} attached`
+        );
+      } catch (error) {
+        toast.error(getUserFriendlyError(error, { operation: 'attaching evidence' }));
+      }
+    },
+    [document, toast, updateDocument]
+  );
+
+  const handleRemoveEvidenceFromBlock = useCallback(
+    (blockId: string, attachmentId: string) => {
+      if (!document) {
+        return;
+      }
+
+      updateDocument((prev) => {
+        const blocks = removeEvidenceAttachmentFromBlocks(prev.blocks, blockId, attachmentId);
+        return relayoutDocument({ ...prev, blocks }, false);
+      });
+
+      toast.success('Evidence removed');
     },
     [document, toast, updateDocument]
   );
@@ -529,6 +598,7 @@ export function MapEditorPage({
                 onEditBlock={handleEditBlock}
                 onEditBlockColor={handleEditBlockColor}
                 onCreateBranch={handleCreateBranch}
+                onAttachEvidence={handleAttachEvidenceToBlock}
                 onNewBlock={() => {
                   setBranchDraft(null);
                   setDialogInitialSection(undefined);
@@ -571,6 +641,7 @@ export function MapEditorPage({
         linkedCasePath={document.casePath}
         onSubmit={editingBlock ? handleSaveEditedBlock : handleAddBlock}
         blockToEdit={editingBlock}
+        allBlocks={document.blocks}
         initialSection={dialogInitialSection}
         branchContext={activeBranchContext}
       />
@@ -578,6 +649,7 @@ export function MapEditorPage({
       <BlockExpandModal
         isOpen={!!expandBlockId}
         block={expandBlock}
+        allBlocks={document.blocks}
         theme={theme}
         onClose={() => setExpandBlockId(null)}
         onNotesChange={(blockId, notesHtml) => {
@@ -588,6 +660,8 @@ export function MapEditorPage({
             ),
           }));
         }}
+        onAttachEvidence={handleAttachEvidenceToBlock}
+        onRemoveEvidence={handleRemoveEvidenceFromBlock}
       />
 
       <MapExportDialog

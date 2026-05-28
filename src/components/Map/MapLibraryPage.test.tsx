@@ -3,6 +3,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MapLibraryPage } from './MapLibraryPage';
 import { mockElectronAPI } from '../../test-utils/mocks';
+import { setCachedMapLibrary } from '../../utils/mapPrefetch';
 
 vi.mock('../Toast/ToastContext', () => ({
   useToast: () => ({
@@ -45,6 +46,7 @@ describe('MapLibraryPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setCachedMapLibrary(null);
     mockElectronAPI.listMaps.mockResolvedValue(sampleMaps);
   });
 

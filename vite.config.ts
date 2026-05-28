@@ -13,6 +13,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Fail loudly if another dev server is already on 5173 instead of silently
+    // switching ports (which leaves Electron loading a stale/wrong Vite instance).
+    strictPort: true,
   },
   build: {
     outDir: 'dist',

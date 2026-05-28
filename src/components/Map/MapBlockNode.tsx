@@ -1,7 +1,7 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useState, type DragEvent } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { Maximize2, FileText, File, Film, Trash2, Pencil, Plus, PaintBucket } from 'lucide-react';
-import { MapBlock, MapBranchSide, MapCanvasSide } from '../../types';
+import { MapAttachment, MapBlock, MapBranchSide, MapCanvasSide } from '../../types';
 import { isPastelPalette } from '../../theme/themeSemantics';
 import { formatChronologyLabel } from '../../utils/mapChronology';
 import type { MapHandleSide } from '../../utils/mapEdgeRouting';
@@ -11,6 +11,7 @@ import {
   resolveMapBlockColor,
   withHexAlpha,
 } from './mapBlockColors';
+import { isMapAttachmentDrag, parseDropPendingAttachments, PendingMapAttachment } from './mapAttachmentUtils';
 
 type BranchButton = {
   branchSide: MapBranchSide;
@@ -19,6 +20,7 @@ type BranchButton = {
 
 export type MapBlockNodeData = {
   block: MapBlock;
+  effectiveAttachments: MapAttachment[];
   theme: 'pastel' | 'dark';
   onExpand: (blockId: string) => void;
   onPreview: (blockId: string) => void;
@@ -26,6 +28,7 @@ export type MapBlockNodeData = {
   onEdit: (blockId: string) => void;
   onEditColor: (blockId: string) => void;
   onCreateBranch: (blockId: string, side: MapBranchSide, sourceSide: MapCanvasSide) => void;
+  onAttachEvidence?: (additions: PendingMapAttachment[]) => void;
   branchButtons: BranchButton[];
   occupiedSides: MapHandleSide[];
 };
@@ -46,6 +49,7 @@ const SIDES: { position: Position; side: 'top' | 'right' | 'bottom' | 'left' }[]
 function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) {
   const {
     block,
+    effectiveAttachments,
     theme,
     onExpand,
     onPreview,
@@ -53,20 +57,23 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
     onEdit,
     onEditColor,
     onCreateBranch,
+    onAttachEvidence,
     branchButtons,
     occupiedSides,
   } = data;
   const isPastel = isPastelPalette(theme);
   const isBranch = block.kind === 'branch';
   const [thumb, setThumb] = useState<string | null>(null);
+  const [isDropTarget, setIsDropTarget] = useState(false);
   const resolvedColors = resolveMapBlockColor({
     surfaceColor: block.surfaceColor,
     borderColor: block.borderColor,
     legacyColor: block.color,
   });
 
-  const imageAtt = block.attachments.find((a) => a.type === 'image');
-  const pdfCount = block.attachments.filter((a) => a.type === 'pdf').length;
+  const resolvedAttachments = effectiveAttachments ?? block.attachments;
+  const imageAtt = resolvedAttachments.find((a) => a.type === 'image');
+  const pdfCount = resolvedAttachments.filter((a) => a.type === 'pdf').length;
   const notePreview = block.notesHtml
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
@@ -158,11 +165,7 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
       ? 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50'
       : 'bg-gray-900 text-amber-300 border-amber-500/50 hover:bg-amber-500/10'
   }`;
-  const subtitle = isBranch
-    ? `${block.branchSide === 'left' ? 'Left' : 'Right'} branch note`
-    : formatChronologyLabel(block.chronology!);
-  const attachmentSummary = `${block.attachments.length} file${block.attachments.length === 1 ? '' : 's'}`;
-  const branchTitleClass = isPastel ? 'text-amber-600' : 'text-amber-300';
+  const attachmentSummary = `${resolvedAttachments.length} file${resolvedAttachments.length === 1 ? '' : 's'}`;
   const visibleSideSet = new Set(occupiedSides);
   const buttonSideClass: Record<MapCanvasSide, string> = {
     top: 'left-1/2 top-auto bottom-auto -top-4 -translate-x-1/2 !translate-y-0',
@@ -171,16 +174,54 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
     left: '-left-4',
   };
 
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!onAttachEvidence || !isMapAttachmentDrag(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+    setIsDropTarget(true);
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    const related = event.relatedTarget;
+    if (related instanceof Element && event.currentTarget.contains(related)) {
+      return;
+    }
+    setIsDropTarget(false);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    setIsDropTarget(false);
+
+    if (!onAttachEvidence || !isMapAttachmentDrag(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const additions = parseDropPendingAttachments(event.dataTransfer);
+    if (additions.length > 0) {
+      onAttachEvidence(additions);
+    }
+  };
+
   return (
     <div
       className={`group relative rounded-2xl border-2 overflow-visible backdrop-blur-md shadow-lg ${borderClass} ${
         backgroundClass
-      }`}
+      } ${isDropTarget ? (isPastel ? 'ring-2 ring-purple-300' : 'ring-2 ring-cyber-cyan-400/50') : ''}`}
       style={{
         width: block.size.width,
         height: block.size.height,
         ...customSurfaceStyle,
       }}
+      onDragOverCapture={handleDragOver}
+      onDragLeaveCapture={handleDragLeave}
+      onDropCapture={handleDrop}
     >
       {SIDES.map(({ position, side }) => (
         <span key={side}>
@@ -289,17 +330,19 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
 
       <button
         type="button"
-        className="nodrag nopan w-full h-full flex flex-col p-3 pt-8 pb-8 text-left rounded-2xl overflow-hidden"
+        className={`nodrag nopan w-full h-full flex flex-col p-3 ${isBranch ? 'pt-6' : 'pt-8'} pb-8 text-left rounded-2xl overflow-hidden`}
         onClick={() => onPreview(block.id)}
       >
-        <span
-          className={`text-xs font-semibold uppercase tracking-wide mb-1 ${
-            isBranch ? branchTitleClass : isPastel ? 'text-purple-500' : 'text-cyber-cyan-400'
-          }`}
-          style={accentColor ? { color: accentColor } : undefined}
-        >
-          {subtitle}
-        </span>
+        {!isBranch && (
+          <span
+            className={`text-xs font-semibold uppercase tracking-wide mb-1 ${
+              isPastel ? 'text-purple-500' : 'text-cyber-cyan-400'
+            }`}
+            style={accentColor ? { color: accentColor } : undefined}
+          >
+            {formatChronologyLabel(block.chronology!)}
+          </span>
+        )}
         {block.title && (
           <span
             className={`block text-sm font-bold leading-snug mb-1 break-words whitespace-normal ${
@@ -319,7 +362,7 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
                   style={{
                     color: bodyColor,
                     display: '-webkit-box',
-                    WebkitLineClamp: 5,
+                    WebkitLineClamp: 6,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                   }}
@@ -342,7 +385,7 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
               >
                 {attachmentSummary}
               </span>
-              {block.attachments.some((attachment) => attachment.type === 'video') ? (
+              {resolvedAttachments.some((attachment) => attachment.type === 'video') ? (
                 <Film
                   className={`w-3.5 h-3.5 ${isPastel ? 'text-amber-500' : 'text-amber-300'}`}
                   style={accentColor ? { color: accentColor } : undefined}
@@ -418,8 +461,8 @@ function MapBlockNodeComponent({ data, selected }: NodeProps<MapBlockFlowNode>) 
                   style={mutedColor ? { color: mutedColor } : undefined}
                 >
                   {pdfCount > 0 ? <FileText className="w-8 h-8" /> : <File className="w-8 h-8" />}
-                  {block.attachments.length > 0 && <span className="text-xs">Preview</span>}
-                  {block.attachments.some((a) => a.type === 'video') && <Film className="w-4 h-4" />}
+                  {resolvedAttachments.length > 0 && <span className="text-xs">Preview</span>}
+                  {resolvedAttachments.some((a) => a.type === 'video') && <Film className="w-4 h-4" />}
                 </div>
               )}
             </div>

@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Theme } from '../../types';
 import { useToast } from '../Toast/ToastContext';
 import { getUserFriendlyError } from '../../utils/errorMessages';
+import { prefetchMapLibrary, warmMapEntry } from '../../utils/mapPrefetch';
 import { MapLandingPage } from './MapLandingPage';
 import { MapLibraryPage } from './MapLibraryPage';
 import { MapEditorPage } from './MapEditorPage';
@@ -20,6 +21,10 @@ export function MapModule({ theme, onExit }: MapModuleProps) {
   const [editorMapPath, setEditorMapPath] = useState<string | null>(null);
   const [autoEditTitleKey, setAutoEditTitleKey] = useState<number | null>(null);
   const [showNewMapDialog, setShowNewMapDialog] = useState(false);
+
+  useEffect(() => {
+    warmMapEntry();
+  }, []);
 
   const ensureVault = useCallback(async (): Promise<boolean> => {
     if (!window.electronAPI?.getArchiveConfig) return false;
@@ -48,6 +53,7 @@ export function MapModule({ theme, onExit }: MapModuleProps) {
 
   const handleOpenLibrary = useCallback(async () => {
     if (!(await ensureVault())) return;
+    void prefetchMapLibrary();
     setScreen('library');
   }, [ensureVault]);
 

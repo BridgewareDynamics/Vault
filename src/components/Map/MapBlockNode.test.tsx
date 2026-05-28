@@ -118,10 +118,11 @@ describe('MapBlockNode', () => {
     expect(props.data.onCreateBranch).toHaveBeenCalledWith('timeline-1', 'left', 'bottom');
   });
 
-  it('shows branch-specific labeling for note cards', () => {
+  it('shows branch note content without side label', () => {
     render(<MapBlockNode {...buildProps(makeBranchBlock())} />);
 
-    expect(screen.getByText('Left branch note')).toBeInTheDocument();
+    expect(screen.queryByText('Left branch note')).not.toBeInTheDocument();
+    expect(screen.queryByText('Right branch note')).not.toBeInTheDocument();
     expect(screen.getByText('Branch Note')).toBeInTheDocument();
   });
 
