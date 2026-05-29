@@ -268,22 +268,26 @@ export function NewMapNameDialog({
                         >
                           <div className="flex items-start gap-3">
                             <div
-                              className={`rounded-2xl p-3 ${
+                              className={`shrink-0 rounded-2xl p-3 ${
                                 isSelected ? 'bg-white/20 text-white' : t.dialogIconBox
                               }`}
                             >
                               <Icon className="h-5 w-5" />
                             </div>
-                            <div className="min-w-0">
-                              <h4 className={`font-semibold ${t.heading}`}>{prompt.title}</h4>
-                              <p className={`mt-1 text-xs uppercase tracking-[0.2em] ${isSelected ? 'text-white/80' : t.primary}`}>
-                                {prompt.subtitle}
-                              </p>
-                              <p className={`mt-2 text-sm leading-6 ${isSelected ? 'text-white/90' : t.muted}`}>
-                                {prompt.description}
-                              </p>
-                            </div>
+                            <h4 className={`min-w-0 flex-1 font-semibold leading-snug ${t.heading}`}>
+                              {prompt.title}
+                            </h4>
                           </div>
+                          <p
+                            className={`mt-2 text-[10px] font-semibold uppercase leading-snug tracking-[0.1em] break-words sm:text-[11px] sm:tracking-[0.14em] ${
+                              isSelected ? 'text-white/80' : t.primary
+                            }`}
+                          >
+                            {prompt.subtitle}
+                          </p>
+                          <p className={`mt-2 text-sm leading-6 ${isSelected ? 'text-white/90' : t.muted}`}>
+                            {prompt.description}
+                          </p>
                         </button>
                       );
                     })}
@@ -347,7 +351,7 @@ export function NewMapNameDialog({
                       ].map((chip) => (
                         <span
                           key={chip}
-                          className={`rounded-full border px-4 py-2 text-sm font-medium ${t.badgeNeutral}`}
+                          className={`max-w-full rounded-full border px-4 py-2 text-sm font-medium break-words ${t.badgeNeutral}`}
                         >
                           {chip}
                         </span>

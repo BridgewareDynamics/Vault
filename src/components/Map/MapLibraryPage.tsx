@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useMemo, useState } from 'react';
+import { type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -20,6 +20,8 @@ import { DeleteMapDialog } from './DeleteMapDialog';
 import {
   getCachedMapLibrary,
   isMapLibraryCacheFresh,
+  prefetchMapDocument,
+  prefetchMapEditorPage,
   prefetchMapLibrary,
   setCachedMapLibrary,
 } from '../../utils/mapPrefetch';
@@ -84,6 +86,11 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
   const [query, setQuery] = useState('');
   const [mapPendingDelete, setMapPendingDelete] = useState<MapListEntry | null>(null);
 
+  const warmMapOpen = useCallback((mapFolderPath: string) => {
+    void prefetchMapEditorPage();
+    void prefetchMapDocument(mapFolderPath);
+  }, []);
+
   const loadMaps = async (options?: { force?: boolean }) => {
     if (!window.electronAPI?.listMaps) {
       setLoading(false);
@@ -115,6 +122,7 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
 
   useEffect(() => {
     void loadMaps();
+    void prefetchMapEditorPage();
   }, []);
 
   const totals = useMemo(
@@ -406,6 +414,8 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
 
                       <button
                         type="button"
+                        onPointerEnter={() => warmMapOpen(displayFeaturedMap.mapFolderPath)}
+                        onFocus={() => warmMapOpen(displayFeaturedMap.mapFolderPath)}
                         onClick={() => onOpenMap(displayFeaturedMap.mapFolderPath)}
                         className="flex h-full w-full flex-col gap-5 text-left"
                       >
@@ -538,6 +548,8 @@ export function MapLibraryPage({ theme, onBack, onOpenMap }: MapLibraryPageProps
 
                               <button
                                 type="button"
+                                onPointerEnter={() => warmMapOpen(entry.mapFolderPath)}
+                                onFocus={() => warmMapOpen(entry.mapFolderPath)}
                                 onClick={() => onOpenMap(entry.mapFolderPath)}
                                 className="relative z-10 flex h-full flex-col gap-4 text-left"
                               >

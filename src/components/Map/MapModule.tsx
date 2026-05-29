@@ -1,12 +1,22 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Theme } from '../../types';
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
+import { Theme, MapDocument } from '../../types';
 import { useToast } from '../Toast/ToastContext';
 import { getUserFriendlyError } from '../../utils/errorMessages';
-import { prefetchMapLibrary, warmMapEntry } from '../../utils/mapPrefetch';
+import {
+  prefetchMapDocument,
+  prefetchMapEditorPage,
+  prefetchMapLibrary,
+  warmMapEntry,
+} from '../../utils/mapPrefetch';
 import { MapLandingPage } from './MapLandingPage';
-import { MapLibraryPage } from './MapLibraryPage';
-import { MapEditorPage } from './MapEditorPage';
 import { NewMapNameDialog } from './NewMapNameDialog';
+
+const MapLibraryPage = lazy(() =>
+  import('./MapLibraryPage').then((module) => ({ default: module.MapLibraryPage }))
+);
+const MapEditorPage = lazy(() =>
+  import('./MapEditorPage').then((module) => ({ default: module.MapEditorPage }))
+);
 
 type MapScreen = 'landing' | 'library' | 'editor';
 
@@ -15,10 +25,19 @@ interface MapModuleProps {
   onExit: () => void;
 }
 
+function MapScreenFallback({ message }: { message: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+      <p className="text-white/70">{message}</p>
+    </div>
+  );
+}
+
 export function MapModule({ theme, onExit }: MapModuleProps) {
   const toast = useToast();
   const [screen, setScreen] = useState<MapScreen>('landing');
   const [editorMapPath, setEditorMapPath] = useState<string | null>(null);
+  const [initialEditorDocument, setInitialEditorDocument] = useState<MapDocument | null>(null);
   const [autoEditTitleKey, setAutoEditTitleKey] = useState<number | null>(null);
   const [showNewMapDialog, setShowNewMapDialog] = useState(false);
 
@@ -42,6 +61,8 @@ export function MapModule({ theme, onExit }: MapModuleProps) {
     try {
       const title = mapName.trim() || 'Untitled Map';
       const doc = await window.electronAPI.createMap(title, null);
+      void prefetchMapEditorPage();
+      setInitialEditorDocument(doc as MapDocument);
       setEditorMapPath(doc.mapFolderPath);
       setAutoEditTitleKey(Date.now());
       setShowNewMapDialog(false);
@@ -58,30 +79,44 @@ export function MapModule({ theme, onExit }: MapModuleProps) {
   }, [ensureVault]);
 
   const handleOpenMap = useCallback((mapFolderPath: string) => {
+    void prefetchMapEditorPage();
+    void prefetchMapDocument(mapFolderPath);
+    setInitialEditorDocument(null);
     setEditorMapPath(mapFolderPath);
     setAutoEditTitleKey(null);
     setScreen('editor');
   }, []);
 
+  const handleLeaveEditor = useCallback(() => {
+    setInitialEditorDocument(null);
+    setEditorMapPath(null);
+    setScreen('landing');
+  }, []);
+
   if (screen === 'editor' && editorMapPath) {
     return (
-      <MapEditorPage
-        theme={theme}
-        mapFolderPath={editorMapPath}
-        autoEditTitleKey={autoEditTitleKey}
-        onBack={() => setScreen('landing')}
-        onHome={onExit}
-      />
+      <Suspense fallback={<MapScreenFallback message="Loading editor..." />}>
+        <MapEditorPage
+          theme={theme}
+          mapFolderPath={editorMapPath}
+          initialDocument={initialEditorDocument}
+          autoEditTitleKey={autoEditTitleKey}
+          onBack={handleLeaveEditor}
+          onHome={onExit}
+        />
+      </Suspense>
     );
   }
 
   if (screen === 'library') {
     return (
-      <MapLibraryPage
-        theme={theme}
-        onBack={() => setScreen('landing')}
-        onOpenMap={handleOpenMap}
-      />
+      <Suspense fallback={<MapScreenFallback message="Loading library..." />}>
+        <MapLibraryPage
+          theme={theme}
+          onBack={() => setScreen('landing')}
+          onOpenMap={handleOpenMap}
+        />
+      </Suspense>
     );
   }
 

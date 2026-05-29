@@ -6,6 +6,7 @@ import {
   MapBlock,
   MapBranchSide,
   MapCanvasSide,
+  MapDocument,
   MapEdgeAppearance,
   MapEdgeStyle,
   Theme,
@@ -35,6 +36,7 @@ import {
 interface MapEditorPageProps {
   theme: Theme;
   mapFolderPath: string;
+  initialDocument?: MapDocument | null;
   autoEditTitleKey?: number | null;
   onBack: () => void;
   onHome: () => void;
@@ -52,6 +54,7 @@ type CreateBlockDialogSection = 'timeline' | 'details' | 'files' | 'notes';
 export function MapEditorPage({
   theme,
   mapFolderPath,
+  initialDocument,
   autoEditTitleKey,
   onBack,
   onHome,
@@ -67,7 +70,7 @@ export function MapEditorPage({
     isDividerDragging,
   } = useWordEditor();
   const { document, loading, saving, dirty, updateDocument, saveNow, relayout } =
-    useMapDocument(mapFolderPath);
+    useMapDocument(mapFolderPath, { initialDocument });
 
   const [showCreateBlock, setShowCreateBlock] = useState(false);
   const [expandBlockId, setExpandBlockId] = useState<string | null>(null);

@@ -5,6 +5,10 @@ import { getMapBlockSize, relayoutDocument } from '../utils/mapLayout';
 import { buildMapEdges } from '../utils/mapEdgeRouting';
 import { logger } from '../utils/logger';
 import { normalizeMapEdgeAppearance } from '../components/Map/mapEdgeAppearance';
+import {
+  getCachedMapDocument,
+  setCachedMapDocument,
+} from '../utils/mapPrefetch';
 
 const AUTOSAVE_MS = 700;
 
@@ -55,19 +59,54 @@ function normalizeDocument(doc: MapDocument): MapDocument {
   };
 }
 
-export function useMapDocument(initialMapFolderPath: string | null) {
-  const [document, setDocument] = useState<MapDocument | null>(null);
-  const [loading, setLoading] = useState(false);
+interface UseMapDocumentOptions {
+  initialDocument?: MapDocument | null;
+}
+
+export function useMapDocument(
+  initialMapFolderPath: string | null,
+  options?: UseMapDocumentOptions
+) {
+  const [document, setDocument] = useState<MapDocument | null>(() => {
+    if (options?.initialDocument) {
+      return normalizeDocument(options.initialDocument);
+    }
+    if (initialMapFolderPath) {
+      const cached = getCachedMapDocument(initialMapFolderPath);
+      return cached ? normalizeDocument(cached) : null;
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState(() => {
+    if (options?.initialDocument) {
+      return false;
+    }
+    if (!initialMapFolderPath) {
+      return false;
+    }
+    return !getCachedMapDocument(initialMapFolderPath);
+  });
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadMap = useCallback(async (mapFolderPath: string) => {
     if (!window.electronAPI?.readMap) return;
+
+    const cached = getCachedMapDocument(mapFolderPath);
+    if (cached) {
+      setDocument(normalizeDocument(cached));
+      setDirty(false);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const doc = await window.electronAPI.readMap(mapFolderPath);
-      setDocument(normalizeDocument(doc as MapDocument));
+      const normalized = normalizeDocument(doc as MapDocument);
+      setCachedMapDocument(mapFolderPath, doc as MapDocument);
+      setDocument(normalized);
       setDirty(false);
     } catch (error) {
       logger.error('Failed to load map:', error);
@@ -78,10 +117,19 @@ export function useMapDocument(initialMapFolderPath: string | null) {
   }, []);
 
   useEffect(() => {
-    if (initialMapFolderPath) {
-      loadMap(initialMapFolderPath);
+    if (!initialMapFolderPath) {
+      return;
     }
-  }, [initialMapFolderPath, loadMap]);
+    if (options?.initialDocument) {
+      const normalized = normalizeDocument(options.initialDocument);
+      setCachedMapDocument(initialMapFolderPath, options.initialDocument);
+      setDocument(normalized);
+      setDirty(false);
+      setLoading(false);
+      return;
+    }
+    void loadMap(initialMapFolderPath);
+  }, [initialMapFolderPath, loadMap, options?.initialDocument]);
 
   const persist = useCallback(async (doc: MapDocument) => {
     if (!window.electronAPI?.saveMap) return;
