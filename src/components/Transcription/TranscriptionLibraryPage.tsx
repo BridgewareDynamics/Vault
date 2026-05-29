@@ -17,6 +17,9 @@ import { ScanLine } from '../Shared/ScanLine';
 import { useToast } from '../Toast/ToastContext';
 import { useTranscriptionTheme } from './transcriptionTheme';
 import { DeleteTranscriptionDialog } from './DeleteTranscriptionDialog';
+import type { ModuleChromeProps } from '../../types/detachableModules';
+import { ModuleChromeButtons } from '../Shared/ModuleChromeButtons';
+import { isLightTheme } from '../../theme/themeSemantics';
 import {
   getCachedTranscriptionLibrary,
   isTranscriptionLibraryCacheFresh,
@@ -26,7 +29,7 @@ import {
 
 type TranscriptionLibraryFilter = 'all' | 'global' | 'case';
 
-interface TranscriptionLibraryPageProps {
+interface TranscriptionLibraryPageProps extends ModuleChromeProps {
   theme: Theme;
   onBack: () => void;
   onOpenTranscription: (transcriptionFolderPath: string) => void;
@@ -52,8 +55,14 @@ export function TranscriptionLibraryPage({
   theme,
   onBack,
   onOpenTranscription,
+  hostMode,
+  onPopOut,
+  onReattach,
+  popOutDisabled,
+  isPastel: isPastelProp,
 }: TranscriptionLibraryPageProps) {
   const t = useTranscriptionTheme(theme);
+  const isPastel = isPastelProp ?? isLightTheme(theme);
   const toast = useToast();
   const [items, setItems] = useState<TranscriptionListEntry[]>(
     () => getCachedTranscriptionLibrary() ?? []
@@ -132,14 +141,24 @@ export function TranscriptionLibraryPage({
       <div className={`relative z-10 flex min-h-screen flex-col ${t.body}`}>
         <header className={`border-b backdrop-blur-xl ${t.headerBorder}`}>
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 py-5">
-            <button
-              type="button"
-              onClick={onBack}
-              className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 transition-colors ${t.secondaryButton}`}
-            >
-              <ArrowLeft className="h-5 w-5" />
-              <span className="font-medium">Back</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onBack}
+                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 transition-colors ${t.secondaryButton}`}
+              >
+                <ArrowLeft className="h-5 w-5" />
+                <span className="font-medium">Back</span>
+              </button>
+              <ModuleChromeButtons
+                featureLabel="Transcript"
+                hostMode={hostMode}
+                onPopOut={onPopOut}
+                onReattach={onReattach}
+                popOutDisabled={popOutDisabled}
+                isPastel={isPastel}
+              />
+            </div>
 
             <div className="flex items-center gap-3">
               <div className={`rounded-2xl p-3 ${t.button}`}>

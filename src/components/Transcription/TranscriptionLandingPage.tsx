@@ -14,8 +14,11 @@ import { HexGrid } from '../Shared/HexGrid';
 import { HolographicEffect } from '../Shared/HolographicEffect';
 import { ScanLine } from '../Shared/ScanLine';
 import { useTranscriptionTheme } from './transcriptionTheme';
+import type { ModuleChromeProps } from '../../types/detachableModules';
+import { ModuleChromeButtons } from '../Shared/ModuleChromeButtons';
+import { isLightTheme } from '../../theme/themeSemantics';
 
-interface TranscriptionLandingPageProps {
+interface TranscriptionLandingPageProps extends ModuleChromeProps {
   theme: Theme;
   onBack: () => void;
   onNewWorkspace: () => void;
@@ -58,8 +61,14 @@ export function TranscriptionLandingPage({
   onBack,
   onNewWorkspace,
   onOpenLibrary,
+  hostMode,
+  onPopOut,
+  onReattach,
+  popOutDisabled,
+  isPastel: isPastelProp,
 }: TranscriptionLandingPageProps) {
   const t = useTranscriptionTheme(theme);
+  const isPastel = isPastelProp ?? isLightTheme(theme);
 
   const actionCards: LandingActionCard[] = [
     {
@@ -96,15 +105,25 @@ export function TranscriptionLandingPage({
       <div className={`relative z-10 flex min-h-screen flex-col ${t.body}`}>
         <header className={`border-b backdrop-blur-xl ${t.headerBorder}`}>
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 py-5">
-            <button
-              type="button"
-              onClick={onBack}
-              className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 transition-colors ${t.secondaryButton}`}
-              aria-label="Back to home"
-            >
-              <Home className="h-5 w-5" />
-              <span className="font-medium">Home</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onBack}
+                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 transition-colors ${t.secondaryButton}`}
+                aria-label="Back to home"
+              >
+                <Home className="h-5 w-5" />
+                <span className="font-medium">Home</span>
+              </button>
+              <ModuleChromeButtons
+                featureLabel="Transcript"
+                hostMode={hostMode}
+                onPopOut={onPopOut}
+                onReattach={onReattach}
+                popOutDisabled={popOutDisabled}
+                isPastel={isPastel}
+              />
+            </div>
 
             <div className="flex items-center gap-3">
               <div className={`rounded-2xl p-3 ${t.button}`}>

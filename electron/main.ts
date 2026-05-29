@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, nativeImage, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, nativeImage, Menu, screen } from 'electron';
 import { join } from 'path';
 import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath } from './utils/pathValidator';
 import * as fs from 'fs/promises';
@@ -3845,11 +3845,108 @@ ipcMain.handle('export-text-file', async (event, options: {
 // Create word editor window
 let wordEditorWindow: BrowserWindow | null = null;
 
+// Research workspace windows (Map / Transcript)
+let mapModuleWindow: BrowserWindow | null = null;
+let transcriptionModuleWindow: BrowserWindow | null = null;
+
 // Create PDF audit window
 let pdfAuditWindow: BrowserWindow | null = null;
 
 // Create PDF extraction window
 let pdfExtractionWindow: BrowserWindow | null = null;
+
+function getElectronPreloadPath(): string {
+  if (isDev) {
+    return join(__dirname, 'preload.cjs');
+  }
+  const appPath = app.getAppPath();
+  return join(appPath, 'dist-electron', 'electron', 'preload.cjs');
+}
+
+function getResearchWorkspaceBounds(parent?: BrowserWindow | null) {
+  const parentBounds = parent && !parent.isDestroyed()
+    ? parent.getBounds()
+    : { x: 0, y: 0, width: 1400, height: 900 };
+  const display = screen.getDisplayMatching(parentBounds);
+  const workArea = display.workArea;
+  const width = Math.round(workArea.width * 0.92);
+  const height = Math.round(workArea.height * 0.92);
+  let x = workArea.x + Math.round((workArea.width - width) / 2);
+  let y = workArea.y + Math.round((workArea.height - height) / 2);
+
+  if (parent && !parent.isDestroyed()) {
+    const parentRight = parentBounds.x + parentBounds.width;
+    const besideX = parentRight + 24;
+    if (besideX + width <= workArea.x + workArea.width) {
+      x = besideX;
+      y = parentBounds.y;
+    }
+  }
+
+  return { x, y, width, height };
+}
+
+function createResearchWorkspaceWindow(options: {
+  title: string;
+  parent?: BrowserWindow | null;
+}): BrowserWindow {
+  const bounds = getResearchWorkspaceBounds(options.parent ?? mainWindow);
+  return new BrowserWindow({
+    ...bounds,
+    minWidth: 1000,
+    minHeight: 700,
+    backgroundColor: '#0f0f1e',
+    webPreferences: {
+      preload: getElectronPreloadPath(),
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: true,
+      devTools: isDev,
+    },
+    titleBarStyle: 'hiddenInset',
+    frame: true,
+    movable: true,
+    resizable: true,
+    show: false,
+    title: options.title,
+  });
+}
+
+function sendJsonEventToWindow(
+  target: BrowserWindow | null,
+  eventName: string,
+  storageKey: string,
+  payload: unknown
+) {
+  if (!target || target.isDestroyed()) {
+    return;
+  }
+  const json = JSON.stringify(payload);
+  target.webContents
+    .executeJavaScript(
+      `(function() {
+        const data = ${json};
+        window[${JSON.stringify(storageKey)}] = data;
+        window.dispatchEvent(new CustomEvent(${JSON.stringify(eventName)}, { detail: data }));
+      })();`
+    )
+    .catch((err) => {
+      logger.error(`Failed to send ${eventName} to window:`, err);
+    });
+}
+
+function loadDetachedRoute(win: BrowserWindow, route: string) {
+  if (isDev) {
+    win.loadURL(getDevServerUrl(route)).catch((err) => {
+      logger.error(`Failed to load dev server for ${route}:`, err);
+    });
+  } else {
+    const appPath = app.getAppPath();
+    win.loadFile(join(appPath, 'dist', 'index.html'), { hash: route }).catch((err) => {
+      logger.error(`Failed to load file for ${route}:`, err);
+    });
+  }
+}
 
 // Track which window should receive audit progress updates
 // This allows progress to continue when detaching during an audit
@@ -4012,6 +4109,147 @@ ipcMain.handle('reattach-word-editor', async (event, options: { content: string;
   } catch (error) {
     logger.error('Failed to reattach word editor window:', error);
     throw new Error(`Failed to reattach word editor window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Create Map research workspace window
+ipcMain.handle('create-map-window', async (_event, state: Record<string, unknown>) => {
+  try {
+    if (mapModuleWindow && !mapModuleWindow.isDestroyed()) {
+      mapModuleWindow.focus();
+      sendJsonEventToWindow(mapModuleWindow, 'map-module-data', '__mapModuleInitialData', state);
+      return { success: true };
+    }
+
+    mapModuleWindow = createResearchWorkspaceWindow({
+      title: 'Vault — Map',
+      parent: mainWindow,
+    });
+
+    loadDetachedRoute(mapModuleWindow, 'map=detached');
+
+    mapModuleWindow.once('ready-to-show', () => {
+      mapModuleWindow?.show();
+    });
+
+    mapModuleWindow.on('closed', () => {
+      mapModuleWindow = null;
+    });
+
+    mapModuleWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        sendJsonEventToWindow(mapModuleWindow, 'map-module-data', '__mapModuleInitialData', state);
+      }, 500);
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create map window:', error);
+    throw new Error(
+      `Failed to create map window: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+ipcMain.handle('reattach-map-module', async (event, state: Record<string, unknown>) => {
+  try {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      sendJsonEventToWindow(mainWindow, 'reattach-map-module-data', '__reattachMapModuleData', state);
+    }
+
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    if (mapModuleWindow === senderWindow) {
+      mapModuleWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach map module:', error);
+    throw new Error(
+      `Failed to reattach map module: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+// Create Transcript research workspace window
+ipcMain.handle('create-transcription-window', async (_event, state: Record<string, unknown>) => {
+  try {
+    if (transcriptionModuleWindow && !transcriptionModuleWindow.isDestroyed()) {
+      transcriptionModuleWindow.focus();
+      sendJsonEventToWindow(
+        transcriptionModuleWindow,
+        'transcription-module-data',
+        '__transcriptionModuleInitialData',
+        state
+      );
+      return { success: true };
+    }
+
+    transcriptionModuleWindow = createResearchWorkspaceWindow({
+      title: 'Vault — Transcript',
+      parent: mainWindow,
+    });
+
+    loadDetachedRoute(transcriptionModuleWindow, 'transcription=detached');
+
+    transcriptionModuleWindow.once('ready-to-show', () => {
+      transcriptionModuleWindow?.show();
+    });
+
+    transcriptionModuleWindow.on('closed', () => {
+      transcriptionModuleWindow = null;
+    });
+
+    transcriptionModuleWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        sendJsonEventToWindow(
+          transcriptionModuleWindow,
+          'transcription-module-data',
+          '__transcriptionModuleInitialData',
+          state
+        );
+      }, 500);
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create transcription window:', error);
+    throw new Error(
+      `Failed to create transcription window: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+ipcMain.handle('reattach-transcription-module', async (event, state: Record<string, unknown>) => {
+  try {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      sendJsonEventToWindow(
+        mainWindow,
+        'reattach-transcription-module-data',
+        '__reattachTranscriptionModuleData',
+        state
+      );
+    }
+
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    if (transcriptionModuleWindow === senderWindow) {
+      transcriptionModuleWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach transcription module:', error);
+    throw new Error(
+      `Failed to reattach transcription module: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 });
 

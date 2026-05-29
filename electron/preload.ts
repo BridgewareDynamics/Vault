@@ -106,6 +106,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
         viewState?: 'editor' | 'library' | 'bookmarkLibrary';
         casePath?: string | null;
       }) => ipcRenderer.invoke('reattach-word-editor', options),
+      createMapWindow: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('create-map-window', state),
+      reattachMapModule: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('reattach-map-module', state),
+      createTranscriptionWindow: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('create-transcription-window', state),
+      reattachTranscriptionModule: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('reattach-transcription-module', state),
   createPdfAuditWindow: (options: {
     pdfPath: string | null;
     settings: {

@@ -13,6 +13,8 @@ import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { Theme } from '../../types';
 import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
+import { COLLECT_EVENT, RESPONSE_EVENT } from '../../utils/wordEditorSnapshot';
+import type { MapModuleWordEditorSnapshot } from '../../types/detachableModules';
 
 const MIN_WIDTH = 400;
 const MAX_WIDTH_PERCENT = 80;
@@ -87,6 +89,35 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   useEffect(() => {
     setContextOpen(isOpen);
   }, [isOpen, setContextOpen]);
+
+  useEffect(() => {
+    const handleCollectSnapshot = () => {
+      if (!isOpen) {
+        window.dispatchEvent(new CustomEvent(RESPONSE_EVENT, { detail: null }));
+        return;
+      }
+
+      let viewState: MapModuleWordEditorSnapshot['viewState'] = 'editor';
+      if (showBookmarkLibrary) {
+        viewState = 'bookmarkLibrary';
+      } else if (showLibrary) {
+        viewState = 'library';
+      }
+
+      const snapshot: MapModuleWordEditorSnapshot = {
+        isOpen: true,
+        content: editorRef.current?.getContent() || '',
+        filePath: currentFilePath,
+        viewState,
+      };
+      window.dispatchEvent(new CustomEvent(RESPONSE_EVENT, { detail: snapshot }));
+    };
+
+    window.addEventListener(COLLECT_EVENT, handleCollectSnapshot);
+    return () => {
+      window.removeEventListener(COLLECT_EVENT, handleCollectSnapshot);
+    };
+  }, [currentFilePath, isOpen, showBookmarkLibrary, showLibrary]);
 
   // Listen for reattach data from detached window
   useEffect(() => {

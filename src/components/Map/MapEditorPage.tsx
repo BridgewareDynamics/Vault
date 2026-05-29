@@ -32,14 +32,19 @@ import {
   removeEvidenceAttachmentFromBlocks,
   resolvePendingAttachmentsToMapAttachments,
 } from './mapAttachmentUtils';
+import type { ModuleChromeProps } from '../../types/detachableModules';
+import type { MapEditorDetachBridge } from './MapModule';
+import { ModuleChromeButtons } from '../Shared/ModuleChromeButtons';
+import { isLightTheme } from '../../theme/themeSemantics';
 
-interface MapEditorPageProps {
+interface MapEditorPageProps extends ModuleChromeProps {
   theme: Theme;
   mapFolderPath: string;
   initialDocument?: MapDocument | null;
   autoEditTitleKey?: number | null;
   onBack: () => void;
   onHome: () => void;
+  registerEditorBridge?: (bridge: MapEditorDetachBridge | null) => void;
 }
 
 interface BranchDraft {
@@ -58,8 +63,15 @@ export function MapEditorPage({
   autoEditTitleKey,
   onBack,
   onHome,
+  hostMode,
+  onPopOut,
+  onReattach,
+  popOutDisabled,
+  isPastel: isPastelProp,
+  registerEditorBridge,
 }: MapEditorPageProps) {
   const t = useMapTheme(theme);
+  const isPastel = isPastelProp ?? isLightTheme(theme);
   const toast = useToast();
   const flowRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -123,6 +135,30 @@ export function MapEditorPage({
     if (nextTitle === document.title) return;
     updateDocument((prev) => ({ ...prev, title: nextTitle }));
   }, [document, titleDraft, updateDocument]);
+
+  useEffect(() => {
+    if (!registerEditorBridge) return;
+
+    registerEditorBridge({
+      flushAndSnapshot: async () => {
+        if (!document) return null;
+
+        const nextTitle = titleDraft.trim() || 'Untitled Map';
+        const titleChanged = nextTitle !== document.title;
+        const docToSave = titleChanged ? { ...document, title: nextTitle } : document;
+
+        if (dirty || titleChanged) {
+          await saveNow(docToSave);
+        }
+
+        return { editorDocument: docToSave, editorMapPath: mapFolderPath };
+      },
+    });
+
+    return () => {
+      registerEditorBridge(null);
+    };
+  }, [dirty, document, mapFolderPath, registerEditorBridge, saveNow, titleDraft]);
 
   const handleAddBlock = useCallback(
     (block: MapBlock) => {
@@ -500,6 +536,14 @@ export function MapEditorPage({
         <button type="button" onClick={onHome} className={`p-2 rounded-lg border ${t.card}`} aria-label="Home">
           <Home className="w-5 h-5" />
         </button>
+        <ModuleChromeButtons
+          featureLabel="Map"
+          hostMode={hostMode}
+          onPopOut={onPopOut}
+          onReattach={onReattach}
+          popOutDisabled={popOutDisabled}
+          isPastel={isPastel}
+        />
         <div className="flex-1 min-w-[220px] max-w-[520px]">
           <input
             ref={titleInputRef}

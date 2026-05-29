@@ -35,10 +35,12 @@ import {
   groupTranscriptionModelsByFamily,
   type TranscriptionModelFamily,
 } from '../../../utils/transcriptionModelCatalog';
+import type { ModuleChromeProps } from '../../../types/detachableModules';
+import { ModuleChromeButtons } from '../../Shared/ModuleChromeButtons';
 
 type WorkspaceTab = 'pipeline' | 'engine' | 'settings';
 
-export interface TranscriptionWorkspaceShellProps {
+export interface TranscriptionWorkspaceShellProps extends ModuleChromeProps {
   ui: TranscriptionWorkspaceUi;
   document: TranscriptionDocument;
   titleDraft: string;
@@ -193,6 +195,11 @@ export function TranscriptionWorkspaceShell({
   currentModel,
   onBack,
   onHome,
+  hostMode,
+  onPopOut,
+  onReattach,
+  popOutDisabled,
+  isPastel,
   onTitleChange,
   onTitleCommit,
   onTitleEscape,
@@ -242,6 +249,14 @@ export function TranscriptionWorkspaceShell({
           <button type="button" onClick={onHome} className={`rounded-xl border p-2.5 ${ui.surface}`} aria-label="Home">
             <Home className="h-4 w-4" />
           </button>
+          <ModuleChromeButtons
+            featureLabel="Transcript"
+            hostMode={hostMode}
+            onPopOut={onPopOut}
+            onReattach={onReattach}
+            popOutDisabled={popOutDisabled}
+            isPastel={isPastel}
+          />
 
           <div className="min-w-[200px] flex-1">
             <input

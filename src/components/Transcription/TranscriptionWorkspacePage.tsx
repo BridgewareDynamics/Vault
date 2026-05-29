@@ -15,6 +15,8 @@ import {
   shouldApplyPreferredParakeetModel,
 } from '../../utils/transcriptionDefaults';
 import { TranscriptionWorkspaceShell } from './workspace/TranscriptionWorkspaceShell';
+import type { ModuleChromeProps } from '../../types/detachableModules';
+import type { TranscriptionWorkspaceDetachBridge } from './TranscriptionModule';
 import { useTranscriptionWorkspaceUi } from './workspace/useTranscriptionWorkspaceUi';
 import type { TranscriptionMediaSkimmerSelection } from './workspace/TranscriptionMediaSkimmer';
 import { deriveSegmentSettingsFromDuration } from '../../utils/transcriptionSegmentDefaults';
@@ -24,11 +26,13 @@ import {
   setCachedTranscriptionEngineStatus,
 } from '../../utils/transcriptionPrefetch';
 
-interface TranscriptionWorkspacePageProps {
+interface TranscriptionWorkspacePageProps extends ModuleChromeProps {
   theme: Theme;
   transcriptionFolderPath: string;
+  initialDocument?: TranscriptionDocument | null;
   onBack: () => void;
   onHome: () => void;
+  registerWorkspaceBridge?: (bridge: TranscriptionWorkspaceDetachBridge | null) => void;
 }
 
 function normalizePath(value: string | null | undefined) {
@@ -116,8 +120,15 @@ function buildPendingSource(
 export function TranscriptionWorkspacePage({
   theme,
   transcriptionFolderPath,
+  initialDocument = null,
   onBack,
   onHome,
+  registerWorkspaceBridge,
+  hostMode,
+  onPopOut,
+  onReattach,
+  popOutDisabled,
+  isPastel,
 }: TranscriptionWorkspacePageProps) {
   const ui = useTranscriptionWorkspaceUi(theme);
   const toast = useToast();
@@ -129,7 +140,7 @@ export function TranscriptionWorkspacePage({
     setDocument,
     updateDocument,
     saveNow,
-  } = useTranscriptionDocument(transcriptionFolderPath);
+  } = useTranscriptionDocument(transcriptionFolderPath, { initialDocument });
 
   const [titleDraft, setTitleDraft] = useState('');
   const [showCaseDialog, setShowCaseDialog] = useState(false);
@@ -240,6 +251,42 @@ export function TranscriptionWorkspacePage({
     if (nextTitle === document.title) return;
     updateDocument((previous) => ({ ...previous, title: nextTitle }));
   }, [document, titleDraft, updateDocument]);
+
+  useEffect(() => {
+    if (!registerWorkspaceBridge) return;
+
+    registerWorkspaceBridge({
+      flushAndSnapshot: async () => {
+        if (!document) return null;
+
+        const nextTitle = titleDraft.trim() || 'Untitled Transcript';
+        const titleChanged = nextTitle !== document.title;
+        const docToSave = titleChanged ? { ...document, title: nextTitle } : document;
+
+        if (dirty || titleChanged) {
+          await saveNow(docToSave);
+        }
+
+        return {
+          workspaceDocument: docToSave,
+          workspacePath: transcriptionFolderPath,
+        };
+      },
+      isTranscriptionRunning: () => running,
+    });
+
+    return () => {
+      registerWorkspaceBridge(null);
+    };
+  }, [
+    dirty,
+    document,
+    registerWorkspaceBridge,
+    running,
+    saveNow,
+    titleDraft,
+    transcriptionFolderPath,
+  ]);
 
   const handleAssignCase = async (casePath: string) => {
     if (!document) return;
@@ -621,6 +668,11 @@ export function TranscriptionWorkspacePage({
         currentModel={currentModel}
         onBack={onBack}
         onHome={onHome}
+        hostMode={hostMode}
+        onPopOut={onPopOut}
+        onReattach={onReattach}
+        popOutDisabled={popOutDisabled}
+        isPastel={isPastel}
         onTitleChange={setTitleDraft}
         onTitleCommit={commitTitle}
         onTitleEscape={() => setTitleDraft(document.title)}

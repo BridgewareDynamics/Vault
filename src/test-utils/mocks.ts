@@ -85,6 +85,10 @@ export const mockElectronAPI = {
   deleteTextFile: vi.fn(),
   createWordEditorWindow: vi.fn(),
   reattachWordEditor: vi.fn(),
+  createMapWindow: vi.fn(),
+  reattachMapModule: vi.fn(),
+  createTranscriptionWindow: vi.fn(),
+  reattachTranscriptionModule: vi.fn(),
   closeWindow: vi.fn(),
 };
 

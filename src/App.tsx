@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { ToastProvider, useToast } from './components/Toast/ToastContext';
 import { ToastContainer } from './components/Toast/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -47,7 +47,22 @@ import {
   warmTranscriptionEntry,
 } from './utils/transcriptionPrefetch';
 import { prefetchMapModule } from './utils/mapPrefetch';
+import type {
+  MapModuleDetachState,
+  TranscriptionModuleDetachState,
+} from './types/detachableModules';
+import { dispatchWordEditorReattach } from './utils/wordEditorSnapshot';
+import {
+  planSwapToMapInMain,
+  planSwapToTranscriptionInMain,
+} from './utils/mainEmbeddedModule';
 import './App.css';
+
+function isDetachedRoute(token: string) {
+  const search = window.location.search || '';
+  const hash = window.location.hash || '';
+  return search.includes(token) || hash.includes(token);
+}
 
 function AppContent() {
   const [selectedPdfPath, setSelectedPdfPath] = useState<string | null>(null);
@@ -63,8 +78,16 @@ function AppContent() {
   const [showPDFExtraction, setShowPDFExtraction] = useState(false);
   const [transcriptionLaunchSourcePath, setTranscriptionLaunchSourcePath] = useState<string | null>(null);
   const [transcriptionLaunchCasePath, setTranscriptionLaunchCasePath] = useState<string | null>(null);
+  const [mapReattachState, setMapReattachState] = useState<MapModuleDetachState | null>(null);
+  const [transcriptionReattachState, setTranscriptionReattachState] =
+    useState<TranscriptionModuleDetachState | null>(null);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(true); // Default to true for new users
   const onboardingCompletedRef = useRef(false); // Track if onboarding was explicitly completed
+
+  const moduleVisibilityRef = useRef({ showMap, showTranscription });
+  useEffect(() => {
+    moduleVisibilityRef.current = { showMap, showTranscription };
+  }, [showMap, showTranscription]);
 
   // Listen for reattach data from detached PDF audit window
   useEffect(() => {
@@ -115,6 +138,136 @@ function AppContent() {
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
+
+  const applyMapInMain = useCallback(
+    async (incoming: MapModuleDetachState | null): Promise<boolean> => {
+      const result = await planSwapToMapInMain({
+        incoming,
+        visibility: moduleVisibilityRef.current,
+      });
+
+      if (!result.ok) {
+        toast.error(result.message);
+        return false;
+      }
+
+      if (result.flushWarning) {
+        toast.warning(
+          'Could not fully save Transcript before switching. Recent autosave may still apply.'
+        );
+      }
+
+      if (result.displacedTranscription) {
+        setTranscriptionReattachState(result.displacedTranscription);
+      }
+
+      setTranscriptionLaunchSourcePath(null);
+      setTranscriptionLaunchCasePath(null);
+      setShowTranscription(false);
+      setMapReattachState(incoming);
+      setShowMap(true);
+
+      if (incoming?.wordEditor?.isOpen) {
+        window.setTimeout(() => {
+          dispatchWordEditorReattach(incoming.wordEditor!);
+        }, 100);
+      }
+
+      return true;
+    },
+    [toast]
+  );
+
+  const applyTranscriptionInMain = useCallback(
+    async (
+      incoming: TranscriptionModuleDetachState | null,
+      launch?: { sourcePath?: string | null; casePath?: string | null }
+    ): Promise<boolean> => {
+      const result = await planSwapToTranscriptionInMain({
+        incoming,
+        visibility: moduleVisibilityRef.current,
+        launchSourcePath: launch?.sourcePath,
+        launchCasePath: launch?.casePath,
+      });
+
+      if (!result.ok) {
+        toast.error(result.message);
+        return false;
+      }
+
+      if (result.flushWarning) {
+        toast.warning(
+          'Could not fully save Map before switching. Recent autosave may still apply.'
+        );
+      }
+
+      if (result.displacedMap) {
+        setMapReattachState(result.displacedMap);
+      }
+
+      setShowMap(false);
+
+      if (incoming) {
+        setTranscriptionReattachState(incoming);
+        setTranscriptionLaunchSourcePath(incoming.launchSourcePath);
+        setTranscriptionLaunchCasePath(incoming.launchCasePath);
+      } else {
+        setTranscriptionReattachState(null);
+        setTranscriptionLaunchSourcePath(launch?.sourcePath ?? null);
+        setTranscriptionLaunchCasePath(launch?.casePath ?? null);
+      }
+
+      setShowTranscription(true);
+      return true;
+    },
+    [toast]
+  );
+
+  useEffect(() => {
+    const handleMapReattach = (event: Event) => {
+      const detail = (event as CustomEvent<MapModuleDetachState>).detail;
+      if (!detail) return;
+      void applyMapInMain(detail);
+    };
+
+    const handleTranscriptionReattach = (event: Event) => {
+      const detail = (event as CustomEvent<TranscriptionModuleDetachState>).detail;
+      if (!detail) return;
+      void applyTranscriptionInMain(detail);
+    };
+
+    window.addEventListener('reattach-map-module-data', handleMapReattach as EventListener);
+    window.addEventListener(
+      'reattach-transcription-module-data',
+      handleTranscriptionReattach as EventListener
+    );
+
+    const storedMap = (window as Window & { __reattachMapModuleData?: MapModuleDetachState })
+      .__reattachMapModuleData;
+    if (storedMap) {
+      void applyMapInMain(storedMap);
+      delete (window as Window & { __reattachMapModuleData?: MapModuleDetachState })
+        .__reattachMapModuleData;
+    }
+
+    const storedTranscription = (
+      window as Window & { __reattachTranscriptionModuleData?: TranscriptionModuleDetachState }
+    ).__reattachTranscriptionModuleData;
+    if (storedTranscription) {
+      void applyTranscriptionInMain(storedTranscription);
+      delete (
+        window as Window & { __reattachTranscriptionModuleData?: TranscriptionModuleDetachState }
+      ).__reattachTranscriptionModuleData;
+    }
+
+    return () => {
+      window.removeEventListener('reattach-map-module-data', handleMapReattach as EventListener);
+      window.removeEventListener(
+        'reattach-transcription-module-data',
+        handleTranscriptionReattach as EventListener
+      );
+    };
+  }, [applyMapInMain, applyTranscriptionInMain]);
   const { settings, updateSettings } = useSettingsContext();
   const { isOpen: isWordEditorOpen, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
   const [shouldUseOverlayMode, setShouldUseOverlayMode] = useState(false);
@@ -239,6 +392,57 @@ function AppContent() {
   
   if (shouldShowDetached) {
     return <DetachedWordEditor />;
+  }
+
+  if (isDetachedRoute('map=detached')) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+              Loading Map...
+            </div>
+          }
+        >
+          <MapModule theme={theme} hostMode="detached" onExit={() => void window.electronAPI?.closeWindow?.()} />
+        </Suspense>
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+          inlineWordEditorContainerId="map-word-editor-inline-container"
+        />
+      </>
+    );
+  }
+
+  if (isDetachedRoute('transcription=detached')) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+              Loading Transcript...
+            </div>
+          }
+        >
+          <TranscriptionModule
+            theme={theme}
+            hostMode="detached"
+            onExit={() => void window.electronAPI?.closeWindow?.()}
+          />
+        </Suspense>
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+        />
+      </>
+    );
   }
 
   // Initialize memory manager when settings are loaded
@@ -484,7 +688,14 @@ function AppContent() {
             </div>
           }
         >
-          <MapModule theme={theme} onExit={() => setShowMap(false)} />
+          <MapModule
+            theme={theme}
+            hostMode="embedded"
+            initialNavigationState={mapReattachState}
+            onNavigationStateConsumed={() => setMapReattachState(null)}
+            onPopOutComplete={() => setShowMap(false)}
+            onExit={() => setShowMap(false)}
+          />
         </Suspense>
         <ToastContainer />
         <SettingsPanel
@@ -510,6 +721,14 @@ function AppContent() {
         >
           <TranscriptionModule
             theme={theme}
+            hostMode="embedded"
+            initialNavigationState={transcriptionReattachState}
+            onNavigationStateConsumed={() => setTranscriptionReattachState(null)}
+            onPopOutComplete={() => {
+              setShowTranscription(false);
+              setTranscriptionLaunchSourcePath(null);
+              setTranscriptionLaunchCasePath(null);
+            }}
             onExit={() => {
               setShowTranscription(false);
               setTranscriptionLaunchSourcePath(null);
@@ -643,10 +862,8 @@ function AppContent() {
                 onBack={() => setShowArchive(false)}
                 onOpenTranscription={(sourcePath, casePath) => {
                   warmTranscriptionEntry();
-                  setTranscriptionLaunchSourcePath(sourcePath);
-                  setTranscriptionLaunchCasePath(casePath);
                   setShowArchive(false);
-                  setShowTranscription(true);
+                  void applyTranscriptionInMain(null, { sourcePath, casePath });
                 }}
               />
             </Suspense>
@@ -722,13 +939,11 @@ function AppContent() {
             onOpenPDFExtraction={() => setShowPDFExtraction(true)}
             onOpenMap={() => {
               void prefetchMapModule();
-              setShowMap(true);
+              void applyMapInMain(null);
             }}
             onOpenTranscription={() => {
               void prefetchTranscriptionModule();
-              setTranscriptionLaunchSourcePath(null);
-              setTranscriptionLaunchCasePath(null);
-              setShowTranscription(true);
+              void applyTranscriptionInMain(null);
             }}
           />
         </div>

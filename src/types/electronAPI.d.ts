@@ -137,6 +137,18 @@ declare global {
         viewState?: 'editor' | 'library' | 'bookmarkLibrary';
         casePath?: string | null;
       }) => Promise<{ success: boolean }>;
+      createMapWindow: (
+        state: import('./detachableModules').MapModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      reattachMapModule: (
+        state: import('./detachableModules').MapModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      createTranscriptionWindow: (
+        state: import('./detachableModules').TranscriptionModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      reattachTranscriptionModule: (
+        state: import('./detachableModules').TranscriptionModuleDetachState
+      ) => Promise<{ success: boolean }>;
       createPdfAuditWindow: (options: {
         pdfPath: string | null;
         settings: {

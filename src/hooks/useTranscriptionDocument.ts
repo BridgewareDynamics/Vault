@@ -4,11 +4,21 @@ import { logger } from '../utils/logger';
 
 const AUTOSAVE_MS = 700;
 
+interface UseTranscriptionDocumentOptions {
+  initialDocument?: TranscriptionDocument | null;
+}
+
 export function useTranscriptionDocument(
-  initialTranscriptionFolderPath: string | null
+  initialTranscriptionFolderPath: string | null,
+  options?: UseTranscriptionDocumentOptions
 ) {
-  const [document, setDocument] = useState<TranscriptionDocument | null>(null);
-  const [loading, setLoading] = useState(Boolean(initialTranscriptionFolderPath));
+  const [document, setDocument] = useState<TranscriptionDocument | null>(
+    () => options?.initialDocument ?? null
+  );
+  const [loading, setLoading] = useState(() => {
+    if (options?.initialDocument) return false;
+    return Boolean(initialTranscriptionFolderPath);
+  });
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -29,10 +39,17 @@ export function useTranscriptionDocument(
   }, []);
 
   useEffect(() => {
-    if (initialTranscriptionFolderPath) {
-      void loadTranscription(initialTranscriptionFolderPath);
+    if (!initialTranscriptionFolderPath) {
+      return;
     }
-  }, [initialTranscriptionFolderPath, loadTranscription]);
+    if (options?.initialDocument) {
+      setDocument(options.initialDocument);
+      setDirty(false);
+      setLoading(false);
+      return;
+    }
+    void loadTranscription(initialTranscriptionFolderPath);
+  }, [initialTranscriptionFolderPath, loadTranscription, options?.initialDocument]);
 
   const persist = useCallback(async (doc: TranscriptionDocument) => {
     if (!window.electronAPI?.saveTranscription) return;
