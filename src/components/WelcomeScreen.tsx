@@ -64,6 +64,11 @@ interface WelcomeMenuCardConfig {
   dark: WelcomeCardDarkPalette;
 }
 
+const ACTION_MENU_CARD_MIN_HEIGHT_CLASS = 'min-h-[22rem]';
+const ACTION_MENU_CARD_PADDING_CLASS = 'p-10 md:p-12';
+const ACTION_MENU_CARD_BODY_MIN_HEIGHT_CLASS = 'min-h-[6.5rem]';
+const ACTION_MENU_CARD_DESCRIPTION_MIN_HEIGHT_CLASS = 'min-h-[3rem]';
+
 const generateParticles = (count: number) =>
   Array.from({ length: count }, (_, i) => ({
     id: i,
@@ -172,52 +177,59 @@ export function WelcomeScreen({
         actionIconClassName: 'text-cyan-300',
       },
     },
-    {
-      key: 'vault',
-      title: 'The Vault',
-      description: 'Access your case archive',
-      actionLabel: 'Open Archive',
-      onClick: onOpenArchive,
-      icon: FolderOpen,
-      actionIcon: Zap,
-      delay: 0.75,
-      pastel: {
-        borderClassName: 'border-pink-200/40',
-        cardShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
-        glowBackground: 'radial-gradient(circle at center, rgba(251, 182, 206, 0.15) 0%, transparent 70%)',
-        glowShadow: '0 0 30px rgba(251, 182, 206, 0.2)',
-        overlayClassName: 'bg-gradient-to-br from-pink-50/30 via-rose-50/20 to-purple-50/30',
-        iconPulse: [
-          'drop-shadow(0 2px 8px rgba(251, 182, 206, 0.2))',
-          'drop-shadow(0 4px 12px rgba(244, 114, 182, 0.28))',
-          'drop-shadow(0 2px 8px rgba(251, 182, 206, 0.2))',
-        ],
-        iconGlowClassName: 'bg-gradient-to-br from-pink-200/40 via-rose-200/40 to-purple-200/40',
-        iconWrapperClassName: 'bg-gradient-to-br from-pink-100/80 to-purple-100/80 border-2 border-pink-200/30',
-        iconClassName: 'text-pink-400',
-        actionIconClassName: 'text-pink-400',
-      },
-      dark: {
-        beamBackground:
-          'linear-gradient(to right, transparent 0%, rgba(244, 114, 182, 0.55) 20%, rgba(168, 85, 247, 0.82) 50%, rgba(244, 114, 182, 0.55) 80%, transparent 100%)',
-        beamBoxShadow: '0 0 12px rgba(244, 114, 182, 0.3), 0 0 28px rgba(168, 85, 247, 0.22)',
-        frameBackgroundImage:
-          'linear-gradient(45deg, rgba(244, 114, 182, 0.95), rgba(168, 85, 247, 0.88), rgba(236, 72, 153, 0.92))',
-        buttonShadow: '0 0 30px rgba(244, 114, 182, 0.2), inset 0 0 28px rgba(168, 85, 247, 0.08)',
-        glowBackground: 'radial-gradient(circle at center, rgba(244, 114, 182, 0.18) 0%, transparent 70%)',
-        glowShadow: '0 0 40px rgba(244, 114, 182, 0.4), 0 0 60px rgba(168, 85, 247, 0.28)',
-        iconPulse: [
-          'drop-shadow(0 0 15px rgba(244, 114, 182, 0.58))',
-          'drop-shadow(0 0 25px rgba(168, 85, 247, 0.8))',
-          'drop-shadow(0 0 15px rgba(244, 114, 182, 0.58))',
-        ],
-        iconGlowClassName: 'bg-gradient-to-br from-pink-500 to-fuchsia-600',
-        iconWrapperClassName: 'bg-gradient-to-br from-pink-500/90 to-fuchsia-600/90 border border-pink-300/40',
-        iconClassName: 'text-white',
-        titleClassName: 'bg-gradient-to-r from-pink-300 via-fuchsia-300 to-violet-300 bg-clip-text text-transparent',
-        actionIconClassName: 'text-pink-300',
-      },
-    },
+    ...(onOpenTranscription
+      ? [
+          {
+            key: 'transcription',
+            title: 'Transcript',
+            description: 'Audio and video speech workflows for Vault case media',
+            actionLabel: 'Launch Engine',
+            onClick: onOpenTranscription,
+            icon: Mic2,
+            actionIcon: Zap,
+            delay: 0.75,
+            pastel: {
+              borderClassName: 'border-fuchsia-200/40',
+              cardShadow: '0 4px 24px rgba(216, 180, 254, 0.18), 0 0 0 1px rgba(216, 180, 254, 0.1)',
+              glowBackground: 'radial-gradient(circle at center, rgba(216, 180, 254, 0.18) 0%, transparent 72%)',
+              glowShadow: '0 0 34px rgba(216, 180, 254, 0.24)',
+              overlayClassName: 'bg-gradient-to-br from-fuchsia-50/35 via-purple-50/25 to-blue-50/30',
+              iconPulse: [
+                'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.24))',
+                'drop-shadow(0 4px 12px rgba(216, 180, 254, 0.34))',
+                'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.24))',
+              ],
+              iconGlowClassName: 'bg-gradient-to-br from-fuchsia-200/40 via-purple-200/40 to-blue-200/40',
+              iconWrapperClassName:
+                'bg-gradient-to-br from-fuchsia-100/80 to-purple-100/80 border-2 border-fuchsia-200/30',
+              iconClassName: 'text-fuchsia-500',
+              actionIconClassName: 'text-fuchsia-500',
+            },
+            dark: {
+              beamBackground:
+                'linear-gradient(to right, transparent 0%, rgba(236, 72, 153, 0.55) 18%, rgba(139, 92, 246, 0.82) 50%, rgba(34, 211, 238, 0.6) 82%, transparent 100%)',
+              beamBoxShadow: '0 0 12px rgba(236, 72, 153, 0.32), 0 0 28px rgba(34, 211, 238, 0.18)',
+              frameBackgroundImage:
+                'linear-gradient(45deg, rgba(236, 72, 153, 0.94), rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.94))',
+              buttonShadow: '0 0 32px rgba(236, 72, 153, 0.2), inset 0 0 28px rgba(34, 211, 238, 0.08)',
+              glowBackground: 'radial-gradient(circle at center, rgba(236, 72, 153, 0.2) 0%, transparent 70%)',
+              glowShadow: '0 0 42px rgba(236, 72, 153, 0.4), 0 0 62px rgba(34, 211, 238, 0.26)',
+              iconPulse: [
+                'drop-shadow(0 0 15px rgba(236, 72, 153, 0.56))',
+                'drop-shadow(0 0 25px rgba(34, 211, 238, 0.82))',
+                'drop-shadow(0 0 15px rgba(236, 72, 153, 0.56))',
+              ],
+              iconGlowClassName: 'bg-gradient-to-br from-fuchsia-500 to-cyan-500',
+              iconWrapperClassName:
+                'bg-gradient-to-br from-fuchsia-500/90 to-cyan-500/90 border border-fuchsia-300/40',
+              iconClassName: 'text-white',
+              titleClassName:
+                'bg-gradient-to-r from-fuchsia-300 via-violet-300 to-cyan-300 bg-clip-text text-transparent',
+              actionIconClassName: 'text-fuchsia-300',
+            },
+          },
+        ]
+      : []),
     {
       key: 'pdf-audit',
       title: 'PDF Audit',
@@ -318,54 +330,52 @@ export function WelcomeScreen({
       : []),
   ];
 
-  const transcriptionCard: WelcomeMenuCardConfig | null = onOpenTranscription
-    ? {
-        key: 'transcription',
-        title: 'Transcript',
-        description: 'Audio and video speech workflows for Vault case media',
-        actionLabel: 'Launch Engine',
-        onClick: onOpenTranscription,
-        icon: Mic2,
-        actionIcon: Zap,
-        delay: 0.95,
-        pastel: {
-          borderClassName: 'border-fuchsia-200/40',
-          cardShadow: '0 4px 24px rgba(216, 180, 254, 0.18), 0 0 0 1px rgba(216, 180, 254, 0.1)',
-          glowBackground: 'radial-gradient(circle at center, rgba(216, 180, 254, 0.18) 0%, transparent 72%)',
-          glowShadow: '0 0 34px rgba(216, 180, 254, 0.24)',
-          overlayClassName: 'bg-gradient-to-br from-fuchsia-50/35 via-purple-50/25 to-blue-50/30',
-          iconPulse: [
-            'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.24))',
-            'drop-shadow(0 4px 12px rgba(216, 180, 254, 0.34))',
-            'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.24))',
-          ],
-          iconGlowClassName: 'bg-gradient-to-br from-fuchsia-200/40 via-purple-200/40 to-blue-200/40',
-          iconWrapperClassName: 'bg-gradient-to-br from-fuchsia-100/80 to-purple-100/80 border-2 border-fuchsia-200/30',
-          iconClassName: 'text-fuchsia-500',
-          actionIconClassName: 'text-fuchsia-500',
-        },
-        dark: {
-          beamBackground:
-            'linear-gradient(to right, transparent 0%, rgba(236, 72, 153, 0.55) 18%, rgba(139, 92, 246, 0.82) 50%, rgba(34, 211, 238, 0.6) 82%, transparent 100%)',
-          beamBoxShadow: '0 0 12px rgba(236, 72, 153, 0.32), 0 0 28px rgba(34, 211, 238, 0.18)',
-          frameBackgroundImage:
-            'linear-gradient(45deg, rgba(236, 72, 153, 0.94), rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.94))',
-          buttonShadow: '0 0 32px rgba(236, 72, 153, 0.2), inset 0 0 28px rgba(34, 211, 238, 0.08)',
-          glowBackground: 'radial-gradient(circle at center, rgba(236, 72, 153, 0.2) 0%, transparent 70%)',
-          glowShadow: '0 0 42px rgba(236, 72, 153, 0.4), 0 0 62px rgba(34, 211, 238, 0.26)',
-          iconPulse: [
-            'drop-shadow(0 0 15px rgba(236, 72, 153, 0.56))',
-            'drop-shadow(0 0 25px rgba(34, 211, 238, 0.82))',
-            'drop-shadow(0 0 15px rgba(236, 72, 153, 0.56))',
-          ],
-          iconGlowClassName: 'bg-gradient-to-br from-fuchsia-500 to-cyan-500',
-          iconWrapperClassName: 'bg-gradient-to-br from-fuchsia-500/90 to-cyan-500/90 border border-fuchsia-300/40',
-          iconClassName: 'text-white',
-          titleClassName: 'bg-gradient-to-r from-fuchsia-300 via-violet-300 to-cyan-300 bg-clip-text text-transparent',
-          actionIconClassName: 'text-fuchsia-300',
-        },
-      }
-    : null;
+  const featuredVaultCard: WelcomeMenuCardConfig = {
+    key: 'vault',
+    title: 'The Vault',
+    description: 'Access your case archive',
+    actionLabel: 'Open Archive',
+    onClick: onOpenArchive,
+    icon: FolderOpen,
+    actionIcon: Zap,
+    delay: 0.95,
+    pastel: {
+      borderClassName: 'border-pink-200/40',
+      cardShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+      glowBackground: 'radial-gradient(circle at center, rgba(251, 182, 206, 0.15) 0%, transparent 70%)',
+      glowShadow: '0 0 30px rgba(251, 182, 206, 0.2)',
+      overlayClassName: 'bg-gradient-to-br from-pink-50/30 via-rose-50/20 to-purple-50/30',
+      iconPulse: [
+        'drop-shadow(0 2px 8px rgba(251, 182, 206, 0.2))',
+        'drop-shadow(0 4px 12px rgba(244, 114, 182, 0.28))',
+        'drop-shadow(0 2px 8px rgba(251, 182, 206, 0.2))',
+      ],
+      iconGlowClassName: 'bg-gradient-to-br from-pink-200/40 via-rose-200/40 to-purple-200/40',
+      iconWrapperClassName: 'bg-gradient-to-br from-pink-100/80 to-purple-100/80 border-2 border-pink-200/30',
+      iconClassName: 'text-pink-400',
+      actionIconClassName: 'text-pink-400',
+    },
+    dark: {
+      beamBackground:
+        'linear-gradient(to right, transparent 0%, rgba(244, 114, 182, 0.55) 20%, rgba(168, 85, 247, 0.82) 50%, rgba(244, 114, 182, 0.55) 80%, transparent 100%)',
+      beamBoxShadow: '0 0 12px rgba(244, 114, 182, 0.3), 0 0 28px rgba(168, 85, 247, 0.22)',
+      frameBackgroundImage:
+        'linear-gradient(45deg, rgba(244, 114, 182, 0.95), rgba(168, 85, 247, 0.88), rgba(236, 72, 153, 0.92))',
+      buttonShadow: '0 0 30px rgba(244, 114, 182, 0.2), inset 0 0 28px rgba(168, 85, 247, 0.08)',
+      glowBackground: 'radial-gradient(circle at center, rgba(244, 114, 182, 0.18) 0%, transparent 70%)',
+      glowShadow: '0 0 40px rgba(244, 114, 182, 0.4), 0 0 60px rgba(168, 85, 247, 0.28)',
+      iconPulse: [
+        'drop-shadow(0 0 15px rgba(244, 114, 182, 0.58))',
+        'drop-shadow(0 0 25px rgba(168, 85, 247, 0.8))',
+        'drop-shadow(0 0 15px rgba(244, 114, 182, 0.58))',
+      ],
+      iconGlowClassName: 'bg-gradient-to-br from-pink-500 to-fuchsia-600',
+      iconWrapperClassName: 'bg-gradient-to-br from-pink-500/90 to-fuchsia-600/90 border border-pink-300/40',
+      iconClassName: 'text-white',
+      titleClassName: 'bg-gradient-to-r from-pink-300 via-fuchsia-300 to-violet-300 bg-clip-text text-transparent',
+      actionIconClassName: 'text-pink-300',
+    },
+  };
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -760,7 +770,7 @@ export function WelcomeScreen({
             <div
               className={`relative z-10 grid grid-cols-1 md:grid-cols-2 ${
                 actionCards.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
-              } gap-8 lg:pt-10`}
+              } items-stretch gap-8 lg:pt-10`}
             >
             {actionCards.map((card) => {
               const Icon = card.icon;
@@ -772,15 +782,22 @@ export function WelcomeScreen({
                   initial={{ opacity: 0, scale: 0.96, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{ duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: card.delay }}
-                  className="relative group"
-                  onPointerEnter={card.key === 'map' ? warmMapEntry : undefined}
+                  className="relative group h-full"
+                  onPointerEnter={
+                    card.key === 'map'
+                      ? warmMapEntry
+                      : card.key === 'transcription'
+                        ? warmTranscriptionEntry
+                        : undefined
+                  }
                 >
                   {isPastel ? (
                     <motion.button
                       whileHover={{ scale: 1.02, y: -3, transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] } }}
                       whileTap={{ scale: 0.98 }}
+                      onPointerDown={card.key === 'transcription' ? warmTranscriptionEntry : undefined}
                       onClick={card.onClick}
-                      className={`w-full relative overflow-hidden rounded-3xl bg-white/80 backdrop-blur-xl shadow-lg border-2 transition-all duration-300 z-10 ${card.pastel.borderClassName}`}
+                      className={`w-full h-full ${ACTION_MENU_CARD_MIN_HEIGHT_CLASS} flex flex-col relative overflow-hidden rounded-3xl bg-white/85 backdrop-blur-xl shadow-lg border-2 transition-all duration-300 z-10 ${card.pastel.borderClassName}`}
                       style={{ boxShadow: card.pastel.cardShadow }}
                     >
                       <motion.div
@@ -795,7 +812,9 @@ export function WelcomeScreen({
                         whileHover={{ opacity: 1 }}
                         transition={{ duration: 0.3 }}
                       />
-                      <div className="relative z-10 p-10 flex flex-col items-center gap-6">
+                      <div
+                        className={`relative z-10 ${ACTION_MENU_CARD_PADDING_CLASS} flex h-full flex-1 flex-col items-center gap-6`}
+                      >
                         <motion.div
                           className="relative"
                           animate={{ filter: card.pastel.iconPulse }}
@@ -809,9 +828,15 @@ export function WelcomeScreen({
                             <Icon className={`w-12 h-12 ${card.pastel.iconClassName}`} />
                           </motion.div>
                         </motion.div>
-                        <div className="text-center">
+                        <div
+                          className={`text-center flex flex-1 flex-col justify-center w-full ${ACTION_MENU_CARD_BODY_MIN_HEIGHT_CLASS}`}
+                        >
                           <h3 className="text-2xl font-bold mb-2 text-gray-800">{card.title}</h3>
-                          <p className="text-sm text-gray-600">{card.description}</p>
+                          <p
+                            className={`text-base text-gray-600 ${ACTION_MENU_CARD_DESCRIPTION_MIN_HEIGHT_CLASS}`}
+                          >
+                            {card.description}
+                          </p>
                         </div>
                         <motion.div className="flex items-center gap-3 text-gray-700 font-semibold text-lg" whileHover={{ scale: 1.05 }}>
                           <ActionIcon className={`w-5 h-5 ${card.pastel.actionIconClassName}`} />
@@ -834,7 +859,7 @@ export function WelcomeScreen({
                         }}
                       />
                       <motion.div
-                        className="rounded-3xl p-[3px]"
+                        className={`rounded-3xl p-[3px] h-full ${ACTION_MENU_CARD_MIN_HEIGHT_CLASS}`}
                         style={{ backgroundImage: card.dark.frameBackgroundImage, backgroundSize: '200% 200%' }}
                         animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
                         transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
@@ -842,8 +867,9 @@ export function WelcomeScreen({
                         <motion.button
                           whileHover={{ scale: 1.04, y: -4, transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] } }}
                           whileTap={{ scale: 0.98 }}
+                          onPointerDown={card.key === 'transcription' ? warmTranscriptionEntry : undefined}
                           onClick={card.onClick}
-                          className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10"
+                          className={`w-full h-full ${ACTION_MENU_CARD_MIN_HEIGHT_CLASS} flex flex-col relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10`}
                           style={{ boxShadow: card.dark.buttonShadow }}
                         >
                           <motion.div
@@ -858,7 +884,9 @@ export function WelcomeScreen({
                             whileHover={{ opacity: 1 }}
                             transition={{ duration: 0.2 }}
                           />
-                          <div className="relative z-10 p-10 flex flex-col items-center gap-6">
+                          <div
+                            className={`relative z-10 ${ACTION_MENU_CARD_PADDING_CLASS} flex h-full flex-1 flex-col items-center gap-6`}
+                          >
                             <motion.div
                               className="relative"
                               animate={{ filter: card.dark.iconPulse }}
@@ -872,9 +900,15 @@ export function WelcomeScreen({
                                 <Icon className={`w-12 h-12 ${card.dark.iconClassName}`} />
                               </motion.div>
                             </motion.div>
-                            <div className="text-center">
+                            <div
+                              className={`text-center flex flex-1 flex-col justify-center w-full ${ACTION_MENU_CARD_BODY_MIN_HEIGHT_CLASS}`}
+                            >
                               <h3 className={`text-2xl font-bold mb-2 ${card.dark.titleClassName}`}>{card.title}</h3>
-                              <p className="text-sm text-gray-300">{card.description}</p>
+                              <p
+                                className={`text-base text-gray-300 ${ACTION_MENU_CARD_DESCRIPTION_MIN_HEIGHT_CLASS}`}
+                              >
+                                {card.description}
+                              </p>
                             </div>
                             <motion.div className="flex items-center gap-3 text-white font-semibold text-lg" whileHover={{ scale: 1.1 }}>
                               <ActionIcon className={`w-5 h-5 ${card.dark.actionIconClassName}`} />
@@ -890,8 +924,7 @@ export function WelcomeScreen({
             })}
             </div>
 
-          {transcriptionCard ? (
-            <div className="mx-auto mt-10 flex w-full max-w-5xl flex-col items-center">
+          <div className="mx-auto mt-10 flex w-full max-w-5xl flex-col items-center">
               <div
                 className={`grid w-full grid-cols-1 ${
                   actionCards.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
@@ -905,7 +938,7 @@ export function WelcomeScreen({
                   }`}
                 >
                   {(() => {
-                    const card = transcriptionCard;
+                    const card = featuredVaultCard;
                     const Icon = card.icon;
                     const ActionIcon = card.actionIcon;
 
@@ -920,7 +953,6 @@ export function WelcomeScreen({
                           delay: card.delay,
                         }}
                         className="relative group"
-                        onPointerEnter={warmTranscriptionEntry}
                       >
                         {isPastel ? (
                           <motion.button
@@ -933,7 +965,6 @@ export function WelcomeScreen({
                               },
                             }}
                             whileTap={{ scale: 0.98 }}
-                            onPointerDown={warmTranscriptionEntry}
                             onClick={card.onClick}
                             className={`w-full relative overflow-hidden rounded-3xl bg-white/85 backdrop-blur-xl shadow-lg border-2 transition-all duration-300 z-10 ${card.pastel.borderClassName}`}
                             style={{ boxShadow: card.pastel.cardShadow }}
@@ -1023,7 +1054,6 @@ export function WelcomeScreen({
                                   },
                                 }}
                                 whileTap={{ scale: 0.98 }}
-                                onPointerDown={warmTranscriptionEntry}
                                 onClick={card.onClick}
                                 className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10"
                                 style={{ boxShadow: card.dark.buttonShadow }}
@@ -1088,7 +1118,6 @@ export function WelcomeScreen({
                 </div>
               </div>
             </div>
-          ) : null}
           </div>
         </motion.div>
       </div>

@@ -86,7 +86,7 @@ describe('WelcomeScreen', () => {
     expect(vaultIcon).toHaveAttribute('src');
   });
 
-  it('should render transcription card when handler is provided', () => {
+  it('should render transcript in the action grid when handler is provided', () => {
     render(
       <SettingsProvider>
         <WelcomeScreen
@@ -98,7 +98,9 @@ describe('WelcomeScreen', () => {
     );
 
     expect(screen.getByText('Transcript')).toBeInTheDocument();
-    expect(screen.getByText('Audio and video speech workflows for Vault case media')).toBeInTheDocument();
+    expect(screen.getByText('Launch Engine')).toBeInTheDocument();
+    expect(screen.getByText('Open Archive')).toBeInTheDocument();
+    expect(screen.getByText('Access your case archive')).toBeInTheDocument();
   });
 });
 
