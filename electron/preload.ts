@@ -118,6 +118,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('create-file-converter-window', state),
       reattachFileConverterModule: (state: Record<string, unknown>) =>
         ipcRenderer.invoke('reattach-file-converter-module', state),
+      createNovelWindow: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('create-novel-window', state),
+      reattachNovelModule: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('reattach-novel-module', state),
   createPdfAuditWindow: (options: {
     pdfPath: string | null;
     settings: {
@@ -243,6 +247,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('export-map-to-directory', mapFolderPath, destDirectory),
   exportMapPng: (options: { mapFolderPath: string; pngBase64: string; destFilePath?: string }) =>
     ipcRenderer.invoke('export-map-png', options),
+  // Novel API
+  listNovels: () => ipcRenderer.invoke('list-novels'),
+  listCaseNovels: (casePath: string) => ipcRenderer.invoke('list-case-novels', casePath),
+  createNovel: (title: string, casePath?: string | null, bookSizeId?: string | null) =>
+    ipcRenderer.invoke('create-novel', title, casePath, bookSizeId),
+  readNovel: (novelFolderPath: string) => ipcRenderer.invoke('read-novel', novelFolderPath),
+  saveNovel: (document: unknown) => ipcRenderer.invoke('save-novel', document),
+  deleteNovel: (novelFolderPath: string) => ipcRenderer.invoke('delete-novel', novelFolderPath),
+  moveNovelToCase: (novelFolderPath: string, casePath: string) =>
+    ipcRenderer.invoke('move-novel-to-case', novelFolderPath, casePath),
+  moveNovelToLibrary: (novelFolderPath: string) => ipcRenderer.invoke('move-novel-to-library', novelFolderPath),
+  copyNovelAssetToNovel: (novelFolderPath: string, sourcePath: string, assetId: string) =>
+    ipcRenderer.invoke('copy-novel-asset-to-novel', novelFolderPath, sourcePath, assetId),
+  exportNovelPdf: (novelFolderPath: string, destFilePath: string) =>
+    ipcRenderer.invoke('export-novel-pdf', novelFolderPath, destFilePath),
+  exportNovelHtml: (novelFolderPath: string, destDirectory: string) =>
+    ipcRenderer.invoke('export-novel-html', novelFolderPath, destDirectory),
+  exportNovelDocx: (novelFolderPath: string, destFilePath: string) =>
+    ipcRenderer.invoke('export-novel-docx', novelFolderPath, destFilePath),
+  exportNovelEpub: (novelFolderPath: string, destFilePath: string) =>
+    ipcRenderer.invoke('export-novel-epub', novelFolderPath, destFilePath),
   // Transcription API
   getTranscriptionEngineStatus: () => ipcRenderer.invoke('get-transcription-engine-status'),
   startTranscriptionEngine: () => ipcRenderer.invoke('start-transcription-engine'),

@@ -240,6 +240,57 @@ export interface MapListEntry {
   blockCount: number;
 }
 
+// Novel Types
+export interface NovelPageImage {
+  id: string;
+  assetPath: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  wrapMode: 'inline' | 'square' | 'behind';
+}
+
+export interface NovelPage {
+  id: string;
+  side: 'left' | 'right';
+  type: 'cover' | 'content';
+  contentHtml: string;
+  images: NovelPageImage[];
+}
+
+export interface NovelDocument {
+  id: string;
+  title: string;
+  version: 1;
+  createdAt: number;
+  updatedAt: number;
+  casePath: string | null;
+  novelFolderPath: string;
+  settings: {
+    showPageNumbers: boolean;
+    fontFamily: string;
+    fontSize: number;
+    bookSizeId: string;
+    marginMm: number;
+    coverTitle: string;
+    coverSubtitle?: string;
+    coverImageAssetId?: string;
+    coverImageRelativePath?: string;
+  };
+  pages: NovelPage[];
+}
+
+export interface NovelListEntry {
+  id: string;
+  title: string;
+  novelFolderPath: string;
+  casePath: string | null;
+  caseName?: string;
+  modified: number;
+  pageCount: number;
+}
+
 // Transcription Types
 export type TranscriptionDocumentStatus =
   | 'draft'

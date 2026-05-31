@@ -20,6 +20,7 @@ import { migrateMetadataFilesToDatabase } from './database/migration';
 import { FileSystemWatcher } from './database/watcher';
 import { File } from './database/models';
 import * as mapStorage from './utils/mapStorage';
+import * as novelStorage from './utils/novelStorage';
 import * as transcriptionStorage from './utils/transcriptionStorage';
 import { transcriptionEngine } from './transcription/transcriptionEngine';
 import {
@@ -617,11 +618,14 @@ ipcMain.handle('select-pdf-file', async () => {
 });
 
 // Select image file
-ipcMain.handle('select-image-file', async () => {
-  if (!mainWindow) return null;
+ipcMain.handle('select-image-file', async (event) => {
+  const parentWindow = getDialogParentWindow(event);
+  if (!parentWindow) return null;
 
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Select Background Image',
+  parentWindow.focus();
+
+  const result = await dialog.showOpenDialog(parentWindow, {
+    title: 'Select Image',
     filters: [
       { name: 'Image Files', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] },
       { name: 'All Files', extensions: ['*'] },
@@ -3856,6 +3860,7 @@ let wordEditorWindow: BrowserWindow | null = null;
 let mapModuleWindow: BrowserWindow | null = null;
 let transcriptionModuleWindow: BrowserWindow | null = null;
 let fileConverterModuleWindow: BrowserWindow | null = null;
+let novelModuleWindow: BrowserWindow | null = null;
 
 // Create PDF audit window
 let pdfAuditWindow: BrowserWindow | null = null;
@@ -3892,6 +3897,11 @@ function getResearchWorkspaceBounds(parent?: BrowserWindow | null) {
   }
 
   return { x, y, width, height };
+}
+
+function getDialogParentWindow(event?: Electron.IpcMainInvokeEvent): BrowserWindow | null {
+  const senderWindow = event ? BrowserWindow.fromWebContents(event.sender) : null;
+  return senderWindow ?? BrowserWindow.getFocusedWindow() ?? mainWindow;
 }
 
 function createResearchWorkspaceWindow(options: {
@@ -4335,6 +4345,69 @@ ipcMain.handle('reattach-file-converter-module', async (event, state: Record<str
     logger.error('Failed to reattach file converter module:', error);
     throw new Error(
       `Failed to reattach file converter module: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+// Create Novel research workspace window
+ipcMain.handle('create-novel-window', async (_event, state: Record<string, unknown>) => {
+  try {
+    if (novelModuleWindow && !novelModuleWindow.isDestroyed()) {
+      novelModuleWindow.focus();
+      sendJsonEventToWindow(novelModuleWindow, 'novel-module-data', '__novelModuleInitialData', state);
+      return { success: true };
+    }
+
+    novelModuleWindow = createResearchWorkspaceWindow({
+      title: 'Vault — Novel',
+      parent: mainWindow,
+    });
+
+    loadDetachedRoute(novelModuleWindow, 'novel=detached');
+
+    novelModuleWindow.once('ready-to-show', () => {
+      novelModuleWindow?.show();
+    });
+
+    novelModuleWindow.on('closed', () => {
+      novelModuleWindow = null;
+    });
+
+    novelModuleWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        sendJsonEventToWindow(novelModuleWindow, 'novel-module-data', '__novelModuleInitialData', state);
+      }, 500);
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create novel window:', error);
+    throw new Error(
+      `Failed to create novel window: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+ipcMain.handle('reattach-novel-module', async (event, state: Record<string, unknown>) => {
+  try {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      sendJsonEventToWindow(mainWindow, 'reattach-novel-module-data', '__reattachNovelModuleData', state);
+    }
+
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    if (novelModuleWindow === senderWindow) {
+      novelModuleWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach novel module:', error);
+    throw new Error(
+      `Failed to reattach novel module: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 });
@@ -4868,9 +4941,13 @@ ipcMain.handle('rename-map', async (event, mapFolderPath: string, newTitle: stri
   }
 });
 
-ipcMain.handle('select-map-attachments', async () => {
-  if (!mainWindow) return [];
-  const result = await dialog.showOpenDialog(mainWindow, {
+ipcMain.handle('select-map-attachments', async (event) => {
+  const parentWindow = getDialogParentWindow(event);
+  if (!parentWindow) return [];
+
+  parentWindow.focus();
+
+  const result = await dialog.showOpenDialog(parentWindow, {
     title: 'Select Files for Block',
     properties: ['openFile', 'multiSelections'],
   });
@@ -4927,6 +5004,132 @@ ipcMain.handle(
     }
   }
 );
+
+// Novel handlers
+ipcMain.handle('list-novels', async () => {
+  try {
+    return await novelStorage.listAllNovels();
+  } catch (error) {
+    logger.error('Failed to list novels:', error);
+    throw new Error(`Failed to list novels: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('list-case-novels', async (_event, casePath: string) => {
+  try {
+    return await novelStorage.listCaseNovels(casePath);
+  } catch (error) {
+    logger.error('Failed to list case novels:', error);
+    throw new Error(`Failed to list case novels: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('create-novel', async (_event, title: string, casePath?: string | null, bookSizeId?: string | null) => {
+  try {
+    return await novelStorage.createNovel(title, casePath ?? null, bookSizeId ?? null);
+  } catch (error) {
+    logger.error('Failed to create novel:', error);
+    throw new Error(`Failed to create novel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('read-novel', async (_event, novelFolderPath: string) => {
+  try {
+    return await novelStorage.readNovelDocument(novelFolderPath);
+  } catch (error) {
+    logger.error('Failed to read novel:', error);
+    throw new Error(`Failed to read novel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('save-novel', async (_event, document: novelStorage.NovelDocumentStored) => {
+  try {
+    return await novelStorage.saveNovelDocument(document);
+  } catch (error) {
+    logger.error('Failed to save novel:', error);
+    throw new Error(`Failed to save novel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('delete-novel', async (_event, novelFolderPath: string) => {
+  try {
+    await novelStorage.deleteNovel(novelFolderPath);
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to delete novel:', error);
+    throw new Error(`Failed to delete novel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('move-novel-to-case', async (_event, novelFolderPath: string, casePath: string) => {
+  try {
+    return await novelStorage.moveNovelToCase(novelFolderPath, casePath);
+  } catch (error) {
+    logger.error('Failed to move novel to case:', error);
+    throw new Error(`Failed to move novel to case: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('move-novel-to-library', async (_event, novelFolderPath: string) => {
+  try {
+    return await novelStorage.moveNovelToLibrary(novelFolderPath);
+  } catch (error) {
+    logger.error('Failed to move novel to library:', error);
+    throw new Error(`Failed to move novel to library: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle(
+  'copy-novel-asset-to-novel',
+  async (_event, novelFolderPath: string, sourcePath: string, assetId: string) => {
+    try {
+      return await novelStorage.copyNovelAssetToNovel(novelFolderPath, sourcePath, assetId);
+    } catch (error) {
+      logger.error('Failed to copy novel asset:', error);
+      throw new Error(`Failed to copy asset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+);
+
+ipcMain.handle('export-novel-pdf', async (_event, novelFolderPath: string, destFilePath: string) => {
+  try {
+    const filePath = await novelStorage.exportNovelToPdf(novelFolderPath, destFilePath);
+    return { success: true, filePath };
+  } catch (error) {
+    logger.error('Failed to export novel PDF:', error);
+    throw new Error(`Failed to export PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('export-novel-html', async (_event, novelFolderPath: string, destDirectory: string) => {
+  try {
+    const exportPath = await novelStorage.exportNovelToHtml(novelFolderPath, destDirectory);
+    return { success: true, exportPath };
+  } catch (error) {
+    logger.error('Failed to export novel HTML:', error);
+    throw new Error(`Failed to export HTML: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('export-novel-docx', async (_event, novelFolderPath: string, destFilePath: string) => {
+  try {
+    const filePath = await novelStorage.exportNovelToDocx(novelFolderPath, destFilePath);
+    return { success: true, filePath };
+  } catch (error) {
+    logger.error('Failed to export novel DOCX:', error);
+    throw new Error(`Failed to export DOCX: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('export-novel-epub', async (_event, novelFolderPath: string, destFilePath: string) => {
+  try {
+    const filePath = await novelStorage.exportNovelToEpub(novelFolderPath, destFilePath);
+    return { success: true, filePath };
+  } catch (error) {
+    logger.error('Failed to export novel EPUB:', error);
+    throw new Error(`Failed to export EPUB: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
 
 // Transcription handlers
 ipcMain.handle('get-transcription-engine-status', async () => {

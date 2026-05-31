@@ -59,6 +59,21 @@ export const mockElectronAPI = {
   copyMapAttachmentToAssets: vi.fn(),
   exportMapToDirectory: vi.fn(),
   exportMapPng: vi.fn(),
+  // Novel APIs
+  listNovels: vi.fn(),
+  listCaseNovels: vi.fn(),
+  createNovel: vi.fn(),
+  readNovel: vi.fn(),
+  saveNovel: vi.fn(),
+  deleteNovel: vi.fn(),
+  moveNovelToCase: vi.fn(),
+  moveNovelToLibrary: vi.fn(),
+  copyNovelAssetToNovel: vi.fn(),
+  exportNovelPdf: vi.fn(),
+  exportNovelHtml: vi.fn(),
+  exportNovelDocx: vi.fn(),
+  exportNovelEpub: vi.fn(),
+  showSaveDialog: vi.fn(),
   // Transcription APIs
   getTranscriptionEngineStatus: vi.fn(),
   startTranscriptionEngine: vi.fn(),
@@ -99,6 +114,8 @@ export const mockElectronAPI = {
   reattachTranscriptionModule: vi.fn(),
   createFileConverterWindow: vi.fn(),
   reattachFileConverterModule: vi.fn(),
+  createNovelWindow: vi.fn(),
+  reattachNovelModule: vi.fn(),
   closeWindow: vi.fn(),
 };
 

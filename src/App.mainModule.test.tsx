@@ -35,7 +35,7 @@ describe('main module swap with embedded snapshot', () => {
     const snapshotPromise = collectEmbeddedTranscriptionSnapshot(500);
     const swapPromise = planSwapToMapInMain({
       incoming: null,
-      visibility: { showMap: false, showTranscription: true },
+      visibility: { showMap: false, showTranscription: true, showNovel: false },
     });
 
     const [snapshot, swap] = await Promise.all([snapshotPromise, swapPromise]);

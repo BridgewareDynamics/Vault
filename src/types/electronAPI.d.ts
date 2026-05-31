@@ -155,6 +155,12 @@ declare global {
       reattachFileConverterModule: (
         state: import('./detachableModules').FileConverterModuleDetachState
       ) => Promise<{ success: boolean }>;
+      createNovelWindow: (
+        state: import('./detachableModules').NovelModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      reattachNovelModule: (
+        state: import('./detachableModules').NovelModuleDetachState
+      ) => Promise<{ success: boolean }>;
       createPdfAuditWindow: (options: {
         pdfPath: string | null;
         settings: {
@@ -324,6 +330,40 @@ declare global {
         pngBase64: string;
         destFilePath?: string;
       }) => Promise<{ success: boolean; filePath: string }>;
+      // Novel API
+      listNovels: () => Promise<import('./index').NovelListEntry[]>;
+      listCaseNovels: (casePath: string) => Promise<import('./index').NovelListEntry[]>;
+      createNovel: (
+        title: string,
+        casePath?: string | null,
+        bookSizeId?: string | null
+      ) => Promise<import('./index').NovelDocument>;
+      readNovel: (novelFolderPath: string) => Promise<import('./index').NovelDocument>;
+      saveNovel: (document: import('./index').NovelDocument) => Promise<import('./index').NovelDocument>;
+      deleteNovel: (novelFolderPath: string) => Promise<{ success: boolean }>;
+      moveNovelToCase: (novelFolderPath: string, casePath: string) => Promise<import('./index').NovelDocument>;
+      moveNovelToLibrary: (novelFolderPath: string) => Promise<import('./index').NovelDocument>;
+      copyNovelAssetToNovel: (
+        novelFolderPath: string,
+        sourcePath: string,
+        assetId: string
+      ) => Promise<{ relativePath: string; vaultPath: string; fileName: string }>;
+      exportNovelPdf: (
+        novelFolderPath: string,
+        destFilePath: string
+      ) => Promise<{ success: boolean; filePath: string }>;
+      exportNovelHtml: (
+        novelFolderPath: string,
+        destDirectory: string
+      ) => Promise<{ success: boolean; exportPath: string }>;
+      exportNovelDocx: (
+        novelFolderPath: string,
+        destFilePath: string
+      ) => Promise<{ success: boolean; filePath: string }>;
+      exportNovelEpub: (
+        novelFolderPath: string,
+        destFilePath: string
+      ) => Promise<{ success: boolean; filePath: string }>;
       // Transcription API
       getTranscriptionEngineStatus: () => Promise<import('./index').TranscriptionEngineStatus>;
       startTranscriptionEngine: () => Promise<import('./index').TranscriptionEngineStatus>;

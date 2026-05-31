@@ -1,4 +1,4 @@
-import type { MapDocument, TranscriptionDocument } from './index';
+import type { MapDocument, TranscriptionDocument, NovelDocument } from './index';
 
 export type MapScreen = 'landing' | 'library' | 'editor';
 
@@ -38,6 +38,25 @@ export interface FileConverterModuleDetachState {
   source: FileConverterSource | null;
   target: FileConverterTarget;
   selectedCasePath: string | null;
+}
+
+export type NovelScreen = 'landing' | 'library' | 'editor';
+
+export type NovelWordEditorViewState = 'editor' | 'library' | 'bookmarkLibrary';
+
+export interface NovelModuleWordEditorSnapshot {
+  isOpen: boolean;
+  content: string;
+  filePath: string | null;
+  viewState: NovelWordEditorViewState;
+}
+
+export interface NovelModuleDetachState {
+  screen: NovelScreen;
+  editorNovelPath: string | null;
+  editorDocument: NovelDocument | null;
+  currentSpreadIndex: number;
+  wordEditor?: NovelModuleWordEditorSnapshot;
 }
 
 export interface FileConverterWorkspaceDetachBridge {

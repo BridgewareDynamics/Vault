@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { memo } from 'react';
-import { FileText, FolderOpen, Shield, Search, Layers, Settings, Map as MapIcon } from 'lucide-react';
+import { FileText, FolderOpen, Shield, Search, Layers, Settings, Map as MapIcon, BookOpen } from 'lucide-react';
 import { Theme } from '../../types';
 import { isLightTheme } from '../../theme/themeSemantics';
 import { HolographicEffect } from '../Shared/HolographicEffect';
@@ -38,6 +38,13 @@ export const FeaturesPage = memo(function FeaturesPage({ theme = 'brideware-purp
       description: 'Build research timelines with dated blocks, attachments, and notes',
       color: 'from-purple-600 to-cyan-600',
       details: ['Tier-based chronology', 'File attachments', 'Timeline canvas', 'Vault & case save'],
+    },
+    {
+      icon: BookOpen,
+      title: 'Novel::',
+      description: 'Write case narratives in a paginated book editor with cover, spreads, and export',
+      color: 'from-amber-500 to-rose-500',
+      details: ['Book spreads', 'Case-linked images', 'Research notes panel', 'PDF & HTML export'],
     },
     {
       icon: Shield,

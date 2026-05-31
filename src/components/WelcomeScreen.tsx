@@ -4,6 +4,7 @@ import { FileText, FolderOpen, Map as MapIcon, Mic2, Shield } from 'lucide-react
 import { ActionToolbar } from './ActionToolbar';
 import { CardBottomDropBeam, MenuGridBeamNetwork } from './Welcome/MenuEnergyConnector';
 import { PdfConverterColumn, type FileConverterCardPalette } from './Welcome/PdfConverterColumn';
+import { PdfAuditNovelColumn, type NovelCardPalette } from './Welcome/PdfAuditNovelColumn';
 import {
   WelcomeActionCard,
   WelcomeActionCardWrapper,
@@ -15,6 +16,7 @@ import { isLightTheme } from '../theme/themeSemantics';
 import { warmTranscriptionEntry } from '../utils/transcriptionPrefetch';
 import { warmMapEntry } from '../utils/mapPrefetch';
 import { warmFileConverterEntry } from '../utils/fileConverterPrefetch';
+import { warmNovelEntry } from '../utils/novelPrefetch';
 
 const getAssetPath = (path: string) => {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
@@ -28,6 +30,7 @@ interface WelcomeScreenProps {
   onOpenPDFExtraction?: () => void;
   onOpenFileConverter?: () => void;
   onOpenMap?: () => void;
+  onOpenNovel?: () => void;
   onOpenTranscription?: () => void;
 }
 
@@ -48,6 +51,7 @@ export function WelcomeScreen({
   onOpenPDFExtraction,
   onOpenFileConverter,
   onOpenMap,
+  onOpenNovel,
   onOpenTranscription,
 }: WelcomeScreenProps) {
   const { settings } = useSettingsContext();
@@ -62,6 +66,9 @@ export function WelcomeScreen({
     }
     if (onOpenMap) {
       warmers.push(warmMapEntry);
+    }
+    if (onOpenNovel) {
+      warmers.push(warmNovelEntry);
     }
     if (onOpenFileConverter) {
       warmers.push(warmFileConverterEntry);
@@ -87,7 +94,7 @@ export function WelcomeScreen({
         window.clearTimeout(timeoutId);
       }
     };
-  }, [onOpenMap, onOpenTranscription, onOpenFileConverter]);
+  }, [onOpenMap, onOpenNovel, onOpenTranscription, onOpenFileConverter]);
 
   const isPastel = isLightTheme(theme);
   const bgGradient = isPastel
@@ -335,8 +342,50 @@ export function WelcomeScreen({
     },
   };
 
-  const pdfToPngCard = actionCards[0];
-  const remainingActionCards = actionCards.slice(1);
+  const pdfToPngCard = actionCards.find((card) => card.key === 'pdf-to-png');
+  const pdfAuditCard = actionCards.find((card) => card.key === 'pdf-audit');
+  const middleActionCards = actionCards.filter(
+    (card) => card.key !== 'pdf-to-png' && card.key !== 'pdf-audit'
+  );
+
+  const novelPalette: NovelCardPalette = {
+    pastel: {
+      borderClassName: 'border-amber-200/40',
+      cardShadow: '0 4px 20px rgba(251, 191, 36, 0.18), 0 0 0 1px rgba(251, 191, 36, 0.12)',
+      glowBackground: 'radial-gradient(circle at center, rgba(251, 191, 36, 0.18) 0%, transparent 70%)',
+      glowShadow: '0 0 30px rgba(251, 191, 36, 0.22)',
+      overlayClassName: 'bg-gradient-to-br from-amber-50/30 via-rose-50/20 to-orange-50/30',
+      iconPulse: [
+        'drop-shadow(0 2px 8px rgba(251, 191, 36, 0.24))',
+        'drop-shadow(0 4px 12px rgba(244, 114, 182, 0.32))',
+        'drop-shadow(0 2px 8px rgba(251, 191, 36, 0.24))',
+      ],
+      iconGlowClassName: 'bg-gradient-to-br from-amber-200/40 via-rose-200/40 to-orange-200/40',
+      iconWrapperClassName: 'bg-gradient-to-br from-amber-100/80 to-rose-100/80 border-2 border-amber-200/30',
+      iconClassName: 'text-amber-600',
+      actionIconClassName: 'text-amber-600',
+    },
+    dark: {
+      beamBackground:
+        'linear-gradient(to right, transparent 0%, rgba(251, 191, 36, 0.55) 20%, rgba(244, 114, 182, 0.85) 50%, rgba(251, 191, 36, 0.55) 80%, transparent 100%)',
+      beamBoxShadow: '0 0 12px rgba(251, 191, 36, 0.35), 0 0 28px rgba(244, 114, 182, 0.22)',
+      frameBackgroundImage:
+        'linear-gradient(45deg, rgba(251, 191, 36, 0.95), rgba(244, 114, 182, 0.85), rgba(234, 88, 12, 0.95))',
+      buttonShadow: '0 0 30px rgba(251, 191, 36, 0.24), inset 0 0 28px rgba(244, 114, 182, 0.08)',
+      glowBackground: 'radial-gradient(circle at center, rgba(251, 191, 36, 0.2) 0%, transparent 70%)',
+      glowShadow: '0 0 40px rgba(251, 191, 36, 0.45), 0 0 60px rgba(244, 114, 182, 0.3)',
+      iconPulse: [
+        'drop-shadow(0 0 15px rgba(251, 191, 36, 0.6))',
+        'drop-shadow(0 0 25px rgba(244, 114, 182, 0.85))',
+        'drop-shadow(0 0 15px rgba(251, 191, 36, 0.6))',
+      ],
+      iconGlowClassName: 'bg-gradient-to-br from-amber-500 to-rose-500',
+      iconWrapperClassName: 'bg-gradient-to-br from-amber-500/90 to-rose-500/90 border border-amber-300/35',
+      iconClassName: 'text-white',
+      titleClassName: 'bg-gradient-to-r from-amber-300 via-rose-300 to-orange-300 bg-clip-text text-transparent',
+      actionIconClassName: 'text-amber-300',
+    },
+  };
 
   const featuredVaultCard: WelcomeMenuCardConfig = {
     key: 'vault',
@@ -797,9 +846,25 @@ export function WelcomeScreen({
                 ) : pdfToPngCard ? (
                   <WelcomeActionCardWrapper card={pdfToPngCard} isPastel={isPastel} />
                 ) : null}
-                {remainingActionCards.map((card) => (
+                {middleActionCards.map((card) => (
                   <WelcomeActionCardWrapper key={card.key} card={card} isPastel={isPastel} />
                 ))}
+                {pdfAuditCard && onOpenNovel ? (
+                  <PdfAuditNovelColumn
+                    isPastel={isPastel}
+                    primaryRgba={primaryRgba}
+                    secondaryRgba={secondaryRgba}
+                    pdfAuditBeamBackground={pdfAuditCard.dark.beamBackground}
+                    pdfAuditBeamBoxShadow={pdfAuditCard.dark.beamBoxShadow}
+                    novelPalette={novelPalette}
+                    onOpenNovel={onOpenNovel}
+                    delay={pdfAuditCard.delay}
+                  >
+                    <WelcomeActionCard card={pdfAuditCard} isPastel={isPastel} omitDarkBeamBorder />
+                  </PdfAuditNovelColumn>
+                ) : pdfAuditCard ? (
+                  <WelcomeActionCardWrapper key={pdfAuditCard.key} card={pdfAuditCard} isPastel={isPastel} />
+                ) : null}
               </div>
             </div>
 

@@ -32,21 +32,25 @@ import {
   warmTranscriptionEntry,
 } from './utils/transcriptionPrefetch';
 import { prefetchMapModule } from './utils/mapPrefetch';
+import { prefetchNovelModule } from './utils/novelPrefetch';
 import type {
   FileConverterModuleDetachState,
   MapModuleDetachState,
+  NovelModuleDetachState,
   TranscriptionModuleDetachState,
 } from './types/detachableModules';
 import { dispatchWordEditorReattach } from './utils/wordEditorSnapshot';
 import {
   planSwapToMapInMain,
   planSwapToTranscriptionInMain,
+  planSwapToNovelInMain,
 } from './utils/mainEmbeddedModule';
 import {
   loadFileConverterModule,
   prefetchFileConverterModule,
 } from './utils/fileConverterPrefetch';
 import { FileConverterLoadingShell } from './components/FileConverter/FileConverterLoadingShell';
+import { NovelLoadingShell } from './components/Novel/NovelLoadingShell';
 import './App.css';
 
 const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
@@ -69,6 +73,13 @@ const FileConverterModule = lazy(() =>
     default: module.FileConverterModule,
   }))
 );
+const NovelModule = lazy(() =>
+  import('./utils/novelPrefetch').then(({ loadNovelModule }) =>
+    loadNovelModule().then((module) => ({
+      default: module.NovelModule,
+    }))
+  )
+);
 
 function isDetachedRoute(token: string) {
   const search = window.location.search || '';
@@ -89,6 +100,7 @@ function AppContent() {
   const [showSecurityChecker, setShowSecurityChecker] = useState(false);
   const [showPDFExtraction, setShowPDFExtraction] = useState(false);
   const [showFileConverter, setShowFileConverter] = useState(false);
+  const [showNovel, setShowNovel] = useState(false);
   const [fileConverterReattachState, setFileConverterReattachState] =
     useState<FileConverterModuleDetachState | null>(null);
   const [transcriptionLaunchSourcePath, setTranscriptionLaunchSourcePath] = useState<string | null>(null);
@@ -96,13 +108,14 @@ function AppContent() {
   const [mapReattachState, setMapReattachState] = useState<MapModuleDetachState | null>(null);
   const [transcriptionReattachState, setTranscriptionReattachState] =
     useState<TranscriptionModuleDetachState | null>(null);
+  const [novelReattachState, setNovelReattachState] = useState<NovelModuleDetachState | null>(null);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(true); // Default to true for new users
   const onboardingCompletedRef = useRef(false); // Track if onboarding was explicitly completed
 
-  const moduleVisibilityRef = useRef({ showMap, showTranscription });
+  const moduleVisibilityRef = useRef({ showMap, showTranscription, showNovel });
   useEffect(() => {
-    moduleVisibilityRef.current = { showMap, showTranscription };
-  }, [showMap, showTranscription]);
+    moduleVisibilityRef.current = { showMap, showTranscription, showNovel };
+  }, [showMap, showTranscription, showNovel]);
 
   // Listen for reattach data from detached PDF audit window
   useEffect(() => {
@@ -168,7 +181,7 @@ function AppContent() {
 
       if (result.flushWarning) {
         toast.warning(
-          'Could not fully save Transcript before switching. Recent autosave may still apply.'
+          'Could not fully save open modules before switching. Recent autosave may still apply.'
         );
       }
 
@@ -176,9 +189,14 @@ function AppContent() {
         setTranscriptionReattachState(result.displacedTranscription);
       }
 
+      if (result.displacedNovel) {
+        setNovelReattachState(result.displacedNovel);
+      }
+
       setTranscriptionLaunchSourcePath(null);
       setTranscriptionLaunchCasePath(null);
       setShowTranscription(false);
+      setShowNovel(false);
       setMapReattachState(incoming);
       setShowMap(true);
 
@@ -212,7 +230,7 @@ function AppContent() {
 
       if (result.flushWarning) {
         toast.warning(
-          'Could not fully save Map before switching. Recent autosave may still apply.'
+          'Could not fully save open modules before switching. Recent autosave may still apply.'
         );
       }
 
@@ -220,7 +238,12 @@ function AppContent() {
         setMapReattachState(result.displacedMap);
       }
 
+      if (result.displacedNovel) {
+        setNovelReattachState(result.displacedNovel);
+      }
+
       setShowMap(false);
+      setShowNovel(false);
 
       if (incoming) {
         setTranscriptionReattachState(incoming);
@@ -241,10 +264,56 @@ function AppContent() {
   const applyFileConverterInMain = useCallback((incoming: FileConverterModuleDetachState | null) => {
     setShowMap(false);
     setShowTranscription(false);
+    setShowNovel(false);
     setFileConverterReattachState(incoming);
     setShowFileConverter(true);
     return true;
   }, []);
+
+  const applyNovelInMain = useCallback(
+    async (incoming: NovelModuleDetachState | null): Promise<boolean> => {
+      const result = await planSwapToNovelInMain({
+        incoming,
+        visibility: moduleVisibilityRef.current,
+      });
+
+      if (!result.ok) {
+        toast.error(result.message);
+        return false;
+      }
+
+      if (result.flushWarning) {
+        toast.warning(
+          'Could not fully save open modules before switching. Recent autosave may still apply.'
+        );
+      }
+
+      if (result.displacedMap) {
+        setMapReattachState(result.displacedMap);
+      }
+
+      if (result.displacedTranscription) {
+        setTranscriptionReattachState(result.displacedTranscription);
+      }
+
+      setTranscriptionLaunchSourcePath(null);
+      setTranscriptionLaunchCasePath(null);
+      setShowMap(false);
+      setShowTranscription(false);
+      setShowFileConverter(false);
+      setNovelReattachState(incoming);
+      setShowNovel(true);
+
+      if (incoming?.wordEditor?.isOpen) {
+        window.setTimeout(() => {
+          dispatchWordEditorReattach(incoming.wordEditor!);
+        }, 100);
+      }
+
+      return true;
+    },
+    [toast]
+  );
 
   useEffect(() => {
     const handleMapReattach = (event: Event) => {
@@ -265,6 +334,12 @@ function AppContent() {
       applyFileConverterInMain(detail);
     };
 
+    const handleNovelReattach = (event: Event) => {
+      const detail = (event as CustomEvent<NovelModuleDetachState>).detail;
+      if (!detail) return;
+      void applyNovelInMain(detail);
+    };
+
     window.addEventListener('reattach-map-module-data', handleMapReattach as EventListener);
     window.addEventListener(
       'reattach-transcription-module-data',
@@ -274,6 +349,7 @@ function AppContent() {
       'reattach-file-converter-module-data',
       handleFileConverterReattach as EventListener
     );
+    window.addEventListener('reattach-novel-module-data', handleNovelReattach as EventListener);
 
     const storedMap = (window as Window & { __reattachMapModuleData?: MapModuleDetachState })
       .__reattachMapModuleData;
@@ -303,6 +379,14 @@ function AppContent() {
       ).__reattachFileConverterModuleData;
     }
 
+    const storedNovel = (window as Window & { __reattachNovelModuleData?: NovelModuleDetachState })
+      .__reattachNovelModuleData;
+    if (storedNovel) {
+      void applyNovelInMain(storedNovel);
+      delete (window as Window & { __reattachNovelModuleData?: NovelModuleDetachState })
+        .__reattachNovelModuleData;
+    }
+
     return () => {
       window.removeEventListener('reattach-map-module-data', handleMapReattach as EventListener);
       window.removeEventListener(
@@ -313,8 +397,9 @@ function AppContent() {
         'reattach-file-converter-module-data',
         handleFileConverterReattach as EventListener
       );
+      window.removeEventListener('reattach-novel-module-data', handleNovelReattach as EventListener);
     };
-  }, [applyMapInMain, applyTranscriptionInMain, applyFileConverterInMain]);
+  }, [applyMapInMain, applyTranscriptionInMain, applyFileConverterInMain, applyNovelInMain]);
   const { settings, updateSettings } = useSettingsContext();
   const { isOpen: isWordEditorOpen, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
   const [shouldUseOverlayMode, setShouldUseOverlayMode] = useState(false);
@@ -512,6 +597,24 @@ function AppContent() {
         </Suspense>
         <ToastContainer />
         <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
+      </>
+    );
+  }
+
+  if (isDetachedRoute('novel=detached')) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <Suspense fallback={<NovelLoadingShell theme={theme} />}>
+          <NovelModule theme={theme} hostMode="detached" onExit={() => void window.electronAPI?.closeWindow?.()} />
+        </Suspense>
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+          inlineWordEditorContainerId="novel-word-editor-inline-container"
+        />
       </>
     );
   }
@@ -770,6 +873,31 @@ function AppContent() {
         </Suspense>
         <ToastContainer />
         <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
+      </>
+    );
+  }
+
+  if (showNovel) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <Suspense fallback={<NovelLoadingShell theme={theme} />}>
+          <NovelModule
+            theme={theme}
+            hostMode="embedded"
+            initialNavigationState={novelReattachState}
+            onNavigationStateConsumed={() => setNovelReattachState(null)}
+            onPopOutComplete={() => setShowNovel(false)}
+            onExit={() => setShowNovel(false)}
+          />
+        </Suspense>
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+          inlineWordEditorContainerId="novel-word-editor-inline-container"
+        />
       </>
     );
   }
@@ -1042,6 +1170,10 @@ function AppContent() {
             onOpenMap={() => {
               void prefetchMapModule();
               void applyMapInMain(null);
+            }}
+            onOpenNovel={() => {
+              void prefetchNovelModule();
+              void applyNovelInMain(null);
             }}
             onOpenTranscription={() => {
               void prefetchTranscriptionModule();

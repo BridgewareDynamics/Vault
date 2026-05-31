@@ -1,6 +1,7 @@
 import type {
   MapModuleDetachState,
   TranscriptionModuleDetachState,
+  NovelModuleDetachState,
 } from '../types/detachableModules';
 
 export const COLLECT_EMBEDDED_MAP_EVENT = 'collect-embedded-map-snapshot';
@@ -9,6 +10,9 @@ export const EMBEDDED_MAP_SNAPSHOT_RESPONSE = 'embedded-map-snapshot-response';
 export const COLLECT_EMBEDDED_TRANSCRIPTION_EVENT = 'collect-embedded-transcription-snapshot';
 export const EMBEDDED_TRANSCRIPTION_SNAPSHOT_RESPONSE =
   'embedded-transcription-snapshot-response';
+
+export const COLLECT_EMBEDDED_NOVEL_EVENT = 'collect-embedded-novel-snapshot';
+export const EMBEDDED_NOVEL_SNAPSHOT_RESPONSE = 'embedded-novel-snapshot-response';
 
 const DEFAULT_TIMEOUT_MS = 2000;
 
@@ -62,6 +66,16 @@ export function collectEmbeddedTranscriptionSnapshot(
   return collectSnapshot<TranscriptionModuleDetachState>(
     COLLECT_EMBEDDED_TRANSCRIPTION_EVENT,
     EMBEDDED_TRANSCRIPTION_SNAPSHOT_RESPONSE,
+    timeoutMs
+  );
+}
+
+export function collectEmbeddedNovelSnapshot(
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<NovelModuleDetachState | null> {
+  return collectSnapshot<NovelModuleDetachState>(
+    COLLECT_EMBEDDED_NOVEL_EVENT,
+    EMBEDDED_NOVEL_SNAPSHOT_RESPONSE,
     timeoutMs
   );
 }
