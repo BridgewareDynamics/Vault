@@ -78,8 +78,9 @@ export const ThemeSelectionPage = memo(function ThemeSelectionPage({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, delay: 0.5 }}
+          className="flex justify-center w-full"
         >
-          <HolographicEffect intensity={0.1} className="rounded-3xl overflow-hidden">
+          <HolographicEffect intensity={0.1} className="rounded-3xl overflow-hidden w-fit">
             <ThemeSelector selectedTheme={selectedTheme} onSelectTheme={onSelectTheme} theme={theme} />
           </HolographicEffect>
         </motion.div>

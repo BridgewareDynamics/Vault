@@ -39,7 +39,7 @@ export function ThemeSelector({ selectedTheme, onSelectTheme, theme = 'brideware
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
+    <div className="flex flex-col sm:flex-row items-center justify-center gap-8 p-4">
       {themes.map((themeOption, index) => {
         const isSelected = selectedTheme === themeOption.value;
         return (
@@ -49,7 +49,7 @@ export function ThemeSelector({ selectedTheme, onSelectTheme, theme = 'brideware
               console.log('[ThemeSelector] Theme selected:', themeOption.value);
               onSelectTheme(themeOption.value);
             }}
-            className="relative group"
+            className="relative group w-full max-w-[320px] sm:w-[320px] shrink-0"
             initial={{ opacity: 0, scale: 0.9, y: 30, rotateY: -15 }}
             animate={{ opacity: 1, scale: 1, y: 0, rotateY: 0 }}
             transition={{

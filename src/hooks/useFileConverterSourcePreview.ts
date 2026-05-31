@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileConverterSource } from '../../types';
+import { FileConverterSource } from '../types';
 
 export interface FileConverterSourcePreviewState {
   loading: boolean;
@@ -88,28 +88,29 @@ export function useFileConverterSourcePreview(
       return;
     }
 
+    const activeSource = source;
     let cancelled = false;
 
     async function loadPreview() {
       setPreview({ loading: true, imageSrc: null, videoSrc: null, unavailable: false });
 
       try {
-        if (source.category === 'video') {
+        if (activeSource.category === 'video') {
           if (!cancelled) {
             setPreview({
               loading: false,
               imageSrc: null,
-              videoSrc: source.sourcePath.startsWith('http')
-                ? source.sourcePath
-                : `vault-video://${encodeURIComponent(source.sourcePath)}`,
+              videoSrc: activeSource.sourcePath.startsWith('http')
+                ? activeSource.sourcePath
+                : `vault-video://${encodeURIComponent(activeSource.sourcePath)}`,
               unavailable: false,
             });
           }
           return;
         }
 
-        if (source.category === 'image' || source.category === 'gif') {
-          const imageSrc = await loadImagePreview(source.sourcePath);
+        if (activeSource.category === 'image' || activeSource.category === 'gif') {
+          const imageSrc = await loadImagePreview(activeSource.sourcePath);
           if (!cancelled) {
             setPreview({
               loading: false,
@@ -121,8 +122,8 @@ export function useFileConverterSourcePreview(
           return;
         }
 
-        if (source.category === 'pdf') {
-          const imageSrc = await loadPdfPreview(source.sourcePath);
+        if (activeSource.category === 'pdf') {
+          const imageSrc = await loadPdfPreview(activeSource.sourcePath);
           if (!cancelled) {
             setPreview({
               loading: false,
@@ -135,7 +136,7 @@ export function useFileConverterSourcePreview(
         }
 
         if (window.electronAPI?.getFileThumbnail) {
-          const imageSrc = await window.electronAPI.getFileThumbnail(source.sourcePath);
+          const imageSrc = await window.electronAPI.getFileThumbnail(activeSource.sourcePath);
           if (!cancelled) {
             setPreview({
               loading: false,
