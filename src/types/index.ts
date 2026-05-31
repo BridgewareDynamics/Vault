@@ -375,3 +375,59 @@ export interface TranscriptionEngineStatus {
   error?: string;
 }
 
+// File Converter Types
+export type FileConverterCategory = 'image' | 'pdf' | 'video' | 'gif';
+export type FileConverterOrigin = 'vault' | 'external';
+export type FileConverterOutputFormat =
+  | 'png'
+  | 'jpeg'
+  | 'webp'
+  | 'tiff'
+  | 'pdf'
+  | 'gif'
+  | 'mp4'
+  | 'webm';
+
+export interface FileConverterSource {
+  origin: FileConverterOrigin;
+  casePath?: string | null;
+  sourcePath: string;
+  fileName: string;
+  category: FileConverterCategory;
+}
+
+export interface FileConverterTarget {
+  format: FileConverterOutputFormat;
+  quality?: number;
+  dpi?: number;
+  pageRange?: 'all' | 'custom';
+  customPageRange?: string;
+}
+
+export interface FileConverterProgress {
+  percent: number;
+  statusMessage: string;
+  phase: 'preparing' | 'converting' | 'finalizing' | 'complete';
+  cancellable: boolean;
+}
+
+export interface FileConverterResult {
+  outputPath?: string;
+  outputPaths?: string[];
+  replacedSource?: boolean;
+}
+
+export interface FileConverterCapabilities {
+  inputExtensions: string[];
+  matrix: Record<FileConverterCategory, FileConverterOutputFormat[]>;
+}
+
+export interface ReplaceVaultFileResult {
+  success: boolean;
+  newPath?: string;
+  backupPath?: string;
+  updatedMaps?: string[];
+  updatedTranscriptions?: string[];
+  error?: string;
+}
+

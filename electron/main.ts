@@ -22,6 +22,13 @@ import { File } from './database/models';
 import * as mapStorage from './utils/mapStorage';
 import * as transcriptionStorage from './utils/transcriptionStorage';
 import { transcriptionEngine } from './transcription/transcriptionEngine';
+import {
+  convertFile,
+  cancelActiveFileConversion,
+  type FileConverterOptions,
+} from './utils/fileConverter';
+import { getConverterCapabilities } from './utils/fileFormatRegistry';
+import { propagateVaultFileReferenceUpdate } from './utils/vaultReferencePropagator';
 
 // Helper function to detect file type from path
 function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | 'audio' | 'other' {
@@ -3848,6 +3855,7 @@ let wordEditorWindow: BrowserWindow | null = null;
 // Research workspace windows (Map / Transcript)
 let mapModuleWindow: BrowserWindow | null = null;
 let transcriptionModuleWindow: BrowserWindow | null = null;
+let fileConverterModuleWindow: BrowserWindow | null = null;
 
 // Create PDF audit window
 let pdfAuditWindow: BrowserWindow | null = null;
@@ -4249,6 +4257,84 @@ ipcMain.handle('reattach-transcription-module', async (event, state: Record<stri
     logger.error('Failed to reattach transcription module:', error);
     throw new Error(
       `Failed to reattach transcription module: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+// Create File Converter research workspace window
+ipcMain.handle('create-file-converter-window', async (_event, state: Record<string, unknown>) => {
+  try {
+    if (fileConverterModuleWindow && !fileConverterModuleWindow.isDestroyed()) {
+      fileConverterModuleWindow.focus();
+      sendJsonEventToWindow(
+        fileConverterModuleWindow,
+        'file-converter-module-data',
+        '__fileConverterModuleInitialData',
+        state
+      );
+      return { success: true };
+    }
+
+    fileConverterModuleWindow = createResearchWorkspaceWindow({
+      title: 'Vault — File Converter',
+      parent: mainWindow,
+    });
+
+    loadDetachedRoute(fileConverterModuleWindow, 'file-converter=detached');
+
+    fileConverterModuleWindow.once('ready-to-show', () => {
+      fileConverterModuleWindow?.show();
+    });
+
+    fileConverterModuleWindow.on('closed', () => {
+      fileConverterModuleWindow = null;
+    });
+
+    fileConverterModuleWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        sendJsonEventToWindow(
+          fileConverterModuleWindow,
+          'file-converter-module-data',
+          '__fileConverterModuleInitialData',
+          state
+        );
+      }, 500);
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create file converter window:', error);
+    throw new Error(
+      `Failed to create file converter window: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+ipcMain.handle('reattach-file-converter-module', async (event, state: Record<string, unknown>) => {
+  try {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      sendJsonEventToWindow(
+        mainWindow,
+        'reattach-file-converter-module-data',
+        '__reattachFileConverterModuleData',
+        state
+      );
+    }
+
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    if (fileConverterModuleWindow === senderWindow) {
+      fileConverterModuleWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach file converter module:', error);
+    throw new Error(
+      `Failed to reattach file converter module: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 });
@@ -5345,6 +5431,200 @@ ipcMain.handle(
           error instanceof Error ? error.message : 'Unknown error'
         }`
       );
+    }
+  }
+);
+
+// File Converter IPC
+ipcMain.handle('get-converter-capabilities', async () => {
+  return getConverterCapabilities();
+});
+
+ipcMain.handle(
+  'convert-file',
+  async (
+    event,
+    options: FileConverterOptions & {
+      renderedPages?: Array<{ pageNumber: number; imageData: string }>;
+    }
+  ) => {
+    const sender = event.sender;
+    const result = await convertFile(options, (progress) => {
+      if (!sender.isDestroyed()) {
+        sender.send('file-converter-progress', progress);
+      }
+    });
+    return result;
+  }
+);
+
+ipcMain.handle('cancel-file-conversion', async () => {
+  cancelActiveFileConversion();
+  return { success: true };
+});
+
+ipcMain.handle('select-converter-file', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      {
+        name: 'Media & Documents',
+        extensions: [
+          'png',
+          'jpg',
+          'jpeg',
+          'webp',
+          'tiff',
+          'tif',
+          'gif',
+          'pdf',
+          'mp4',
+          'mov',
+          'mkv',
+          'webm',
+          'avi',
+        ],
+      },
+    ],
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+
+ipcMain.handle(
+  'save-converted-file-to-case',
+  async (_event, casePath: string, sourceOutputPath: string, preferredName?: string) => {
+    if (!isSafePath(casePath) || !isSafePath(sourceOutputPath)) {
+      return { success: false, error: 'Invalid path' };
+    }
+
+    try {
+      const fileName = preferredName ?? path.basename(sourceOutputPath);
+      const destPath = path.join(casePath, fileName);
+
+      try {
+        await fs.access(destPath);
+        return { success: false, error: 'A file with this name already exists in the case' };
+      } catch (error) {
+        const errorCode = isErrorWithCode(error) ? error.code : undefined;
+        if (errorCode !== 'ENOENT') {
+          throw error;
+        }
+      }
+
+      await fs.copyFile(sourceOutputPath, destPath);
+
+      if (isDatabaseReady()) {
+        const caseRecord = db!.getCaseByPath(casePath);
+        if (caseRecord) {
+          const stats = await fs.stat(destPath);
+          const fileId = db!.generateId(destPath);
+          const fileType = detectFileTypeFromPath(destPath);
+          const checksum = await db!.calculateChecksum(destPath);
+          db!.createFile({
+            id: fileId,
+            case_id: caseRecord.id,
+            name: fileName,
+            path: destPath,
+            size: stats.size,
+            type: fileType === 'audio' ? 'other' : fileType,
+            is_folder: 0,
+            checksum,
+            local_modified_at: stats.mtime.getTime(),
+            created_at: stats.birthtime.getTime(),
+          });
+        }
+      }
+
+      return { success: true, savedPath: destPath };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to save file to case',
+      };
+    }
+  }
+);
+
+ipcMain.handle(
+  'replace-vault-file-with-conversion',
+  async (
+    _event,
+    options: {
+      casePath: string | null;
+      originalPath: string;
+      convertedPath: string;
+      newFileName?: string;
+    }
+  ) => {
+    const { casePath, originalPath, convertedPath, newFileName } = options;
+
+    if (!isSafePath(originalPath) || !isSafePath(convertedPath)) {
+      return { success: false, error: 'Invalid path' };
+    }
+
+    try {
+      const dir = path.dirname(originalPath);
+      const targetName = newFileName ?? path.basename(convertedPath);
+      const newPath = path.join(dir, targetName);
+
+      const backupDir = path.join(dir, '.vault-backup');
+      await fs.mkdir(backupDir, { recursive: true });
+      const backupPath = path.join(
+        backupDir,
+        `${path.basename(originalPath, path.extname(originalPath))}-${Date.now()}${path.extname(originalPath)}`
+      );
+
+      await fs.copyFile(originalPath, backupPath);
+
+      try {
+        await fs.unlink(originalPath);
+      } catch {
+        // original may already be gone
+      }
+
+      await fs.copyFile(convertedPath, newPath);
+
+      if (db) {
+        const stats = await fs.stat(newPath);
+        const fileType = detectFileTypeFromPath(newPath);
+        db.updateFile(originalPath, {
+          name: targetName,
+          path: newPath,
+          type: fileType === 'audio' ? 'other' : fileType,
+          size: stats.size,
+          local_modified_at: stats.mtime.getTime(),
+        });
+      }
+
+      const propagation = await propagateVaultFileReferenceUpdate(
+        casePath,
+        originalPath,
+        newPath,
+        targetName,
+        db
+      );
+
+      try {
+        await generateFileThumbnail(newPath);
+      } catch {
+        // best effort
+      }
+
+      return {
+        success: true,
+        newPath,
+        backupPath,
+        updatedMaps: propagation.updatedMaps,
+        updatedTranscriptions: propagation.updatedTranscriptions,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Replace failed',
+      };
     }
   }
 );

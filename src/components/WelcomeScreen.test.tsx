@@ -102,6 +102,38 @@ describe('WelcomeScreen', () => {
     expect(screen.getByText('Open Archive')).toBeInTheDocument();
     expect(screen.getByText('Access your case archive')).toBeInTheDocument();
   });
+
+  it('should render File Converter when handler is provided', () => {
+    render(
+      <SettingsProvider>
+        <WelcomeScreen
+          onSelectFile={mockOnSelectFile}
+          onOpenArchive={mockOnOpenArchive}
+          onOpenFileConverter={vi.fn()}
+        />
+      </SettingsProvider>
+    );
+    expect(screen.getByText('File Converter')).toBeInTheDocument();
+  });
+
+  it('should call onOpenFileConverter when File Converter is clicked', () => {
+    const mockOnOpenFileConverter = vi.fn();
+    render(
+      <SettingsProvider>
+        <WelcomeScreen
+          onSelectFile={mockOnSelectFile}
+          onOpenArchive={mockOnOpenArchive}
+          onOpenFileConverter={mockOnOpenFileConverter}
+        />
+      </SettingsProvider>
+    );
+    const converterButton = screen.getByText('Open Converter').closest('button');
+    if (!converterButton) {
+      throw new Error('File Converter button not found');
+    }
+    fireEvent.click(converterButton);
+    expect(mockOnOpenFileConverter).toHaveBeenCalledTimes(1);
+  });
 });
 
 

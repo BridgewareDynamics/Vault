@@ -114,6 +114,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('create-transcription-window', state),
       reattachTranscriptionModule: (state: Record<string, unknown>) =>
         ipcRenderer.invoke('reattach-transcription-module', state),
+      createFileConverterWindow: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('create-file-converter-window', state),
+      reattachFileConverterModule: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('reattach-file-converter-module', state),
   createPdfAuditWindow: (options: {
     pdfPath: string | null;
     settings: {
@@ -282,6 +286,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('run-transcription', options),
   cancelTranscriptionJob: (transcriptionFolderPath?: string) =>
     ipcRenderer.invoke('cancel-transcription-job', transcriptionFolderPath),
+  getConverterCapabilities: () => ipcRenderer.invoke('get-converter-capabilities'),
+  convertFile: (options: {
+    sourcePath: string;
+    outputFormat: string;
+    outputDirectory?: string;
+    quality?: number;
+    dpi?: number;
+    renderedPages?: Array<{ pageNumber: number; imageData: string }>;
+  }) => ipcRenderer.invoke('convert-file', options),
+  cancelFileConversion: () => ipcRenderer.invoke('cancel-file-conversion'),
+  selectConverterFile: () => ipcRenderer.invoke('select-converter-file'),
+  saveConvertedFileToCase: (casePath: string, sourceOutputPath: string, preferredName?: string) =>
+    ipcRenderer.invoke('save-converted-file-to-case', casePath, sourceOutputPath, preferredName),
+  replaceVaultFileWithConversion: (options: {
+    casePath: string | null;
+    originalPath: string;
+    convertedPath: string;
+    newFileName?: string;
+  }) => ipcRenderer.invoke('replace-vault-file-with-conversion', options),
+  onFileConverterProgress: (callback: (progress: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: unknown) => callback(progress);
+    ipcRenderer.on('file-converter-progress', listener);
+    return () => {
+      ipcRenderer.removeListener('file-converter-progress', listener);
+    };
+  },
 });
 
 // Type declaration for TypeScript

@@ -10,21 +10,6 @@ import { Gallery } from './components/Gallery';
 import { ImageViewer } from './components/ImageViewer';
 import { Toolbar } from './components/Toolbar';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
-const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
-const MapModule = lazy(() =>
-  import('./utils/mapPrefetch').then(({ loadMapModule }) =>
-    loadMapModule().then((module) => ({
-      default: module.MapModule,
-    }))
-  )
-);
-const TranscriptionModule = lazy(() =>
-  import('./utils/transcriptionPrefetch').then(({ loadTranscriptionModule }) =>
-    loadTranscriptionModule().then((module) => ({
-      default: module.TranscriptionModule,
-    }))
-  )
-);
 import { usePDFExtraction } from './hooks/usePDFExtraction';
 import { ConversionSettings } from './types';
 import { isLightTheme } from './theme/themeSemantics';
@@ -48,6 +33,7 @@ import {
 } from './utils/transcriptionPrefetch';
 import { prefetchMapModule } from './utils/mapPrefetch';
 import type {
+  FileConverterModuleDetachState,
   MapModuleDetachState,
   TranscriptionModuleDetachState,
 } from './types/detachableModules';
@@ -56,7 +42,33 @@ import {
   planSwapToMapInMain,
   planSwapToTranscriptionInMain,
 } from './utils/mainEmbeddedModule';
+import {
+  loadFileConverterModule,
+  prefetchFileConverterModule,
+} from './utils/fileConverterPrefetch';
+import { FileConverterLoadingShell } from './components/FileConverter/FileConverterLoadingShell';
 import './App.css';
+
+const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
+const MapModule = lazy(() =>
+  import('./utils/mapPrefetch').then(({ loadMapModule }) =>
+    loadMapModule().then((module) => ({
+      default: module.MapModule,
+    }))
+  )
+);
+const TranscriptionModule = lazy(() =>
+  import('./utils/transcriptionPrefetch').then(({ loadTranscriptionModule }) =>
+    loadTranscriptionModule().then((module) => ({
+      default: module.TranscriptionModule,
+    }))
+  )
+);
+const FileConverterModule = lazy(() =>
+  loadFileConverterModule().then((module) => ({
+    default: module.FileConverterModule,
+  }))
+);
 
 function isDetachedRoute(token: string) {
   const search = window.location.search || '';
@@ -76,6 +88,9 @@ function AppContent() {
   const [showTranscription, setShowTranscription] = useState(false);
   const [showSecurityChecker, setShowSecurityChecker] = useState(false);
   const [showPDFExtraction, setShowPDFExtraction] = useState(false);
+  const [showFileConverter, setShowFileConverter] = useState(false);
+  const [fileConverterReattachState, setFileConverterReattachState] =
+    useState<FileConverterModuleDetachState | null>(null);
   const [transcriptionLaunchSourcePath, setTranscriptionLaunchSourcePath] = useState<string | null>(null);
   const [transcriptionLaunchCasePath, setTranscriptionLaunchCasePath] = useState<string | null>(null);
   const [mapReattachState, setMapReattachState] = useState<MapModuleDetachState | null>(null);
@@ -223,6 +238,14 @@ function AppContent() {
     [toast]
   );
 
+  const applyFileConverterInMain = useCallback((incoming: FileConverterModuleDetachState | null) => {
+    setShowMap(false);
+    setShowTranscription(false);
+    setFileConverterReattachState(incoming);
+    setShowFileConverter(true);
+    return true;
+  }, []);
+
   useEffect(() => {
     const handleMapReattach = (event: Event) => {
       const detail = (event as CustomEvent<MapModuleDetachState>).detail;
@@ -236,10 +259,20 @@ function AppContent() {
       void applyTranscriptionInMain(detail);
     };
 
+    const handleFileConverterReattach = (event: Event) => {
+      const detail = (event as CustomEvent<FileConverterModuleDetachState>).detail;
+      if (!detail) return;
+      applyFileConverterInMain(detail);
+    };
+
     window.addEventListener('reattach-map-module-data', handleMapReattach as EventListener);
     window.addEventListener(
       'reattach-transcription-module-data',
       handleTranscriptionReattach as EventListener
+    );
+    window.addEventListener(
+      'reattach-file-converter-module-data',
+      handleFileConverterReattach as EventListener
     );
 
     const storedMap = (window as Window & { __reattachMapModuleData?: MapModuleDetachState })
@@ -260,14 +293,28 @@ function AppContent() {
       ).__reattachTranscriptionModuleData;
     }
 
+    const storedFileConverter = (
+      window as Window & { __reattachFileConverterModuleData?: FileConverterModuleDetachState }
+    ).__reattachFileConverterModuleData;
+    if (storedFileConverter) {
+      applyFileConverterInMain(storedFileConverter);
+      delete (
+        window as Window & { __reattachFileConverterModuleData?: FileConverterModuleDetachState }
+      ).__reattachFileConverterModuleData;
+    }
+
     return () => {
       window.removeEventListener('reattach-map-module-data', handleMapReattach as EventListener);
       window.removeEventListener(
         'reattach-transcription-module-data',
         handleTranscriptionReattach as EventListener
       );
+      window.removeEventListener(
+        'reattach-file-converter-module-data',
+        handleFileConverterReattach as EventListener
+      );
     };
-  }, [applyMapInMain, applyTranscriptionInMain]);
+  }, [applyMapInMain, applyTranscriptionInMain, applyFileConverterInMain]);
   const { settings, updateSettings } = useSettingsContext();
   const { isOpen: isWordEditorOpen, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
   const [shouldUseOverlayMode, setShouldUseOverlayMode] = useState(false);
@@ -441,6 +488,30 @@ function AppContent() {
           isArchiveVisible={false}
           hideFixedButtons={true}
         />
+      </>
+    );
+  }
+
+  if (isDetachedRoute('file-converter=detached')) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <Suspense
+          fallback={
+            <FileConverterLoadingShell
+              theme={theme}
+              onClose={() => void window.electronAPI?.closeWindow?.()}
+            />
+          }
+        >
+          <FileConverterModule
+            theme={theme}
+            hostMode="detached"
+            onExit={() => void window.electronAPI?.closeWindow?.()}
+          />
+        </Suspense>
+        <ToastContainer />
+        <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
       </>
     );
   }
@@ -675,6 +746,33 @@ function AppContent() {
       reset();
     }
   }, [selectedPdfPath, reset]);
+
+  if (showFileConverter) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <Suspense
+          fallback={
+            <FileConverterLoadingShell
+              theme={theme}
+              onClose={() => setShowFileConverter(false)}
+            />
+          }
+        >
+          <FileConverterModule
+            theme={theme}
+            hostMode="embedded"
+            initialNavigationState={fileConverterReattachState}
+            onNavigationStateConsumed={() => setFileConverterReattachState(null)}
+            onPopOutComplete={() => setShowFileConverter(false)}
+            onExit={() => setShowFileConverter(false)}
+          />
+        </Suspense>
+        <ToastContainer />
+        <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
+      </>
+    );
+  }
 
   // Show Map feature
   if (showMap) {
@@ -937,6 +1035,10 @@ function AppContent() {
             onOpenArchive={() => setShowArchive(true)}
             onOpenSecurityChecker={() => setShowSecurityChecker(true)}
             onOpenPDFExtraction={() => setShowPDFExtraction(true)}
+            onOpenFileConverter={() => {
+              void prefetchFileConverterModule();
+              setShowFileConverter(true);
+            }}
             onOpenMap={() => {
               void prefetchMapModule();
               void applyMapInMain(null);

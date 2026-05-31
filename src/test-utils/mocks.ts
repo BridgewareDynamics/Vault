@@ -76,6 +76,14 @@ export const mockElectronAPI = {
   copyTranscriptionSourceToAssets: vi.fn(),
   runTranscription: vi.fn(),
   cancelTranscriptionJob: vi.fn(),
+  // File Converter APIs
+  getConverterCapabilities: vi.fn(),
+  convertFile: vi.fn(),
+  cancelFileConversion: vi.fn(),
+  selectConverterFile: vi.fn(),
+  saveConvertedFileToCase: vi.fn(),
+  replaceVaultFileWithConversion: vi.fn(),
+  onFileConverterProgress: vi.fn(() => () => {}),
   // Word Editor APIs
   readTextFile: vi.fn(),
   saveTextFile: vi.fn(),
@@ -89,6 +97,8 @@ export const mockElectronAPI = {
   reattachMapModule: vi.fn(),
   createTranscriptionWindow: vi.fn(),
   reattachTranscriptionModule: vi.fn(),
+  createFileConverterWindow: vi.fn(),
+  reattachFileConverterModule: vi.fn(),
   closeWindow: vi.fn(),
 };
 

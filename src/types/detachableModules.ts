@@ -29,6 +29,22 @@ export interface TranscriptionModuleDetachState {
   launchCasePath: string | null;
 }
 
+import type { FileConverterSource, FileConverterTarget } from './index';
+
+export type FileConverterScreen = 'landing' | 'workspace';
+
+export interface FileConverterModuleDetachState {
+  screen: FileConverterScreen;
+  source: FileConverterSource | null;
+  target: FileConverterTarget;
+  selectedCasePath: string | null;
+}
+
+export interface FileConverterWorkspaceDetachBridge {
+  collectDetachState: () => Promise<FileConverterModuleDetachState>;
+  isConverting: () => boolean;
+}
+
 export type ModuleHostMode = 'embedded' | 'detached';
 
 export interface ModuleChromeProps {

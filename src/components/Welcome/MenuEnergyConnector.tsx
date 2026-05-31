@@ -1,4 +1,5 @@
 import { motion, type Transition } from 'framer-motion';
+import type { ReactNode } from 'react';
 
 export type MenuConnectorVariant = 'hero-to-grid' | 'grid-to-feature';
 
@@ -505,3 +506,152 @@ export function MenuHeroLightEmitter() {
 }
 
 export const MenuHeroAnchor = MenuHeroLightEmitter;
+
+interface BeamThemeProps {
+  isPastel: boolean;
+  primaryRgba: string;
+  secondaryRgba: string;
+}
+
+function resolveBeamTheme({ isPastel, primaryRgba, secondaryRgba }: BeamThemeProps) {
+  return getBeamTheme(isPastel, primaryRgba, secondaryRgba);
+}
+
+interface RoundedBeamFrameProps extends BeamThemeProps {
+  children: ReactNode;
+  beamBackground: string;
+  beamBoxShadow?: string;
+  className?: string;
+}
+
+/** Animated rounded beam border wrapping a card (PDF to PNG column). */
+export function RoundedBeamFrame({
+  isPastel,
+  primaryRgba,
+  secondaryRgba,
+  children,
+  beamBackground,
+  beamBoxShadow,
+  className = '',
+}: RoundedBeamFrameProps) {
+  const theme = resolveBeamTheme({ isPastel, primaryRgba, secondaryRgba });
+
+  if (isPastel) {
+    return (
+      <div className={`relative ${className}`}>
+        <motion.div
+          className="pointer-events-none absolute -inset-[2px] z-0 rounded-3xl"
+          style={{
+            background: beamBackground,
+            padding: '2px',
+            WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+            WebkitMaskComposite: 'xor',
+            mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+            maskComposite: 'exclude',
+            boxShadow: beamBoxShadow ?? `0 0 16px ${theme.mid}`,
+          }}
+          animate={{ opacity: [0.75, 1, 0.75] }}
+          transition={pulseTransition(theme.pulseDuration, 0.9)}
+          aria-hidden
+        />
+        <div className="relative z-10">{children}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`relative ${className}`}>
+      <div
+        className="pointer-events-none absolute -inset-[2px] z-0 rounded-3xl"
+        style={{
+          background: beamBackground,
+          padding: '2px',
+          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+          WebkitMaskComposite: 'xor',
+          mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+          maskComposite: 'exclude',
+          boxShadow: beamBoxShadow,
+        }}
+        aria-hidden
+      />
+      <div className="relative z-10">{children}</div>
+    </div>
+  );
+}
+
+interface CardBottomDropBeamProps extends BeamThemeProps {
+  dropHeight?: number;
+  delayIndex?: number;
+  className?: string;
+}
+
+/** Vertical beam segment from bottom-center of a card downward (mirrors CardDropBeam). */
+export function CardBottomDropBeam({
+  isPastel,
+  primaryRgba,
+  secondaryRgba,
+  dropHeight = 36,
+  delayIndex = 0,
+  className = '',
+}: CardBottomDropBeamProps) {
+  const theme = resolveBeamTheme({ isPastel, primaryRgba, secondaryRgba });
+
+  return (
+    <div
+      className={`relative mx-auto overflow-visible pointer-events-none ${className}`}
+      style={{ width: BEAM.dropContainer, height: dropHeight }}
+      aria-hidden
+    >
+      <div
+        className="absolute left-1/2 top-0 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{
+          width: BEAM.junction,
+          height: BEAM.junction,
+          background: theme.whiteHot,
+          boxShadow: filamentGlow(theme),
+        }}
+      />
+      <EnergyBeamLine
+        theme={theme}
+        orientation="vertical"
+        length="100%"
+        profile="drop"
+        enterDelay={0.85 + delayIndex * 0.06}
+      />
+      <FlowPulse
+        theme={theme}
+        orientation="vertical"
+        delayOffset={PULSE_DELAY + 0.3 + delayIndex * 0.2}
+        thickness={BEAM.boltDrop}
+        spanParent
+      />
+      <div
+        className="absolute bottom-0 left-1/2 z-20 -translate-x-1/2 translate-y-1/2 rounded-full"
+        style={{
+          width: BEAM.junction,
+          height: BEAM.junction,
+          background: theme.whiteHot,
+          boxShadow: filamentGlow(theme),
+        }}
+      />
+    </div>
+  );
+}
+
+interface MenuPdfConverterBranchProps extends BeamThemeProps {
+  className?: string;
+}
+
+/** Bottom branch beam connecting PDF card to File Converter card. */
+export function MenuPdfConverterBranch(props: MenuPdfConverterBranchProps) {
+  return (
+    <CardBottomDropBeam
+      isPastel={props.isPastel}
+      primaryRgba={props.primaryRgba}
+      secondaryRgba={props.secondaryRgba}
+      dropHeight={28}
+      delayIndex={0}
+      className={props.className}
+    />
+  );
+}

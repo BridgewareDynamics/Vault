@@ -1,13 +1,20 @@
 ﻿import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { FileText, FolderOpen, Map as MapIcon, Mic2, Shield, type LucideIcon, Zap } from 'lucide-react';
+import { FileText, FolderOpen, Map as MapIcon, Mic2, Shield } from 'lucide-react';
 import { ActionToolbar } from './ActionToolbar';
-import { MenuGridBeamNetwork } from './Welcome/MenuEnergyConnector';
+import { CardBottomDropBeam, MenuGridBeamNetwork } from './Welcome/MenuEnergyConnector';
+import { PdfConverterColumn, type FileConverterCardPalette } from './Welcome/PdfConverterColumn';
+import {
+  WelcomeActionCard,
+  WelcomeActionCardWrapper,
+  type WelcomeMenuCardConfig,
+} from './Welcome/WelcomeActionCard';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
 import { isLightTheme } from '../theme/themeSemantics';
 import { warmTranscriptionEntry } from '../utils/transcriptionPrefetch';
 import { warmMapEntry } from '../utils/mapPrefetch';
+import { warmFileConverterEntry } from '../utils/fileConverterPrefetch';
 
 const getAssetPath = (path: string) => {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
@@ -19,55 +26,10 @@ interface WelcomeScreenProps {
   onOpenArchive: () => void;
   onOpenSecurityChecker: () => void;
   onOpenPDFExtraction?: () => void;
+  onOpenFileConverter?: () => void;
   onOpenMap?: () => void;
   onOpenTranscription?: () => void;
 }
-
-interface WelcomeCardPastelPalette {
-  borderClassName: string;
-  cardShadow: string;
-  glowBackground: string;
-  glowShadow: string;
-  overlayClassName: string;
-  iconPulse: string[];
-  iconGlowClassName: string;
-  iconWrapperClassName: string;
-  iconClassName: string;
-  actionIconClassName: string;
-}
-
-interface WelcomeCardDarkPalette {
-  beamBackground: string;
-  beamBoxShadow: string;
-  frameBackgroundImage: string;
-  buttonShadow: string;
-  glowBackground: string;
-  glowShadow: string;
-  iconPulse: string[];
-  iconGlowClassName: string;
-  iconWrapperClassName: string;
-  iconClassName: string;
-  titleClassName: string;
-  actionIconClassName: string;
-}
-
-interface WelcomeMenuCardConfig {
-  key: string;
-  title: string;
-  description: string;
-  actionLabel: string;
-  onClick: () => void;
-  icon: LucideIcon;
-  actionIcon: LucideIcon;
-  delay: number;
-  pastel: WelcomeCardPastelPalette;
-  dark: WelcomeCardDarkPalette;
-}
-
-const ACTION_MENU_CARD_MIN_HEIGHT_CLASS = 'min-h-[22rem]';
-const ACTION_MENU_CARD_PADDING_CLASS = 'p-10 md:p-12';
-const ACTION_MENU_CARD_BODY_MIN_HEIGHT_CLASS = 'min-h-[6.5rem]';
-const ACTION_MENU_CARD_DESCRIPTION_MIN_HEIGHT_CLASS = 'min-h-[3rem]';
 
 const generateParticles = (count: number) =>
   Array.from({ length: count }, (_, i) => ({
@@ -84,6 +46,7 @@ export function WelcomeScreen({
   onOpenArchive,
   onOpenSecurityChecker,
   onOpenPDFExtraction,
+  onOpenFileConverter,
   onOpenMap,
   onOpenTranscription,
 }: WelcomeScreenProps) {
@@ -99,6 +62,9 @@ export function WelcomeScreen({
     }
     if (onOpenMap) {
       warmers.push(warmMapEntry);
+    }
+    if (onOpenFileConverter) {
+      warmers.push(warmFileConverterEntry);
     }
 
     if (warmers.length === 0) {
@@ -121,7 +87,7 @@ export function WelcomeScreen({
         window.clearTimeout(timeoutId);
       }
     };
-  }, [onOpenMap, onOpenTranscription]);
+  }, [onOpenMap, onOpenTranscription, onOpenFileConverter]);
 
   const isPastel = isLightTheme(theme);
   const bgGradient = isPastel
@@ -186,7 +152,7 @@ export function WelcomeScreen({
             actionLabel: 'Launch Engine',
             onClick: onOpenTranscription,
             icon: Mic2,
-            actionIcon: Zap,
+            actionIcon: Mic2,
             delay: 0.75,
             pastel: {
               borderClassName: 'border-fuchsia-200/40',
@@ -330,6 +296,48 @@ export function WelcomeScreen({
       : []),
   ];
 
+  const fileConverterPalette: FileConverterCardPalette = {
+    pastel: {
+      borderClassName: 'border-cyan-200/40',
+      cardShadow: '0 4px 20px rgba(165, 243, 252, 0.18), 0 0 0 1px rgba(165, 243, 252, 0.12)',
+      glowBackground: 'radial-gradient(circle at center, rgba(165, 243, 252, 0.18) 0%, transparent 70%)',
+      glowShadow: '0 0 30px rgba(165, 243, 252, 0.22)',
+      overlayClassName: 'bg-gradient-to-br from-cyan-50/30 via-teal-50/20 to-purple-50/30',
+      iconPulse: [
+        'drop-shadow(0 2px 8px rgba(165, 243, 252, 0.24))',
+        'drop-shadow(0 4px 12px rgba(34, 211, 238, 0.32))',
+        'drop-shadow(0 2px 8px rgba(165, 243, 252, 0.24))',
+      ],
+      iconGlowClassName: 'bg-gradient-to-br from-cyan-200/40 via-teal-200/40 to-purple-200/40',
+      iconWrapperClassName: 'bg-gradient-to-br from-cyan-100/80 to-teal-100/80 border-2 border-cyan-200/30',
+      iconClassName: 'text-cyan-500',
+      actionIconClassName: 'text-cyan-500',
+    },
+    dark: {
+      beamBackground:
+        'linear-gradient(to right, transparent 0%, rgba(34, 211, 238, 0.55) 20%, rgba(168, 85, 247, 0.85) 50%, rgba(34, 211, 238, 0.55) 80%, transparent 100%)',
+      beamBoxShadow: '0 0 12px rgba(34, 211, 238, 0.35), 0 0 28px rgba(168, 85, 247, 0.22)',
+      frameBackgroundImage:
+        'linear-gradient(45deg, rgba(34, 211, 238, 0.95), rgba(168, 85, 247, 0.85), rgba(59, 130, 246, 0.95))',
+      buttonShadow: '0 0 30px rgba(34, 211, 238, 0.24), inset 0 0 30px rgba(168, 85, 247, 0.08)',
+      glowBackground: 'radial-gradient(circle at center, rgba(34, 211, 238, 0.2) 0%, transparent 70%)',
+      glowShadow: '0 0 40px rgba(34, 211, 238, 0.45), 0 0 60px rgba(168, 85, 247, 0.3)',
+      iconPulse: [
+        'drop-shadow(0 0 15px rgba(34, 211, 238, 0.6))',
+        'drop-shadow(0 0 25px rgba(168, 85, 247, 0.85))',
+        'drop-shadow(0 0 15px rgba(34, 211, 238, 0.6))',
+      ],
+      iconGlowClassName: 'bg-gradient-to-br from-cyan-600 to-purple-600',
+      iconWrapperClassName: 'bg-gradient-to-br from-cyan-600/90 to-purple-600/90 border border-cyan-300/35',
+      iconClassName: 'text-white',
+      titleClassName: 'bg-gradient-to-r from-cyan-300 via-violet-300 to-purple-300 bg-clip-text text-transparent',
+      actionIconClassName: 'text-cyan-300',
+    },
+  };
+
+  const pdfToPngCard = actionCards[0];
+  const remainingActionCards = actionCards.slice(1);
+
   const featuredVaultCard: WelcomeMenuCardConfig = {
     key: 'vault',
     title: 'The Vault',
@@ -337,7 +345,7 @@ export function WelcomeScreen({
     actionLabel: 'Open Archive',
     onClick: onOpenArchive,
     icon: FolderOpen,
-    actionIcon: Zap,
+    actionIcon: FolderOpen,
     delay: 0.95,
     pastel: {
       borderClassName: 'border-pink-200/40',
@@ -760,171 +768,50 @@ export function WelcomeScreen({
           </div>
 
           <div className="relative w-full max-w-7xl overflow-visible">
-            <MenuGridBeamNetwork
-              isPastel={isPastel}
-              primaryRgba={primaryRgba}
-              secondaryRgba={secondaryRgba}
-              columnCount={actionCards.length === 4 ? 4 : 3}
-            />
+            <div className="relative">
+              <MenuGridBeamNetwork
+                isPastel={isPastel}
+                primaryRgba={primaryRgba}
+                secondaryRgba={secondaryRgba}
+                columnCount={actionCards.length === 4 ? 4 : 3}
+              />
 
-            <div
-              className={`relative z-10 grid grid-cols-1 md:grid-cols-2 ${
-                actionCards.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
-              } items-stretch gap-8 lg:pt-10`}
-            >
-            {actionCards.map((card) => {
-              const Icon = card.icon;
-              const ActionIcon = card.actionIcon;
-
-              return (
-                <motion.div
-                  key={card.key}
-                  initial={{ opacity: 0, scale: 0.96, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  transition={{ duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: card.delay }}
-                  className="relative group h-full"
-                  onPointerEnter={
-                    card.key === 'map'
-                      ? warmMapEntry
-                      : card.key === 'transcription'
-                        ? warmTranscriptionEntry
-                        : undefined
-                  }
-                >
-                  {isPastel ? (
-                    <motion.button
-                      whileHover={{ scale: 1.02, y: -3, transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] } }}
-                      whileTap={{ scale: 0.98 }}
-                      onPointerDown={card.key === 'transcription' ? warmTranscriptionEntry : undefined}
-                      onClick={card.onClick}
-                      className={`w-full h-full ${ACTION_MENU_CARD_MIN_HEIGHT_CLASS} flex flex-col relative overflow-hidden rounded-3xl bg-white/85 backdrop-blur-xl shadow-lg border-2 transition-all duration-300 z-10 ${card.pastel.borderClassName}`}
-                      style={{ boxShadow: card.pastel.cardShadow }}
-                    >
-                      <motion.div
-                        className="absolute inset-0 rounded-3xl pointer-events-none"
-                        initial={{ opacity: 0 }}
-                        whileHover={{ opacity: 1, transition: { duration: 0.3 } }}
-                        style={{ background: card.pastel.glowBackground, boxShadow: card.pastel.glowShadow }}
-                      />
-                      <motion.div
-                        className={`absolute inset-0 rounded-3xl ${card.pastel.overlayClassName}`}
-                        initial={{ opacity: 0 }}
-                        whileHover={{ opacity: 1 }}
-                        transition={{ duration: 0.3 }}
-                      />
-                      <div
-                        className={`relative z-10 ${ACTION_MENU_CARD_PADDING_CLASS} flex h-full flex-1 flex-col items-center gap-6`}
-                      >
-                        <motion.div
-                          className="relative"
-                          animate={{ filter: card.pastel.iconPulse }}
-                          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                        >
-                          <div className={`absolute inset-0 rounded-3xl blur-xl ${card.pastel.iconGlowClassName}`}></div>
-                          <motion.div
-                            className={`relative p-6 rounded-3xl shadow-md ${card.pastel.iconWrapperClassName}`}
-                            whileHover={{ scale: 1.08, rotate: [0, -1, 1, -1, 1, 0], transition: { duration: 0.4, ease: 'easeOut' } }}
-                          >
-                            <Icon className={`w-12 h-12 ${card.pastel.iconClassName}`} />
-                          </motion.div>
-                        </motion.div>
-                        <div
-                          className={`text-center flex flex-1 flex-col justify-center w-full ${ACTION_MENU_CARD_BODY_MIN_HEIGHT_CLASS}`}
-                        >
-                          <h3 className="text-2xl font-bold mb-2 text-gray-800">{card.title}</h3>
-                          <p
-                            className={`text-base text-gray-600 ${ACTION_MENU_CARD_DESCRIPTION_MIN_HEIGHT_CLASS}`}
-                          >
-                            {card.description}
-                          </p>
-                        </div>
-                        <motion.div className="flex items-center gap-3 text-gray-700 font-semibold text-lg" whileHover={{ scale: 1.05 }}>
-                          <ActionIcon className={`w-5 h-5 ${card.pastel.actionIconClassName}`} />
-                          <span>{card.actionLabel}</span>
-                        </motion.div>
-                      </div>
-                    </motion.button>
-                  ) : (
-                    <>
-                      <div
-                        className="absolute -inset-[2px] pointer-events-none z-0 rounded-3xl"
-                        style={{
-                          background: card.dark.beamBackground,
-                          padding: '2px',
-                          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                          WebkitMaskComposite: 'xor',
-                          mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                          maskComposite: 'exclude',
-                          boxShadow: card.dark.beamBoxShadow,
-                        }}
-                      />
-                      <motion.div
-                        className={`rounded-3xl p-[3px] h-full ${ACTION_MENU_CARD_MIN_HEIGHT_CLASS}`}
-                        style={{ backgroundImage: card.dark.frameBackgroundImage, backgroundSize: '200% 200%' }}
-                        animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-                        transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-                      >
-                        <motion.button
-                          whileHover={{ scale: 1.04, y: -4, transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] } }}
-                          whileTap={{ scale: 0.98 }}
-                          onPointerDown={card.key === 'transcription' ? warmTranscriptionEntry : undefined}
-                          onClick={card.onClick}
-                          className={`w-full h-full ${ACTION_MENU_CARD_MIN_HEIGHT_CLASS} flex flex-col relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10`}
-                          style={{ boxShadow: card.dark.buttonShadow }}
-                        >
-                          <motion.div
-                            className="absolute inset-0 rounded-3xl pointer-events-none"
-                            initial={{ opacity: 0 }}
-                            whileHover={{ opacity: 1, transition: { duration: 0.2 } }}
-                            style={{ background: card.dark.glowBackground, boxShadow: card.dark.glowShadow }}
-                          />
-                          <motion.div
-                            className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-transparent"
-                            initial={{ opacity: 0 }}
-                            whileHover={{ opacity: 1 }}
-                            transition={{ duration: 0.2 }}
-                          />
-                          <div
-                            className={`relative z-10 ${ACTION_MENU_CARD_PADDING_CLASS} flex h-full flex-1 flex-col items-center gap-6`}
-                          >
-                            <motion.div
-                              className="relative"
-                              animate={{ filter: card.dark.iconPulse }}
-                              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                            >
-                              <div className={`absolute inset-0 rounded-3xl blur-2xl opacity-60 ${card.dark.iconGlowClassName}`}></div>
-                              <motion.div
-                                className={`relative p-6 rounded-3xl shadow-2xl ${card.dark.iconWrapperClassName}`}
-                                whileHover={{ scale: 1.1, rotate: [0, -2, 2, -2, 2, 0], transition: { duration: 0.3, ease: 'easeOut' } }}
-                              >
-                                <Icon className={`w-12 h-12 ${card.dark.iconClassName}`} />
-                              </motion.div>
-                            </motion.div>
-                            <div
-                              className={`text-center flex flex-1 flex-col justify-center w-full ${ACTION_MENU_CARD_BODY_MIN_HEIGHT_CLASS}`}
-                            >
-                              <h3 className={`text-2xl font-bold mb-2 ${card.dark.titleClassName}`}>{card.title}</h3>
-                              <p
-                                className={`text-base text-gray-300 ${ACTION_MENU_CARD_DESCRIPTION_MIN_HEIGHT_CLASS}`}
-                              >
-                                {card.description}
-                              </p>
-                            </div>
-                            <motion.div className="flex items-center gap-3 text-white font-semibold text-lg" whileHover={{ scale: 1.1 }}>
-                              <ActionIcon className={`w-5 h-5 ${card.dark.actionIconClassName}`} />
-                              <span>{card.actionLabel}</span>
-                            </motion.div>
-                          </div>
-                        </motion.button>
-                      </motion.div>
-                    </>
-                  )}
-                </motion.div>
-              );
-            })}
+              <div
+                className={`relative z-10 grid grid-cols-1 md:grid-cols-2 ${
+                  actionCards.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+                } items-start gap-8 lg:pt-10`}
+              >
+                {pdfToPngCard && onOpenFileConverter ? (
+                  <PdfConverterColumn
+                    isPastel={isPastel}
+                    primaryRgba={primaryRgba}
+                    secondaryRgba={secondaryRgba}
+                    pdfBeamBackground={pdfToPngCard.dark.beamBackground}
+                    pdfBeamBoxShadow={pdfToPngCard.dark.beamBoxShadow}
+                    fileConverterPalette={fileConverterPalette}
+                    onOpenFileConverter={onOpenFileConverter}
+                    delay={pdfToPngCard.delay}
+                  >
+                    <WelcomeActionCard card={pdfToPngCard} isPastel={isPastel} omitDarkBeamBorder />
+                  </PdfConverterColumn>
+                ) : pdfToPngCard ? (
+                  <WelcomeActionCardWrapper card={pdfToPngCard} isPastel={isPastel} />
+                ) : null}
+                {remainingActionCards.map((card) => (
+                  <WelcomeActionCardWrapper key={card.key} card={card} isPastel={isPastel} />
+                ))}
+              </div>
             </div>
 
-          <div className="mx-auto mt-10 flex w-full max-w-5xl flex-col items-center">
+            <div className="mx-auto mt-8 flex w-full max-w-5xl flex-col items-center lg:-mt-52">
+              <CardBottomDropBeam
+                isPastel={isPastel}
+                primaryRgba={primaryRgba}
+                secondaryRgba={secondaryRgba}
+                dropHeight={22}
+                delayIndex={1}
+                className="mb-1 hidden lg:block"
+              />
               <div
                 className={`grid w-full grid-cols-1 ${
                   actionCards.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
@@ -952,7 +839,7 @@ export function WelcomeScreen({
                           ease: [0.25, 0.1, 0.25, 1],
                           delay: card.delay,
                         }}
-                        className="relative group"
+                        className="relative group -translate-y-2 lg:-translate-y-4"
                       >
                         {isPastel ? (
                           <motion.button

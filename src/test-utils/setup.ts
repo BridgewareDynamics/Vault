@@ -88,6 +88,29 @@ beforeEach(() => {
       mockFn.mockReset();
     }
   });
+  mockElectronAPI.getConverterCapabilities.mockResolvedValue({
+    inputExtensions: ['.png', '.pdf', '.mp4'],
+    matrix: {
+      image: ['png', 'jpeg', 'webp', 'tiff', 'pdf', 'gif', 'mp4'],
+      pdf: ['png', 'jpeg', 'webp', 'tiff', 'pdf'],
+      video: ['mp4', 'webm', 'gif', 'png', 'jpeg'],
+      gif: ['png', 'jpeg', 'webp', 'gif', 'mp4', 'webm'],
+    },
+  });
+  mockElectronAPI.onFileConverterProgress.mockImplementation(() => () => {});
+  mockElectronAPI.listMaps.mockResolvedValue([]);
+  mockElectronAPI.listTranscriptions.mockResolvedValue([]);
+  mockElectronAPI.listArchiveCases.mockResolvedValue([]);
+  mockElectronAPI.getSettings.mockResolvedValue({
+    hardwareAcceleration: true,
+    ramLimitMB: 2048,
+    fullscreen: false,
+    extractionQuality: 'high',
+    thumbnailSize: 200,
+    performanceMode: 'auto',
+    showOnboarding: false,
+    theme: 'brideware-purple',
+  });
 });
 
 // Ensure timers are restored after all tests complete to prevent hanging

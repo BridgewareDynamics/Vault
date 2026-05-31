@@ -149,6 +149,12 @@ declare global {
       reattachTranscriptionModule: (
         state: import('./detachableModules').TranscriptionModuleDetachState
       ) => Promise<{ success: boolean }>;
+      createFileConverterWindow: (
+        state: import('./detachableModules').FileConverterModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      reattachFileConverterModule: (
+        state: import('./detachableModules').FileConverterModuleDetachState
+      ) => Promise<{ success: boolean }>;
       createPdfAuditWindow: (options: {
         pdfPath: string | null;
         settings: {
@@ -359,6 +365,32 @@ declare global {
         settings?: Partial<import('./index').TranscriptionEngineSettings>;
       }) => Promise<import('./index').TranscriptionDocument>;
       cancelTranscriptionJob: (transcriptionFolderPath?: string) => Promise<{ success: boolean }>;
+      // File Converter API
+      getConverterCapabilities: () => Promise<import('./index').FileConverterCapabilities>;
+      convertFile: (options: {
+        sourcePath: string;
+        outputFormat: import('./index').FileConverterOutputFormat;
+        outputDirectory?: string;
+        quality?: number;
+        dpi?: number;
+        renderedPages?: Array<{ pageNumber: number; imageData: string }>;
+      }) => Promise<{ success: boolean; outputPath?: string; outputPaths?: string[]; error?: string }>;
+      cancelFileConversion: () => Promise<{ success: boolean }>;
+      selectConverterFile: () => Promise<string | null>;
+      saveConvertedFileToCase: (
+        casePath: string,
+        sourceOutputPath: string,
+        preferredName?: string
+      ) => Promise<{ success: boolean; savedPath?: string; error?: string }>;
+      replaceVaultFileWithConversion: (options: {
+        casePath: string | null;
+        originalPath: string;
+        convertedPath: string;
+        newFileName?: string;
+      }) => Promise<import('./index').ReplaceVaultFileResult>;
+      onFileConverterProgress: (
+        callback: (progress: import('./index').FileConverterProgress) => void
+      ) => () => void;
     };
   }
 }
