@@ -9,10 +9,11 @@ import { BookPageShell } from './BookPageShell';
 import { BookSpineInsertMenu } from './BookSpineInsertMenu';
 import { BookStage } from './BookStage';
 import { clampSpreadIndex, getSpreads } from './engine/spreadNavigator';
-import { insertPageInSpread, reindexPageSides } from './engine/pageNumbering';
-import { measureHtmlOverflow, mergeHtmlFragments } from './engine/pageLayoutEngine';
+import { getSpreadIndexForPage, insertPageInSpread, reindexPageSides } from './engine/pageNumbering';
+import { mergeHtmlFragments, paginatePageInput } from './engine/pageLayoutEngine';
 import { loadNovelAssetPreviewUrl } from './novelAssetUtils';
 import { useBookDisplayMetrics } from './hooks/useBookDisplayMetrics';
+import type { PageEditorInputPayload } from './BookPageEditor';
 
 export interface BookSpreadFlipRequest {
   direction: 'next' | 'prev';
@@ -54,6 +55,7 @@ export function BookSpreadView({
   const stageRef = useRef<HTMLDivElement>(null);
   const insertButtonRef = useRef<HTMLButtonElement>(null);
   const [showInsertMenu, setShowInsertMenu] = useState(false);
+  const [focusPageId, setFocusPageId] = useState<string | null>(null);
   const metrics = useBookDisplayMetrics(
     novelDoc.settings.bookSizeId,
     novelDoc.settings.marginMm,
@@ -66,22 +68,34 @@ export function BookSpreadView({
 
   const measureOptions = useMemo(
     () => buildPageMeasureOptions(metrics, novelDoc),
-    [metrics, novelDoc.settings.fontFamily, novelDoc.settings.fontSize]
+    [metrics, novelDoc.settings.fontFamily, novelDoc.settings.fontSize, novelDoc.settings.showPageNumbers]
   );
 
-  const handlePageContent = (pageId: string, html: string) => {
+  const handlePageContent = (pageId: string, payload: PageEditorInputPayload) => {
     let pages = [...novelDoc.pages];
-    let pageIndex = pages.findIndex((p) => p.id === pageId);
-    if (pageIndex < 0) return;
+    const startPageIndex = pages.findIndex((p) => p.id === pageId);
+    if (startPageIndex < 0) return;
 
-    let currentHtml = html;
+    let pageIndex = startPageIndex;
+    let currentHtml = payload.html;
     let changed = false;
+    let hadOverflowSplit = false;
+    let typingTailPageId: string | null = null;
+
+    const paginate = (html: string) =>
+      paginatePageInput({
+        html,
+        contentWidthPx: payload.contentWidthPx,
+        contentHeightPx: measureOptions.contentHeightPx,
+        fontFamily: measureOptions.fontFamily,
+        fontSize: measureOptions.fontSize,
+      });
 
     while (pageIndex >= 0 && pageIndex < pages.length) {
       const page = pages[pageIndex];
       if (page.type !== 'content') break;
 
-      const split = measureHtmlOverflow(currentHtml, measureOptions);
+      const split = paginate(currentHtml);
       if (!split.isOverflowing) {
         if (pages[pageIndex].contentHtml !== currentHtml) {
           pages[pageIndex] = { ...pages[pageIndex], contentHtml: currentHtml };
@@ -90,6 +104,7 @@ export function BookSpreadView({
         break;
       }
 
+      hadOverflowSplit = true;
       pages[pageIndex] = { ...pages[pageIndex], contentHtml: split.keptHtml };
       changed = true;
       pageIndex += 1;
@@ -97,14 +112,17 @@ export function BookSpreadView({
       if (pageIndex < pages.length && pages[pageIndex].type === 'content') {
         currentHtml = mergeHtmlFragments(split.overflowHtml, pages[pageIndex].contentHtml);
         pages[pageIndex] = { ...pages[pageIndex], contentHtml: currentHtml };
+        typingTailPageId = pages[pageIndex].id;
       } else {
-        pages.splice(pageIndex, 0, {
+        const newPage: NovelPage = {
           id: crypto.randomUUID(),
           side: 'right',
           type: 'content',
           contentHtml: split.overflowHtml,
           images: [],
-        });
+        };
+        pages.splice(pageIndex, 0, newPage);
+        typingTailPageId = newPage.id;
         break;
       }
     }
@@ -114,19 +132,12 @@ export function BookSpreadView({
     const reindexed = reindexPageSides(pages);
     onUpdatePages(reindexed);
 
-    const spreadInfo = getSpreads(reindexed)[spreadIndex];
-    if (
-      spreadInfo &&
-      !spreadInfo.isCoverSpread &&
-      spreadInfo.leftPage &&
-      spreadInfo.rightPage &&
-      onSpreadAdvance
-    ) {
-      const leftFull = measureHtmlOverflow(spreadInfo.leftPage.contentHtml, measureOptions).isOverflowing;
-      const rightFull = measureHtmlOverflow(spreadInfo.rightPage.contentHtml, measureOptions).isOverflowing;
-      if (leftFull && rightFull) {
-        onSpreadAdvance();
+    if (hadOverflowSplit && typingTailPageId) {
+      const targetSpread = getSpreadIndexForPage(reindexed, typingTailPageId);
+      if (targetSpread !== null && targetSpread > spreadIndex) {
+        onSpreadAdvance?.();
       }
+      setFocusPageId(typingTailPageId);
     }
   };
   const insertPageImage = (pageId: string, vaultPath: string, relativePath: string) => {
@@ -180,10 +191,10 @@ export function BookSpreadView({
           document={novelDoc}
           contentHtml={spreadData.leftPage.contentHtml}
           side="left"
-          onChange={(html) => handlePageContent(spreadData.leftPage!.id, html)}
-          onOverflow={(html) => handlePageContent(spreadData.leftPage!.id, html)}
+          onPageInput={(input) => handlePageContent(spreadData.leftPage!.id, input)}
           onInsertImage={insertPageImage}
           active={editable}
+          autoFocus={focusPageId === spreadData.leftPage!.id}
         />
       );
     }
@@ -201,10 +212,10 @@ export function BookSpreadView({
           document={novelDoc}
           contentHtml={spreadData.rightPage.contentHtml}
           side="right"
-          onChange={(html) => handlePageContent(spreadData.rightPage!.id, html)}
-          onOverflow={(html) => handlePageContent(spreadData.rightPage!.id, html)}
+          onPageInput={(input) => handlePageContent(spreadData.rightPage!.id, input)}
           onInsertImage={insertPageImage}
           active={editable}
+          autoFocus={focusPageId === spreadData.rightPage!.id}
         />
       );
     }
@@ -262,6 +273,14 @@ export function BookSpreadView({
     const timeout = window.setTimeout(() => onFlipComplete?.(), BOOK_FLIP_DURATION_MS);
     return () => window.clearTimeout(timeout);
   }, [flipRequest, flippingPage, onFlipComplete]);
+
+  useEffect(() => {
+    if (!focusPageId) return;
+    const targetSpread = getSpreadIndexForPage(novelDoc.pages, focusPageId);
+    if (targetSpread !== spreadIndex) return;
+    const timeout = window.setTimeout(() => setFocusPageId(null), 250);
+    return () => window.clearTimeout(timeout);
+  }, [focusPageId, spreadIndex, novelDoc.pages]);
 
   const flipBackPage =
     flipRequest && targetSpread
