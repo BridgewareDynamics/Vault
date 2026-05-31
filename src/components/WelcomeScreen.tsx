@@ -468,7 +468,7 @@ export function WelcomeScreen({
       </div>
 
       <motion.div
-        className="absolute w-96 h-96 rounded-full pointer-events-none"
+        className="fixed w-96 h-96 rounded-full pointer-events-none z-[1]"
         style={{
           background: `radial-gradient(circle, ${primaryRgba}0.15) 0%, transparent 70%)`,
           left: mousePosition.x - 192,
