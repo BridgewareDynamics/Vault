@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, FolderOpen, FolderPlus, Search, X, Zap } from 'lucide-react';
 import { ArchiveCase, Theme } from '../../types';
@@ -151,7 +152,7 @@ export function CaseSelectionDialog({
       : 'border-gray-700/50 bg-gray-800/60 hover:border-cyber-purple-500/40 hover:bg-gray-800/80';
   };
 
-  return (
+  return createPortal(
     <>
       <AnimatePresence>
         <motion.div
@@ -491,6 +492,7 @@ export function CaseSelectionDialog({
         }}
         onConfirm={handleCreateCase}
       />
-    </>
+    </>,
+    document.body
   );
 }
