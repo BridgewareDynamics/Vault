@@ -23,6 +23,7 @@ import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext'
 import { ArchiveContextProvider } from './contexts/ArchiveContext';
 import { VaultActiveCaseProvider } from './contexts/VaultActiveCaseContext';
 import { AudioRecorderProvider } from './contexts/AudioRecorderContext';
+import { AudioRecorderStudioPanel } from './components/AudioRecorder/AudioRecorderStudioPanel';
 import { VaultActiveCaseSync } from './components/AudioRecorder/VaultActiveCaseSync';
 import { VaultRecorderTopBar } from './components/AudioRecorder/VaultRecorderTopBar';
 import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
@@ -1411,6 +1412,7 @@ function App() {
                 <ErrorBoundary>
                   <AppContent />
                 </ErrorBoundary>
+                <AudioRecorderStudioPanel />
               </AudioRecorderProvider>
             </VaultActiveCaseProvider>
           </ArchiveContextProvider>

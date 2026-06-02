@@ -2705,6 +2705,7 @@ ipcMain.handle(
       const fileId = db!.generateId(destPath);
       const caseRecord = db!.getCaseByPath(casePath);
       if (caseRecord) {
+        const fileType = detectFileTypeFromPath(destPath);
         const checksum = await db!.calculateChecksum(destPath);
         db!.createFile({
           id: fileId,
@@ -2712,7 +2713,7 @@ ipcMain.handle(
           name: path.basename(destPath),
           path: destPath,
           size: stats.size,
-          type: 'audio',
+          type: fileType === 'audio' ? 'other' : fileType,
           is_folder: 0,
           checksum,
           local_modified_at: stats.mtime.getTime(),

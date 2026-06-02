@@ -1,4 +1,4 @@
-import { VaultRecorderTrigger } from './VaultRecorderTrigger';
+import { VaultRecorderDock } from './VaultRecorderDock';
 
 interface VaultRecorderTopBarProps {
   visible: boolean;
@@ -16,7 +16,7 @@ export function VaultRecorderTopBar({ visible }: VaultRecorderTopBarProps) {
       aria-label="Global audio recorder"
     >
       <div className="pointer-events-auto">
-        <VaultRecorderTrigger />
+        <VaultRecorderDock />
       </div>
     </div>
   );

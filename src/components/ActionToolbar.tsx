@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Settings, FileText } from 'lucide-react';
-import { VaultRecorderTrigger } from './AudioRecorder/VaultRecorderTrigger';
+import { VaultRecorderDock } from './AudioRecorder/VaultRecorderDock';
 import { useSettings } from '../hooks/useSettings';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
@@ -34,7 +34,7 @@ export function ActionToolbar({ hideWordEditorButton = false, onSettingsClick }:
   return (
     <>
       <div className="flex items-center gap-2">
-        <VaultRecorderTrigger />
+        <VaultRecorderDock />
 
         {/* Word Editor Button */}
         {!hideWordEditorButton && (

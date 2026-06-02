@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface AudioInputDevice {
   deviceId: string;
@@ -9,6 +9,7 @@ export function useAudioInputDevices(enabled: boolean) {
   const [devices, setDevices] = useState<AudioInputDevice[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const labelsUnlockedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) {
@@ -20,6 +21,16 @@ export function useAudioInputDevices(enabled: boolean) {
     setLoading(true);
     setError(null);
     try {
+      if (enabled && !labelsUnlockedRef.current) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((track) => track.stop());
+          labelsUnlockedRef.current = true;
+        } catch {
+          // enumerate may still return devices without stable ids
+        }
+      }
+
       const list = await navigator.mediaDevices.enumerateDevices();
       const inputs = list
         .filter((device) => device.kind === 'audioinput')
@@ -37,7 +48,7 @@ export function useAudioInputDevices(enabled: boolean) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) {

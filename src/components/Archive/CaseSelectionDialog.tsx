@@ -171,21 +171,22 @@ export function CaseSelectionDialog({
 
   const casePanel = (
     <motion.div
+      key="case-selection-panel"
       {...panelMotion}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
       onClick={(event) => event.stopPropagation()}
       className={`flex max-h-[85vh] w-full ${panelMaxWidth} flex-col overflow-hidden rounded-2xl border-2 shadow-2xl backdrop-blur-xl ${shellClassName}`}
-            style={
-              isPastel
-                ? {
-                    boxShadow:
-                      '0 20px 60px rgba(251, 182, 206, 0.2), 0 0 0 1px rgba(251, 182, 206, 0.1)',
-                  }
-                : undefined
+      style={
+        isPastel
+          ? {
+              boxShadow:
+                '0 20px 60px rgba(251, 182, 206, 0.2), 0 0 0 1px rgba(251, 182, 206, 0.1)',
             }
-          >
-            <div
-              className={`border-b p-6 backdrop-blur-xl ${
+          : undefined
+      }
+    >
+      <div
+        className={`border-b p-6 backdrop-blur-xl ${
                 isPastel
                   ? 'bg-gradient-to-r from-white/95 via-pink-50/30 to-white/95'
                   : 'bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
