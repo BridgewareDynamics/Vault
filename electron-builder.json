@@ -14,7 +14,9 @@
     "dist-electron/**/*",
     "package.json",
     "build/icon.ico",
-    "build/icon.png"
+    "build/icon.png",
+    "THIRD_PARTY_NOTICES.md",
+    "licenses/**/*"
   ],
   "extraResources": [
     {

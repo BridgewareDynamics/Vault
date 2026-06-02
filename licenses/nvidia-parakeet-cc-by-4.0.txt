@@ -1,0 +1,32 @@
+NVIDIA Parakeet Automatic Speech Recognition Models
+=====================================================
+
+The Vault's transcription feature uses NVIDIA Parakeet speech recognition models,
+including but not limited to:
+
+  - nvidia/parakeet-tdt-0.6b-v2 (Parakeet TDT 0.6B V2)
+  - nvidia/parakeet-tdt-0.6b-v3 (Parakeet TDT 0.6B V3)
+
+Copyright (c) NVIDIA Corporation.
+
+These models are used under the Creative Commons Attribution 4.0 International
+(CC BY 4.0) license.
+
+You must give appropriate credit, provide a link to the license, and indicate if
+changes were made. You may do so in any reasonable manner, but not in any way
+that suggests the licensor endorses you or your use.
+
+License: https://creativecommons.org/licenses/by/4.0/
+Legal code: https://creativecommons.org/licenses/by/4.0/legalcode
+
+Model sources:
+  - https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2
+  - https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+
+Inference is performed using the NVIDIA NeMo toolkit (Apache License 2.0):
+  https://github.com/NVIDIA/NeMo
+
+Modifications: Model weights may be downloaded, cached locally, or bundled with
+The Vault installer without modification to the core model parameters. The Vault
+application code that loads and invokes these models is separate from the model
+weights and is not a derivative work of the models.

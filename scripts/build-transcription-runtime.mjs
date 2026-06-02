@@ -39,6 +39,11 @@ const sourceBundledParakeetV3Directory = path.join(
   'parakeet-v3'
 );
 const sourceLegacyParakeetV3Directory = path.join(projectRoot, 'context', 'parakeet');
+const sourceParakeetAttributionFile = path.join(
+  projectRoot,
+  'licenses',
+  'nvidia-parakeet-cc-by-4.0.txt'
+);
 
 const pythonVersion = process.env.VAULT_TRANSCRIPTION_PYTHON_VERSION || '3.11.9';
 const pythonEmbedUrl =
@@ -351,6 +356,18 @@ async function copyLocalParakeetV3Model() {
   return true;
 }
 
+async function copyModelAttributionNotice() {
+  if (!(await exists(sourceParakeetAttributionFile))) {
+    fail(`Missing Parakeet attribution notice at ${sourceParakeetAttributionFile}`);
+  }
+
+  await mkdir(bundledModelsRoot, { recursive: true });
+  await cp(
+    sourceParakeetAttributionFile,
+    path.join(bundledModelsRoot, 'MODEL_ATTRIBUTION.txt')
+  );
+}
+
 async function writeManifest() {
   const manifestPath = path.join(runtimeRoot, 'runtime-manifest.json');
   const usingLocalParakeetV3 = await exists(
@@ -419,6 +436,9 @@ async function main() {
     log('Bundling default transcription model');
     await copyDefaultModel();
   }
+
+  log('Copying Parakeet model attribution notice (CC BY 4.0)');
+  await copyModelAttributionNotice();
 
   log('Writing runtime manifest');
   await writeManifest();

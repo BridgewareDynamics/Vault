@@ -35,6 +35,7 @@ import {
   groupTranscriptionModelsByFamily,
   type TranscriptionModelFamily,
 } from '../../../utils/transcriptionModelCatalog';
+import { TranscriptionModelAttribution } from '../TranscriptionModelAttribution';
 import type { ModuleChromeProps } from '../../../types/detachableModules';
 import { ModuleChromeButtons } from '../../Shared/ModuleChromeButtons';
 
@@ -588,6 +589,13 @@ export function TranscriptionWorkspaceShell({
                     </p>
                   ) : null}
                 </div>
+
+                <TranscriptionModelAttribution
+                  mutedClassName={ui.t.muted}
+                  primaryClassName={ui.t.primary}
+                  surfaceClassName={ui.surface}
+                  activeModelId={currentModel?.modelId ?? null}
+                />
               </div>
             )}
 

@@ -801,6 +801,8 @@ npm run test:coverage:ci
 
 ## Acknowledgments
 
+- **NVIDIA Parakeet** (`nvidia/parakeet-tdt-0.6b-v2`, `nvidia/parakeet-tdt-0.6b-v3`): Speech recognition models used by the Transcript module, © NVIDIA Corporation, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [licenses/nvidia-parakeet-cc-by-4.0.txt](licenses/nvidia-parakeet-cc-by-4.0.txt).
+- **NVIDIA NeMo**: ASR inference toolkit ([Apache 2.0](https://github.com/NVIDIA/NeMo/blob/main/LICENSE))
 - **PDF.js**: Mozilla's PDF rendering library
 - **Electron**: Cross-platform desktop application framework
 - **React**: UI library
