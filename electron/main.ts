@@ -2657,6 +2657,74 @@ ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: 
   return copiedFiles;
 });
 
+ipcMain.handle(
+  'save-audio-recording-to-case',
+  async (
+    _event,
+    casePath: string,
+    fileName: string,
+    audioData: Uint8Array | Buffer,
+    mimeType?: string
+  ) => {
+    if (!isSafePath(casePath)) {
+      throw new Error('Invalid case path');
+    }
+
+    const sanitizedName = path.basename(fileName).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
+    if (!sanitizedName) {
+      throw new Error('Invalid file name');
+    }
+
+    const extFromMime =
+      mimeType?.includes('wav')
+        ? '.wav'
+        : mimeType?.includes('mpeg') || mimeType?.includes('mp3')
+          ? '.mp3'
+          : mimeType?.includes('ogg')
+            ? '.ogg'
+            : '.webm';
+    const hasExt = path.extname(sanitizedName).length > 0;
+    const resolvedName = hasExt ? sanitizedName : `${sanitizedName}${extFromMime}`;
+
+    let destPath = path.join(casePath, resolvedName);
+    if (await fs.stat(destPath).then(() => true).catch(() => false)) {
+      const stem = path.basename(resolvedName, path.extname(resolvedName));
+      const ext = path.extname(resolvedName);
+      let counter = 1;
+      while (await fs.stat(destPath).then(() => true).catch(() => false)) {
+        destPath = path.join(casePath, `${stem} (${counter})${ext}`);
+        counter += 1;
+      }
+    }
+
+    const buffer = Buffer.isBuffer(audioData) ? audioData : Buffer.from(audioData);
+    await fs.writeFile(destPath, buffer);
+
+    if (isDatabaseReady()) {
+      const stats = await fs.stat(destPath);
+      const fileId = db!.generateId(destPath);
+      const caseRecord = db!.getCaseByPath(casePath);
+      if (caseRecord) {
+        const checksum = await db!.calculateChecksum(destPath);
+        db!.createFile({
+          id: fileId,
+          case_id: caseRecord.id,
+          name: path.basename(destPath),
+          path: destPath,
+          size: stats.size,
+          type: 'audio',
+          is_folder: 0,
+          checksum,
+          local_modified_at: stats.mtime.getTime(),
+          created_at: stats.birthtime.getTime(),
+        });
+      }
+    }
+
+    return destPath;
+  }
+);
+
 // Delete case
 ipcMain.handle('delete-case', async (event, casePath: string) => {
   if (!isSafePath(casePath)) {

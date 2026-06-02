@@ -25,6 +25,7 @@ import { FileConverterProgressPanel } from './FileConverterProgress';
 import { FileConverterResultsPanel } from './FileConverterResults';
 import { FileConverterStepRail, type FileConverterStepId } from './FileConverterStepRail';
 import { isLightTheme } from '../../theme/themeSemantics';
+import { useRegisterVaultActiveCase } from '../../contexts/VaultActiveCaseContext';
 import type { FileConverterModuleDetachState, ModuleChromeProps } from '../../types/detachableModules';
 import type { FileConverterWorkspaceDetachBridge } from '../../types/detachableModules';
 import { DEFAULT_FILE_CONVERTER_TARGET } from './fileConverterDefaults';
@@ -87,6 +88,9 @@ export function FileConverterWorkspacePage({
   const [selectedCasePath, setSelectedCasePath] = useState<string | null>(
     initialState?.selectedCasePath ?? null
   );
+
+  const linkedCaseName = selectedCasePath?.split(/[\\/]/).filter(Boolean).pop() ?? null;
+  useRegisterVaultActiveCase(selectedCasePath, linkedCaseName);
 
   const availableFormats = useMemo((): FileConverterOutputFormat[] => {
     if (!source || !capabilities) {

@@ -28,6 +28,7 @@ export const mockElectronAPI = {
   listArchiveCases: vi.fn(),
   listCaseFiles: vi.fn(),
   addFilesToCase: vi.fn(),
+  saveAudioRecordingToCase: vi.fn().mockResolvedValue('/mock/case/recording.webm'),
   deleteCase: vi.fn(),
   setCaseBackgroundImage: vi.fn(),
   setFolderBackgroundImage: vi.fn(),

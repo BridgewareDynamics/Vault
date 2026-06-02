@@ -43,6 +43,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listArchiveCases: () => ipcRenderer.invoke('list-archive-cases'),
   listCaseFiles: (casePath: string) => ipcRenderer.invoke('list-case-files', casePath),
   addFilesToCase: (casePath: string, filePaths?: string[]) => ipcRenderer.invoke('add-files-to-case', casePath, filePaths),
+  saveAudioRecordingToCase: (
+    casePath: string,
+    fileName: string,
+    audioData: ArrayBuffer,
+    mimeType?: string
+  ) => ipcRenderer.invoke('save-audio-recording-to-case', casePath, fileName, Buffer.from(audioData), mimeType),
   deleteCase: (casePath: string) => ipcRenderer.invoke('delete-case', casePath),
   setCaseBackgroundImage: (casePath: string, imagePath: string) => ipcRenderer.invoke('set-case-background-image', casePath, imagePath),
   setFolderBackgroundImage: (folderPath: string, imagePath: string) => ipcRenderer.invoke('set-folder-background-image', folderPath, imagePath),
@@ -382,6 +388,12 @@ declare global {
       listArchiveCases: () => Promise<Array<{ name: string; path: string; backgroundImage?: string; description?: string; categoryTagId?: string }>>;
       listCaseFiles: (casePath: string) => Promise<Array<{ name: string; path: string; size: number; modified: number; isFolder?: boolean; folderType?: 'extraction' | 'case'; parentPdfName?: string; categoryTagId?: string }>>;
       addFilesToCase: (casePath: string, filePaths?: string[]) => Promise<string[]>;
+      saveAudioRecordingToCase: (
+        casePath: string,
+        fileName: string,
+        audioData: ArrayBuffer,
+        mimeType?: string
+      ) => Promise<string>;
       deleteCase: (casePath: string) => Promise<boolean>;
       setCaseBackgroundImage: (casePath: string, imagePath: string) => Promise<string>;
       setFolderBackgroundImage: (folderPath: string, imagePath: string) => Promise<string>;

@@ -524,6 +524,24 @@ export function ArchivePage({ onBack, onOpenTranscription }: ArchivePageProps) {
     };
   }, [files, loading, toast, selectedFile, findFileInArchive, currentCase, currentFolderPath, cases, setCurrentCase, setArchiveContextCase, navigateToFolder, openFolder, goBackToCase]);
 
+  useEffect(() => {
+    const handleRecordingSaved = (event: Event) => {
+      const detail = (event as CustomEvent<{ casePath?: string }>).detail;
+      if (!currentCase?.path || !detail?.casePath) {
+        return;
+      }
+      const normalizePath = (pathValue: string) => pathValue.replace(/\\/g, '/');
+      if (normalizePath(currentCase.path) === normalizePath(detail.casePath)) {
+        void refreshFiles();
+      }
+    };
+
+    window.addEventListener('vault-audio-recording-saved', handleRecordingSaved as EventListener);
+    return () => {
+      window.removeEventListener('vault-audio-recording-saved', handleRecordingSaved as EventListener);
+    };
+  }, [currentCase?.path, refreshFiles]);
+
   // Listen for reattach data from detached PDF extraction window
   useEffect(() => {
     const handleReattach = (event: any) => {

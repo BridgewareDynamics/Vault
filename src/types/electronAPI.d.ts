@@ -43,6 +43,12 @@ declare global {
       listArchiveCases: () => Promise<Array<{ name: string; path: string; backgroundImage?: string; description?: string; categoryTagId?: string }>>;
       listCaseFiles: (casePath: string) => Promise<Array<{ name: string; path: string; size: number; modified: number; isFolder?: boolean; folderType?: 'extraction' | 'case'; parentPdfName?: string; categoryTagId?: string }>>;
       addFilesToCase: (casePath: string, filePaths?: string[]) => Promise<string[]>;
+      saveAudioRecordingToCase: (
+        casePath: string,
+        fileName: string,
+        audioData: ArrayBuffer,
+        mimeType?: string
+      ) => Promise<string>;
       deleteCase: (casePath: string) => Promise<boolean>;
       setCaseBackgroundImage: (casePath: string, imagePath: string) => Promise<string>;
       setFolderBackgroundImage: (folderPath: string, imagePath: string) => Promise<string>;

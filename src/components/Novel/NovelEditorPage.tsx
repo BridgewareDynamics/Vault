@@ -9,6 +9,7 @@ import { getUserFriendlyError } from '../../utils/errorMessages';
 import type { ModuleChromeProps } from '../../types/detachableModules';
 import { ModuleChromeButtons } from '../Shared/ModuleChromeButtons';
 import { isLightTheme } from '../../theme/themeSemantics';
+import { useRegisterVaultActiveCase } from '../../contexts/VaultActiveCaseContext';
 import { useNovelTheme } from './novelTheme';
 import { NovelEditorToolbar } from './NovelEditorToolbar';
 import { NovelRichTextToolbar } from './NovelRichTextToolbar';
@@ -80,6 +81,9 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
     () => (novelDoc ? getBookSizePreset(novelDoc.settings.bookSizeId).name : ''),
     [novelDoc?.settings.bookSizeId]
   );
+
+  const linkedCaseName = novelDoc?.casePath?.split(/[\\/]/).filter(Boolean).pop() ?? null;
+  useRegisterVaultActiveCase(novelDoc?.casePath ?? null, linkedCaseName);
 
   const requestSpreadNavigation = useCallback(
     (direction: 'next' | 'prev') => {

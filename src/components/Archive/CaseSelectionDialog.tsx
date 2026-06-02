@@ -20,6 +20,8 @@ export interface CaseSelectionDialogProps {
   allowCreateCase?: boolean;
   /** Render above dialogs such as new transcription (z-[80]). */
   elevated?: boolean;
+  /** Side panel beside a parent dialog (no full-screen overlay). */
+  layout?: 'overlay' | 'companion';
 }
 
 export function CaseSelectionDialog({
@@ -32,6 +34,7 @@ export function CaseSelectionDialog({
   emptyStateHint = 'Create a case in the archive or start one below',
   allowCreateCase = true,
   elevated = false,
+  layout = 'overlay',
 }: CaseSelectionDialogProps) {
   const { settings } = useSettingsContext();
   const isPastel = (settings?.theme as Theme) === 'pastel';
@@ -152,28 +155,26 @@ export function CaseSelectionDialog({
       : 'border-gray-700/50 bg-gray-800/60 hover:border-cyber-purple-500/40 hover:bg-gray-800/80';
   };
 
-  return createPortal(
-    <>
-      <AnimatePresence>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className={`fixed inset-0 flex items-center justify-center p-4 backdrop-blur-sm ${
-            elevated ? 'z-[80]' : 'z-[60]'
-          } ${isPastel ? 'bg-black/40' : 'bg-black/80'}`}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="case-selection-dialog-title"
-        >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.95, opacity: 0, y: 20 }}
-            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-            onClick={(event) => event.stopPropagation()}
-            className={`flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border-2 shadow-2xl backdrop-blur-xl ${shellClassName}`}
+  const panelMaxWidth = layout === 'companion' ? 'max-w-md xl:w-[26rem]' : 'max-w-3xl';
+  const panelMotion =
+    layout === 'companion'
+      ? {
+          initial: { opacity: 0, x: 24, scale: 0.98 },
+          animate: { opacity: 1, x: 0, scale: 1 },
+          exit: { opacity: 0, x: 20, scale: 0.98 },
+        }
+      : {
+          initial: { scale: 0.95, opacity: 0, y: 20 },
+          animate: { scale: 1, opacity: 1, y: 0 },
+          exit: { scale: 0.95, opacity: 0, y: 20 },
+        };
+
+  const casePanel = (
+    <motion.div
+      {...panelMotion}
+      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      onClick={(event) => event.stopPropagation()}
+      className={`flex max-h-[85vh] w-full ${panelMaxWidth} flex-col overflow-hidden rounded-2xl border-2 shadow-2xl backdrop-blur-xl ${shellClassName}`}
             style={
               isPastel
                 ? {
@@ -477,21 +478,51 @@ export function CaseSelectionDialog({
                 {confirmLabel}
               </motion.button>
             </div>
-          </motion.div>
+    </motion.div>
+  );
+
+  const caseNameDialog = (
+    <CaseNameDialog
+      isOpen={showCaseNameDialog}
+      elevated
+      superElevated={elevated || layout === 'companion'}
+      onClose={() => {
+        if (!creatingCase) {
+          setShowCaseNameDialog(false);
+        }
+      }}
+      onConfirm={handleCreateCase}
+    />
+  );
+
+  if (layout === 'companion') {
+    return (
+      <>
+        <AnimatePresence mode="popLayout">{isOpen ? casePanel : null}</AnimatePresence>
+        {caseNameDialog}
+      </>
+    );
+  }
+
+  return createPortal(
+    <>
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className={`fixed inset-0 flex items-center justify-center p-4 backdrop-blur-sm ${
+            elevated ? 'z-[80]' : 'z-[60]'
+          } ${isPastel ? 'bg-black/40' : 'bg-black/80'}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="case-selection-dialog-title"
+        >
+          {casePanel}
         </motion.div>
       </AnimatePresence>
-
-      <CaseNameDialog
-        isOpen={showCaseNameDialog}
-        elevated
-        superElevated={elevated}
-        onClose={() => {
-          if (!creatingCase) {
-            setShowCaseNameDialog(false);
-          }
-        }}
-        onConfirm={handleCreateCase}
-      />
+      {caseNameDialog}
     </>,
     document.body
   );

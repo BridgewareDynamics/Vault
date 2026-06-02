@@ -21,6 +21,10 @@ import { SettingsProvider, useSettingsContext } from './utils/settingsContext';
 import { getMemoryManager } from './utils/memoryManager';
 import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext';
 import { ArchiveContextProvider } from './contexts/ArchiveContext';
+import { VaultActiveCaseProvider } from './contexts/VaultActiveCaseContext';
+import { AudioRecorderProvider } from './contexts/AudioRecorderContext';
+import { VaultActiveCaseSync } from './components/AudioRecorder/VaultActiveCaseSync';
+import { VaultRecorderTopBar } from './components/AudioRecorder/VaultRecorderTopBar';
 import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
 import { DetachedSecurityChecker } from './components/DetachedSecurityChecker';
 import { DetachedPDFExtraction } from './components/DetachedPDFExtraction';
@@ -539,6 +543,7 @@ function AppContent() {
         >
           <MapModule theme={theme} hostMode="detached" onExit={() => void window.electronAPI?.closeWindow?.()} />
         </Suspense>
+        <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
           hideWordEditorButton={true}
@@ -567,6 +572,7 @@ function AppContent() {
             onExit={() => void window.electronAPI?.closeWindow?.()}
           />
         </Suspense>
+        <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
           hideWordEditorButton={true}
@@ -595,6 +601,7 @@ function AppContent() {
             onExit={() => void window.electronAPI?.closeWindow?.()}
           />
         </Suspense>
+        <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
       </>
@@ -608,6 +615,7 @@ function AppContent() {
         <Suspense fallback={<NovelLoadingShell theme={theme} />}>
           <NovelModule theme={theme} hostMode="detached" onExit={() => void window.electronAPI?.closeWindow?.()} />
         </Suspense>
+        <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
           hideWordEditorButton={true}
@@ -871,6 +879,7 @@ function AppContent() {
             onExit={() => setShowFileConverter(false)}
           />
         </Suspense>
+        <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
       </>
@@ -891,6 +900,7 @@ function AppContent() {
             onExit={() => setShowNovel(false)}
           />
         </Suspense>
+        <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
           hideWordEditorButton={true}
@@ -923,6 +933,7 @@ function AppContent() {
             onExit={() => setShowMap(false)}
           />
         </Suspense>
+        <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
           hideWordEditorButton={true}
@@ -964,6 +975,7 @@ function AppContent() {
             initialCasePath={transcriptionLaunchCasePath}
           />
         </Suspense>
+        <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
           hideWordEditorButton={true}
@@ -1393,9 +1405,14 @@ function App() {
       <SettingsProvider>
         <WordEditorProvider>
           <ArchiveContextProvider>
-            <ErrorBoundary>
-              <AppContent />
-            </ErrorBoundary>
+            <VaultActiveCaseProvider>
+              <AudioRecorderProvider>
+                <VaultActiveCaseSync />
+                <ErrorBoundary>
+                  <AppContent />
+                </ErrorBoundary>
+              </AudioRecorderProvider>
+            </VaultActiveCaseProvider>
           </ArchiveContextProvider>
         </WordEditorProvider>
       </SettingsProvider>

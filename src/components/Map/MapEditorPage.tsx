@@ -36,6 +36,7 @@ import type { ModuleChromeProps } from '../../types/detachableModules';
 import type { MapEditorDetachBridge } from './MapModule';
 import { ModuleChromeButtons } from '../Shared/ModuleChromeButtons';
 import { isLightTheme } from '../../theme/themeSemantics';
+import { useRegisterVaultActiveCase } from '../../contexts/VaultActiveCaseContext';
 
 interface MapEditorPageProps extends ModuleChromeProps {
   theme: Theme;
@@ -98,6 +99,8 @@ export function MapEditorPage({
   const [titleDraft, setTitleDraft] = useState('');
   const linkedCaseName =
     document?.casePath?.split(/[\\/]/).filter(Boolean).pop() ?? null;
+
+  useRegisterVaultActiveCase(document?.casePath ?? null, linkedCaseName);
 
   const expandBlock = document?.blocks.find((b) => b.id === expandBlockId) ?? null;
   const editingBlock = document?.blocks.find((b) => b.id === editingBlockId) ?? null;

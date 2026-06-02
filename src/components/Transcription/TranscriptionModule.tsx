@@ -15,6 +15,7 @@ import type {
   TranscriptionScreen,
 } from '../../types/detachableModules';
 import { isLightTheme } from '../../theme/themeSemantics';
+import { useRegisterVaultActiveCase } from '../../contexts/VaultActiveCaseContext';
 import {
   COLLECT_EMBEDDED_TRANSCRIPTION_EVENT,
   EMBEDDED_TRANSCRIPTION_SNAPSHOT_RESPONSE,
@@ -96,6 +97,14 @@ export function TranscriptionModule({
   const [isReattaching, setIsReattaching] = useState(false);
   const [isPoppingOut, setIsPoppingOut] = useState(false);
   const t = useTranscriptionTheme(theme);
+
+  const moduleCasePath =
+    screen === 'workspace' ? null : pendingCasePath ?? launchCasePath ?? null;
+  const moduleCaseName =
+    pendingCaseName ??
+    moduleCasePath?.split(/[\\/]/).filter(Boolean).pop() ??
+    null;
+  useRegisterVaultActiveCase(moduleCasePath, moduleCaseName);
 
   useEffect(() => {
     warmTranscriptionEntry();

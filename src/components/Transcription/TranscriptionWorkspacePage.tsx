@@ -18,6 +18,7 @@ import { TranscriptionWorkspaceShell } from './workspace/TranscriptionWorkspaceS
 import type { ModuleChromeProps } from '../../types/detachableModules';
 import type { TranscriptionWorkspaceDetachBridge } from './TranscriptionModule';
 import { useTranscriptionWorkspaceUi } from './workspace/useTranscriptionWorkspaceUi';
+import { useRegisterVaultActiveCase } from '../../contexts/VaultActiveCaseContext';
 import type { TranscriptionMediaSkimmerSelection } from './workspace/TranscriptionMediaSkimmer';
 import { deriveSegmentSettingsFromDuration } from '../../utils/transcriptionSegmentDefaults';
 import { useTranscriptionSourceDuration } from './workspace/useTranscriptionSourceDuration';
@@ -614,6 +615,10 @@ export function TranscriptionWorkspacePage({
     [engineStatus?.deviceDefault]
   );
 
+  const linkedCaseName =
+    document?.casePath?.split(/[\\/]/).filter(Boolean).pop() ?? null;
+  useRegisterVaultActiveCase(document?.casePath ?? null, linkedCaseName);
+
   if (!document) {
     return (
       <div className={`flex h-screen flex-col ${ui.t.bg}`}>
@@ -631,9 +636,6 @@ export function TranscriptionWorkspacePage({
       </div>
     );
   }
-
-  const linkedCaseName =
-    document.casePath?.split(/[\\/]/).filter(Boolean).pop() ?? null;
 
   const modelOptions =
     models.length > 0

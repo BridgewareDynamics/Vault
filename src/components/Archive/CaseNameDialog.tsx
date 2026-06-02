@@ -92,7 +92,7 @@ export function CaseNameDialog({
             }
           }}
           className={`fixed inset-0 backdrop-blur-sm flex items-center justify-center p-4 ${
-            superElevated ? 'z-[90]' : elevated ? 'z-[70]' : 'z-50'
+            superElevated ? 'z-[100]' : elevated ? 'z-[70]' : 'z-50'
           } ${isPastel ? 'bg-black/40' : 'bg-black/80'}`}
           role="dialog"
           aria-modal="true"
