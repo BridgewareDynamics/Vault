@@ -15,6 +15,7 @@ import {
   setCachedNovelLibrary,
 } from '../../utils/novelPrefetch';
 import { getUserFriendlyError } from '../../utils/errorMessages';
+import { DeleteNovelDialog } from './DeleteNovelDialog';
 
 type NovelLibraryFilter = 'all' | 'global' | 'case';
 
@@ -41,6 +42,8 @@ export function NovelLibraryPage({
   const [loading, setLoading] = useState(() => !getCachedNovelLibrary());
   const [filter, setFilter] = useState<NovelLibraryFilter>('all');
   const [query, setQuery] = useState('');
+  const [novelPendingDelete, setNovelPendingDelete] = useState<NovelListEntry | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadNovels = async (force?: boolean) => {
     if (!window.electronAPI?.listNovels) {
@@ -93,15 +96,23 @@ export function NovelLibraryPage({
     [novels]
   );
 
-  const handleDelete = async (entry: NovelListEntry) => {
-    if (!window.electronAPI?.deleteNovel) return;
-    if (!confirm(`Delete "${entry.title}"?`)) return;
+  const handleDelete = (entry: NovelListEntry) => {
+    setNovelPendingDelete(entry);
+  };
+
+  const confirmDelete = async () => {
+    if (!window.electronAPI?.deleteNovel || !novelPendingDelete) return;
+
+    setDeleting(true);
     try {
-      await window.electronAPI.deleteNovel(entry.novelFolderPath);
+      await window.electronAPI.deleteNovel(novelPendingDelete.novelFolderPath);
+      setNovelPendingDelete(null);
       await loadNovels(true);
       toast.success('Novel deleted');
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'deleting novel' }));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -181,7 +192,7 @@ export function NovelLibraryPage({
                 </button>
                 <button
                   type="button"
-                  onClick={() => void handleDelete(entry)}
+                  onClick={() => handleDelete(entry)}
                   className="rounded-xl p-2 hover:bg-red-500/20"
                   aria-label={`Delete ${entry.title}`}
                 >
@@ -192,6 +203,19 @@ export function NovelLibraryPage({
           </div>
         )}
       </div>
+
+      <DeleteNovelDialog
+        isOpen={!!novelPendingDelete}
+        theme={theme}
+        entry={novelPendingDelete}
+        deleting={deleting}
+        onClose={() => {
+          if (!deleting) {
+            setNovelPendingDelete(null);
+          }
+        }}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }

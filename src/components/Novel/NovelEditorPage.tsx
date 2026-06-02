@@ -15,7 +15,7 @@ import { NovelRichTextToolbar } from './NovelRichTextToolbar';
 import { BookSpreadView, type BookSpreadFlipRequest, BOOK_FLIP_DURATION_MS } from './BookSpreadView';
 import { NovelExportDialog } from './NovelExportDialog';
 import { NovelVaultLibraryPanel } from './NovelVaultLibraryPanel';
-import { getSpreadCount, planSpreadNavigation } from './engine/spreadNavigator';
+import { getSpreadCount, getSpreads, planSpreadNavigation } from './engine/spreadNavigator';
 import { getBookSizePreset } from './engine/bookSizes';
 import { setCachedNovelLibrary } from '../../utils/novelPrefetch';
 import { buildNovelAssetVaultPath, loadNovelAssetPreviewUrl } from './novelAssetUtils';
@@ -73,6 +73,7 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [selectingCoverImage, setSelectingCoverImage] = useState(false);
+  const [insertImageRequest, setInsertImageRequest] = useState<{ nonce: number } | null>(null);
 
   const spreadCount = useMemo(() => (novelDoc ? getSpreadCount(novelDoc.pages) : 1), [novelDoc]);
   const bookSizeLabel = useMemo(
@@ -230,6 +231,18 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
     }
   };
 
+  const handleInsertPageImage = useCallback(() => {
+    if (!novelDoc) return;
+    const spread = getSpreads(novelDoc.pages)[spreadIndex];
+    const hasContentPage =
+      spread?.leftPage?.type === 'content' || spread?.rightPage?.type === 'content';
+    if (!hasContentPage) {
+      toast.error('Open a content page to insert an image.');
+      return;
+    }
+    setInsertImageRequest({ nonce: Date.now() });
+  }, [novelDoc, spreadIndex, toast]);
+
   const handleFormatCommand = (command: string, value?: string) => {
     window.document.execCommand(command, false, value);
   };
@@ -295,6 +308,7 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
           updateSettings({ showPageNumbers: !novelDoc.settings.showPageNumbers })
         }
         onFormatCommand={handleFormatCommand}
+        onInsertImage={handleInsertPageImage}
       />
 
       <div className={`flex flex-1 min-h-0 ${isWordEditorOpen ? 'flex' : ''}`}>
@@ -318,6 +332,8 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
               toast.success(`Inserted blank page on the ${side}`)
             }
             selectingCoverImage={selectingCoverImage}
+            insertImageRequest={insertImageRequest}
+            onInsertImageRequestHandled={() => setInsertImageRequest(null)}
           />
           {novelDoc.casePath && <NovelVaultLibraryPanel linkedCasePath={novelDoc.casePath} theme={theme} />}
         </div>

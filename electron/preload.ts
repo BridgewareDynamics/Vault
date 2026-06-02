@@ -75,6 +75,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('debug-log', logEntry),
   // System information
   getSystemMemory: () => ipcRenderer.invoke('get-system-memory'),
+  getSystemFonts: () => ipcRenderer.invoke('get-system-fonts'),
   // Settings API
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (updates: any) => ipcRenderer.invoke('update-settings', updates),
@@ -260,6 +261,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   moveNovelToLibrary: (novelFolderPath: string) => ipcRenderer.invoke('move-novel-to-library', novelFolderPath),
   copyNovelAssetToNovel: (novelFolderPath: string, sourcePath: string, assetId: string) =>
     ipcRenderer.invoke('copy-novel-asset-to-novel', novelFolderPath, sourcePath, assetId),
+  writeNovelAssetFromDataUrl: (novelFolderPath: string, relativePath: string, dataUrl: string) =>
+    ipcRenderer.invoke('write-novel-asset-from-data-url', novelFolderPath, relativePath, dataUrl),
   exportNovelPdf: (novelFolderPath: string, destFilePath: string) =>
     ipcRenderer.invoke('export-novel-pdf', novelFolderPath, destFilePath),
   exportNovelHtml: (novelFolderPath: string, destDirectory: string) =>
@@ -408,6 +411,7 @@ declare global {
         hypothesisId: string;
       }) => Promise<void>;
       getSystemMemory: () => Promise<{ totalMemory: number; freeMemory: number; usedMemory: number }>;
+      getSystemFonts: () => Promise<string[]>;
       // Settings API
       getSettings: () => Promise<{
         hardwareAcceleration: boolean;

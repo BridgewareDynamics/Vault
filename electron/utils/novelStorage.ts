@@ -12,6 +12,7 @@ import {
   LIST_SCAN_CONCURRENCY,
   mapWithConcurrency,
 } from './listScanUtils';
+import { formatFontFamilyCss } from './systemFonts';
 
 const DEFAULT_BOOK_SIZE_ID = 'us-trade';
 const DEFAULT_MARGIN_MM = 19;
@@ -394,6 +395,29 @@ export async function copyNovelAssetToNovel(
   };
 }
 
+export async function writeNovelAssetFromDataUrl(
+  novelFolderPath: string,
+  relativePath: string,
+  dataUrl: string
+): Promise<void> {
+  if (!isSafePath(novelFolderPath)) {
+    throw new Error('Invalid path');
+  }
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) {
+    throw new Error('Invalid data URL');
+  }
+  const normalized = relativePath.replace(/\\/g, '/');
+  const fullPath = normalized.startsWith(`${NOVEL_ASSETS_DIR}/`)
+    ? path.join(novelFolderPath, normalized)
+    : path.join(getNovelAssetsPath(novelFolderPath), path.basename(normalized));
+  if (!isSafePath(fullPath)) {
+    throw new Error('Invalid asset path');
+  }
+  await fs.mkdir(path.dirname(fullPath), { recursive: true });
+  await fs.writeFile(fullPath, Buffer.from(match[2], 'base64'));
+}
+
 export async function exportNovelToPdf(
   novelFolderPath: string,
   destFilePath: string
@@ -677,7 +701,7 @@ export async function exportNovelToHtml(
     .join('\n');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${doc.title}</title>
-<style>body{font-family:${doc.settings.fontFamily};font-size:${doc.settings.fontSize}pt;max-width:800px;margin:0 auto;padding:2rem;}
+<style>body{font-family:${formatFontFamilyCss(doc.settings.fontFamily)};font-size:${doc.settings.fontSize}pt;max-width:800px;margin:0 auto;padding:2rem;}
 .page{page-break-after:always;margin-bottom:2rem;min-height:600px;border:1px solid #ddd;padding:2rem;}</style></head>
 <body><h1>${doc.settings.coverTitle}</h1>${htmlPages}</body></html>`;
 

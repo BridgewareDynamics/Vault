@@ -69,6 +69,7 @@ export const mockElectronAPI = {
   moveNovelToCase: vi.fn(),
   moveNovelToLibrary: vi.fn(),
   copyNovelAssetToNovel: vi.fn(),
+  writeNovelAssetFromDataUrl: vi.fn(),
   exportNovelPdf: vi.fn(),
   exportNovelHtml: vi.fn(),
   exportNovelDocx: vi.fn(),

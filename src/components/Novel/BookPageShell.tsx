@@ -15,6 +15,8 @@ interface BookPageShellProps {
   style?: CSSProperties;
   onDragOver?: (event: React.DragEvent) => void;
   onDrop?: (event: React.DragEvent) => void;
+  isActiveTypingPage?: boolean;
+  isImageDropTarget?: boolean;
 }
 
 export function BookPageShell({
@@ -29,6 +31,8 @@ export function BookPageShell({
   style,
   onDragOver,
   onDrop,
+  isActiveTypingPage = false,
+  isImageDropTarget = false,
 }: BookPageShellProps) {
   const t = useNovelTheme(theme);
   const isCover = variant === 'cover';
@@ -36,7 +40,9 @@ export function BookPageShell({
 
   return (
     <div
-      className={`group/page relative shrink-0 ${className}`}
+      className={`group/page relative shrink-0 ${className} ${
+        isActiveTypingPage ? 'ring-2 ring-purple-400/50 ring-offset-2 ring-offset-transparent' : ''
+      } ${isImageDropTarget ? 'ring-2 ring-cyan-400/70 ring-offset-2 ring-offset-transparent' : ''}`}
       style={{
         width: metrics.pageWidthPx,
         height: metrics.pageHeightPx,

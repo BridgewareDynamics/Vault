@@ -73,6 +73,7 @@ declare global {
         hypothesisId: string;
       }) => Promise<void>;
       getSystemMemory: () => Promise<{ totalMemory: number; freeMemory: number; usedMemory: number }>;
+      getSystemFonts: () => Promise<string[]>;
       // Settings API
       getSettings: () => Promise<{
         hardwareAcceleration: boolean;
@@ -348,6 +349,11 @@ declare global {
         sourcePath: string,
         assetId: string
       ) => Promise<{ relativePath: string; vaultPath: string; fileName: string }>;
+      writeNovelAssetFromDataUrl: (
+        novelFolderPath: string,
+        relativePath: string,
+        dataUrl: string
+      ) => Promise<{ success: boolean }>;
       exportNovelPdf: (
         novelFolderPath: string,
         destFilePath: string

@@ -30,6 +30,7 @@ import {
 } from './utils/fileConverter';
 import { getConverterCapabilities } from './utils/fileFormatRegistry';
 import { propagateVaultFileReferenceUpdate } from './utils/vaultReferencePropagator';
+import { listSystemFonts } from './utils/systemFonts';
 
 // Helper function to detect file type from path
 function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | 'audio' | 'other' {
@@ -583,6 +584,8 @@ ipcMain.handle('get-system-memory', async () => {
     usedMemory,
   };
 });
+
+ipcMain.handle('get-system-fonts', async () => listSystemFonts());
 
 // Select PDF file
 ipcMain.handle('select-pdf-file', async () => {
@@ -5087,6 +5090,19 @@ ipcMain.handle(
     } catch (error) {
       logger.error('Failed to copy novel asset:', error);
       throw new Error(`Failed to copy asset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+);
+
+ipcMain.handle(
+  'write-novel-asset-from-data-url',
+  async (_event, novelFolderPath: string, relativePath: string, dataUrl: string) => {
+    try {
+      await novelStorage.writeNovelAssetFromDataUrl(novelFolderPath, relativePath, dataUrl);
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to write novel asset:', error);
+      throw new Error(`Failed to write asset: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 );

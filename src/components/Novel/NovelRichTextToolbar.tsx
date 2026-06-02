@@ -1,13 +1,8 @@
+import { Image as ImageIcon } from 'lucide-react';
 import { useNovelTheme } from './novelTheme';
 import { Theme } from '../../types';
-
-const NOVEL_FONT_OPTIONS = [
-  { label: 'Georgia', value: 'Georgia, serif' },
-  { label: 'Crimson Pro', value: '"Crimson Pro", Georgia, serif' },
-  { label: 'Lora', value: 'Lora, Georgia, serif' },
-  { label: 'Inter', value: 'Inter, system-ui, sans-serif' },
-  { label: 'System UI', value: 'system-ui, -apple-system, sans-serif' },
-];
+import { NovelFontPicker } from './NovelFontPicker';
+import { NovelFontSizePicker } from './NovelFontSizePicker';
 
 interface NovelRichTextToolbarProps {
   theme: Theme;
@@ -18,6 +13,7 @@ interface NovelRichTextToolbarProps {
   onFontSizeChange: (size: number) => void;
   onTogglePageNumbers: () => void;
   onFormatCommand: (command: string, value?: string) => void;
+  onInsertImage?: () => void;
   className?: string;
 }
 
@@ -30,6 +26,7 @@ export function NovelRichTextToolbar({
   onFontSizeChange,
   onTogglePageNumbers,
   onFormatCommand,
+  onInsertImage,
   className = '',
 }: NovelRichTextToolbarProps) {
   const t = useNovelTheme(theme);
@@ -62,30 +59,22 @@ export function NovelRichTextToolbar({
         </button>
       </div>
       <div className={`hidden h-5 w-px sm:block ${t.isPastel ? 'bg-stone-300/60' : 'bg-white/10'}`} />
-      <select
-        value={fontFamily}
-        onChange={(e) => onFontFamilyChange(e.target.value)}
-        className={`rounded-lg border bg-transparent px-2 py-1.5 text-sm ${t.badgeNeutral}`}
-        aria-label="Font family"
-      >
-        {NOVEL_FONT_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-      <select
-        value={fontSize}
-        onChange={(e) => onFontSizeChange(Number(e.target.value))}
-        className={`rounded-lg border bg-transparent px-2 py-1.5 text-sm ${t.badgeNeutral}`}
-        aria-label="Font size"
-      >
-        {[10, 11, 12, 14, 16, 18, 24].map((size) => (
-          <option key={size} value={size}>
-            {size} pt
-          </option>
-        ))}
-      </select>
+      {onInsertImage && (
+        <>
+          <button
+            type="button"
+            className={`${btn} inline-flex items-center gap-1.5`}
+            onClick={onInsertImage}
+            title="Insert image on active page"
+          >
+            <ImageIcon className="h-4 w-4" />
+            Image
+          </button>
+          <div className={`hidden h-5 w-px sm:block ${t.isPastel ? 'bg-stone-300/60' : 'bg-white/10'}`} />
+        </>
+      )}
+      <NovelFontPicker theme={theme} value={fontFamily} onChange={onFontFamilyChange} />
+      <NovelFontSizePicker theme={theme} value={fontSize} onChange={onFontSizeChange} />
       <button
         type="button"
         className={showPageNumbers ? btnActive : btn}
@@ -97,4 +86,4 @@ export function NovelRichTextToolbar({
   );
 }
 
-export { NOVEL_FONT_OPTIONS };
+export { NOVEL_FONT_PRESETS } from './novelFontUtils';

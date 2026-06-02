@@ -241,6 +241,14 @@ export interface MapListEntry {
 }
 
 // Novel Types
+export interface NovelPageImageCrop {
+  /** Normalized crop region within the source asset (0–1). */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface NovelPageImage {
   id: string;
   assetPath: string;
@@ -249,6 +257,7 @@ export interface NovelPageImage {
   width: number;
   height: number;
   wrapMode: 'inline' | 'square' | 'behind';
+  crop?: NovelPageImageCrop;
 }
 
 export interface NovelPage {

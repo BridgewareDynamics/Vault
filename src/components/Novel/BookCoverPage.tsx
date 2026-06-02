@@ -3,6 +3,7 @@ import { ImagePlus } from 'lucide-react';
 import { NovelDocument } from '../../types';
 import { Theme } from '../../types';
 import { useNovelTheme } from './novelTheme';
+import { formatFontFamilyCss } from './novelFontUtils';
 import { BookPageShell } from './BookPageShell';
 import type { BookDisplayMetrics } from './engine/bookSizes';
 
@@ -50,7 +51,7 @@ export function BookCoverPage({
               contentEditable
               suppressContentEditableWarning
               className="outline-none font-serif text-[clamp(1.1rem,4.5vw,1.75rem)] font-bold leading-tight tracking-tight"
-              style={{ fontFamily: document.settings.fontFamily }}
+              style={{ fontFamily: formatFontFamilyCss(document.settings.fontFamily) }}
               onBlur={() =>
                 onUpdateSettings({ coverTitle: titleRef.current?.textContent?.trim() || document.title })
               }
@@ -63,7 +64,7 @@ export function BookCoverPage({
               contentEditable
               suppressContentEditableWarning
               className="outline-none text-sm opacity-75"
-              style={{ fontFamily: document.settings.fontFamily }}
+              style={{ fontFamily: formatFontFamilyCss(document.settings.fontFamily) }}
               onBlur={() =>
                 onUpdateSettings({ coverSubtitle: subtitleRef.current?.textContent?.trim() || '' })
               }
