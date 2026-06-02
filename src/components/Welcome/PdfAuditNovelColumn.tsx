@@ -128,8 +128,10 @@ export function PdfAuditNovelColumn({
               </motion.div>
             </motion.div>
             <div className="text-center flex flex-1 flex-col justify-center w-full">
-              <h3 className="text-xl font-bold mb-1 text-gray-800">Novel::</h3>
-              <p className="text-sm text-gray-600 min-h-[2.5rem]">Book creation for case narratives</p>
+              <h3 className="text-xl font-bold mb-1 text-gray-800">Novel</h3>
+              <p className="text-sm text-gray-600 min-h-[2.5rem]">
+                Spread-based books with covers, case links, and export
+              </p>
             </div>
             <motion.div className="flex items-center gap-2 text-gray-700 font-semibold text-base" whileHover={{ scale: 1.05 }}>
               <ActionIcon className={`w-4 h-4 ${novelPalette.pastel.actionIconClassName}`} />
@@ -194,8 +196,10 @@ export function PdfAuditNovelColumn({
                   </motion.div>
                 </motion.div>
                 <div className="text-center flex flex-1 flex-col justify-center w-full">
-                  <h3 className={`text-xl font-bold mb-1 ${novelPalette.dark.titleClassName}`}>Novel::</h3>
-                  <p className="text-sm text-gray-300 min-h-[2.5rem]">Book creation for case narratives</p>
+                  <h3 className={`text-xl font-bold mb-1 ${novelPalette.dark.titleClassName}`}>Novel</h3>
+                  <p className="text-sm text-gray-300 min-h-[2.5rem]">
+                    Spread-based books with covers, case links, and export
+                  </p>
                 </div>
                 <motion.div className="flex items-center gap-2 text-white font-semibold text-base" whileHover={{ scale: 1.1 }}>
                   <ActionIcon className={`w-4 h-4 ${novelPalette.dark.actionIconClassName}`} />
