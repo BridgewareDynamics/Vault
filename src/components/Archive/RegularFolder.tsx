@@ -2,8 +2,8 @@ import { motion } from 'framer-motion';
 import { Folder, Trash2, Pencil, Image } from 'lucide-react';
 import { ArchiveFile, Theme } from '../../types';
 import { isLightTheme } from '../../theme/themeSemantics';
-import { useState, useEffect } from 'react';
-import { logger } from '../../utils/logger';
+import { useMemo } from 'react';
+import { resolveVaultBackgroundUrl } from '../../utils/readFileDataUtils';
 import { useSettingsContext } from '../../utils/settingsContext';
 
 interface RegularFolderProps {
@@ -29,31 +29,13 @@ export function RegularFolder({
   onDrop,
   isDragOver = false
 }: RegularFolderProps) {
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | undefined>(undefined);
+  const backgroundImageUrl = useMemo(
+    () => resolveVaultBackgroundUrl(folder.backgroundImage),
+    [folder.backgroundImage],
+  );
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
   const isPastel = isLightTheme(theme);
-
-  // Load background image as data URL
-  useEffect(() => {
-    const loadBackgroundImage = async () => {
-      if (!folder.backgroundImage || !window.electronAPI) {
-        setBackgroundImageUrl(undefined);
-        return;
-      }
-
-      try {
-        const fileData = await window.electronAPI.readFileData(folder.backgroundImage);
-        const dataUrl = `data:${fileData.mimeType};base64,${fileData.data}`;
-        setBackgroundImageUrl(dataUrl);
-      } catch (error) {
-        logger.error('Failed to load folder background image:', error);
-        setBackgroundImageUrl(undefined);
-      }
-    };
-
-    loadBackgroundImage();
-  }, [folder.backgroundImage]);
 
   if (!folder) {
     return null;

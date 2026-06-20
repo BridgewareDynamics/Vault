@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ArchivePage } from './ArchivePage';
@@ -9,6 +10,26 @@ import * as useArchiveModule from '../../hooks/useArchive';
 import * as useArchiveExtractionModule from '../../hooks/useArchiveExtraction';
 import * as useCategoryTagsModule from '../../hooks/useCategoryTags';
 import { mockElectronAPI } from '../../test-utils/mocks';
+
+vi.mock('../../utils/archivePrefetch', () => ({
+  prefetchArchiveHeavyDeps: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('./ArchiveFileViewer', () => ({
+  ArchiveFileViewer: ({ onClose }: { onClose: () => void }) => (
+    <button type="button" aria-label="Close viewer" onClick={onClose}>
+      Close viewer
+    </button>
+  ),
+}));
+
+vi.mock('../SecurityCheckerModal', () => ({
+  SecurityCheckerModal: () => null,
+}));
+
+vi.mock('../PDFExtractionModal', () => ({
+  PDFExtractionModal: () => null,
+}));
 
 // Mock the hooks
 vi.mock('../../hooks/useArchive');
@@ -28,6 +49,7 @@ describe('ArchivePage', () => {
     files: [],
     searchQuery: '',
     loading: false,
+    isRefreshingFolder: false,
     setCurrentCase: vi.fn(),
     setSearchQuery: vi.fn(),
     selectArchiveDrive: vi.fn().mockResolvedValue(true),
@@ -52,6 +74,7 @@ describe('ArchivePage', () => {
     tags: [],
     getTagById: vi.fn().mockReturnValue(null),
     findFileInArchive: vi.fn().mockReturnValue(null),
+    ensureThumbnailForFile: vi.fn(),
   };
 
   const defaultExtractionReturn = {
@@ -61,6 +84,8 @@ describe('ArchivePage', () => {
     statusMessage: '',
     extractingCasePath: null,
     extractingFolderPath: null,
+    cancel: vi.fn(),
+    reset: vi.fn(),
   };
 
   beforeEach(() => {

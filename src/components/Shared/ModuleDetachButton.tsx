@@ -3,7 +3,7 @@ import { ExternalLink, Minimize2 } from 'lucide-react';
 
 interface ModuleDetachButtonProps {
   mode: 'detach' | 'reattach';
-  featureLabel: 'Map' | 'Transcript' | 'File Converter';
+  featureLabel: 'Map' | 'Transcript' | 'File Converter' | 'Novel';
   onClick: () => void;
   disabled?: boolean;
   isPastel?: boolean;

@@ -19,6 +19,7 @@ import { logger } from './utils/logger';
 import { getUserFriendlyError } from './utils/errorMessages';
 import { SettingsProvider, useSettingsContext } from './utils/settingsContext';
 import { getMemoryManager } from './utils/memoryManager';
+import { getThumbnailMemoryCache } from './utils/thumbnailService';
 import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext';
 import { ArchiveContextProvider } from './contexts/ArchiveContext';
 import { VaultActiveCaseProvider } from './contexts/VaultActiveCaseContext';
@@ -38,6 +39,7 @@ import {
 } from './utils/transcriptionPrefetch';
 import { prefetchMapModule } from './utils/mapPrefetch';
 import { prefetchNovelModule } from './utils/novelPrefetch';
+import { warmArchiveEntry, invalidateArchiveModuleCache } from './utils/archivePrefetch';
 import type {
   FileConverterModuleDetachState,
   MapModuleDetachState,
@@ -58,7 +60,13 @@ import { FileConverterLoadingShell } from './components/FileConverter/FileConver
 import { NovelLoadingShell } from './components/Novel/NovelLoadingShell';
 import './App.css';
 
-const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
+const ArchivePage = lazy(() =>
+  import('./utils/archivePrefetch').then(({ loadArchivePageModule }) =>
+    loadArchivePageModule().then((module) => ({
+      default: module.ArchivePage,
+    })),
+  ),
+);
 const MapModule = lazy(() =>
   import('./utils/mapPrefetch').then(({ loadMapModule }) =>
     loadMapModule().then((module) => ({
@@ -122,6 +130,15 @@ function AppContent() {
     moduleVisibilityRef.current = { showMap, showTranscription, showNovel };
   }, [showMap, showTranscription, showNovel]);
 
+  const openArchive = useCallback(() => {
+    warmArchiveEntry();
+    setShowArchive(true);
+  }, []);
+
+  useEffect(() => {
+    warmArchiveEntry();
+  }, []);
+
   // Listen for reattach data from detached PDF audit window
   useEffect(() => {
     const handleReattach = () => {
@@ -144,7 +161,7 @@ function AppContent() {
       // If caseFolderPath is present, ArchivePage will handle it
       if (data && !data.caseFolderPath) {
         // Open the PDF extraction modal when reattaching from home menu
-        console.log('App: Received reattach-pdf-extraction-data event without caseFolderPath, opening modal');
+        logger.debug('App: Received reattach-pdf-extraction-data event without caseFolderPath, opening modal');
         setShowPDFExtraction(true);
       }
     };
@@ -155,7 +172,7 @@ function AppContent() {
     const checkStoredData = () => {
       const storedData = (window as any).__reattachPdfExtractionData;
       if (storedData && !storedData.caseFolderPath) {
-        console.log('App: Found stored reattach data without caseFolderPath, opening modal');
+        logger.debug('App: Found stored reattach data without caseFolderPath, opening modal');
         setShowPDFExtraction(true);
       }
     };
@@ -413,7 +430,7 @@ function AppContent() {
   useEffect(() => {
     // Don't override if onboarding was just completed in this session
     if (onboardingCompletedRef.current) {
-      console.log('[Onboarding] Onboarding was completed in this session, not overriding');
+      logger.debug('[Onboarding] Onboarding was completed in this session, not overriding');
       return;
     }
 
@@ -422,18 +439,18 @@ function AppContent() {
       // If undefined/null (new user), default to true
       // For new users without settings, showOnboarding will be true by default
       const shouldShow = settings.showOnboarding !== false;
-      console.log('[Onboarding] Settings loaded:', { 
+      logger.debug('[Onboarding] Settings loaded:', { 
         showOnboarding: settings.showOnboarding, 
         shouldShow,
         type: typeof settings.showOnboarding,
         settingsKeys: Object.keys(settings),
         hasShowOnboarding: 'showOnboarding' in settings,
       });
-      console.log('[Onboarding] Setting showOnboarding to:', shouldShow, 'from settings:', settings.showOnboarding);
+      logger.debug('[Onboarding] Setting showOnboarding to:', shouldShow, 'from settings:', settings.showOnboarding);
       setShowOnboarding(shouldShow);
     } else {
       // If settings haven't loaded yet, keep showOnboarding as true (default for new users)
-      console.log('[Onboarding] Settings not loaded yet, defaulting to true');
+      logger.debug('[Onboarding] Settings not loaded yet, defaulting to true');
       setShowOnboarding(true);
     }
   }, [settings]);
@@ -442,7 +459,7 @@ function AppContent() {
   useEffect(() => {
     if (settings?.theme) {
       const theme = settings.theme;
-      console.log('[App] Applying theme to document:', theme);
+      logger.debug('[App] Applying theme to document:', theme);
       document.documentElement.setAttribute('data-theme', theme);
       document.body.setAttribute('data-theme', theme);
       
@@ -502,6 +519,134 @@ function AppContent() {
       logger.warn('Electron API not available - running in browser mode');
     }
   }, []);
+
+  // Initialize memory manager when settings are loaded
+  useEffect(() => {
+    if (settings) {
+      const memoryManager = getMemoryManager();
+      memoryManager.initialize(settings);
+
+      // Register cleanup callback for image caches
+      const unregister = memoryManager.registerCleanupCallback(() => {
+        getThumbnailMemoryCache().clear();
+        logger.info('[MemoryManager] Cleanup triggered - clearing thumbnail cache');
+      });
+
+      return () => {
+        unregister();
+        memoryManager.shutdown();
+      };
+    }
+  }, [settings]);
+
+  // Listen for bookmark open events - open archive if needed
+  useEffect(() => {
+    // Track last processed bookmark to prevent duplicates
+    let lastProcessedBookmark: string | null = null;
+    
+    const handleOpenBookmark = (event: CustomEvent<{ pdfPath: string; pageNumber: number; keepPanelOpen?: boolean }>) => {
+      const { pdfPath, pageNumber } = event.detail;
+      
+      // Create a unique key for this bookmark
+      const bookmarkKey = `${pdfPath}:${pageNumber}`;
+      
+      // Skip if we just processed this bookmark (prevent duplicates)
+      if (lastProcessedBookmark === bookmarkKey) {
+        return;
+      }
+      lastProcessedBookmark = bookmarkKey;
+      
+      // Reset after a delay to allow the same bookmark to be opened again if needed
+      setTimeout(() => {
+        if (lastProcessedBookmark === bookmarkKey) {
+          lastProcessedBookmark = null;
+        }
+      }, 2000);
+      
+      // Always store bookmark info in sessionStorage for ArchivePage to pick up
+      sessionStorage.setItem('pending-bookmark-open', JSON.stringify({ pdfPath, pageNumber }));
+      
+      // Don't close the word editor when opening bookmarks - keep it open so users can access typing/notes
+      // The panel should remain open regardless of where the bookmark is opened from
+      
+      // Open archive if not already open
+      if (!showArchive) {
+        openArchive();
+        // Small delay to ensure ArchivePage is mounted before handling the event
+        setTimeout(() => {
+          // Re-dispatch the event so ArchivePage can handle it
+          window.dispatchEvent(event);
+        }, 300);
+      } else {
+        // Archive is already open, dispatch event immediately for ArchivePage to handle
+        // Small delay to ensure ArchivePage is ready
+        setTimeout(() => {
+          window.dispatchEvent(event);
+        }, 100);
+      }
+    };
+
+    const handleNavigateToCaseFolder = (event: CustomEvent<{ casePath: string }>) => {
+      // Open archive if not already open
+      if (!showArchive) {
+        openArchive();
+        // Small delay to ensure ArchivePage is mounted before handling the event
+        setTimeout(() => {
+          // Re-dispatch the event so ArchivePage can handle it
+          window.dispatchEvent(event);
+        }, 300);
+      } else {
+        // Archive is already open, dispatch event immediately for ArchivePage to handle
+        // Small delay to ensure ArchivePage is ready
+        setTimeout(() => {
+          window.dispatchEvent(event);
+        }, 100);
+      }
+    };
+
+    const handleOpenWordEditorFromViewer = () => {
+      // When word editor is opened from PDF viewer, use overlay mode to preserve viewer state
+      setShouldUseOverlayMode(true);
+    };
+
+    const handleCloseWordEditor = () => {
+      // Reset overlay mode flag when word editor closes
+      setShouldUseOverlayMode(false);
+    };
+
+    window.addEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
+    window.addEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
+    window.addEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
+    window.addEventListener('close-word-editor' as any, handleCloseWordEditor as EventListener);
+    return () => {
+      window.removeEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
+      window.removeEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
+      window.removeEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
+      window.removeEventListener('close-word-editor' as any, handleCloseWordEditor as EventListener);
+    };
+  }, [showArchive, isWordEditorOpen, openArchive]);
+
+  // Update memory manager when settings change
+  useEffect(() => {
+    if (settings) {
+      const memoryManager = getMemoryManager();
+      memoryManager.updateSettings(settings);
+    }
+  }, [settings]);
+
+  // Reset overlay mode flag when word editor closes
+  useEffect(() => {
+    if (!isWordEditorOpen) {
+      setShouldUseOverlayMode(false);
+    }
+  }, [isWordEditorOpen]);
+
+  // Reset on new file selection
+  useEffect(() => {
+    if (selectedPdfPath) {
+      reset();
+    }
+  }, [selectedPdfPath, reset]);
 
   // If in detached audit mode, show only the audit component
   const shouldShowDetachedAudit = isDetachedAudit || 
@@ -628,129 +773,6 @@ function AppContent() {
     );
   }
 
-  // Initialize memory manager when settings are loaded
-  useEffect(() => {
-    if (settings) {
-      const memoryManager = getMemoryManager();
-      memoryManager.initialize(settings);
-
-      // Register cleanup callback for image caches
-      const unregister = memoryManager.registerCleanupCallback(() => {
-        // Clear any image caches if needed
-        // This is a placeholder - actual cache clearing would be implemented
-        // based on your specific caching strategy
-        logger.info('[MemoryManager] Cleanup triggered - clearing caches');
-      });
-
-      return () => {
-        unregister();
-        memoryManager.shutdown();
-      };
-    }
-  }, [settings]);
-
-  // Listen for bookmark open events - open archive if needed
-  useEffect(() => {
-    // Track last processed bookmark to prevent duplicates
-    let lastProcessedBookmark: string | null = null;
-    
-    const handleOpenBookmark = (event: CustomEvent<{ pdfPath: string; pageNumber: number; keepPanelOpen?: boolean }>) => {
-      const { pdfPath, pageNumber } = event.detail;
-      
-      // Create a unique key for this bookmark
-      const bookmarkKey = `${pdfPath}:${pageNumber}`;
-      
-      // Skip if we just processed this bookmark (prevent duplicates)
-      if (lastProcessedBookmark === bookmarkKey) {
-        return;
-      }
-      lastProcessedBookmark = bookmarkKey;
-      
-      // Reset after a delay to allow the same bookmark to be opened again if needed
-      setTimeout(() => {
-        if (lastProcessedBookmark === bookmarkKey) {
-          lastProcessedBookmark = null;
-        }
-      }, 2000);
-      
-      // Always store bookmark info in sessionStorage for ArchivePage to pick up
-      sessionStorage.setItem('pending-bookmark-open', JSON.stringify({ pdfPath, pageNumber }));
-      
-      // Don't close the word editor when opening bookmarks - keep it open so users can access typing/notes
-      // The panel should remain open regardless of where the bookmark is opened from
-      
-      // Open archive if not already open
-      if (!showArchive) {
-        setShowArchive(true);
-        // Small delay to ensure ArchivePage is mounted before handling the event
-        setTimeout(() => {
-          // Re-dispatch the event so ArchivePage can handle it
-          window.dispatchEvent(event);
-        }, 300);
-      } else {
-        // Archive is already open, dispatch event immediately for ArchivePage to handle
-        // Small delay to ensure ArchivePage is ready
-        setTimeout(() => {
-          window.dispatchEvent(event);
-        }, 100);
-      }
-    };
-
-    const handleNavigateToCaseFolder = (event: CustomEvent<{ casePath: string }>) => {
-      // Open archive if not already open
-      if (!showArchive) {
-        setShowArchive(true);
-        // Small delay to ensure ArchivePage is mounted before handling the event
-        setTimeout(() => {
-          // Re-dispatch the event so ArchivePage can handle it
-          window.dispatchEvent(event);
-        }, 300);
-      } else {
-        // Archive is already open, dispatch event immediately for ArchivePage to handle
-        // Small delay to ensure ArchivePage is ready
-        setTimeout(() => {
-          window.dispatchEvent(event);
-        }, 100);
-      }
-    };
-
-    const handleOpenWordEditorFromViewer = () => {
-      // When word editor is opened from PDF viewer, use overlay mode to preserve viewer state
-      setShouldUseOverlayMode(true);
-    };
-
-    const handleCloseWordEditor = () => {
-      // Reset overlay mode flag when word editor closes
-      setShouldUseOverlayMode(false);
-    };
-
-    window.addEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
-    window.addEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
-    window.addEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
-    window.addEventListener('close-word-editor' as any, handleCloseWordEditor as EventListener);
-    return () => {
-      window.removeEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
-      window.removeEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
-      window.removeEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
-      window.removeEventListener('close-word-editor' as any, handleCloseWordEditor as EventListener);
-    };
-  }, [showArchive, isWordEditorOpen]);
-
-  // Update memory manager when settings change
-  useEffect(() => {
-    if (settings) {
-      const memoryManager = getMemoryManager();
-      memoryManager.updateSettings(settings);
-    }
-  }, [settings]);
-
-  // Reset overlay mode flag when word editor closes
-  useEffect(() => {
-    if (!isWordEditorOpen) {
-      setShouldUseOverlayMode(false);
-    }
-  }, [isWordEditorOpen]);
-
   // Handle PDF file selection
   const handleSelectFile = async () => {
     try {
@@ -851,13 +873,6 @@ function AppContent() {
       toast.error(getUserFriendlyError(err, { operation: 'saving files', path: saveDirectory }));
     }
   };
-
-  // Reset on new file selection
-  useEffect(() => {
-    if (selectedPdfPath) {
-      reset();
-    }
-  }, [selectedPdfPath, reset]);
 
   if (showFileConverter) {
     const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
@@ -1001,8 +1016,9 @@ function AppContent() {
             className={`overflow-auto ${isDividerDragging ? '' : 'transition-all duration-300'}`}
             style={useSideBySideLayout ? { width: `${dividerPosition}%` } : { width: '100%' }}
           >
-            <Suspense
-              fallback={
+            <ErrorBoundary onReset={invalidateArchiveModuleCache}>
+              <Suspense
+                fallback={
                 (() => {
                   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
                   const isPastel = isLightTheme(theme);
@@ -1106,6 +1122,7 @@ function AppContent() {
                 }}
               />
             </Suspense>
+            </ErrorBoundary>
           </div>
           
           {/* Resizable Divider - only shown in side-by-side layout */}
@@ -1135,33 +1152,33 @@ function AppContent() {
 
   // Show welcome screen if no PDF selected and not extracting
   if (!selectedPdfPath && !isExtracting && extractedPages.length === 0) {
-    console.log('[Onboarding] Rendering welcome screen, showOnboarding:', showOnboarding, typeof showOnboarding);
+    logger.debug('[Onboarding] Rendering welcome screen, showOnboarding:', showOnboarding, typeof showOnboarding);
     return (
       <>
         {/* Show onboarding modal if needed - ALWAYS render it first */}
         {showOnboarding && (
           <OnboardingModal
             onComplete={async (theme: Theme, dontShowAgain: boolean) => {
-              console.log('[Onboarding] Completing onboarding - theme:', theme, 'dontShowAgain:', dontShowAgain);
+              logger.debug('[Onboarding] Completing onboarding - theme:', theme, 'dontShowAgain:', dontShowAgain);
               try {
                 // Mark onboarding as completed to prevent useEffect from overriding
                 onboardingCompletedRef.current = true;
                 setShowOnboarding(false);
                 
-                console.log('[Onboarding] Updating settings with theme:', theme);
+                logger.debug('[Onboarding] Updating settings with theme:', theme);
                 await updateSettings({
                   showOnboarding: !dontShowAgain,
                   theme,
                 });
-                console.log('[Onboarding] Settings updated successfully, theme set to:', theme);
+                logger.debug('[Onboarding] Settings updated successfully, theme set to:', theme);
                 
                 // Force a small delay to ensure settings context has updated
                 // The useEffect above will pick up the theme change from settings context
                 setTimeout(() => {
-                  console.log('[Onboarding] Settings should now be updated in context');
+                  logger.debug('[Onboarding] Settings should now be updated in context');
                 }, 100);
               } catch (error) {
-                console.error('[Onboarding] Failed to update settings:', error);
+                logger.error('[Onboarding] Failed to update settings:', error);
                 // Reset the ref if update failed so onboarding can be shown again
                 onboardingCompletedRef.current = false;
               }
@@ -1173,7 +1190,7 @@ function AppContent() {
         >
           <WelcomeScreen 
             onSelectFile={handleSelectFile}
-            onOpenArchive={() => setShowArchive(true)}
+            onOpenArchive={openArchive}
             onOpenSecurityChecker={() => setShowSecurityChecker(true)}
             onOpenPDFExtraction={() => setShowPDFExtraction(true)}
             onOpenFileConverter={() => {

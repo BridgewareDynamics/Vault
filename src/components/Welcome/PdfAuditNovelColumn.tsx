@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { BookOpen, type LucideIcon } from 'lucide-react';
+import { AmbientLavaFrame } from '../Shared/AmbientLavaFrame';
 import { MenuPdfConverterBranch, RoundedBeamFrame } from './MenuEnergyConnector';
 import { warmNovelEntry } from '../../utils/novelPrefetch';
 
@@ -153,15 +154,7 @@ export function PdfAuditNovelColumn({
               boxShadow: novelPalette.dark.beamBoxShadow,
             }}
           />
-          <motion.div
-            className={`rounded-3xl p-[3px] ${NOVEL_MIN_HEIGHT}`}
-            style={{
-              backgroundImage: novelPalette.dark.frameBackgroundImage,
-              backgroundSize: '200% 200%',
-            }}
-            animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-          >
+          <AmbientLavaFrame className={NOVEL_MIN_HEIGHT} borderGradient={novelPalette.dark.frameBackgroundImage}>
             <motion.button
               whileHover={{ scale: 1.04, y: -3, transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] } }}
               whileTap={{ scale: 0.98 }}
@@ -207,7 +200,7 @@ export function PdfAuditNovelColumn({
                 </motion.div>
               </div>
             </motion.button>
-          </motion.div>
+          </AmbientLavaFrame>
         </>
       )}
     </motion.div>

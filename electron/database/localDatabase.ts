@@ -3,6 +3,7 @@ import { app } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as crypto from 'crypto';
+import { calculateStreamingSha256 } from '../utils/streamChecksum';
 import { SCHEMA } from './schema';
 import {
   Case,
@@ -497,8 +498,11 @@ export class LocalDatabase {
    */
   public async calculateChecksum(filePath: string): Promise<string> {
     try {
-      const fileBuffer = await fs.readFile(filePath);
-      return crypto.createHash('sha256').update(fileBuffer).digest('hex');
+      const checksum = await calculateStreamingSha256(filePath);
+      if (!checksum) {
+        logger.error(`Failed to calculate checksum for ${filePath}: empty digest`);
+      }
+      return checksum;
     } catch (error) {
       logger.error(`Failed to calculate checksum for ${filePath}:`, error);
       return '';

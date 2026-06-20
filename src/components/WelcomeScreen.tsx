@@ -1,5 +1,5 @@
 ﻿import { motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, FolderOpen, Map as MapIcon, Mic2, Shield } from 'lucide-react';
 import { ActionToolbar } from './ActionToolbar';
 import { CardBottomDropBeam, MenuGridBeamNetwork } from './Welcome/MenuEnergyConnector';
@@ -10,6 +10,7 @@ import {
   WelcomeActionCardWrapper,
   type WelcomeMenuCardConfig,
 } from './Welcome/WelcomeActionCard';
+import { AmbientLavaFrame } from './Shared/AmbientLavaFrame';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
 import { isLightTheme } from '../theme/themeSemantics';
@@ -17,6 +18,7 @@ import { warmTranscriptionEntry } from '../utils/transcriptionPrefetch';
 import { warmMapEntry } from '../utils/mapPrefetch';
 import { warmFileConverterEntry } from '../utils/fileConverterPrefetch';
 import { warmNovelEntry } from '../utils/novelPrefetch';
+import { warmArchiveEntry } from '../utils/archivePrefetch';
 
 const getAssetPath = (path: string) => {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
@@ -58,8 +60,12 @@ export function WelcomeScreen({
   const theme: Theme = (settings?.theme as Theme) || 'pastel';
   const particles = useMemo(() => generateParticles(50), []);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const mousePositionRef = useRef({ x: 0, y: 0 });
+  const mouseRafRef = useRef<number | null>(null);
 
   useEffect(() => {
+    warmArchiveEntry();
+
     const warmers: Array<() => void> = [];
     if (onOpenTranscription) {
       warmers.push(warmTranscriptionEntry);
@@ -103,7 +109,7 @@ export function WelcomeScreen({
   const primaryRgba = isPastel ? 'rgba(216, 180, 254, ' : 'rgba(139, 92, 246, ';
   const secondaryRgba = isPastel ? 'rgba(165, 180, 252, ' : 'rgba(34, 211, 238, ';
 
-  const actionCards: WelcomeMenuCardConfig[] = [
+  const actionCards: WelcomeMenuCardConfig[] = useMemo(() => [
     {
       key: 'pdf-to-png',
       title: 'PDF to PNG',
@@ -114,40 +120,41 @@ export function WelcomeScreen({
       actionIcon: FileText,
       delay: 0.7,
       pastel: {
-        borderClassName: 'border-purple-200/40',
-        cardShadow: '0 4px 20px rgba(216, 180, 254, 0.15), 0 0 0 1px rgba(216, 180, 254, 0.1)',
-        glowBackground: 'radial-gradient(circle at center, rgba(216, 180, 254, 0.15) 0%, transparent 70%)',
-        glowShadow: '0 0 30px rgba(216, 180, 254, 0.2)',
-        overlayClassName: 'bg-gradient-to-br from-purple-50/30 via-pink-50/20 to-blue-50/30',
+        borderClassName: 'border-violet-200/45',
+        cardShadow: '0 4px 20px rgba(167, 139, 250, 0.16), 0 0 0 1px rgba(167, 139, 250, 0.1)',
+        glowBackground: 'radial-gradient(circle at center, rgba(167, 139, 250, 0.16) 0%, transparent 70%)',
+        glowShadow: '0 0 30px rgba(167, 139, 250, 0.22)',
+        overlayClassName: 'bg-gradient-to-br from-violet-50/40 via-violet-50/25 to-purple-50/35',
         iconPulse: [
-          'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.2))',
-          'drop-shadow(0 4px 12px rgba(216, 180, 254, 0.3))',
-          'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.2))',
+          'drop-shadow(0 2px 8px rgba(167, 139, 250, 0.22))',
+          'drop-shadow(0 4px 12px rgba(139, 92, 246, 0.32))',
+          'drop-shadow(0 2px 8px rgba(167, 139, 250, 0.22))',
         ],
-        iconGlowClassName: 'bg-gradient-to-br from-purple-200/40 via-pink-200/40 to-blue-200/40',
-        iconWrapperClassName: 'bg-gradient-to-br from-purple-100/80 to-pink-100/80 border-2 border-purple-200/30',
-        iconClassName: 'text-purple-400',
-        actionIconClassName: 'text-purple-400',
+        iconGlowClassName: 'bg-gradient-to-br from-violet-200/50 to-purple-200/50',
+        iconWrapperClassName: 'bg-gradient-to-br from-violet-100/85 to-purple-100/85 border-2 border-violet-200/35',
+        iconClassName: 'text-violet-500',
+        actionIconClassName: 'text-violet-500',
       },
       dark: {
         beamBackground:
-          'linear-gradient(to right, transparent 0%, rgba(168, 85, 247, 0.55) 20%, rgba(34, 211, 238, 0.85) 50%, rgba(168, 85, 247, 0.55) 80%, transparent 100%)',
-        beamBoxShadow: '0 0 12px rgba(168, 85, 247, 0.35), 0 0 28px rgba(34, 211, 238, 0.22)',
+          'linear-gradient(to right, transparent 0%, rgba(124, 58, 237, 0.55) 20%, rgba(167, 139, 250, 0.85) 50%, rgba(124, 58, 237, 0.55) 80%, transparent 100%)',
+        beamBoxShadow: '0 0 12px rgba(139, 92, 246, 0.35), 0 0 28px rgba(124, 58, 237, 0.22)',
         frameBackgroundImage:
-          'linear-gradient(45deg, rgba(168, 85, 247, 0.95), rgba(236, 72, 153, 0.85), rgba(34, 211, 238, 0.95))',
-        buttonShadow: '0 0 30px rgba(168, 85, 247, 0.24), inset 0 0 30px rgba(34, 211, 238, 0.08)',
-        glowBackground: 'radial-gradient(circle at center, rgba(168, 85, 247, 0.2) 0%, transparent 70%)',
-        glowShadow: '0 0 40px rgba(168, 85, 247, 0.45), 0 0 60px rgba(34, 211, 238, 0.3)',
+          'linear-gradient(135deg, rgba(124, 58, 237, 0.95), rgba(139, 92, 246, 0.9), rgba(167, 139, 250, 0.95))',
+        buttonShadow: '0 0 30px rgba(139, 92, 246, 0.24), inset 0 0 30px rgba(124, 58, 237, 0.08)',
+        glowBackground: 'radial-gradient(circle at center, rgba(139, 92, 246, 0.2) 0%, transparent 70%)',
+        glowShadow: '0 0 40px rgba(139, 92, 246, 0.45), 0 0 60px rgba(124, 58, 237, 0.3)',
         iconPulse: [
-          'drop-shadow(0 0 15px rgba(168, 85, 247, 0.6))',
-          'drop-shadow(0 0 25px rgba(34, 211, 238, 0.85))',
-          'drop-shadow(0 0 15px rgba(168, 85, 247, 0.6))',
+          'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
+          'drop-shadow(0 0 25px rgba(167, 139, 250, 0.85))',
+          'drop-shadow(0 0 15px rgba(139, 92, 246, 0.6))',
         ],
-        iconGlowClassName: 'bg-gradient-to-br from-purple-600 to-cyan-600',
-        iconWrapperClassName: 'bg-gradient-to-br from-purple-600/90 to-cyan-600/90 border border-fuchsia-300/35',
+        iconGlowClassName: 'bg-gradient-to-br from-violet-500 to-purple-700',
+        iconWrapperClassName: 'bg-gradient-to-br from-violet-500/90 to-purple-700/90 border border-violet-300/35',
         iconClassName: 'text-white',
-        titleClassName: 'bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent',
-        actionIconClassName: 'text-cyan-300',
+        titleClassName:
+          'bg-gradient-to-b from-white via-violet-100 to-violet-300/90 bg-clip-text text-transparent tracking-tight drop-shadow-[0_1px_10px_rgba(167,139,250,0.35)]',
+        actionIconClassName: 'text-violet-300',
       },
     },
     ...(onOpenTranscription
@@ -162,43 +169,43 @@ export function WelcomeScreen({
             actionIcon: Mic2,
             delay: 0.75,
             pastel: {
-              borderClassName: 'border-fuchsia-200/40',
-              cardShadow: '0 4px 24px rgba(216, 180, 254, 0.18), 0 0 0 1px rgba(216, 180, 254, 0.1)',
-              glowBackground: 'radial-gradient(circle at center, rgba(216, 180, 254, 0.18) 0%, transparent 72%)',
-              glowShadow: '0 0 34px rgba(216, 180, 254, 0.24)',
-              overlayClassName: 'bg-gradient-to-br from-fuchsia-50/35 via-purple-50/25 to-blue-50/30',
+              borderClassName: 'border-rose-200/45',
+              cardShadow: '0 4px 24px rgba(251, 113, 133, 0.18), 0 0 0 1px rgba(251, 113, 133, 0.1)',
+              glowBackground: 'radial-gradient(circle at center, rgba(251, 113, 133, 0.18) 0%, transparent 72%)',
+              glowShadow: '0 0 34px rgba(251, 113, 133, 0.24)',
+              overlayClassName: 'bg-gradient-to-br from-rose-50/40 via-rose-50/25 to-pink-50/30',
               iconPulse: [
-                'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.24))',
-                'drop-shadow(0 4px 12px rgba(216, 180, 254, 0.34))',
-                'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.24))',
+                'drop-shadow(0 2px 8px rgba(251, 113, 133, 0.24))',
+                'drop-shadow(0 4px 12px rgba(244, 63, 94, 0.34))',
+                'drop-shadow(0 2px 8px rgba(251, 113, 133, 0.24))',
               ],
-              iconGlowClassName: 'bg-gradient-to-br from-fuchsia-200/40 via-purple-200/40 to-blue-200/40',
+              iconGlowClassName: 'bg-gradient-to-br from-rose-200/50 to-pink-200/50',
               iconWrapperClassName:
-                'bg-gradient-to-br from-fuchsia-100/80 to-purple-100/80 border-2 border-fuchsia-200/30',
-              iconClassName: 'text-fuchsia-500',
-              actionIconClassName: 'text-fuchsia-500',
+                'bg-gradient-to-br from-rose-100/85 to-pink-100/85 border-2 border-rose-200/35',
+              iconClassName: 'text-rose-500',
+              actionIconClassName: 'text-rose-500',
             },
             dark: {
               beamBackground:
-                'linear-gradient(to right, transparent 0%, rgba(236, 72, 153, 0.55) 18%, rgba(139, 92, 246, 0.82) 50%, rgba(34, 211, 238, 0.6) 82%, transparent 100%)',
-              beamBoxShadow: '0 0 12px rgba(236, 72, 153, 0.32), 0 0 28px rgba(34, 211, 238, 0.18)',
+                'linear-gradient(to right, transparent 0%, rgba(244, 63, 94, 0.55) 18%, rgba(251, 113, 133, 0.85) 50%, rgba(225, 29, 72, 0.6) 82%, transparent 100%)',
+              beamBoxShadow: '0 0 12px rgba(244, 63, 94, 0.32), 0 0 28px rgba(225, 29, 72, 0.18)',
               frameBackgroundImage:
-                'linear-gradient(45deg, rgba(236, 72, 153, 0.94), rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.94))',
-              buttonShadow: '0 0 32px rgba(236, 72, 153, 0.2), inset 0 0 28px rgba(34, 211, 238, 0.08)',
-              glowBackground: 'radial-gradient(circle at center, rgba(236, 72, 153, 0.2) 0%, transparent 70%)',
-              glowShadow: '0 0 42px rgba(236, 72, 153, 0.4), 0 0 62px rgba(34, 211, 238, 0.26)',
+                'linear-gradient(135deg, rgba(225, 29, 72, 0.94), rgba(244, 63, 94, 0.9), rgba(251, 113, 133, 0.94))',
+              buttonShadow: '0 0 32px rgba(244, 63, 94, 0.2), inset 0 0 28px rgba(225, 29, 72, 0.08)',
+              glowBackground: 'radial-gradient(circle at center, rgba(244, 63, 94, 0.2) 0%, transparent 70%)',
+              glowShadow: '0 0 42px rgba(244, 63, 94, 0.4), 0 0 62px rgba(225, 29, 72, 0.26)',
               iconPulse: [
-                'drop-shadow(0 0 15px rgba(236, 72, 153, 0.56))',
-                'drop-shadow(0 0 25px rgba(34, 211, 238, 0.82))',
-                'drop-shadow(0 0 15px rgba(236, 72, 153, 0.56))',
+                'drop-shadow(0 0 15px rgba(244, 63, 94, 0.56))',
+                'drop-shadow(0 0 25px rgba(251, 113, 133, 0.82))',
+                'drop-shadow(0 0 15px rgba(244, 63, 94, 0.56))',
               ],
-              iconGlowClassName: 'bg-gradient-to-br from-fuchsia-500 to-cyan-500',
+              iconGlowClassName: 'bg-gradient-to-br from-rose-500 to-rose-700',
               iconWrapperClassName:
-                'bg-gradient-to-br from-fuchsia-500/90 to-cyan-500/90 border border-fuchsia-300/40',
+                'bg-gradient-to-br from-rose-500/90 to-rose-700/90 border border-rose-300/40',
               iconClassName: 'text-white',
               titleClassName:
-                'bg-gradient-to-r from-fuchsia-300 via-violet-300 to-cyan-300 bg-clip-text text-transparent',
-              actionIconClassName: 'text-fuchsia-300',
+                'bg-gradient-to-b from-white via-rose-100 to-rose-300/90 bg-clip-text text-transparent tracking-tight drop-shadow-[0_1px_10px_rgba(251,113,133,0.35)]',
+              actionIconClassName: 'text-rose-300',
             },
           },
         ]
@@ -245,7 +252,8 @@ export function WelcomeScreen({
         iconGlowClassName: 'bg-gradient-to-br from-sky-500 to-blue-600',
         iconWrapperClassName: 'bg-gradient-to-br from-sky-500/90 to-blue-600/90 border border-cyan-300/40',
         iconClassName: 'text-white',
-        titleClassName: 'bg-gradient-to-r from-sky-300 via-cyan-300 to-blue-300 bg-clip-text text-transparent',
+        titleClassName:
+          'bg-gradient-to-b from-white via-sky-100 to-sky-300/90 bg-clip-text text-transparent tracking-tight drop-shadow-[0_1px_10px_rgba(56,189,248,0.35)]',
         actionIconClassName: 'text-cyan-300',
       },
     },
@@ -261,94 +269,102 @@ export function WelcomeScreen({
             actionIcon: MapIcon,
             delay: 0.85,
             pastel: {
-              borderClassName: 'border-fuchsia-200/40',
-              cardShadow: '0 4px 24px rgba(216, 180, 254, 0.18), 0 0 0 1px rgba(216, 180, 254, 0.1)',
-              glowBackground: 'radial-gradient(circle at center, rgba(216, 180, 254, 0.18) 0%, transparent 72%)',
-              glowShadow: '0 0 34px rgba(216, 180, 254, 0.24)',
-              overlayClassName: 'bg-gradient-to-br from-fuchsia-50/35 via-purple-50/25 to-blue-50/30',
+              borderClassName: 'border-emerald-200/45',
+              cardShadow: '0 4px 24px rgba(110, 231, 183, 0.18), 0 0 0 1px rgba(110, 231, 183, 0.1)',
+              glowBackground: 'radial-gradient(circle at center, rgba(110, 231, 183, 0.18) 0%, transparent 72%)',
+              glowShadow: '0 0 34px rgba(110, 231, 183, 0.24)',
+              overlayClassName: 'bg-gradient-to-br from-emerald-50/40 via-emerald-50/25 to-teal-50/30',
               iconPulse: [
-                'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.24))',
-                'drop-shadow(0 4px 12px rgba(216, 180, 254, 0.34))',
-                'drop-shadow(0 2px 8px rgba(216, 180, 254, 0.24))',
+                'drop-shadow(0 2px 8px rgba(110, 231, 183, 0.24))',
+                'drop-shadow(0 4px 12px rgba(16, 185, 129, 0.34))',
+                'drop-shadow(0 2px 8px rgba(110, 231, 183, 0.24))',
               ],
-              iconGlowClassName: 'bg-gradient-to-br from-fuchsia-200/40 via-purple-200/40 to-blue-200/40',
-              iconWrapperClassName: 'bg-gradient-to-br from-fuchsia-100/80 to-purple-100/80 border-2 border-fuchsia-200/30',
-              iconClassName: 'text-fuchsia-500',
-              actionIconClassName: 'text-fuchsia-500',
+              iconGlowClassName: 'bg-gradient-to-br from-emerald-200/50 to-teal-200/50',
+              iconWrapperClassName: 'bg-gradient-to-br from-emerald-100/85 to-teal-100/85 border-2 border-emerald-200/35',
+              iconClassName: 'text-emerald-600',
+              actionIconClassName: 'text-emerald-600',
             },
             dark: {
               beamBackground:
-                'linear-gradient(to right, transparent 0%, rgba(236, 72, 153, 0.55) 18%, rgba(139, 92, 246, 0.82) 50%, rgba(34, 211, 238, 0.6) 82%, transparent 100%)',
-              beamBoxShadow: '0 0 12px rgba(236, 72, 153, 0.32), 0 0 28px rgba(34, 211, 238, 0.18)',
+                'linear-gradient(to right, transparent 0%, rgba(16, 185, 129, 0.55) 18%, rgba(52, 211, 153, 0.85) 50%, rgba(5, 150, 105, 0.6) 82%, transparent 100%)',
+              beamBoxShadow: '0 0 12px rgba(16, 185, 129, 0.32), 0 0 28px rgba(5, 150, 105, 0.18)',
               frameBackgroundImage:
-                'linear-gradient(45deg, rgba(236, 72, 153, 0.94), rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.94))',
-              buttonShadow: '0 0 32px rgba(236, 72, 153, 0.2), inset 0 0 28px rgba(34, 211, 238, 0.08)',
-              glowBackground: 'radial-gradient(circle at center, rgba(236, 72, 153, 0.2) 0%, transparent 70%)',
-              glowShadow: '0 0 42px rgba(236, 72, 153, 0.4), 0 0 62px rgba(34, 211, 238, 0.26)',
+                'linear-gradient(135deg, rgba(5, 150, 105, 0.94), rgba(16, 185, 129, 0.9), rgba(52, 211, 153, 0.94))',
+              buttonShadow: '0 0 32px rgba(16, 185, 129, 0.2), inset 0 0 28px rgba(5, 150, 105, 0.08)',
+              glowBackground: 'radial-gradient(circle at center, rgba(16, 185, 129, 0.2) 0%, transparent 70%)',
+              glowShadow: '0 0 42px rgba(16, 185, 129, 0.4), 0 0 62px rgba(5, 150, 105, 0.26)',
               iconPulse: [
-                'drop-shadow(0 0 15px rgba(236, 72, 153, 0.56))',
-                'drop-shadow(0 0 25px rgba(34, 211, 238, 0.82))',
-                'drop-shadow(0 0 15px rgba(236, 72, 153, 0.56))',
+                'drop-shadow(0 0 15px rgba(16, 185, 129, 0.56))',
+                'drop-shadow(0 0 25px rgba(52, 211, 153, 0.82))',
+                'drop-shadow(0 0 15px rgba(16, 185, 129, 0.56))',
               ],
-              iconGlowClassName: 'bg-gradient-to-br from-fuchsia-500 to-cyan-500',
+              iconGlowClassName: 'bg-gradient-to-br from-emerald-500 to-teal-700',
               iconWrapperClassName:
-                'bg-gradient-to-br from-fuchsia-500/90 to-cyan-500/90 border border-fuchsia-300/40',
+                'bg-gradient-to-br from-emerald-500/90 to-teal-700/90 border border-emerald-300/40',
               iconClassName: 'text-white',
               titleClassName:
-                'bg-gradient-to-r from-fuchsia-300 via-violet-300 to-cyan-300 bg-clip-text text-transparent',
-              actionIconClassName: 'text-fuchsia-300',
+                'bg-gradient-to-b from-white via-emerald-100 to-emerald-300/90 bg-clip-text text-transparent tracking-tight drop-shadow-[0_1px_10px_rgba(52,211,153,0.35)]',
+              actionIconClassName: 'text-emerald-300',
             },
           },
         ]
       : []),
-  ];
+  ], [onOpenPDFExtraction, onSelectFile, onOpenTranscription, onOpenSecurityChecker, onOpenMap]);
 
-  const fileConverterPalette: FileConverterCardPalette = {
+  const fileConverterPalette: FileConverterCardPalette = useMemo(() => ({
     pastel: {
-      borderClassName: 'border-cyan-200/40',
-      cardShadow: '0 4px 20px rgba(165, 243, 252, 0.18), 0 0 0 1px rgba(165, 243, 252, 0.12)',
-      glowBackground: 'radial-gradient(circle at center, rgba(165, 243, 252, 0.18) 0%, transparent 70%)',
-      glowShadow: '0 0 30px rgba(165, 243, 252, 0.22)',
-      overlayClassName: 'bg-gradient-to-br from-cyan-50/30 via-teal-50/20 to-purple-50/30',
+      borderClassName: 'border-cyan-200/45',
+      cardShadow: '0 4px 20px rgba(103, 232, 249, 0.18), 0 0 0 1px rgba(103, 232, 249, 0.12)',
+      glowBackground: 'radial-gradient(circle at center, rgba(103, 232, 249, 0.18) 0%, transparent 70%)',
+      glowShadow: '0 0 30px rgba(103, 232, 249, 0.22)',
+      overlayClassName: 'bg-gradient-to-br from-cyan-50/40 via-cyan-50/25 to-sky-50/30',
       iconPulse: [
-        'drop-shadow(0 2px 8px rgba(165, 243, 252, 0.24))',
+        'drop-shadow(0 2px 8px rgba(103, 232, 249, 0.24))',
         'drop-shadow(0 4px 12px rgba(34, 211, 238, 0.32))',
-        'drop-shadow(0 2px 8px rgba(165, 243, 252, 0.24))',
+        'drop-shadow(0 2px 8px rgba(103, 232, 249, 0.24))',
       ],
-      iconGlowClassName: 'bg-gradient-to-br from-cyan-200/40 via-teal-200/40 to-purple-200/40',
-      iconWrapperClassName: 'bg-gradient-to-br from-cyan-100/80 to-teal-100/80 border-2 border-cyan-200/30',
+      iconGlowClassName: 'bg-gradient-to-br from-cyan-200/50 to-sky-200/50',
+      iconWrapperClassName: 'bg-gradient-to-br from-cyan-100/85 to-sky-100/85 border-2 border-cyan-200/35',
       iconClassName: 'text-cyan-500',
       actionIconClassName: 'text-cyan-500',
     },
     dark: {
       beamBackground:
-        'linear-gradient(to right, transparent 0%, rgba(34, 211, 238, 0.55) 20%, rgba(168, 85, 247, 0.85) 50%, rgba(34, 211, 238, 0.55) 80%, transparent 100%)',
-      beamBoxShadow: '0 0 12px rgba(34, 211, 238, 0.35), 0 0 28px rgba(168, 85, 247, 0.22)',
+        'linear-gradient(to right, transparent 0%, rgba(6, 182, 212, 0.55) 20%, rgba(34, 211, 238, 0.85) 50%, rgba(6, 182, 212, 0.55) 80%, transparent 100%)',
+      beamBoxShadow: '0 0 12px rgba(6, 182, 212, 0.35), 0 0 28px rgba(8, 145, 178, 0.22)',
       frameBackgroundImage:
-        'linear-gradient(45deg, rgba(34, 211, 238, 0.95), rgba(168, 85, 247, 0.85), rgba(59, 130, 246, 0.95))',
-      buttonShadow: '0 0 30px rgba(34, 211, 238, 0.24), inset 0 0 30px rgba(168, 85, 247, 0.08)',
-      glowBackground: 'radial-gradient(circle at center, rgba(34, 211, 238, 0.2) 0%, transparent 70%)',
-      glowShadow: '0 0 40px rgba(34, 211, 238, 0.45), 0 0 60px rgba(168, 85, 247, 0.3)',
+        'linear-gradient(135deg, rgba(8, 145, 178, 0.95), rgba(6, 182, 212, 0.9), rgba(34, 211, 238, 0.95))',
+      buttonShadow: '0 0 30px rgba(6, 182, 212, 0.24), inset 0 0 30px rgba(8, 145, 178, 0.08)',
+      glowBackground: 'radial-gradient(circle at center, rgba(6, 182, 212, 0.2) 0%, transparent 70%)',
+      glowShadow: '0 0 40px rgba(6, 182, 212, 0.45), 0 0 60px rgba(8, 145, 178, 0.3)',
       iconPulse: [
-        'drop-shadow(0 0 15px rgba(34, 211, 238, 0.6))',
-        'drop-shadow(0 0 25px rgba(168, 85, 247, 0.85))',
-        'drop-shadow(0 0 15px rgba(34, 211, 238, 0.6))',
+        'drop-shadow(0 0 15px rgba(6, 182, 212, 0.6))',
+        'drop-shadow(0 0 25px rgba(34, 211, 238, 0.85))',
+        'drop-shadow(0 0 15px rgba(6, 182, 212, 0.6))',
       ],
-      iconGlowClassName: 'bg-gradient-to-br from-cyan-600 to-purple-600',
-      iconWrapperClassName: 'bg-gradient-to-br from-cyan-600/90 to-purple-600/90 border border-cyan-300/35',
+      iconGlowClassName: 'bg-gradient-to-br from-cyan-500 to-sky-700',
+      iconWrapperClassName: 'bg-gradient-to-br from-cyan-500/90 to-sky-700/90 border border-cyan-300/35',
       iconClassName: 'text-white',
-      titleClassName: 'bg-gradient-to-r from-cyan-300 via-violet-300 to-purple-300 bg-clip-text text-transparent',
+      titleClassName:
+        'bg-gradient-to-b from-white via-cyan-100 to-cyan-300/90 bg-clip-text text-transparent tracking-tight drop-shadow-[0_1px_10px_rgba(34,211,238,0.35)]',
       actionIconClassName: 'text-cyan-300',
     },
-  };
+  }), []);
 
-  const pdfToPngCard = actionCards.find((card) => card.key === 'pdf-to-png');
-  const pdfAuditCard = actionCards.find((card) => card.key === 'pdf-audit');
-  const middleActionCards = actionCards.filter(
-    (card) => card.key !== 'pdf-to-png' && card.key !== 'pdf-audit'
+  const pdfToPngCard = useMemo(
+    () => actionCards.find((card) => card.key === 'pdf-to-png'),
+    [actionCards],
+  );
+  const pdfAuditCard = useMemo(
+    () => actionCards.find((card) => card.key === 'pdf-audit'),
+    [actionCards],
+  );
+  const middleActionCards = useMemo(
+    () => actionCards.filter((card) => card.key !== 'pdf-to-png' && card.key !== 'pdf-audit'),
+    [actionCards],
   );
 
-  const novelPalette: NovelCardPalette = {
+  const novelPalette: NovelCardPalette = useMemo(() => ({
     pastel: {
       borderClassName: 'border-amber-200/40',
       cardShadow: '0 4px 20px rgba(251, 191, 36, 0.18), 0 0 0 1px rgba(251, 191, 36, 0.12)',
@@ -382,12 +398,13 @@ export function WelcomeScreen({
       iconGlowClassName: 'bg-gradient-to-br from-amber-500 to-rose-500',
       iconWrapperClassName: 'bg-gradient-to-br from-amber-500/90 to-rose-500/90 border border-amber-300/35',
       iconClassName: 'text-white',
-      titleClassName: 'bg-gradient-to-r from-amber-300 via-rose-300 to-orange-300 bg-clip-text text-transparent',
+      titleClassName:
+        'bg-gradient-to-b from-white via-amber-100 to-amber-300/90 bg-clip-text text-transparent tracking-tight drop-shadow-[0_1px_10px_rgba(251,191,36,0.35)]',
       actionIconClassName: 'text-amber-300',
     },
-  };
+  }), []);
 
-  const featuredVaultCard: WelcomeMenuCardConfig = {
+  const featuredVaultCard: WelcomeMenuCardConfig = useMemo(() => ({
     key: 'vault',
     title: 'The Vault',
     description: 'Access your case archive',
@@ -429,18 +446,30 @@ export function WelcomeScreen({
       iconGlowClassName: 'bg-gradient-to-br from-pink-500 to-fuchsia-600',
       iconWrapperClassName: 'bg-gradient-to-br from-pink-500/90 to-fuchsia-600/90 border border-pink-300/40',
       iconClassName: 'text-white',
-      titleClassName: 'bg-gradient-to-r from-pink-300 via-fuchsia-300 to-violet-300 bg-clip-text text-transparent',
+      titleClassName:
+        'bg-gradient-to-b from-white via-pink-100 to-pink-300/90 bg-clip-text text-transparent tracking-tight drop-shadow-[0_1px_10px_rgba(244,114,182,0.35)]',
       actionIconClassName: 'text-pink-300',
     },
-  };
+  }), [onOpenArchive]);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
-      setMousePosition({ x: event.clientX, y: event.clientY });
+      mousePositionRef.current = { x: event.clientX, y: event.clientY };
+      if (mouseRafRef.current === null) {
+        mouseRafRef.current = window.requestAnimationFrame(() => {
+          setMousePosition(mousePositionRef.current);
+          mouseRafRef.current = null;
+        });
+      }
     };
 
     window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (mouseRafRef.current !== null) {
+        window.cancelAnimationFrame(mouseRafRef.current);
+      }
+    };
   }, []);
 
   return (
@@ -597,8 +626,19 @@ export function WelcomeScreen({
             >
               {isPastel ? (
                 <>
+                  <motion.div
+                    className="flex items-center gap-2.5 mb-2.5"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 }}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.6)]" />
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.42em] text-purple-500/80">
+                      Research Suite
+                    </span>
+                  </motion.div>
                   <motion.h1
-                    className="text-5xl font-bold text-gray-800"
+                    className="text-5xl font-semibold leading-none tracking-tight text-gray-800"
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{
@@ -609,43 +649,54 @@ export function WelcomeScreen({
                   >
                     Welcome to Vault
                   </motion.h1>
-                  <motion.p
-                    className="text-base text-gray-600 mt-2 font-medium"
+                  <motion.div
+                    className="flex items-center gap-3 mt-3.5"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.35 }}
                   >
-                    A Research Organization System
-                  </motion.p>
+                    <span className="h-px w-10 bg-gradient-to-r from-purple-400/70 to-transparent" />
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-gray-500 font-medium">
+                      A Research Organization System
+                    </p>
+                  </motion.div>
                 </>
               ) : (
                 <>
+                  <motion.div
+                    className="flex items-center gap-2.5 mb-2.5"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 }}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-cyber-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.85)]" />
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.42em] text-cyber-cyan-300/80">
+                      Research Suite
+                    </span>
+                  </motion.div>
                   <motion.h1
-                    className="text-5xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-shimmer"
-                    initial={{ opacity: 0 }}
-                    animate={{
-                      opacity: 1,
-                      textShadow: [
-                        '0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(34, 211, 238, 0.3)',
-                        '0 0 30px rgba(139, 92, 246, 0.8), 0 0 60px rgba(34, 211, 238, 0.5)',
-                        '0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(34, 211, 238, 0.3)',
-                      ],
-                    }}
+                    className="text-5xl font-semibold leading-none tracking-tight bg-gradient-to-b from-white via-purple-100 to-cyber-purple-300/90 bg-clip-text text-transparent"
+                    style={{ filter: 'drop-shadow(0 2px 16px rgba(139, 92, 246, 0.28))' }}
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{
                       opacity: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
-                      textShadow: { duration: 4, repeat: Infinity, ease: [0.4, 0, 0.6, 1] },
+                      y: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1], delay: 0.25 },
                     }}
                   >
                     Welcome to Vault
                   </motion.h1>
-                  <motion.p
-                    className="text-base text-gray-300 mt-1 font-medium"
+                  <motion.div
+                    className="flex items-center gap-3 mt-3.5"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1], delay: 0.35 }}
                   >
-                    A Research Organization System
-                  </motion.p>
+                    <span className="h-px w-10 bg-gradient-to-r from-cyber-purple-400/80 via-cyber-cyan-400/50 to-transparent" />
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-gray-400 font-medium">
+                      A Research Organization System
+                    </p>
+                  </motion.div>
                 </>
               )}
             </motion.div>
@@ -917,6 +968,8 @@ export function WelcomeScreen({
                               },
                             }}
                             whileTap={{ scale: 0.98 }}
+                            onPointerEnter={warmArchiveEntry}
+                            onPointerDown={warmArchiveEntry}
                             onClick={card.onClick}
                             className={`w-full relative overflow-hidden rounded-3xl bg-white/85 backdrop-blur-xl shadow-lg border-2 transition-all duration-300 z-10 ${card.pastel.borderClassName}`}
                             style={{ boxShadow: card.pastel.cardShadow }}
@@ -985,17 +1038,7 @@ export function WelcomeScreen({
                                 boxShadow: card.dark.beamBoxShadow,
                               }}
                             />
-                            <motion.div
-                              className="rounded-3xl p-[3px]"
-                              style={{
-                                backgroundImage: card.dark.frameBackgroundImage,
-                                backgroundSize: '200% 200%',
-                              }}
-                              animate={{
-                                backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
-                              }}
-                              transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-                            >
+                            <AmbientLavaFrame borderGradient={card.dark.frameBackgroundImage}>
                               <motion.button
                                 whileHover={{
                                   scale: 1.02,
@@ -1006,6 +1049,8 @@ export function WelcomeScreen({
                                   },
                                 }}
                                 whileTap={{ scale: 0.98 }}
+                                onPointerEnter={warmArchiveEntry}
+                                onPointerDown={warmArchiveEntry}
                                 onClick={card.onClick}
                                 className="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10"
                                 style={{ boxShadow: card.dark.buttonShadow }}
@@ -1061,7 +1106,7 @@ export function WelcomeScreen({
                                   </motion.div>
                                 </div>
                               </motion.button>
-                            </motion.div>
+                            </AmbientLavaFrame>
                           </>
                         )}
                       </motion.div>

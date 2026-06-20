@@ -6,6 +6,7 @@ import { CaseSelectionDialog } from './Archive/CaseSelectionDialog';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
 import { isLightTheme } from '../theme/themeSemantics';
+import { logger } from '../utils/logger';
 
 interface PdfAuditState {
   pdfPath: string | null;
@@ -74,22 +75,22 @@ export function DetachedSecurityChecker() {
   // Set up immediately on mount to ensure we catch results even if audit completes quickly
   useEffect(() => {
     if (!window.electronAPI?.onAuditResult) {
-      console.warn('DetachedSecurityChecker: onAuditResult API not available');
+      logger.warn('DetachedSecurityChecker: onAuditResult API not available');
       return;
     }
     
-    console.log('DetachedSecurityChecker: Setting up audit result listener');
+    logger.debug('DetachedSecurityChecker: Setting up audit result listener');
     
     // Also set up a test to verify IPC is working
     const testListener = () => {
-      console.log('DetachedSecurityChecker: IPC listener is active and ready');
+      logger.debug('DetachedSecurityChecker: IPC listener is active and ready');
     };
     // Small delay to log that listener is ready
     setTimeout(testListener, 100);
     
     const removeResultListener = window.electronAPI.onAuditResult((auditResult: RedactionAuditResult) => {
-      console.log('DetachedSecurityChecker: Received audit result via IPC', auditResult);
-      console.log('DetachedSecurityChecker: Current state before update', {
+      logger.debug('DetachedSecurityChecker: Received audit result via IPC', auditResult);
+      logger.debug('DetachedSecurityChecker: Current state before update', {
         localIsAuditing,
         hookIsAuditing,
         hasLocalResult: !!localResult,
@@ -101,7 +102,7 @@ export function DetachedSecurityChecker() {
       // Clear auditing state - ensure both local and hook states are cleared
       setLocalIsAuditing(false);
       setLocalProgressMessage('');
-      console.log('DetachedSecurityChecker: State updated with result:', {
+      logger.debug('DetachedSecurityChecker: State updated with result:', {
         filename: auditResult.filename,
         totalPages: auditResult.totalPages,
         flaggedPagesCount: auditResult.flaggedPages?.length || 0,
@@ -110,7 +111,7 @@ export function DetachedSecurityChecker() {
     });
     
     const removeErrorListener = window.electronAPI.onAuditError?.((error: string) => {
-      console.error('DetachedSecurityChecker: Received audit error via IPC', error);
+      logger.error('DetachedSecurityChecker: Received audit error via IPC', error);
       // Clear auditing state
       setLocalIsAuditing(false);
       setLocalProgressMessage('');
@@ -118,7 +119,7 @@ export function DetachedSecurityChecker() {
     });
     
     return () => {
-      console.log('DetachedSecurityChecker: Cleaning up audit result listeners');
+      logger.debug('DetachedSecurityChecker: Cleaning up audit result listeners');
       removeResultListener();
       if (removeErrorListener) {
         removeErrorListener();
@@ -130,7 +131,7 @@ export function DetachedSecurityChecker() {
   useEffect(() => {
     const handleData = (event: CustomEvent<PdfAuditState>) => {
       const data = event.detail;
-      console.log('DetachedSecurityChecker: Received pdf-audit-data', {
+      logger.debug('DetachedSecurityChecker: Received pdf-audit-data', {
         hasPdfPath: !!data.pdfPath,
         hasResult: !!data.result,
         resultFilename: data.result?.filename,
@@ -155,7 +156,7 @@ export function DetachedSecurityChecker() {
       
       // If result is passed, it means audit completed - store it in local state
       if (data.result) {
-        console.log('DetachedSecurityChecker: Received result in initial data, storing in localResult', {
+        logger.debug('DetachedSecurityChecker: Received result in initial data, storing in localResult', {
           filename: data.result.filename,
           totalPages: data.result.totalPages,
           flaggedPages: data.result.flaggedPages?.length || 0,
@@ -265,7 +266,7 @@ export function DetachedSecurityChecker() {
       }
     } catch (error) {
       toast.error('Failed to reattach audit window');
-      console.error('Reattach error:', error);
+      logger.error('Reattach error:', error);
       setIsReattaching(false);
     }
   };

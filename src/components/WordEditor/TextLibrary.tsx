@@ -16,19 +16,7 @@ function useContainerWidth(ref: React.RefObject<HTMLDivElement>) {
   const widthRef = useRef(0); // Track current width to avoid stale closure
   const updateWidthRef = useRef<(() => void) | null>(null); // Expose updateWidth function
 
-  useEffect(() => {
-    // #region agent log
-    if (window.electronAPI?.debugLog) {
-      window.electronAPI.debugLog({location:'TextLibrary.tsx:useContainerWidth:effect',message:'useContainerWidth effect running',data:{hasRef:!!ref.current,currentWidth:width},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
-    }
-    // #endregion
-    if (!ref.current) {
-      // #region agent log
-      if (window.electronAPI?.debugLog) {
-        window.electronAPI.debugLog({location:'TextLibrary.tsx:useContainerWidth:noRef',message:'Container ref not available',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
-      }
-      // #endregion
-      setWidth(0);
+  useEffect(() => {if (!ref.current) {setWidth(0);
       widthRef.current = 0;
       updateWidthRef.current = null;
       return;
@@ -38,13 +26,7 @@ function useContainerWidth(ref: React.RefObject<HTMLDivElement>) {
     const updateWidth = () => {
       if (ref.current) {
         const rect = ref.current.getBoundingClientRect();
-        const newWidth = rect.width;
-        // #region agent log
-        if (window.electronAPI?.debugLog) {
-          window.electronAPI.debugLog({location:'TextLibrary.tsx:useContainerWidth:updateWidth',message:'updateWidth called',data:{newWidth,oldWidth:widthRef.current,rectWidth:rect.width,rectLeft:rect.left},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-        }
-        // #endregion
-        if (newWidth > 0) {
+        const newWidth = rect.width;if (newWidth > 0) {
           setWidth(newWidth);
           widthRef.current = newWidth;
         }
@@ -59,13 +41,7 @@ function useContainerWidth(ref: React.RefObject<HTMLDivElement>) {
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const newWidth = entry.contentRect.width;
-        // #region agent log
-        if (window.electronAPI?.debugLog) {
-          window.electronAPI.debugLog({location:'TextLibrary.tsx:useContainerWidth:resizeObserver',message:'ResizeObserver fired',data:{newWidth,oldWidth:widthRef.current,contentRectWidth:entry.contentRect.width},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
-        }
-        // #endregion
-        if (newWidth > 0) {
+        const newWidth = entry.contentRect.width;if (newWidth > 0) {
           setWidth(newWidth);
           widthRef.current = newWidth;
         }
@@ -109,21 +85,7 @@ interface TextLibraryProps {
   detachedCasePath?: string | null; // Case path passed from detached window
 }
 
-export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false, onFileDeleted, detachedCasePath }: TextLibraryProps) {
-  // #region agent log
-  useEffect(() => {
-    if (window.electronAPI?.debugLog) {
-      window.electronAPI.debugLog({location:'TextLibrary.tsx:mount',message:'TextLibrary component mounted',data:{isDetached},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
-    }
-    return () => {
-      if (window.electronAPI?.debugLog) {
-        window.electronAPI.debugLog({location:'TextLibrary.tsx:unmount',message:'TextLibrary component unmounted',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}).catch(()=>{});
-      }
-    };
-  }, [isDetached]);
-  // #endregion
-  
-  const [files, setFiles] = useState<TextFile[]>([]);
+export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false, onFileDeleted, detachedCasePath }: TextLibraryProps) {const [files, setFiles] = useState<TextFile[]>([]);
   const [showNewFileDialog, setShowNewFileDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<{ path: string; name: string } | null>(null);
@@ -158,54 +120,19 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
   // Determine layout mode based on container width
   // Use list view when container is narrow (< 600px), card view otherwise
   // Wait for a valid width measurement before deciding layout
-  const useListView = useMemo(() => {
-    // #region agent log
-    if (window.electronAPI?.debugLog) {
-      window.electronAPI.debugLog({location:'TextLibrary.tsx:useListView:calculation',message:'Calculating useListView',data:{containerWidth,isDetached,shouldBeList:containerWidth > 0 && containerWidth < 600 && !isDetached},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
-    }
-    // #endregion
-    // If width is 0, we haven't measured yet - default to list view for compact mode
+  const useListView = useMemo(() => {// If width is 0, we haven't measured yet - default to list view for compact mode
     // This ensures we show compact view immediately when panel opens with library
     if (containerWidth === 0) return true;
-    const result = containerWidth < 600 && !isDetached;
-    // #region agent log
-    if (window.electronAPI?.debugLog) {
-      window.electronAPI.debugLog({location:'TextLibrary.tsx:useListView:result',message:'useListView result',data:{result,containerWidth,threshold:600},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
-    }
-    // #endregion
-    return result;
+    const result = containerWidth < 600 && !isDetached;return result;
   }, [containerWidth, isDetached]);
   
-  const layoutMode = useListView ? 'list' : 'card';
-  
-  // #region agent log
-  useEffect(() => {
-    if (window.electronAPI?.debugLog) {
-      window.electronAPI.debugLog({location:'TextLibrary.tsx:layoutMode:change',message:'Layout mode changed',data:{layoutMode,useListView,containerWidth,hasRef:!!containerRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
-    }
-  }, [layoutMode, useListView, containerWidth]);
-  
-  // Log render state for debugging
-  useEffect(() => {
-    if (window.electronAPI?.debugLog) {
-      window.electronAPI.debugLog({location:'TextLibrary.tsx:render',message:'TextLibrary rendered',data:{containerWidth,useListView,layoutMode,hasRef:!!containerRef.current,isDetached},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
-    }
-  }, [containerWidth, useListView, layoutMode, isDetached]);
-  // #endregion
-  
-  // Force a re-check of width when component becomes visible (panel opens)
+  const layoutMode = useListView ? 'list' : 'card';// Force a re-check of width when component becomes visible (panel opens)
   // This ensures proper layout detection when panel reopens
   useEffect(() => {
     const checkWidth = () => {
       if (containerRef.current) {
         const currentWidth = containerRef.current.getBoundingClientRect().width;
-        const widthDiff = Math.abs(currentWidth - containerWidth);
-        // #region agent log
-        if (window.electronAPI?.debugLog) {
-          window.electronAPI.debugLog({location:'TextLibrary.tsx:checkWidth',message:'checkWidth called',data:{currentWidth,containerWidth,widthDiff,needsUpdate:currentWidth > 0 && widthDiff > 1},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-        }
-        // #endregion
-        // If we have a valid width but our state doesn't match, force update
+        const widthDiff = Math.abs(currentWidth - containerWidth);// If we have a valid width but our state doesn't match, force update
         if (currentWidth > 0 && widthDiff > 1) {
           // Directly update the width if updateWidth function is available
           if (updateContainerWidth) {
@@ -215,12 +142,6 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
             containerRef.current.offsetHeight; // Force reflow
           }
         }
-      } else {
-        // #region agent log
-        if (window.electronAPI?.debugLog) {
-          window.electronAPI.debugLog({location:'TextLibrary.tsx:checkWidth:noRef',message:'checkWidth: containerRef.current is null',data:{containerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
-        }
-        // #endregion
       }
     };
 
@@ -320,13 +241,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
     }
     // If shouldShowGalleryCalc is true, we don't load files - the gallery will be shown instead
   }, [selectedCaseForNotes?.path, currentCase?.path, showGallery, contextStabilized, detachedCasePath, refreshKey]);
-  const loadFiles = async () => {
-    // #region agent log
-    if (window.electronAPI?.debugLog) {
-      window.electronAPI.debugLog({location:'TextLibrary.tsx:loadFiles:entry',message:'loadFiles called',data:{selectedCasePath:selectedCaseForNotes?.path,currentCasePath:currentCase?.path,isDetached},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-    }
-    // #endregion
-    if (!window.electronAPI) {
+  const loadFiles = async () => {if (!window.electronAPI) {
       setLoading(false);
       return;
     }
@@ -334,41 +249,16 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
     try {
       setLoading(true);
       // Priority: selectedCaseForNotes > detachedCasePath > currentCase > global
-      const casePath = selectedCaseForNotes?.path || detachedCasePath || currentCase?.path;
-      // #region agent log
-      if (window.electronAPI?.debugLog) {
-        window.electronAPI.debugLog({location:'TextLibrary.tsx:loadFiles:casePath',message:'Determined casePath',data:{casePath,selectedCasePath:selectedCaseForNotes?.path,currentCasePath:currentCase?.path,willLoadCaseNotes:!!casePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-      }
-      // #endregion
-      
-      if (casePath) {
+      const casePath = selectedCaseForNotes?.path || detachedCasePath || currentCase?.path;if (casePath) {
         // Load case notes
         const fileList = await window.electronAPI.listCaseNotes(casePath);
-        setFiles(fileList);
-        // #region agent log
-        if (window.electronAPI?.debugLog) {
-          window.electronAPI.debugLog({location:'TextLibrary.tsx:loadFiles:loadedCaseNotes',message:'Loaded case notes',data:{casePath,fileCount:fileList.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-        }
-        // #endregion
-      } else {
+        setFiles(fileList);} else {
         // Load global notes
         const fileList = await window.electronAPI.listTextFiles();
-        setFiles(fileList);
-        // #region agent log
-        if (window.electronAPI?.debugLog) {
-          window.electronAPI.debugLog({location:'TextLibrary.tsx:loadFiles:loadedGlobalNotes',message:'Loaded global notes',data:{fileCount:fileList.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-        }
-        // #endregion
-      }
+        setFiles(fileList);}
     } catch (error) {
       toast.error('Failed to load notes');
-      console.error('Load files error:', error);
-      // #region agent log
-      if (window.electronAPI?.debugLog) {
-        window.electronAPI.debugLog({location:'TextLibrary.tsx:loadFiles:error',message:'Load files failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-      }
-      // #endregion
-    } finally {
+      console.error('Load files error:', error);} finally {
       setLoading(false);
     }
   };

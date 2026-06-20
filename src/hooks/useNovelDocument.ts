@@ -16,6 +16,8 @@ function normalizeDocument(doc: NovelDocument): NovelDocument {
       ...normalizeNovelBookSettings(doc.settings ?? {}),
       coverTitle: doc.settings?.coverTitle ?? doc.title,
       coverSubtitle: doc.settings?.coverSubtitle ?? '',
+      coverAuthor: doc.settings?.coverAuthor ?? '',
+      showCoverEditionBadge: doc.settings?.showCoverEditionBadge ?? true,
       coverImageAssetId: doc.settings?.coverImageAssetId,
       coverImageRelativePath: doc.settings?.coverImageRelativePath,
     },
@@ -147,6 +149,20 @@ export function useNovelDocument(
     [updateDocument]
   );
 
+  const updateTitle = useCallback(
+    (title: string) => {
+      updateDocument((prev) => ({
+        ...prev,
+        title,
+        settings: {
+          ...prev.settings,
+          coverTitle: prev.settings.coverTitle === prev.title ? title : prev.settings.coverTitle,
+        },
+      }));
+    },
+    [updateDocument]
+  );
+
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -161,6 +177,7 @@ export function useNovelDocument(
     updateDocument,
     updatePages,
     updateSettings,
+    updateTitle,
     flushSave,
     persist,
   };

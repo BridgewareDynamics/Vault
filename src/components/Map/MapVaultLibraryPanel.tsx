@@ -11,6 +11,7 @@ import {
   PlaySquare,
   X,
 } from 'lucide-react';
+import { resolveReadFileDataUrl, resolveReadFileMimeType } from '../../utils/readFileDataUtils';
 import { ArchiveCase, ArchiveFile, Theme } from '../../types';
 import { ArchiveFileViewer } from '../Archive/ArchiveFileViewer';
 import { useMapTheme } from './mapTheme';
@@ -243,8 +244,8 @@ export function MapVaultLibraryPanel({
           const data = await window.electronAPI.readFileData(file.path);
           if (!cancelled) {
             setPreviewAsset({
-              src: `data:${data.mimeType};base64,${data.data}`,
-              mimeType: data.mimeType,
+              src: resolveReadFileDataUrl(data, file.path),
+              mimeType: resolveReadFileMimeType(data.mimeType, file.path),
             });
           }
         } else if (file.type === 'video') {

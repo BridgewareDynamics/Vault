@@ -20,6 +20,7 @@ export function usePDFExtraction() {
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const cancelRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const pageTimesRef = useRef<number[]>([]);
 
@@ -115,12 +116,36 @@ export function usePDFExtraction() {
     return undefined;
   };
 
+  const throwIfCancelled = (signal: AbortSignal) => {
+    if (cancelRef.current || signal.aborted) {
+      throw new DOMException('Extraction cancelled by user', 'AbortError');
+    }
+  };
+
+  const isCancellationError = (err: unknown): boolean => {
+    if (cancelRef.current) {
+      return true;
+    }
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return true;
+    }
+    if (err instanceof Error && err.message.toLowerCase().includes('cancelled')) {
+      return true;
+    }
+    return false;
+  };
+
   const extractPDF = useCallback(
     async (
       pdfPath: string,
       settings: Partial<ConversionSettings> = {},
       onProgress?: (progress: ExtractionProgress) => void
     ) => {
+      abortControllerRef.current?.abort();
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+      const { signal } = abortController;
+
       cancelRef.current = false;
       startTimeRef.current = Date.now();
       pageTimesRef.current = [];
@@ -147,6 +172,7 @@ export function usePDFExtraction() {
 
         setStatusMessage('Validating PDF file...');
         await window.electronAPI.validatePDFForExtraction(pdfPath);
+        throwIfCancelled(signal);
 
         // Read PDF file as array buffer via IPC
         setStatusMessage('Reading PDF file...');
@@ -167,6 +193,7 @@ export function usePDFExtraction() {
         ]);
 
         const fileData = await window.electronAPI.readPDFFile(pdfPath);
+        throwIfCancelled(signal);
 
         // Load PDF document
         setStatusMessage('Loading PDF document...');
@@ -184,7 +211,10 @@ export function usePDFExtraction() {
           if (fileData && typeof fileData === 'object' && 'type' in fileData) {
             if (fileData.type === 'file-path') {
               // Large file - use chunked reading
-              pdf = await createChunkedPDFSource(fileData.path, pdfjsLib);
+              pdf = await createChunkedPDFSource(fileData.path, pdfjsLib, undefined, undefined, {
+                skipWarning: true,
+                signal,
+              });
             } else if (fileData.type === 'base64') {
               // Small file - decode base64
               const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
@@ -215,6 +245,8 @@ export function usePDFExtraction() {
           } else {
             throw new Error('Unexpected PDF file data format');
           }
+
+          throwIfCancelled(signal);
 
           const totalPages = pdf.numPages;
           const pagesToExtract = getPagesToExtract(
@@ -288,7 +320,14 @@ export function usePDFExtraction() {
 
               // Track render progress
               let renderProgress = 0;
+              let renderCancelled = false;
               const progressInterval = setInterval(() => {
+                if (cancelRef.current) {
+                  renderCancelled = true;
+                  clearInterval(progressInterval);
+                  renderTask.cancel();
+                  return;
+                }
                 renderProgress = Math.min(renderProgress + 10, 90);
                 setProgress((prev) => {
                   if (!prev) return prev;
@@ -300,8 +339,15 @@ export function usePDFExtraction() {
                 });
               }, 100);
 
-              await renderTask.promise;
-              clearInterval(progressInterval);
+              try {
+                await renderTask.promise;
+              } finally {
+                clearInterval(progressInterval);
+              }
+
+              if (renderCancelled || cancelRef.current) {
+                throw new Error('Extraction cancelled by user');
+              }
 
               // Convert canvas to image data based on format
               let imageData: string;
@@ -424,7 +470,7 @@ export function usePDFExtraction() {
           }
         }
       } catch (err) {
-        if (cancelRef.current) {
+        if (isCancellationError(err)) {
           setStatusMessage('Extraction cancelled');
           setError('Extraction was cancelled by user');
         } else {
@@ -436,6 +482,10 @@ export function usePDFExtraction() {
         }
         setIsExtracting(false);
         throw err;
+      } finally {
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null;
+        }
       }
     },
     []
@@ -443,6 +493,7 @@ export function usePDFExtraction() {
 
   const cancel = useCallback(() => {
     cancelRef.current = true;
+    abortControllerRef.current?.abort();
   }, []);
 
   const reset = useCallback(() => {

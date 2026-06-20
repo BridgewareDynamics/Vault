@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { X, FolderOpen, Save, FileText, FolderPlus } from 'lucide-react';
 import { ArchiveFile } from '../types';
+import { logger } from '../utils/logger';
 
 export type ExtractionSaveOption = 'save-loose' | 'make-pdf-folder' | 'add-to-pdf-folder' | 'add-folder-to-directory';
 
@@ -57,7 +58,7 @@ async function findExtractionFoldersForPDF(
         file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
     ) as ArchiveFile[];
   } catch (error) {
-    console.error('Failed to find extraction folders:', error);
+    logger.error('Failed to find extraction folders:', error);
     return [];
   }
 }
@@ -104,7 +105,7 @@ export function PDFExtractionSaveOptions({
             setIsDetecting(false);
           })
           .catch((error) => {
-            console.error('Error detecting folders:', error);
+            logger.error('Error detecting folders:', error);
             setDetectedFolders([]);
             setIsDetecting(false);
           });
@@ -148,7 +149,7 @@ export function PDFExtractionSaveOptions({
         setSaveDirectory(directory);
       }
     } catch (error) {
-      console.error('Failed to select directory:', error);
+      logger.error('Failed to select directory:', error);
     }
   };
 

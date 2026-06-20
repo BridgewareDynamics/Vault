@@ -1,3 +1,4 @@
+import type { RefObject } from 'react';
 import {
   BookOpen,
   ChevronLeft,
@@ -14,7 +15,11 @@ import { Theme } from '../../types';
 
 interface NovelEditorToolbarProps {
   theme: Theme;
-  title: string;
+  titleDraft: string;
+  onTitleChange: (value: string) => void;
+  onTitleCommit: () => void;
+  onTitleEscape: () => void;
+  titleInputRef?: RefObject<HTMLInputElement>;
   bookSizeLabel?: string;
   saving: boolean;
   dirty: boolean;
@@ -34,7 +39,11 @@ interface NovelEditorToolbarProps {
 
 export function NovelEditorToolbar({
   theme,
-  title,
+  titleDraft,
+  onTitleChange,
+  onTitleCommit,
+  onTitleEscape,
+  titleInputRef,
   bookSizeLabel,
   saving,
   dirty,
@@ -55,11 +64,29 @@ export function NovelEditorToolbar({
 
   return (
     <div className={`flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 ${t.dialogFooter}`}>
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <BookOpen className={`h-5 w-5 shrink-0 ${t.primary}`} />
-        <div className="min-w-0">
-          <p className="truncate font-semibold">{title}</p>
-          <p className={`text-xs ${t.muted}`}>
+        <div className="min-w-0 flex-1 max-w-md">
+          <input
+            ref={titleInputRef}
+            type="text"
+            value={titleDraft}
+            onChange={(event) => onTitleChange(event.target.value)}
+            onBlur={onTitleCommit}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.currentTarget.blur();
+              }
+              if (event.key === 'Escape') {
+                onTitleEscape();
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder="Untitled Novel"
+            className={`w-full truncate rounded-xl border px-3 py-1.5 text-base font-semibold outline-none ${t.titleInput}`}
+            aria-label="Book title"
+          />
+          <p className={`mt-0.5 text-xs ${t.muted}`}>
             {spreadLabel}
             {bookSizeLabel ? ` · ${bookSizeLabel}` : ''}
             {dirty ? ' · Unsaved changes' : saving ? ' · Saving...' : ''}

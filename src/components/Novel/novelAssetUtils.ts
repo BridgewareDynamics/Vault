@@ -1,3 +1,5 @@
+import { resolveReadFileDataUrl } from '../../utils/readFileDataUtils';
+
 export async function loadNovelAssetPreviewUrl(vaultPath: string): Promise<string | null> {
   if (!vaultPath) return null;
   if (window.electronAPI?.getFileThumbnail) {
@@ -10,9 +12,7 @@ export async function loadNovelAssetPreviewUrl(vaultPath: string): Promise<strin
   if (window.electronAPI?.readFileData) {
     try {
       const data = await window.electronAPI.readFileData(vaultPath);
-      if (typeof data === 'string' && data.startsWith('data:')) {
-        return data;
-      }
+      return resolveReadFileDataUrl(data, vaultPath);
     } catch {
       return null;
     }

@@ -10,7 +10,6 @@ export function resolveFfmpegPath(): string {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ffmpegStatic = require('ffmpeg-static') as string | null | undefined;
     if (ffmpegStatic && existsSync(ffmpegStatic)) {
       cachedFfmpegPath = ffmpegStatic;

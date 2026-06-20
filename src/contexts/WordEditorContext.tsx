@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 
 interface WordEditorContextType {
   isOpen: boolean;
@@ -60,7 +60,7 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Save width to localStorage when it changes
-  const setPanelWidth = (width: number) => {
+  const setPanelWidth = useCallback((width: number) => {
     // Enforce min/max constraints
     const maxWidthPx = (window.innerWidth * MAX_WIDTH) / 100;
     const constrainedWidth = Math.max(MIN_WIDTH, Math.min(width, maxWidthPx));
@@ -71,10 +71,10 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.warn('Failed to save word editor panel width to localStorage:', error);
     }
-  };
+  }, []);
 
   // Save divider position to localStorage when it changes
-  const setDividerPosition = (position: number) => {
+  const setDividerPosition = useCallback((position: number) => {
     // Enforce min/max constraints
     const constrainedPosition = Math.max(MIN_DIVIDER_POSITION, Math.min(position, MAX_DIVIDER_POSITION));
     setDividerPositionState(constrainedPosition);
@@ -84,19 +84,31 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.warn('Failed to save divider position to localStorage:', error);
     }
-  };
+  }, []);
 
-  return (
-    <WordEditorContext.Provider value={{ 
-      isOpen, 
-      setIsOpen, 
-      panelWidth, 
+  const value = useMemo(
+    () => ({
+      isOpen,
+      setIsOpen,
+      panelWidth,
       setPanelWidth,
       dividerPosition,
       setDividerPosition,
       isDividerDragging,
-      setIsDividerDragging
-    }}>
+      setIsDividerDragging,
+    }),
+    [
+      isOpen,
+      panelWidth,
+      setPanelWidth,
+      dividerPosition,
+      setDividerPosition,
+      isDividerDragging,
+    ],
+  );
+
+  return (
+    <WordEditorContext.Provider value={value}>
       {children}
     </WordEditorContext.Provider>
   );

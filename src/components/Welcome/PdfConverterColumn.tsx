@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { AmbientLavaFrame } from '../Shared/AmbientLavaFrame';
 import { FileCog, type LucideIcon } from 'lucide-react';
 import {
   MenuPdfConverterBranch,
@@ -163,14 +164,9 @@ export function PdfConverterColumn({
               boxShadow: fileConverterPalette.dark.beamBoxShadow,
             }}
           />
-          <motion.div
-            className={`rounded-3xl p-[3px] ${FILE_CONVERTER_MIN_HEIGHT}`}
-            style={{
-              backgroundImage: fileConverterPalette.dark.frameBackgroundImage,
-              backgroundSize: '200% 200%',
-            }}
-            animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+          <AmbientLavaFrame
+            className={FILE_CONVERTER_MIN_HEIGHT}
+            borderGradient={fileConverterPalette.dark.frameBackgroundImage}
           >
             <motion.button
               whileHover={{ scale: 1.04, y: -3, transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] } }}
@@ -226,7 +222,7 @@ export function PdfConverterColumn({
                 </motion.div>
               </div>
             </motion.button>
-          </motion.div>
+          </AmbientLavaFrame>
         </>
       )}
     </motion.div>

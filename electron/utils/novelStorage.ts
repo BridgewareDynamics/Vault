@@ -80,6 +80,8 @@ export interface NovelDocumentStored {
     marginMm: number;
     coverTitle: string;
     coverSubtitle?: string;
+    coverAuthor?: string;
+    showCoverEditionBadge?: boolean;
     coverImageAssetId?: string;
     coverImageRelativePath?: string;
   };
@@ -144,6 +146,8 @@ export function createEmptyNovelDocument(
       marginMm: DEFAULT_MARGIN_MM,
       coverTitle: title,
       coverSubtitle: '',
+      coverAuthor: '',
+      showCoverEditionBadge: true,
     },
     pages: createDefaultPages(title),
   };
@@ -444,7 +448,7 @@ export async function exportNovelToPdf(
       const titleWidth = boldFont.widthOfTextAtSize(doc.settings.coverTitle, titleSize);
       pdfPage.drawText(doc.settings.coverTitle, {
         x: (pageWidth - titleWidth) / 2,
-        y: pageHeight / 2,
+        y: pageHeight / 2 + 24,
         size: titleSize,
         font: boldFont,
         color: rgb(0.1, 0.1, 0.1),
@@ -454,10 +458,33 @@ export async function exportNovelToPdf(
         const subWidth = font.widthOfTextAtSize(doc.settings.coverSubtitle, subSize);
         pdfPage.drawText(doc.settings.coverSubtitle, {
           x: (pageWidth - subWidth) / 2,
-          y: pageHeight / 2 - 36,
+          y: pageHeight / 2 - 12,
           size: subSize,
           font,
           color: rgb(0.3, 0.3, 0.3),
+        });
+      }
+      if (doc.settings.coverAuthor) {
+        const authorSize = 12;
+        const authorWidth = font.widthOfTextAtSize(doc.settings.coverAuthor, authorSize);
+        pdfPage.drawText(doc.settings.coverAuthor, {
+          x: (pageWidth - authorWidth) / 2,
+          y: margin + 48,
+          size: authorSize,
+          font,
+          color: rgb(0.25, 0.25, 0.25),
+        });
+      }
+      if (doc.settings.showCoverEditionBadge !== false) {
+        const editionLabel = 'Vault Research Edition';
+        const editionSize = 9;
+        const editionWidth = font.widthOfTextAtSize(editionLabel, editionSize);
+        pdfPage.drawText(editionLabel, {
+          x: (pageWidth - editionWidth) / 2,
+          y: margin,
+          size: editionSize,
+          font,
+          color: rgb(0.45, 0.45, 0.45),
         });
       }
       continue;
@@ -523,6 +550,22 @@ export async function exportNovelToDocx(
     children.push(
       new Paragraph({
         children: [new TextRun(doc.settings.coverSubtitle)],
+      })
+    );
+  }
+
+  if (doc.settings.coverAuthor) {
+    children.push(
+      new Paragraph({
+        children: [new TextRun(doc.settings.coverAuthor)],
+      })
+    );
+  }
+
+  if (doc.settings.showCoverEditionBadge !== false) {
+    children.push(
+      new Paragraph({
+        children: [new TextRun('Vault Research Edition')],
       })
     );
   }
@@ -623,6 +666,8 @@ export async function exportNovelToEpub(
 <body>
   <h1>${escapeXml(title)}</h1>
   ${doc.settings.coverSubtitle ? `<h2>${escapeXml(doc.settings.coverSubtitle)}</h2>` : ''}
+  ${doc.settings.coverAuthor ? `<p>${escapeXml(doc.settings.coverAuthor)}</p>` : ''}
+  ${doc.settings.showCoverEditionBadge !== false ? '<p><em>Vault Research Edition</em></p>' : ''}
 </body>
 </html>`;
   zip.file('OEBPS/cover.xhtml', coverXhtml);
@@ -643,6 +688,7 @@ export async function exportNovelToEpub(
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="book-id" version="2.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:title>${escapeXml(title)}</dc:title>
+    ${doc.settings.coverAuthor ? `<dc:creator>${escapeXml(doc.settings.coverAuthor)}</dc:creator>` : ''}
     <dc:identifier id="book-id">${escapeXml(bookId)}</dc:identifier>
     <dc:language>en</dc:language>
   </metadata>

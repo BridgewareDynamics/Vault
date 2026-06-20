@@ -102,7 +102,7 @@ describe('SettingsPanel', () => {
     });
 
     // Find backdrop by its class name
-    const backdrop = document.querySelector('.fixed.inset-0.bg-black\\/50');
+    const backdrop = document.querySelector('.fixed.inset-0.bg-black\\/60');
     expect(backdrop).toBeInTheDocument();
 
     await act(async () => {

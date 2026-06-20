@@ -41,9 +41,9 @@ export type OnboardingAccent = 'purple' | 'cyan' | 'emerald' | 'amber';
 export function getAccentGradients(theme: Theme, accent: OnboardingAccent) {
   const isPastel = isLightTheme(theme);
   const map = {
-    purple: { solid: 'from-purple-600 to-cyan-600', pastel: 'from-purple-300 to-pink-300' },
-    cyan: { solid: 'from-cyan-500 to-blue-600', pastel: 'from-cyan-200 to-blue-200' },
-    emerald: { solid: 'from-emerald-500 to-teal-500', pastel: 'from-emerald-200 to-teal-200' },
+    purple: { solid: 'from-violet-500 to-purple-700', pastel: 'from-violet-200 to-purple-300' },
+    cyan: { solid: 'from-cyan-500 to-sky-700', pastel: 'from-cyan-200 to-sky-300' },
+    emerald: { solid: 'from-emerald-500 to-teal-700', pastel: 'from-emerald-200 to-teal-300' },
     amber: { solid: 'from-amber-500 to-rose-500', pastel: 'from-amber-200 to-rose-200' },
   } as const;
   return isPastel ? map[accent].pastel : map[accent].solid;

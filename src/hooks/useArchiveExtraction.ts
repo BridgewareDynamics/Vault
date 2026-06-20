@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { ExtractionProgress, PDFDocument } from '../types';
 import { useToast } from '../components/Toast/ToastContext';
 import { setupPDFWorker } from '../utils/pdfWorker';
@@ -11,7 +11,28 @@ export function useArchiveExtraction() {
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [extractingCasePath, setExtractingCasePath] = useState<string | null>(null);
   const [extractingFolderPath, setExtractingFolderPath] = useState<string | null>(null);
+  const cancelRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const toast = useToast();
+
+  const throwIfCancelled = (signal: AbortSignal) => {
+    if (cancelRef.current || signal.aborted) {
+      throw new DOMException('Extraction cancelled by user', 'AbortError');
+    }
+  };
+
+  const isCancellationError = (err: unknown): boolean => {
+    if (cancelRef.current) {
+      return true;
+    }
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return true;
+    }
+    if (err instanceof Error && err.message.toLowerCase().includes('cancelled')) {
+      return true;
+    }
+    return false;
+  };
 
   const extractPDF = useCallback(async (
     pdfPath: string,
@@ -20,17 +41,20 @@ export function useArchiveExtraction() {
     saveParentFile: boolean,
     onProgress?: (progress: ExtractionProgress) => void
   ) => {
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    const { signal } = abortController;
+
+    cancelRef.current = false;
     setIsExtracting(true);
     setExtractingCasePath(casePath);
-    // Set folder path for tracking extraction state
     const folderPath = `${casePath}/${folderName}`;
     setExtractingFolderPath(folderPath);
     setStatusMessage('Validating PDF file...');
-    
-    // Show a single persistent toast that will be updated with progress
-    let extractionToastId: string | null = toast.info('Starting PDF extraction...', 0); // 0 duration = persistent
-    
-    // Show initial progress
+
+    let extractionToastId: string | null = toast.info('Starting PDF extraction...', 0);
+
     setProgress({
       currentPage: 0,
       totalPages: 0,
@@ -38,15 +62,14 @@ export function useArchiveExtraction() {
     });
 
     try {
-      // Validate PDF first
       if (!window.electronAPI) {
         throw new Error('Electron API not available');
       }
 
       setStatusMessage('Validating PDF file...');
       await window.electronAPI.validatePDFForExtraction(pdfPath);
+      throwIfCancelled(signal);
 
-      // Read PDF file as array buffer via IPC
       setStatusMessage('Reading PDF file...');
       setProgress({
         currentPage: 0,
@@ -54,18 +77,16 @@ export function useArchiveExtraction() {
         percentage: 5,
       });
 
-      // Setup PDF.js worker
       await setupPDFWorker();
-      
-      // Dynamically import pdfjs-dist and pdfSource for code splitting
+
       const [pdfjsLib, { createChunkedPDFSource }] = await Promise.all([
         import('pdfjs-dist'),
         import('../utils/pdfSource'),
       ]);
-      
+
       const fileData = await window.electronAPI.readPDFFile(pdfPath);
-      
-      // Load PDF document
+      throwIfCancelled(signal);
+
       setStatusMessage('Loading PDF document...');
       setProgress({
         currentPage: 0,
@@ -74,43 +95,42 @@ export function useArchiveExtraction() {
       });
 
       let pdf: PDFDocument | null = null;
-      
+
       try {
-        // Handle new format with type field
         if (fileData && typeof fileData === 'object' && 'type' in fileData) {
           if (fileData.type === 'file-path') {
-            // Large file - use chunked reading
-            pdf = await createChunkedPDFSource(fileData.path, pdfjsLib);
+            pdf = await createChunkedPDFSource(fileData.path, pdfjsLib, undefined, undefined, {
+              skipWarning: true,
+              signal,
+            });
           } else if (fileData.type === 'base64') {
-            // Small file - decode base64
             const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
             const binaryString = atob(cleanBase64);
             const bytes = new Uint8Array(binaryString.length);
             for (let i = 0; i < binaryString.length; i++) {
               bytes[i] = binaryString.charCodeAt(i);
             }
-            const arrayBuffer = bytes.buffer;
-            pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            pdf = await pdfjsLib.getDocument({ data: bytes.buffer }).promise;
           } else {
             throw new Error('Unexpected PDF file data format');
           }
         } else if (typeof fileData === 'string') {
-          // Legacy format: base64 string
           const cleanBase64 = fileData.trim().replace(/\s/g, '');
           const binaryString = atob(cleanBase64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
-          const arrayBuffer = bytes.buffer;
-          pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          pdf = await pdfjsLib.getDocument({ data: bytes.buffer }).promise;
         } else if (Array.isArray(fileData)) {
-          // Legacy format: array of numbers
           const arrayBuffer = new Uint8Array(fileData).buffer;
           pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         } else {
           throw new Error('Unexpected PDF file data format');
         }
+
+        throwIfCancelled(signal);
+
         const totalPages = pdf.numPages;
 
         setStatusMessage(`Found ${totalPages} page${totalPages !== 1 ? 's' : ''}. Starting extraction...`);
@@ -122,54 +142,65 @@ export function useArchiveExtraction() {
 
         const extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }> = [];
 
-        // Helper function to generate fileName from PDF path and page number
-        const generateFileName = (pdfPath: string, pageNumber: number): string => {
-          const pdfBasename = pdfPath.replace(/\\/g, '/').split('/').pop()?.replace(/\.pdf$/i, '') || 'page';
+        const generateFileName = (path: string, pageNumber: number): string => {
+          const pdfBasename = path.replace(/\\/g, '/').split('/').pop()?.replace(/\.pdf$/i, '') || 'page';
           return `${pdfBasename}_page_${String(pageNumber).padStart(3, '0')}.jpg`;
         };
 
-        // Extract each page with memory management
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+          throwIfCancelled(signal);
+
           setStatusMessage(`Extracting page ${pageNum} of ${totalPages}...`);
-          
+
           let page = null;
           let canvas: HTMLCanvasElement | null = null;
-          
+
           try {
             page = await pdf.getPage(pageNum);
-            
-            // Use adaptive scale based on page size to prevent OOM
-            // For large pages, use lower scale; for normal pages, use 1.5
+
             const baseViewport = page.getViewport({ scale: 1.0 });
             const pageArea = baseViewport.width * baseViewport.height;
-            const maxArea = 1920 * 1080; // Full HD area
+            const maxArea = 1920 * 1080;
             const scale = pageArea > maxArea * 2 ? 1.0 : pageArea > maxArea ? 1.25 : 1.5;
-            
+
             const viewport = page.getViewport({ scale });
 
-            // Create canvas element
             canvas = document.createElement('canvas');
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-            const context = canvas.getContext('2d', { 
+            const context = canvas.getContext('2d', {
               willReadFrequently: false,
-              alpha: false // Disable alpha channel to save memory
+              alpha: false,
             });
 
             if (!context) {
               throw new Error('Failed to get canvas context');
             }
 
-            // Render PDF page to canvas
             const renderTask = page.render({
               canvasContext: context,
               viewport: viewport,
             });
-            
-            await renderTask.promise;
 
-            // Convert canvas to base64 JPEG with compression to reduce memory
-            // JPEG is more memory-efficient than PNG for photos/documents
+            let renderCancelled = false;
+            const progressInterval = setInterval(() => {
+              if (cancelRef.current || signal.aborted) {
+                renderCancelled = true;
+                clearInterval(progressInterval);
+                renderTask.cancel();
+              }
+            }, 100);
+
+            try {
+              await renderTask.promise;
+            } finally {
+              clearInterval(progressInterval);
+            }
+
+            if (renderCancelled) {
+              throw new DOMException('Extraction cancelled by user', 'AbortError');
+            }
+
             const imageData = canvas.toDataURL('image/jpeg', 0.92);
 
             extractedPages.push({
@@ -178,9 +209,7 @@ export function useArchiveExtraction() {
               fileName: generateFileName(pdfPath, pageNum),
             });
 
-            // Clean up canvas immediately to free memory
             context.clearRect(0, 0, canvas.width, canvas.height);
-            // Remove canvas from DOM if it was added (shouldn't be, but safety check)
             if (canvas.parentNode) {
               canvas.parentNode.removeChild(canvas);
             }
@@ -188,22 +217,17 @@ export function useArchiveExtraction() {
             canvas.height = 0;
             canvas = null;
 
-            // Destroy page to free memory
             if (page) {
               page.cleanup();
               page = null;
             }
 
-            // Force garbage collection hint every 5 pages
             if (pageNum % 5 === 0) {
-              // Request garbage collection if available (Chrome DevTools with --js-flags=--expose-gc)
-              if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
-                (globalThis as any).gc();
+              if (typeof globalThis !== 'undefined' && (globalThis as { gc?: () => void }).gc) {
+                (globalThis as { gc?: () => void }).gc?.();
               }
             }
 
-            // Update progress - calculate percentage with base 15% for initial steps
-            // and 70% for the actual extraction (15% to 85%)
             const extractionProgress = (pageNum / totalPages) * 70;
             const currentProgress: ExtractionProgress = {
               currentPage: pageNum,
@@ -212,22 +236,16 @@ export function useArchiveExtraction() {
             };
 
             setProgress(currentProgress);
-            if (onProgress) {
-              onProgress(currentProgress);
-            }
+            onProgress?.(currentProgress);
 
-            // Update the persistent toast with progress (every page for small PDFs, every 5 for larger)
             if (extractionToastId) {
               if (totalPages <= 10) {
-                // For small PDFs, update every page
                 toast.updateToast(extractionToastId, `Extracting page ${pageNum} of ${totalPages}...`);
               } else if (pageNum % 5 === 0 || pageNum === totalPages) {
-                // For larger PDFs, update every 5 pages
                 toast.updateToast(extractionToastId, `Extracting ${pageNum} of ${totalPages} pages...`);
               }
             }
           } catch (error) {
-            // Clean up on error
             if (canvas) {
               canvas.width = 0;
               canvas.height = 0;
@@ -236,7 +254,7 @@ export function useArchiveExtraction() {
             if (page) {
               try {
                 page.cleanup();
-              } catch (e) {
+              } catch {
                 // Ignore cleanup errors
               }
               page = null;
@@ -245,17 +263,17 @@ export function useArchiveExtraction() {
           }
         }
 
-        // Destroy PDF document to free memory before IPC transfer
         if (pdf) {
           try {
-            // Clean up blob URL if it exists
             cleanupPDFBlobUrl(pdf);
             await pdf.destroy();
-          } catch (e) {
+          } catch {
             // Ignore destroy errors
           }
           pdf = null;
         }
+
+        throwIfCancelled(signal);
 
         setStatusMessage('Saving extracted pages...');
         setProgress({
@@ -263,23 +281,20 @@ export function useArchiveExtraction() {
           totalPages,
           percentage: 85,
         });
-        
-        // Update toast to show saving status
+
         if (extractionToastId) {
           toast.updateToast(extractionToastId, 'Saving extracted pages to vault...');
         }
 
-        // Save to archive
         const result = await window.electronAPI.extractPDFFromArchive({
           pdfPath,
           casePath,
           folderName,
           saveParentFile,
-          saveToZip: false, // Archive extractions save directly to folders, not ZIP
+          saveToZip: false,
           extractedPages,
         });
 
-        // Clear extracted pages from memory after IPC transfer
         extractedPages.length = 0;
 
         setStatusMessage('Extraction complete!');
@@ -289,53 +304,68 @@ export function useArchiveExtraction() {
           percentage: 100,
         });
 
-        // Update the toast to success and auto-dismiss after 3 seconds
         if (extractionToastId) {
-          toast.updateToast(extractionToastId, `Successfully extracted ${totalPages} page${totalPages !== 1 ? 's' : ''} to vault`, 'success');
+          toast.updateToast(
+            extractionToastId,
+            `Successfully extracted ${totalPages} page${totalPages !== 1 ? 's' : ''} to vault`,
+            'success',
+          );
           setTimeout(() => {
             toast.dismissToast(extractionToastId!);
           }, 3000);
         }
-        
+
         setIsExtracting(false);
         setExtractingCasePath(null);
         setExtractingFolderPath(null);
         return result;
       } finally {
-        // Ensure PDF is destroyed even on error
         if (pdf) {
           try {
-            // Clean up blob URL if it exists
             cleanupPDFBlobUrl(pdf);
             await pdf.destroy();
-          } catch (e) {
+          } catch {
             // Ignore destroy errors
           }
-          pdf = null;
         }
       }
     } catch (err) {
-      const errorMessage = getUserFriendlyError(err, { operation: 'PDF extraction', fileName: pdfPath });
-      setStatusMessage('');
+      const cancelled = isCancellationError(err);
+      const errorMessage = cancelled
+        ? 'Extraction was cancelled by user'
+        : getUserFriendlyError(err, { operation: 'PDF extraction', fileName: pdfPath });
+
+      setStatusMessage(cancelled ? 'Extraction cancelled' : '');
       setIsExtracting(false);
       setExtractingCasePath(null);
       setExtractingFolderPath(null);
-      
-      // Update the toast to show error and auto-dismiss after 5 seconds
+
       if (extractionToastId) {
-        toast.updateToast(extractionToastId, errorMessage, 'error');
+        toast.updateToast(extractionToastId, errorMessage, cancelled ? 'info' : 'error');
         setTimeout(() => {
           toast.dismissToast(extractionToastId);
-        }, 5000);
-      } else {
+        }, cancelled ? 3000 : 5000);
+      } else if (!cancelled) {
         toast.error(errorMessage);
       }
-      
-      throw new Error(errorMessage);
+
+      throw cancelled ? new DOMException(errorMessage, 'AbortError') : new Error(errorMessage);
+    } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
     }
   }, [toast]);
 
+  const cancel = useCallback(() => {
+    cancelRef.current = true;
+    abortControllerRef.current?.abort();
+  }, []);
+
   const reset = useCallback(() => {
+    cancelRef.current = false;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
     setIsExtracting(false);
     setProgress(null);
     setStatusMessage('');
@@ -350,7 +380,7 @@ export function useArchiveExtraction() {
     statusMessage,
     extractingCasePath,
     extractingFolderPath,
+    cancel,
     reset,
   };
 }
-

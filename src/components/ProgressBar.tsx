@@ -4,13 +4,14 @@ import { ExtractionProgress } from '../types';
 interface ProgressBarProps {
   progress: ExtractionProgress;
   statusMessage?: string;
+  onCancel?: () => void;
 }
 
-export function ProgressBar({ progress, statusMessage }: ProgressBarProps) {
+export function ProgressBar({ progress, statusMessage, onCancel }: ProgressBarProps) {
   return (
     <div className="w-full space-y-3 p-6 bg-gray-800/50 backdrop-blur-sm rounded-xl border-2 border-cyber-purple-500/30 shadow-lg">
-      <div className="flex justify-between items-center">
-        <div className="flex flex-col">
+      <div className="flex justify-between items-center gap-4">
+        <div className="flex flex-col min-w-0">
           <span className="font-semibold text-white text-lg">
             {statusMessage || 'Processing PDF...'}
           </span>
@@ -20,10 +21,20 @@ export function ProgressBar({ progress, statusMessage }: ProgressBarProps) {
             </span>
           )}
         </div>
-        <div className="text-right">
+        <div className="flex shrink-0 items-center gap-3">
           <span className="text-cyber-purple-400 font-bold text-2xl">
             {progress.percentage}%
           </span>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-sm font-medium text-red-300 hover:bg-red-500/20"
+              aria-label="Cancel extraction"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </div>
       

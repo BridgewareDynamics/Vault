@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 import { Toast, ToastType } from '../../types';
 import { TOAST_DURATION } from '../../utils/constants';
 
@@ -62,8 +62,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     return showToast(message, 'warning', duration);
   }, [showToast]);
 
+  const value = useMemo(
+    () => ({ toasts, showToast, updateToast, dismissToast, success, error, info, warning }),
+    [toasts, showToast, updateToast, dismissToast, success, error, info, warning],
+  );
+
   return (
-    <ToastContext.Provider value={{ toasts, showToast, updateToast, dismissToast, success, error, info, warning }}>
+    <ToastContext.Provider value={value}>
       {children}
     </ToastContext.Provider>
   );

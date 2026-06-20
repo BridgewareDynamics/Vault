@@ -5,7 +5,6 @@ import { WordEditor, WordEditorHandle } from './WordEditor';
 import { TextLibrary } from './TextLibrary';
 import { BookmarkLibrary } from '../Bookmarks/BookmarkLibrary';
 import { useToast } from '../Toast/ToastContext';
-import { debugLog } from '../../utils/debugLogger';
 import { WordEditorErrorBoundary } from './WordEditorErrorBoundary';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { useSettingsContext } from '../../utils/settingsContext';
@@ -115,58 +114,29 @@ export function DetachedWordEditor() {
 
   // Track showLibrary changes - ensure editor is ready immediately when library closes
   useEffect(() => {
-    debugLog({
-      location: 'DetachedWordEditor.tsx:showLibrary:useEffect',
-      message: 'showLibrary state changed',
-      data: { showLibrary, filePath, editorKey },
-    });
+
     if (!showLibrary && editorRef.current) {
       // Library was closed, ensure editor is ready immediately
       requestAnimationFrame(() => {
         if (editorRef.current) {
           editorRef.current.focus();
-          debugLog({
-            location: 'DetachedWordEditor.tsx:showLibrary:useEffect',
-            message: 'Editor focused after library close',
-            data: { filePath },
-          });
+
         }
       });
     }
   }, [showLibrary, filePath, editorKey]);
 
   const handleReattach = async () => {
-    debugLog({
-      location: 'DetachedWordEditor.tsx:handleReattach',
-      message: 'Reattach button clicked',
-      data: { isReattaching, filePath },
-      sessionId: 'debug-session',
-      runId: 'run1',
-      hypothesisId: 'A',
-    });
+
     // Prevent multiple reattach attempts
     if (isReattaching) {
       return;
     }
 
     const hasChanges = editorRef.current?.hasUnsavedChanges();
-    debugLog({
-      location: 'DetachedWordEditor.tsx:handleReattach',
-      message: 'hasUnsavedChanges check result',
-      data: { hasChanges, filePath },
-      sessionId: 'debug-session',
-      runId: 'run1',
-      hypothesisId: 'A',
-    });
+
     if (hasChanges) {
-      debugLog({
-        location: 'DetachedWordEditor.tsx:handleReattach',
-        message: 'Showing unsaved dialog',
-        data: { filePath },
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'A',
-      });
+
       setShowUnsavedDialog(true);
       setPendingClose(true);
       return;
@@ -245,11 +215,7 @@ export function DetachedWordEditor() {
   }, [isReattaching]);
 
   const handleOpenFile = (filePath: string) => {
-    debugLog({
-      location: 'DetachedWordEditor.tsx:handleOpenFile',
-      message: 'handleOpenFile called',
-      data: { newFilePath: filePath, currentFilePath: filePath, showLibrary, currentEditorKey: editorKey },
-    });
+
     // Force a re-render by incrementing editorKey, even if it's the same file
     // This ensures the file loads even if the user clicks the same file again
     setEditorKey(prev => prev + 1);
@@ -433,11 +399,7 @@ export function DetachedWordEditor() {
               {/* Enhanced Library button */}
               <motion.button
                 onClick={() => {
-                  debugLog({
-                    location: 'DetachedWordEditor.tsx:LibraryToggle',
-                    message: 'Library toggle clicked',
-                    data: { currentShowLibrary: showLibrary, filePath, editorKey },
-                  });
+
                   if (!showLibrary) {
                     // Force refresh when opening library
                     setLibraryKey(prev => prev + 1);
@@ -549,21 +511,13 @@ export function DetachedWordEditor() {
               onOpenFile={handleOpenFile}
               onNewFile={handleNewFile}
               onClose={() => {
-                debugLog({
-                  location: 'DetachedWordEditor.tsx:TextLibrary:onClose',
-                  message: 'Library onClose called',
-                  data: { filePath, editorKey },
-                });
+
                 setShowLibrary(false);
                 // Ensure editor is ready immediately when switching back from library
                 requestAnimationFrame(() => {
                   if (editorRef.current) {
                     editorRef.current.focus();
-                    debugLog({
-                      location: 'DetachedWordEditor.tsx:TextLibrary:onClose',
-                      message: 'Editor focused after library close',
-                      data: { filePath },
-                    });
+
                   }
                 });
               }}
@@ -579,11 +533,7 @@ export function DetachedWordEditor() {
               }}
             >
               {(() => {
-                debugLog({
-                  location: 'DetachedWordEditor.tsx:render',
-                  message: 'Rendering WordEditor',
-                  data: { showLibrary, filePath, editorKey, key: `${filePath || 'new-file'}-${editorKey}` },
-                });
+
                 return null;
               })()}
               <WordEditor
@@ -602,14 +552,7 @@ export function DetachedWordEditor() {
         isOpen={showUnsavedDialog}
         theme={theme}
         onSave={async () => {
-          debugLog({
-            location: 'DetachedWordEditor.tsx:onSave',
-            message: 'Save clicked in unsaved dialog',
-            data: { filePath, hasUnsavedChanges: editorRef.current?.hasUnsavedChanges() },
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'D',
-          });
+
           // Save current file if it exists
           if (editorRef.current && window.electronAPI) {
             const textContent = editorRef.current.getTextContent();
@@ -618,14 +561,7 @@ export function DetachedWordEditor() {
                 // Save existing file
                 await window.electronAPI.saveTextFile(filePath, textContent);
                 toast.success('File saved');
-                debugLog({
-                  location: 'DetachedWordEditor.tsx:onSave',
-                  message: 'File saved, calling markAsSaved',
-                  data: { filePath },
-                  sessionId: 'debug-session',
-                  runId: 'run1',
-                  hypothesisId: 'D',
-                });
+
               } else {
                 // For new files without a path, we can't save, so just discard changes
                 // The content will be sent during reattach
@@ -633,14 +569,7 @@ export function DetachedWordEditor() {
               }
               // Mark editor as saved to prevent repeated prompts
               editorRef.current.markAsSaved();
-              debugLog({
-                location: 'DetachedWordEditor.tsx:onSave',
-                message: 'After markAsSaved, checking state',
-                data: { hasUnsavedChanges: editorRef.current?.hasUnsavedChanges(), filePath },
-                sessionId: 'debug-session',
-                runId: 'run1',
-                hypothesisId: 'C',
-              });
+
             } catch (error) {
               toast.error('Failed to save file');
               console.error('Save error:', error);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useImperativeHandle, useMemo, useState, forwardRef } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react';
 import { Theme, NovelDocument } from '../../types';
 import { useNovelDocument } from '../../hooks/useNovelDocument';
 import { useToast } from '../Toast/ToastContext';
@@ -34,6 +34,7 @@ interface NovelEditorPageProps extends ModuleChromeProps {
   novelFolderPath: string;
   initialDocument?: NovelDocument | null;
   initialSpreadIndex?: number;
+  autoFocusTitle?: boolean;
   onBack: () => void;
   onRegisterDetachBridge?: (bridge: NovelEditorDetachBridge | null) => void;
 }
@@ -44,6 +45,7 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
     novelFolderPath,
     initialDocument,
     initialSpreadIndex = 0,
+    autoFocusTitle = false,
     onBack,
     hostMode,
     onPopOut,
@@ -57,7 +59,7 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
   const t = useNovelTheme(theme);
   const isPastel = isPastelProp ?? isLightTheme(theme);
   const toast = useToast();
-  const { isOpen: isWordEditorOpen, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
+  const { isOpen: isWordEditorOpen, dividerPosition, setDividerPosition } = useWordEditor();
   const {
     document: novelDoc,
     loading,
@@ -65,9 +67,12 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
     dirty,
     updatePages,
     updateSettings,
+    updateTitle,
     flushSave,
     persist,
   } = useNovelDocument(novelFolderPath, { initialDocument });
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const [titleDraft, setTitleDraft] = useState('');
   const [spreadIndex, setSpreadIndex] = useState(initialSpreadIndex);
   const [flipRequest, setFlipRequest] = useState<BookSpreadFlipRequest | null>(null);
   const [showCaseDialog, setShowCaseDialog] = useState(false);
@@ -125,11 +130,58 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
   useImperativeHandle(_ref, () => null);
 
   useEffect(() => {
+    if (novelDoc?.title) {
+      setTitleDraft(novelDoc.title);
+    }
+  }, [novelDoc?.title]);
+
+  const commitTitle = useCallback(() => {
+    if (!novelDoc) return;
+    const nextTitle = titleDraft.trim() || 'Untitled Novel';
+    setTitleDraft(nextTitle);
+    if (nextTitle === novelDoc.title) return;
+    updateTitle(nextTitle);
+    setCachedNovelLibrary(null);
+  }, [novelDoc, titleDraft, updateTitle]);
+
+  useEffect(() => {
+    if (!autoFocusTitle || !novelDoc) return;
+    const frame = requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [autoFocusTitle, novelDoc?.id]);
+
+  useEffect(() => {
     if (!onRegisterDetachBridge) return;
     const bridge: NovelEditorDetachBridge = {
       flushAndSnapshot: async () => {
-        const saved = await flushSave();
-        if (!saved) return null;
+        if (!novelDoc) return null;
+
+        const nextTitle = titleDraft.trim() || 'Untitled Novel';
+        const titleChanged = nextTitle !== novelDoc.title;
+        const docToSave = titleChanged
+          ? {
+              ...novelDoc,
+              title: nextTitle,
+              settings: {
+                ...novelDoc.settings,
+                coverTitle:
+                  novelDoc.settings.coverTitle === novelDoc.title
+                    ? nextTitle
+                    : novelDoc.settings.coverTitle,
+              },
+            }
+          : novelDoc;
+
+        if (titleChanged) {
+          updateTitle(nextTitle);
+        }
+
+        const saved =
+          titleChanged || dirty ? ((await persist(docToSave)) ?? docToSave) : novelDoc;
+
         return {
           editorDocument: saved,
           editorNovelPath: saved.novelFolderPath,
@@ -139,7 +191,7 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
     };
     onRegisterDetachBridge(bridge);
     return () => onRegisterDetachBridge(null);
-  }, [flushSave, onRegisterDetachBridge, spreadIndex]);
+  }, [dirty, novelDoc, onRegisterDetachBridge, persist, spreadIndex, titleDraft, updateTitle]);
 
   useEffect(() => {
     if (!novelDoc?.settings.coverImageRelativePath) {
@@ -272,6 +324,7 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
           Back
         </button>
         <ModuleChromeButtons
+          featureLabel="Novel"
           hostMode={hostMode}
           onPopOut={onPopOut}
           onReattach={onReattach}
@@ -282,7 +335,11 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
 
       <NovelEditorToolbar
         theme={theme}
-        title={novelDoc.title}
+        titleDraft={titleDraft}
+        onTitleChange={setTitleDraft}
+        onTitleCommit={commitTitle}
+        onTitleEscape={() => setTitleDraft(novelDoc.title)}
+        titleInputRef={titleInputRef}
         saving={saving}
         dirty={dirty}
         isWordEditorOpen={isWordEditorOpen}
@@ -346,8 +403,7 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
           <>
             <ResizableDivider
               position={dividerPosition}
-              onPositionChange={setDividerPosition}
-              isDragging={isDividerDragging}
+              onResize={setDividerPosition}
             />
             <div
               id="novel-word-editor-inline-container"

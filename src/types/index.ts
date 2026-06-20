@@ -284,6 +284,9 @@ export interface NovelDocument {
     marginMm: number;
     coverTitle: string;
     coverSubtitle?: string;
+    coverAuthor?: string;
+    /** When false, hides the "Vault Research Edition" footer on the cover. Default true. */
+    showCoverEditionBadge?: boolean;
     coverImageAssetId?: string;
     coverImageRelativePath?: string;
   };

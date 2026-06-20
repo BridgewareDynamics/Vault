@@ -4,6 +4,7 @@ import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText, BookmarkPlus, 
 import { ArchiveFile, PDFDocument, PDFRenderTask, Theme } from '../../types';
 import { isLightTheme } from '../../theme/themeSemantics';
 import { logger } from '../../utils/logger';
+import { resolveReadFileDataUrl, resolveReadFileMimeType } from '../../utils/readFileDataUtils';
 import { setupPDFWorker } from '../../utils/pdfWorker';
 import { cleanupPDFBlobUrl } from '../../utils/pdfSource';
 import { LargePDFWarningDialog } from '../LargePDFWarningDialog';
@@ -24,7 +25,11 @@ interface ArchiveFileViewerProps {
   overlayZIndex?: number;
 }
 
-export function ArchiveFileViewer({
+type ArchiveFileViewerContentProps = Omit<ArchiveFileViewerProps, 'file'> & {
+  file: ArchiveFile;
+};
+
+function ArchiveFileViewerContent({
   file,
   files,
   onClose,
@@ -34,7 +39,7 @@ export function ArchiveFileViewer({
   onInitialPageApplied,
   onTranscribe,
   overlayZIndex = 50,
-}: ArchiveFileViewerProps) {
+}: ArchiveFileViewerContentProps) {
   const { isOpen: isWordEditorOpen, setIsOpen: setWordEditorOpen, panelWidth, dividerPosition } = useWordEditor();
   const toast = useToast();
   const { settings: appSettings } = useSettingsContext();
@@ -53,18 +58,13 @@ export function ArchiveFileViewer({
       const inlineContainer = document.getElementById('word-editor-inline-container');
       setIsInlineMode(!!inlineContainer && isWordEditorOpen);
     };
-    
+
     checkInlineMode();
-    
-    // Check periodically in case container is added/removed
-    const interval = setInterval(checkInlineMode, 100);
-    
-    // Also check on mutations
+
     const observer = new MutationObserver(checkInlineMode);
     observer.observe(document.body, { childList: true, subtree: true });
-    
+
     return () => {
-      clearInterval(interval);
       observer.disconnect();
     };
   }, [isWordEditorOpen]);
@@ -146,6 +146,7 @@ export function ArchiveFileViewer({
   const isDraggingRef = useRef(false);
   const isPdfDraggingRef = useRef(false);
   const dragConstraintsRef = useRef<{ left: number; right: number; top: number; bottom: number } | false | null>(null);
+  const loadIdRef = useRef(0);
   // Stable constraints state that only updates when not dragging
   const [stableDragConstraints, setStableDragConstraints] = useState<{ left: number; right: number; top: number; bottom: number } | false | React.RefObject<HTMLElement>>(false);
   
@@ -154,53 +155,17 @@ export function ArchiveFileViewer({
   const [warningFileSize, setWarningFileSize] = useState(0);
   const [memoryInfo, setMemoryInfo] = useState<{ totalMemory: number; freeMemory: number; usedMemory: number } | null>(null);
   const [pendingLoad, setPendingLoad] = useState<{ filePath: string; pdfjsLib: any } | null>(null);
+  const warningLoadIdRef = useRef(0);
   const warningResolveRef = useRef<((value: boolean) => void) | null>(null);
   
   // Handle warning dialog actions
-  const handleWarningContinue = async () => {
+  const handleWarningContinue = () => {
     setShowWarningDialog(false);
     if (warningResolveRef.current) {
       warningResolveRef.current(true);
       warningResolveRef.current = null;
     }
-    
-    // Continue loading the PDF
-    if (pendingLoad) {
-      try {
-        // Ensure worker is set up before loading
-        await setupPDFWorker();
-        
-        // Small delay to ensure worker is fully initialized
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        const { createChunkedPDFSource } = await import('../../utils/pdfSource');
-        const pdf = await createChunkedPDFSource(
-          pendingLoad.filePath, 
-          pendingLoad.pdfjsLib,
-          undefined, // showWarning (not needed here, already shown)
-          (progress) => setPdfLoadingProgress(progress) // onProgress
-        );
-        
-        // Verify PDF is valid before setting state
-        if (pdf && typeof pdf.numPages === 'number' && pdf.numPages > 0) {
-          setPdfDoc(pdf);
-          setTotalPages(pdf.numPages);
-          // Use initialPage if provided, otherwise default to 1
-          const startPage = initialPage && initialPage >= 1 && initialPage <= pdf.numPages ? initialPage : 1;
-          setCurrentPage(startPage);
-          setPdfLoading(false);
-          setPdfLoadingProgress(0);
-        } else {
-          throw new Error('Invalid PDF document loaded');
-        }
-      } catch (error) {
-        logger.error('Failed to load PDF after warning:', error);
-        setPdfLoading(false);
-        setPdfLoadingProgress(0);
-        setPdfDoc(null);
-      }
-      setPendingLoad(null);
-    }
+    setPendingLoad(null);
   };
   
   const handleWarningCancel = () => {
@@ -308,19 +273,7 @@ export function ArchiveFileViewer({
   }, [pdfDoc, file, onClose]);
 
   useEffect(() => {
-    if (file) {
-      // Clear previous file data before loading new one to free memory
-      if (fileData) {
-        setFileData(null);
-      }
-      
-      if (file.type === 'pdf') {
-        loadPDF();
-      } else {
-        loadFileData();
-      }
-    } else {
-      // Cleanup when file is cleared
+    if (!file) {
       if (pdfDoc) {
         try {
           cleanupPDFBlobUrl(pdfDoc);
@@ -335,84 +288,155 @@ export function ArchiveFileViewer({
       setPdfDoc(null);
       setCurrentPage(1);
       setTotalPages(0);
+      return;
     }
-    // Reset image zoom when file changes
+
+    const loadId = ++loadIdRef.current;
+    const pdfLoadAbortController = new AbortController();
+    setFileData(null);
     setImageScale(1);
     imageX.set(0);
     imageY.set(0);
-  }, [file]);
 
-  const loadFileData = async () => {
-    if (!file || !window.electronAPI) return;
+    const isStale = () => loadId !== loadIdRef.current;
 
-    try {
-      setLoading(true);
-      const data = await window.electronAPI.readFileData(file.path);
-      setFileData({
-        data: `data:${data.mimeType};base64,${data.data}`,
-        mimeType: data.mimeType,
-      });
-    } catch (error) {
-      logger.error('Failed to load file data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const loadFileData = async () => {
+      if (!window.electronAPI) return;
 
-  const loadPDF = async () => {
-    if (!file || !window.electronAPI || file.type !== 'pdf') return;
+      try {
+        if (!isStale()) {
+          setLoading(true);
+        }
+        const data = await window.electronAPI.readFileData(file.path);
+        if (isStale()) return;
+        setFileData({
+          data: resolveReadFileDataUrl(data, file.path),
+          mimeType: resolveReadFileMimeType(data.mimeType, file.path),
+        });
+      } catch (error) {
+        if (!isStale()) {
+          logger.error('Failed to load file data:', error);
+        }
+      } finally {
+        if (!isStale()) {
+          setLoading(false);
+        }
+      }
+    };
 
-    try {
-      setPdfLoading(true);
-      setPdfLoadingProgress(0);
-      
-      // Import PDF.js and setup worker
-      const [pdfjsLib, { createChunkedPDFSource }] = await Promise.all([
-        import('pdfjs-dist'),
-        import('../../utils/pdfSource'),
-      ]);
-      await setupPDFWorker();
-      
-      setPdfLoadingProgress(10);
-      const fileData = await window.electronAPI.readPDFFile(file.path);
-      
-      let pdf: PDFDocument;
-      
-      // Handle new format with type field
-      if (fileData && typeof fileData === 'object' && 'type' in fileData) {
-        if (fileData.type === 'file-path') {
-          // Large file - use chunked reading with warning dialog
-          setPdfLoadingProgress(20);
-          
-          // Show warning dialog for large files
-          const showWarning = async (fileSize: number, memInfo: { totalMemory: number; freeMemory: number; usedMemory: number }): Promise<boolean> => {
-            return new Promise((resolve) => {
-              setWarningFileSize(fileSize);
-              setMemoryInfo(memInfo);
-              setShowWarningDialog(true);
-              setPendingLoad({ filePath: fileData.path, pdfjsLib });
-              warningResolveRef.current = resolve;
+    const loadPDF = async () => {
+      if (!window.electronAPI || file.type !== 'pdf') return;
+
+      try {
+        if (!isStale()) {
+          setPdfLoading(true);
+          setPdfLoadingProgress(0);
+        }
+
+        const [pdfjsLib, { createChunkedPDFSource }] = await Promise.all([
+          import('pdfjs-dist'),
+          import('../../utils/pdfSource'),
+        ]);
+        if (isStale()) return;
+
+        await setupPDFWorker();
+        if (isStale()) return;
+
+        if (!isStale()) {
+          setPdfLoadingProgress(10);
+        }
+        const fileData = await window.electronAPI.readPDFFile(file.path);
+        if (isStale()) return;
+
+        let pdf: PDFDocument;
+
+        if (fileData && typeof fileData === 'object' && 'type' in fileData) {
+          if (fileData.type === 'file-path') {
+            if (!isStale()) {
+              setPdfLoadingProgress(20);
+            }
+
+            const showWarning = async (
+              fileSize: number,
+              memInfo: { totalMemory: number; freeMemory: number; usedMemory: number },
+            ): Promise<boolean> => {
+              return new Promise((resolve) => {
+                warningLoadIdRef.current = loadId;
+                setWarningFileSize(fileSize);
+                setMemoryInfo(memInfo);
+                setShowWarningDialog(true);
+                setPendingLoad({ filePath: fileData.path, pdfjsLib });
+                warningResolveRef.current = resolve;
+              });
+            };
+
+            pdf = await createChunkedPDFSource(
+              fileData.path,
+              pdfjsLib,
+              showWarning,
+              (progress) => {
+                if (!isStale()) {
+                  setPdfLoadingProgress(progress);
+                }
+              },
+              { signal: pdfLoadAbortController.signal },
+            );
+          } else if (fileData.type === 'base64') {
+            if (!isStale()) {
+              setPdfLoadingProgress(20);
+            }
+            const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
+            const binaryString = atob(cleanBase64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            const arrayBuffer = bytes.buffer;
+
+            if (!isStale()) {
+              setPdfLoadingProgress(30);
+            }
+            const loadingTask = pdfjsLib.getDocument({
+              data: arrayBuffer,
+              disableAutoFetch: false,
+              disableStream: false,
+              verbosity: 0,
             });
-          };
-          
-          pdf = await createChunkedPDFSource(
-            fileData.path, 
-            pdfjsLib, 
-            showWarning,
-            (progress) => setPdfLoadingProgress(progress) // onProgress
-          );
-        } else if (fileData.type === 'base64') {
-          // Small file - decode base64
-          setPdfLoadingProgress(20);
-          const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
+            pdf = await loadingTask.promise;
+          } else {
+            throw new Error('Unexpected PDF file data format');
+          }
+        } else if (typeof fileData === 'string') {
+          if (!isStale()) {
+            setPdfLoadingProgress(20);
+          }
+          const cleanBase64 = fileData.trim().replace(/\s/g, '');
           const binaryString = atob(cleanBase64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
           const arrayBuffer = bytes.buffer;
-          
-          setPdfLoadingProgress(30);
+
+          if (!isStale()) {
+            setPdfLoadingProgress(30);
+          }
+          const loadingTask = pdfjsLib.getDocument({
+            data: arrayBuffer,
+            disableAutoFetch: false,
+            disableStream: false,
+            verbosity: 0,
+          });
+          pdf = await loadingTask.promise;
+        } else if (Array.isArray(fileData)) {
+          if (!isStale()) {
+            setPdfLoadingProgress(20);
+          }
+          const arrayBuffer = new Uint8Array(fileData).buffer;
+
+          if (!isStale()) {
+            setPdfLoadingProgress(30);
+          }
           const loadingTask = pdfjsLib.getDocument({
             data: arrayBuffer,
             disableAutoFetch: false,
@@ -423,66 +447,55 @@ export function ArchiveFileViewer({
         } else {
           throw new Error('Unexpected PDF file data format');
         }
-      } else if (typeof fileData === 'string') {
-        // Legacy format: base64 string
-        setPdfLoadingProgress(20);
-        const cleanBase64 = fileData.trim().replace(/\s/g, '');
-        const binaryString = atob(cleanBase64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
+
+        if (isStale()) {
+          try {
+            cleanupPDFBlobUrl(pdf);
+            pdf.destroy().catch(() => {
+              // Ignore destroy errors
+            });
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          return;
         }
-        const arrayBuffer = bytes.buffer;
-        
-        setPdfLoadingProgress(30);
-        const loadingTask = pdfjsLib.getDocument({
-          data: arrayBuffer,
-          disableAutoFetch: false,
-          disableStream: false,
-          verbosity: 0,
-        });
-        pdf = await loadingTask.promise;
-      } else if (Array.isArray(fileData)) {
-        // Legacy format: array of numbers
-        setPdfLoadingProgress(20);
-        const arrayBuffer = new Uint8Array(fileData).buffer;
-        
-        setPdfLoadingProgress(30);
-        const loadingTask = pdfjsLib.getDocument({
-          data: arrayBuffer,
-          disableAutoFetch: false,
-          disableStream: false,
-          verbosity: 0,
-        });
-        pdf = await loadingTask.promise;
-      } else {
-        throw new Error('Unexpected PDF file data format');
+
+        setPdfLoadingProgress(95);
+        setPdfDoc(pdf);
+        setTotalPages(pdf.numPages);
+        const startPage = initialPage && initialPage >= 1 && initialPage <= pdf.numPages ? initialPage : 1;
+        setCurrentPage(startPage);
+        setPdfLoadingProgress(100);
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        if (isStale()) return;
+
+        setTimeout(() => {
+          if (!isStale()) {
+            setPdfLoading(false);
+            setPdfLoadingProgress(0);
+          }
+        }, 300);
+      } catch (error) {
+        if (!isStale()) {
+          logger.error('Failed to load PDF:', error);
+          setPdfLoading(false);
+          setPdfLoadingProgress(0);
+        }
       }
-      
-      setPdfLoadingProgress(95);
-      
-      setPdfDoc(pdf);
-      setTotalPages(pdf.numPages);
-      // Use initialPage if provided, otherwise default to 1
-      const startPage = initialPage && initialPage >= 1 && initialPage <= pdf.numPages ? initialPage : 1;
-      setCurrentPage(startPage);
-      setPdfLoadingProgress(100);
-      
-      // Wait for first page to render before hiding loading screen
-      // This prevents the white rectangle flash
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Small delay to show completion, then hide loading
-      setTimeout(() => {
-        setPdfLoading(false);
-        setPdfLoadingProgress(0);
-      }, 300);
-    } catch (error) {
-      logger.error('Failed to load PDF:', error);
-      setPdfLoading(false);
-      setPdfLoadingProgress(0);
+    };
+
+    if (file.type === 'pdf') {
+      void loadPDF();
+    } else {
+      void loadFileData();
     }
-  };
+
+    return () => {
+      pdfLoadAbortController.abort();
+      loadIdRef.current += 1;
+    };
+  }, [file]);
 
   // Calculate drag constraints based on canvas and container sizes
   const calculateDragConstraints = useCallback(() => {
@@ -933,8 +946,6 @@ export function ArchiveFileViewer({
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [file, fileData, imageX, imageY]);
-
-  if (!file) return null;
 
   const currentIndex = files.findIndex(f => f.path === file.path);
   const hasNext = onNext && currentIndex < files.length - 1;
@@ -1653,6 +1664,14 @@ export function ArchiveFileViewer({
       )}
     </>
   );
+}
+
+export function ArchiveFileViewer(props: ArchiveFileViewerProps) {
+  if (!props.file) {
+    return null;
+  }
+
+  return <ArchiveFileViewerContent {...props} file={props.file} />;
 }
 
 

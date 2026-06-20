@@ -59,7 +59,10 @@ declare global {
       savePDFThumbnail: (filePath: string, thumbnailData: string) => Promise<void>;
       readPDFThumbnail: (filePath: string) => Promise<string | null>;
       deletePDFThumbnail: (filePath: string) => Promise<void>;
-      readFileData: (filePath: string) => Promise<{ data: string; mimeType: string; fileName: string }>;
+      readFileData: (filePath: string) => Promise<
+        | { data: string; mimeType: string; fileName: string }
+        | { type: 'file-path'; path: string; mimeType: string; fileName: string }
+      >;
       extractPDFFromArchive: (options: {
         pdfPath: string;
         casePath: string;
@@ -69,6 +72,7 @@ declare global {
         extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
       }) => Promise<{ success: boolean; messages: string[]; extractionFolder: string }>;
       logToMain: (level: LogLevel, ...args: LogArgs) => Promise<void>;
+      openDevToolsInDev: () => Promise<{ success: boolean }>;
       debugLog: (logEntry: {
         location: string;
         message: string;
@@ -79,7 +83,7 @@ declare global {
         hypothesisId: string;
       }) => Promise<void>;
       getSystemMemory: () => Promise<{ totalMemory: number; freeMemory: number; usedMemory: number }>;
-      getSystemFonts: () => Promise<string[]>;
+      getSystemFonts: (forceRefresh?: boolean) => Promise<string[]>;
       // Settings API
       getSettings: () => Promise<{
         hardwareAcceleration: boolean;
@@ -131,7 +135,7 @@ declare global {
         content: string;
         format: 'pdf' | 'docx' | 'rtf';
         filePath?: string;
-      }) => Promise<{ success: boolean; filePath: string }>;
+      }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
       createWordEditorWindow: (options: {
         content: string;
         filePath?: string | null;
@@ -208,6 +212,7 @@ declare global {
         showSettings: boolean;
         extractedPages: any[];
         selectedPages: number[];
+        previewPage: any | null;
         isExtracting: boolean;
         progress: any | null;
         error: string | null;
@@ -228,6 +233,7 @@ declare global {
         showSettings: boolean;
         extractedPages: any[];
         selectedPages: number[];
+        previewPage: any | null;
         isExtracting: boolean;
         progress: any | null;
         error: string | null;

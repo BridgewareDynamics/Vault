@@ -1,4 +1,5 @@
 import type { FileConverterCapabilities } from '../types';
+import { isVitestEnv } from './isVitestEnv';
 
 type FileConverterModuleType = typeof import('../components/FileConverter/FileConverterModule');
 
@@ -60,6 +61,10 @@ export async function prefetchFileConverterCapabilities(): Promise<FileConverter
 
 /** Warm module chunk, case picker, and IPC capabilities while the user is on Welcome. */
 export function warmFileConverterEntry(): void {
+  if (isVitestEnv()) {
+    return;
+  }
+
   void prefetchFileConverterModule().then(() => {
     void prefetchCaseSelectionDialog();
   });

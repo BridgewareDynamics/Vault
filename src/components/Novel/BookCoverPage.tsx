@@ -1,11 +1,14 @@
 import { useRef } from 'react';
-import { ImagePlus } from 'lucide-react';
+import { Eye, EyeOff, ImagePlus } from 'lucide-react';
 import { NovelDocument } from '../../types';
 import { Theme } from '../../types';
 import { useNovelTheme } from './novelTheme';
 import { formatFontFamilyCss } from './novelFontUtils';
 import { BookPageShell } from './BookPageShell';
 import type { BookDisplayMetrics } from './engine/bookSizes';
+
+const COVER_EDITION_LABEL = 'Vault Research Edition';
+const AUTHOR_PLACEHOLDER = 'Author name';
 
 interface BookCoverPageProps {
   theme: Theme;
@@ -29,6 +32,8 @@ export function BookCoverPage({
   const t = useNovelTheme(theme);
   const titleRef = useRef<HTMLDivElement>(null);
   const subtitleRef = useRef<HTMLDivElement>(null);
+  const authorRef = useRef<HTMLDivElement>(null);
+  const showEditionBadge = document.settings.showCoverEditionBadge !== false;
 
   const triggerCoverImagePicker = () => {
     onSelectCoverImage?.();
@@ -73,7 +78,55 @@ export function BookCoverPage({
             </div>
           </div>
 
-          <p className="text-xs uppercase tracking-[0.25em] opacity-60">Vault Research Edition</p>
+          <div className="flex w-full flex-col items-center gap-2 px-[6%] pb-10">
+            <div
+              ref={authorRef}
+              contentEditable
+              suppressContentEditableWarning
+              className={`outline-none text-sm ${document.settings.coverAuthor ? 'opacity-90' : 'opacity-50 italic'}`}
+              style={{ fontFamily: formatFontFamilyCss(document.settings.fontFamily) }}
+              onBlur={() => {
+                const raw = authorRef.current?.textContent?.trim() || '';
+                const nextAuthor = raw === AUTHOR_PLACEHOLDER ? '' : raw;
+                onUpdateSettings({ coverAuthor: nextAuthor });
+              }}
+            >
+              {document.settings.coverAuthor || AUTHOR_PLACEHOLDER}
+            </div>
+
+            {showEditionBadge ? (
+              <div className="group flex items-center gap-2">
+                <p className="text-xs uppercase tracking-[0.25em] opacity-60">{COVER_EDITION_LABEL}</p>
+                <button
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onUpdateSettings({ showCoverEditionBadge: false });
+                  }}
+                  className={`rounded-md border p-1 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 ${t.badgeNeutral}`}
+                  title="Hide edition label"
+                  aria-label="Hide Vault Research Edition label"
+                >
+                  <EyeOff className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onUpdateSettings({ showCoverEditionBadge: true });
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] uppercase tracking-[0.18em] opacity-60 transition-opacity hover:opacity-100 ${t.badgeNeutral}`}
+                title="Show edition label"
+              >
+                <Eye className="h-3 w-3" />
+                Show edition label
+              </button>
+            )}
+          </div>
         </div>
       </BookPageShell>
 

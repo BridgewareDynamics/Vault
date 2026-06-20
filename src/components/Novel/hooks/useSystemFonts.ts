@@ -6,12 +6,16 @@ export function useSystemFonts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefresh = false) => {
+    if (!forceRefresh && fonts.length > 0) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       if (window.electronAPI?.getSystemFonts) {
-        const installed = await window.electronAPI.getSystemFonts();
+        const installed = await window.electronAPI.getSystemFonts(forceRefresh);
         setFonts(installed);
       } else {
         setFonts(getFallbackFonts());
@@ -22,7 +26,7 @@ export function useSystemFonts() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fonts.length]);
 
   useEffect(() => {
     void load();

@@ -9,7 +9,7 @@
 [![Electron](https://img.shields.io/badge/Electron-28.1-blue.svg)](https://www.electronjs.org/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
-The Vault is a desktop research workspace for investigators, researchers, and professionals who need to extract, organize, map, and audit document-driven work. Built with Electron and React, it now brings four connected workflows into one application: `PDF to PNG` for page extraction, `The Vault` for case-based organization, `Map` for visual research timelines, and `PDF Audit` for security and redaction review. Recent updates also add case-linkable maps, smarter audit report saving, and case-aware note browsing alongside bookmarks, thumbnails, and rich text editing.
+The Vault is a desktop research workspace for investigators, researchers, and professionals who need to extract, organize, map, and audit document-driven work. Built with Electron and React, it brings connected workflows into one application: **PDF to PNG** for page extraction, **The Vault** for case-based organization, **Map** for visual research timelines, **PDF Audit** for security and redaction review, plus **Word Editor**, **Novel**, **File Converter**, and **Transcript** modules. Recent performance work adds lazy archive loading, visibility-based PDF thumbnails, extraction cancel, and RAM-limit-driven memory cleanup.
 
 ## Table of Contents
 
@@ -144,6 +144,8 @@ The Vault is a desktop research workspace for investigators, researchers, and pr
    # Linting
    npm run lint
    ```
+
+   **CI:** Pull requests to `main` and `prerelease` run `npm run lint`, `npm test`, and `npm run build:all` on Ubuntu and Windows (see `.github/workflows/ci.yml`).
 
 ### Production Build
 

@@ -7,7 +7,6 @@ import { BookmarkLibrary } from '../Bookmarks/BookmarkLibrary';
 import { useToast } from '../Toast/ToastContext';
 import { useWordEditor } from '../../contexts/WordEditorContext';
 import { useArchiveContext } from '../../contexts/ArchiveContext';
-import { debugLog } from '../../utils/debugLogger';
 import { WordEditorErrorBoundary } from './WordEditorErrorBoundary';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { Theme } from '../../types';
@@ -255,11 +254,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   };
 
   const handleOpenFile = (filePath: string) => {
-    debugLog({
-      location: 'WordEditorPanel.tsx:handleOpenFile',
-      message: 'handleOpenFile called',
-      data: { newFilePath: filePath, currentFilePath, showLibrary },
-    });
+
     // Force a re-render by incrementing editorKey, even if it's the same file
     // This ensures the file loads even if the user clicks the same file again
     setEditorKey(prev => prev + 1);
@@ -294,11 +289,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
   };
 
   const handleFileDeleted = (deletedFilePath: string) => {
-    debugLog({
-      location: 'WordEditorPanel.tsx:handleFileDeleted',
-      message: 'handleFileDeleted called',
-      data: { deletedFilePath, currentFilePath },
-    });
+
     // If the deleted file is the currently open file, clear it
     if (currentFilePath === deletedFilePath) {
       setCurrentFilePath(null);
@@ -310,11 +301,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       const draftKey = `word-editor-draft-${deletedFilePath}`;
       localStorage.removeItem(draftKey);
       localStorage.removeItem('word-editor-draft-new');
-      debugLog({
-        location: 'WordEditorPanel.tsx:handleFileDeleted',
-        message: 'File deleted, cleared filePath and incremented editorKey',
-        data: { newFilePath: null, editorKey: editorKey + 1 },
-      });
+
     }
   };
 

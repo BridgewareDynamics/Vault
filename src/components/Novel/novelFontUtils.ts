@@ -35,6 +35,29 @@ export function isPresetFont(fontFamily: string): boolean {
   return NOVEL_FONT_PRESETS.some((entry) => entry.value === fontFamily.trim());
 }
 
+export function sanitizeCustomFontInput(raw: string): string {
+  return raw.replace(/[<>]/g, '').trim();
+}
+
+/** Turn free-typed input into a stored font-family value (single name or full CSS stack). */
+export function parseCustomFontInput(raw: string): string | null {
+  const cleaned = sanitizeCustomFontInput(raw);
+  if (!cleaned) return null;
+  if (cleaned.includes(',')) return cleaned;
+  return formatFontFamilyCss(cleaned);
+}
+
+export function isFontInCatalog(
+  fontFamily: string,
+  systemFonts: readonly string[]
+): boolean {
+  const key = normalizeFontKey(fontFamily);
+  if (NOVEL_FONT_PRESETS.some((entry) => normalizeFontKey(entry.value) === key)) {
+    return true;
+  }
+  return systemFonts.some((font) => font.toLowerCase() === key);
+}
+
 export function getFallbackFonts(): string[] {
   return [
     'Arial',

@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 
 interface BookSpineInsertMenuProps {
   isOpen: boolean;
-  anchorRef: React.RefObject<HTMLButtonElement | null>;
+  anchorRef: React.RefObject<HTMLButtonElement>;
   onToggle: () => void;
   onClose: () => void;
   onInsertLeft: () => void;

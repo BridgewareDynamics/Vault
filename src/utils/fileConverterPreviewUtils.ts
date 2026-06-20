@@ -1,27 +1,7 @@
 import { detectCategoryFromPath } from '../hooks/useFileConverter';
 import type { FileConverterSource } from '../types';
-
-function mimeTypeFromPath(filePath: string): string | null {
-  const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
-  switch (ext) {
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'png':
-      return 'image/png';
-    case 'gif':
-      return 'image/gif';
-    case 'webp':
-      return 'image/webp';
-    case 'tif':
-    case 'tiff':
-      return 'image/tiff';
-    case 'bmp':
-      return 'image/bmp';
-    default:
-      return null;
-  }
-}
+import { loadPdfPreviewThumbnail } from './loadPdfThumbnail';
+import { resolveReadFileDataUrl, resolveReadFileMimeType } from './readFileDataUtils';
 
 async function loadImageDataUrl(sourcePath: string): Promise<string | null> {
   if (!window.electronAPI?.readFileData) {
@@ -29,35 +9,22 @@ async function loadImageDataUrl(sourcePath: string): Promise<string | null> {
   }
 
   const data = await window.electronAPI.readFileData(sourcePath);
-  const mimeType =
-    data.mimeType === 'application/octet-stream'
-      ? mimeTypeFromPath(sourcePath) ?? data.mimeType
-      : data.mimeType;
+  const mimeType = resolveReadFileMimeType(data.mimeType, sourcePath);
 
   if (!mimeType.startsWith('image/')) {
     return null;
   }
 
-  return `data:${mimeType};base64,${data.data}`;
-}
-
-async function loadPdfThumbnail(sourcePath: string): Promise<string | null> {
-  if (window.electronAPI?.readPDFThumbnail) {
-    const thumbnail = await window.electronAPI.readPDFThumbnail(sourcePath);
-    if (thumbnail) {
-      return thumbnail;
-    }
-  }
-
-  if (window.electronAPI?.getFileThumbnail) {
-    return window.electronAPI.getFileThumbnail(sourcePath);
-  }
-
-  return null;
+  return resolveReadFileDataUrl(data, sourcePath);
 }
 
 /** Small list thumbnail — prefers generated thumbs for performance. */
 export async function loadCaseFileThumbnail(filePath: string): Promise<string | null> {
+  const category = detectCategoryFromPath(filePath);
+  if (category === 'pdf') {
+    return loadPdfPreviewThumbnail(filePath);
+  }
+
   if (window.electronAPI?.getFileThumbnail) {
     try {
       const thumbnail = await window.electronAPI.getFileThumbnail(filePath);
@@ -67,11 +34,6 @@ export async function loadCaseFileThumbnail(filePath: string): Promise<string | 
     } catch {
       // fall through to category-specific loaders
     }
-  }
-
-  const category = detectCategoryFromPath(filePath);
-  if (category === 'pdf') {
-    return loadPdfThumbnail(filePath);
   }
 
   if (category === 'image' || category === 'gif') {
@@ -105,7 +67,7 @@ export async function loadFileConverterSourcePreview(
   }
 
   if (source.category === 'pdf') {
-    const imageSrc = await loadPdfThumbnail(source.sourcePath);
+    const imageSrc = await loadPdfPreviewThumbnail(source.sourcePath, { maxSize: 420 });
     return { imageSrc, videoSrc: null, unavailable: !imageSrc };
   }
 

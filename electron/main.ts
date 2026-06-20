@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import JSZip from 'jszip';
 import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive } from './utils/archiveConfig';
 import { generateFileThumbnail } from './utils/thumbnailGenerator';
+import { MAX_FILE_SIZE_FOR_BASE64, readFileDataPayload } from './utils/fileDataUtils';
 import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMarker } from './utils/archiveMarker';
 import { logger, type LogLevel, type LogArgs } from './utils/logger';
 import { loadSettings } from './utils/settings';
@@ -55,6 +56,10 @@ function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | '
 // Helper function to safely check if database is ready
 function isDatabaseReady(): boolean {
   return db !== null && db.isInitialized();
+}
+
+function shouldUseDatabaseForListing(): boolean {
+  return isDatabaseReady() && !migrationInProgress;
 }
 
 // Helper function to find case path from any file/folder path
@@ -139,32 +144,37 @@ process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) =>
 let mainWindow: BrowserWindow | null = null;
 let db: LocalDatabase | null = null;
 let fileWatcher: FileSystemWatcher | null = null;
+let migrationInProgress = false;
 
-// Register custom protocol for video files (more efficient than data URLs)
-function registerVideoProtocol() {
-  protocol.registerFileProtocol('vault-video', (request, callback) => {
+// Register custom protocols for efficient local file access (avoids base64 data URLs)
+function registerVaultPathProtocol(scheme: string) {
+  protocol.registerFileProtocol(scheme, (request, callback) => {
     try {
-      // Extract file path from URL (vault-video://path/to/file.mp4)
-      const url = request.url.replace('vault-video://', '');
+      const prefix = `${scheme}://`;
+      const url = request.url.replace(prefix, '');
       const filePath = decodeURIComponent(url);
 
-      // Validate path
       if (!isSafePath(filePath)) {
-        callback({ error: -2 }); // FAILED
+        callback({ error: -2 });
         return;
       }
 
       if (!existsSync(filePath)) {
-        callback({ error: -6 }); // FILE_NOT_FOUND
+        callback({ error: -6 });
         return;
       }
 
       callback({ path: filePath });
     } catch (error) {
-      logger.error('Video protocol error:', error);
-      callback({ error: -2 }); // FAILED
+      logger.error(`${scheme} protocol error:`, error);
+      callback({ error: -2 });
     }
   });
+}
+
+function registerVaultFileProtocols() {
+  registerVaultPathProtocol('vault-video');
+  registerVaultPathProtocol('vault-file');
 }
 
 async function createWindow() {
@@ -425,20 +435,14 @@ async function createWindow() {
   });
 }
 
-app.whenReady().then(async () => {
-  // Set App User Model ID for Windows icon association
-  // This helps Windows properly associate the icon with the application
-  if (process.platform === 'win32') {
-    app.setAppUserModelId('com.vault.app');
+async function runBackgroundVaultMigration(): Promise<void> {
+  if (!db) {
+    return;
   }
-  
-  // Initialize database BEFORE creating window to ensure it's ready
+
+  migrationInProgress = true;
+
   try {
-    db = LocalDatabase.getInstance();
-    await db.initialize();
-    logger.info('Database initialized');
-    
-    // Check if migration is needed
     const archiveDrive = await getArchiveDrive();
     if (archiveDrive && !db.isMigrationCompleted()) {
       logger.info(`Running database migration from: ${archiveDrive}`);
@@ -447,7 +451,6 @@ app.whenReady().then(async () => {
       if (migrationResult.errors.length > 0) {
         logger.warn(`Migration had ${migrationResult.errors.length} errors:`, migrationResult.errors);
       }
-      // If migration found no data, log warning but don't mark as complete
       if (migrationResult.cases === 0 && migrationResult.files === 0) {
         logger.warn('Migration found no cases or files. Archive drive may be empty or migration needs to be re-run.');
         logger.warn('You can force re-migration by calling the force-remigration IPC handler');
@@ -456,13 +459,11 @@ app.whenReady().then(async () => {
       logger.warn('Archive drive not set - migration will run when archive drive is configured');
     } else if (db.isMigrationCompleted()) {
       logger.info('Migration already completed - skipping');
-      // Verify we actually have data in the database
       const caseCount = db.getCases().length;
       if (caseCount === 0 && archiveDrive) {
         logger.warn('Migration marked as complete but database has 0 cases - migration may have failed');
         logger.warn('You can force re-migration by calling the force-remigration IPC handler');
       } else if (caseCount > 0 && archiveDrive) {
-        // Check if cases have files - if not, files weren't migrated
         let totalFiles = 0;
         for (const caseRecord of db.getCases()) {
           const files = db.getFiles(caseRecord.path);
@@ -473,7 +474,6 @@ app.whenReady().then(async () => {
           logger.warn('WARNING: Cases exist but have 0 files - file migration may have failed!');
           logger.warn('Clearing migration flag to re-run file migration...');
           db.clearMigrationFlag();
-          // Re-run migration to get files
           logger.info('Re-running migration to migrate files...');
           const migrationResult = await migrateMetadataFilesToDatabase(archiveDrive, db);
           logger.info(`Re-migration completed: ${migrationResult.cases} cases, ${migrationResult.files} files`);
@@ -482,21 +482,38 @@ app.whenReady().then(async () => {
         logger.info(`Database has ${caseCount} cases`);
       }
     }
-    
-    // Start file system watcher
-    fileWatcher = new FileSystemWatcher(db);
-    await fileWatcher.start();
-    logger.info('File system watcher started');
+
+    if (!fileWatcher) {
+      fileWatcher = new FileSystemWatcher(db);
+      await fileWatcher.start();
+      logger.info('File system watcher started');
+    }
   } catch (error) {
-    logger.error('Failed to initialize database:', error);
-    // Continue app startup even if database fails - handlers will fall back to file system
+    logger.error('Background vault migration failed:', error);
+  } finally {
+    migrationInProgress = false;
+  }
+}
+
+app.whenReady().then(async () => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.vault.app');
   }
   
-  // Register custom protocols before creating window
-  registerVideoProtocol();
+  try {
+    db = LocalDatabase.getInstance();
+    await db.initialize();
+    logger.info('Database initialized');
+  } catch (error) {
+    logger.error('Failed to initialize database:', error);
+  }
   
-  // Create window AFTER database is initialized
+  registerVaultFileProtocols();
   await createWindow();
+
+  if (db) {
+    void runBackgroundVaultMigration();
+  }
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -537,7 +554,19 @@ ipcMain.handle('log-renderer', async (event, level: LogLevel, ...args: LogArgs) 
   logger[level](`[Renderer]`, ...args);
 });
 
-// Debug logging handler - writes NDJSON to debug.log file
+ipcMain.handle('open-devtools-in-dev', async (event) => {
+  if (!isDev) {
+    return { success: false };
+  }
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) {
+    return { success: false };
+  }
+  win.webContents.openDevTools({ mode: 'detach' });
+  return { success: true };
+});
+
+// Debug logging handler - dev only; writes NDJSON to debug.log file
 ipcMain.handle('debug-log', async (event, logEntry: {
   location: string;
   message: string;
@@ -547,6 +576,10 @@ ipcMain.handle('debug-log', async (event, logEntry: {
   runId: string;
   hypothesisId: string;
 }) => {
+  if (!isDev) {
+    return { success: true };
+  }
+
   try {
     // Use workspace path: .cursor/debug.log relative to where the app is running
     // In development, this is typically the workspace root
@@ -585,7 +618,9 @@ ipcMain.handle('get-system-memory', async () => {
   };
 });
 
-ipcMain.handle('get-system-fonts', async () => listSystemFonts());
+ipcMain.handle('get-system-fonts', async (_event, forceRefresh?: boolean) =>
+  listSystemFonts(Boolean(forceRefresh))
+);
 
 // Select PDF file
 ipcMain.handle('select-pdf-file', async () => {
@@ -836,12 +871,6 @@ ipcMain.handle('read-pdf-file', async (event, filePath: string) => {
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      // Check file size - if larger than ~350MB, return path instead of data
-      // JavaScript strings have a max length of ~512MB (0x1fffffe8 characters = ~536MB)
-      // Base64 encoding increases size by ~33%, so limit to ~350MB raw file size for safety
-      // This leaves ~50MB buffer to account for any overhead
-      const MAX_FILE_SIZE_FOR_BASE64 = 350 * 1024 * 1024; // 350MB
-      
       const stats = await fs.stat(filePath);
       
       if (stats.size > MAX_FILE_SIZE_FOR_BASE64) {
@@ -1605,9 +1634,13 @@ ipcMain.handle('list-archive-cases', async () => {
     }
 
     // Query database instead of scanning file system
-    if (!isDatabaseReady()) {
-      // Fallback to file system scan if database not initialized
-      logger.warn('Database not initialized, falling back to file system scan');
+    if (!shouldUseDatabaseForListing()) {
+      // Fallback to file system scan if database not initialized or migration in progress
+      if (migrationInProgress) {
+        logger.debug('Migration in progress, using file system scan for archive cases');
+      } else {
+        logger.warn('Database not initialized, falling back to file system scan');
+      }
       return await listCasesFromFileSystem(archiveDrive);
     }
 
@@ -2103,9 +2136,12 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     }
 
     // Query database instead of scanning file system
-    if (!isDatabaseReady()) {
-      // Fallback to file system scan if database not initialized
-      logger.warn('Database not initialized, falling back to file system scan');
+    if (!shouldUseDatabaseForListing()) {
+      if (migrationInProgress) {
+        logger.debug(`[Main] list-case-files: Migration in progress, using file system scan for ${casePath}`);
+      } else {
+        logger.warn('Database not initialized, falling back to file system scan');
+      }
       return await listCaseFilesFromFileSystem(casePath);
     }
 
@@ -3310,24 +3346,7 @@ ipcMain.handle('read-file-data', async (event, filePath: string) => {
   }
 
   try {
-    const data = await fs.readFile(filePath);
-    const base64 = data.toString('base64');
-    const ext = path.extname(filePath).toLowerCase();
-    
-    // Determine MIME type
-    let mimeType = 'application/octet-stream';
-    if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
-    else if (ext === '.png') mimeType = 'image/png';
-    else if (ext === '.gif') mimeType = 'image/gif';
-    else if (ext === '.pdf') mimeType = 'application/pdf';
-    else if (['.mp4'].includes(ext)) mimeType = 'video/mp4';
-    else if (['.webm'].includes(ext)) mimeType = 'video/webm';
-
-    return {
-      data: base64,
-      mimeType,
-      fileName: path.basename(filePath),
-    };
+    return await readFileDataPayload(filePath);
   } catch (error) {
     throw new Error(`Failed to read file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
@@ -3819,34 +3838,15 @@ ipcMain.handle('export-text-file', async (event, options: {
     const { content, format, filePath } = options;
     const textLibraryPath = await getTextLibraryPath();
     
-    // Extract plain text from HTML - remove tags and decode entities
-    let plainText = content
-      .replace(/<[^>]*>/g, '') // Remove HTML tags
-      .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
-      .replace(/&amp;/g, '&') // Decode HTML entities
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\s+/g, ' ') // Collapse whitespace
-      .trim();
-    
-    // Try to preserve line breaks from <br> and <p> tags
-    const textWithBreaks = content
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<p[^>]*>/gi, '')
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\n\s*\n/g, '\n') // Remove empty lines
-      .trim();
-    
-    const finalText = textWithBreaks || plainText;
+    if (format === 'pdf') {
+      return {
+        success: false,
+        error: 'PDF export is not yet supported',
+      };
+    }
+
+    const { exportPlainTextToDocx, htmlToExportPlainText, buildRtfContent } = await import('./utils/textExport.js');
+    const finalText = htmlToExportPlainText(content);
     
     let exportPath: string;
     let fileName: string;
@@ -3868,31 +3868,10 @@ ipcMain.handle('export-text-file', async (event, options: {
       counter++;
     }
     
-    if (format === 'pdf') {
-      // For PDF export, save as plain text for now
-      // TODO: Add pdfkit library for proper PDF generation
-      await fs.writeFile(exportPath, finalText, 'utf8');
-      logger.warn('PDF export not fully implemented, saved as text file');
-    } else if (format === 'docx') {
-      // For DOCX, create a simple RTF file for now
-      // TODO: Add docx library for proper DOCX generation
-      const rtfContent = `{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}
-\\f0\\fs24 ${finalText.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\n/g, '\\par ')} }`;
-      const rtfPath = exportPath.replace(/\.docx$/i, '.rtf');
-      await fs.writeFile(rtfPath, rtfContent, 'utf8');
-      exportPath = rtfPath;
-      logger.warn('DOCX export not fully implemented, saved as RTF file');
+    if (format === 'docx') {
+      await exportPlainTextToDocx(finalText, exportPath);
     } else if (format === 'rtf') {
-      // Create RTF file with proper formatting
-      const escapedText = finalText
-        .replace(/\\/g, '\\\\') // Escape backslashes
-        .replace(/\{/g, '\\{') // Escape braces
-        .replace(/\}/g, '\\}') // Escape braces
-        .replace(/\n/g, '\\par '); // Convert newlines to RTF paragraph breaks
-      
-      const rtfContent = `{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}
-\\f0\\fs24 ${escapedText} }`;
-      await fs.writeFile(exportPath, rtfContent, 'utf8');
+      await fs.writeFile(exportPath, buildRtfContent(finalText), 'utf8');
     }
     
     return {
@@ -3901,27 +3880,10 @@ ipcMain.handle('export-text-file', async (event, options: {
     };
   } catch (error) {
     logger.error('Failed to export text file:', error);
-    // Fallback: save as plain text
-    try {
-      const textLibraryPath = await getTextLibraryPath();
-      const fallbackPath = path.join(textLibraryPath, `export_${Date.now()}.txt`);
-      const fallbackText = options.content
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .trim();
-      await fs.writeFile(fallbackPath, fallbackText, 'utf8');
-      return {
-        success: true,
-        filePath: fallbackPath,
-      };
-    } catch (fallbackError) {
-      throw new Error(`Failed to export text file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to export text file',
+    };
   }
 });
 
@@ -4137,7 +4099,6 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
               viewState: ${JSON.stringify(viewState)},
               casePath: ${(options as any).casePath ? JSON.stringify((options as any).casePath) : 'null'}
             };
-            console.log('Main process: Dispatching word-editor-data event', data);
             // Store data in case listener isn't ready yet
             window.__wordEditorInitialData = data;
             const event = new CustomEvent('word-editor-data', {
@@ -4597,7 +4558,6 @@ ipcMain.handle('create-pdf-audit-window', async (event, options: {
               isAuditing: ${JSON.stringify(options.isAuditing)},
               progressMessage: ${JSON.stringify(options.progressMessage)}
             };
-            console.log('Main process: Dispatching pdf-audit-data event', data);
             // Store data in case listener isn't ready yet
             window.__pdfAuditInitialData = data;
             const event = new CustomEvent('pdf-audit-data', {
@@ -4797,7 +4757,6 @@ ipcMain.handle('create-pdf-extraction-window', async (event, options: {
               statusMessage: ${JSON.stringify(options.statusMessage || '')},
               caseFolderPath: ${options.caseFolderPath ? JSON.stringify(options.caseFolderPath) : 'null'}
             };
-            console.log('Main process: Dispatching pdf-extraction-data event', data);
             // Store data in case listener isn't ready yet
             window.__pdfExtractionInitialData = data;
             const event = new CustomEvent('pdf-extraction-data', {

@@ -1,7 +1,9 @@
 import { motion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
+import { AmbientLavaFrame } from '../Shared/AmbientLavaFrame';
 import { warmMapEntry } from '../../utils/mapPrefetch';
 import { warmTranscriptionEntry } from '../../utils/transcriptionPrefetch';
+import { warmArchiveEntry } from '../../utils/archivePrefetch';
 
 export interface WelcomeCardPastelPalette {
   borderClassName: string;
@@ -64,7 +66,13 @@ export function WelcomeActionCard({ card, isPastel, omitDarkBeamBorder = false }
       <motion.button
         whileHover={{ scale: 1.02, y: -3, transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] } }}
         whileTap={{ scale: 0.98 }}
-        onPointerDown={card.key === 'transcription' ? warmTranscriptionEntry : undefined}
+        onPointerDown={
+          card.key === 'transcription'
+            ? warmTranscriptionEntry
+            : card.key === 'vault'
+              ? warmArchiveEntry
+              : undefined
+        }
         onClick={card.onClick}
         className={`w-full ${ACTION_MENU_CARD_MIN_HEIGHT_CLASS} flex flex-col relative overflow-hidden rounded-3xl bg-white/85 backdrop-blur-xl shadow-lg border-2 transition-all duration-300 z-10 ${card.pastel.borderClassName}`}
         style={{ boxShadow: card.pastel.cardShadow }}
@@ -137,16 +145,20 @@ export function WelcomeActionCard({ card, isPastel, omitDarkBeamBorder = false }
           }}
         />
       )}
-      <motion.div
-        className={`rounded-3xl p-[3px] ${ACTION_MENU_CARD_MIN_HEIGHT_CLASS}`}
-        style={{ backgroundImage: card.dark.frameBackgroundImage, backgroundSize: '200% 200%' }}
-        animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-        transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+      <AmbientLavaFrame
+        className={ACTION_MENU_CARD_MIN_HEIGHT_CLASS}
+        borderGradient={card.dark.frameBackgroundImage}
       >
         <motion.button
           whileHover={{ scale: 1.04, y: -4, transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] } }}
           whileTap={{ scale: 0.98 }}
-          onPointerDown={card.key === 'transcription' ? warmTranscriptionEntry : undefined}
+          onPointerDown={
+          card.key === 'transcription'
+            ? warmTranscriptionEntry
+            : card.key === 'vault'
+              ? warmArchiveEntry
+              : undefined
+        }
           onClick={card.onClick}
           className={`w-full ${ACTION_MENU_CARD_MIN_HEIGHT_CLASS} flex flex-col relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-xl shadow-2xl transition-all duration-200 z-10`}
           style={{ boxShadow: card.dark.buttonShadow }}
@@ -202,7 +214,7 @@ export function WelcomeActionCard({ card, isPastel, omitDarkBeamBorder = false }
             </motion.div>
           </div>
         </motion.button>
-      </motion.div>
+      </AmbientLavaFrame>
     </>
   );
 }
@@ -222,9 +234,11 @@ export function WelcomeActionCardWrapper({ card, isPastel }: WelcomeActionCardWr
       onPointerEnter={
         card.key === 'map'
           ? warmMapEntry
-          : card.key === 'transcription'
-            ? warmTranscriptionEntry
-            : undefined
+          : card.key === 'vault'
+            ? warmArchiveEntry
+            : card.key === 'transcription'
+              ? warmTranscriptionEntry
+              : undefined
       }
     >
       <WelcomeActionCard card={card} isPastel={isPastel} />

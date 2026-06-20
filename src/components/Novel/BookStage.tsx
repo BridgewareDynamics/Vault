@@ -7,7 +7,7 @@ import type { BookDisplayMetrics } from './engine/bookSizes';
 interface BookStageProps {
   theme: Theme;
   metrics: BookDisplayMetrics;
-  containerRef: RefObject<HTMLDivElement | null>;
+  containerRef: RefObject<HTMLDivElement>;
   children: ReactNode;
 }
 

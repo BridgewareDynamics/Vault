@@ -1,5 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { AppSettings } from '../types';
+import { logger } from './logger';
 
 interface SettingsContextValue {
   settings: AppSettings | null;
@@ -43,7 +44,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       };
       setSettings(completeSettings);
     } catch (error) {
-      console.error('Failed to load settings:', error);
+      logger.error('Failed to load settings:', error);
       // Set defaults on error
       setSettings({
         hardwareAcceleration: true,
@@ -85,7 +86,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       };
       setSettings(completeSettings);
     } catch (error) {
-      console.error('Failed to update settings:', error);
+      logger.error('Failed to update settings:', error);
       throw error;
     }
   }, []);
@@ -94,12 +95,15 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     loadSettings();
   }, [loadSettings]);
 
-  const value: SettingsContextValue = {
-    settings,
-    loading,
-    updateSettings,
-    refreshSettings: loadSettings,
-  };
+  const value = React.useMemo(
+    (): SettingsContextValue => ({
+      settings,
+      loading,
+      updateSettings,
+      refreshSettings: loadSettings,
+    }),
+    [settings, loading, updateSettings, loadSettings],
+  );
 
   return (
     <SettingsContext.Provider value={value}>

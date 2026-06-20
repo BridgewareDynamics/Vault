@@ -296,6 +296,7 @@ export function NovelModule({
           novelFolderPath={editorNovelPath}
           initialDocument={initialEditorDocument}
           initialSpreadIndex={currentSpreadIndex}
+          autoFocusTitle={initialEditorDocument != null}
           onBack={() => setScreen('landing')}
           onRegisterDetachBridge={(bridge) => {
             editorBridgeRef.current = bridge;

@@ -42,6 +42,9 @@ export default {
         'float': 'float 6s ease-in-out infinite',
         'scan': 'scan 8s linear infinite',
         'particle-float': 'particleFloat 20s linear infinite',
+        'lava-drift-a': 'lavaDriftA 20s ease-in-out infinite',
+        'lava-drift-b': 'lavaDriftB 24s ease-in-out infinite',
+        'lava-drift-c': 'lavaDriftC 28s ease-in-out infinite',
       },
       keyframes: {
         slideInRight: {
@@ -101,6 +104,21 @@ export default {
           '10%': { opacity: '1' },
           '90%': { opacity: '1' },
           '100%': { transform: 'translate(100px, -100vh) rotate(360deg)', opacity: '0' },
+        },
+        lavaDriftA: {
+          '0%, 100%': { transform: 'translate(0%, 0%) scale(1)' },
+          '33%': { transform: 'translate(10%, -12%) scale(1.06)' },
+          '66%': { transform: 'translate(-8%, 8%) scale(0.96)' },
+        },
+        lavaDriftB: {
+          '0%, 100%': { transform: 'translate(0%, 0%) scale(1)' },
+          '40%': { transform: 'translate(-12%, -6%) scale(1.08)' },
+          '70%': { transform: 'translate(6%, 14%) scale(0.94)' },
+        },
+        lavaDriftC: {
+          '0%, 100%': { transform: 'translate(0%, 0%) scale(1)' },
+          '35%': { transform: 'translate(8%, 10%) scale(1.05)' },
+          '68%': { transform: 'translate(-10%, -8%) scale(0.97)' },
         },
       },
       backdropBlur: {

@@ -51,6 +51,25 @@ This document tracks the implementation of all critical blockers for v1.0 releas
   - Build scripts (acceptable - build-time scripts, not production runtime)
 - [x] No console.log statements found in production source code (components, hooks, main.ts, etc.)
 
+### Phase 7: Production Readiness Pass 2 (v1.0 hardening)
+- [x] **PR A — Critical fixes**
+  - Removed agent debug instrumentation; gated dev-only debug IPC
+  - Extraction cancel/abort (`AbortController`) for modal, archive, and detached flows
+  - Detach guard while extraction is running
+  - Real DOCX export via `docx`; honest PDF export disable; fixed false export success
+  - Fixed detached-window `logger is not defined` in main-process injected scripts
+- [x] **PR B — Memory & performance**
+  - Instant Vault navigation with lazy-loaded archive shell and deferred heavy modals
+  - Unified archive module import with HMR-safe dynamic import retry
+  - Lazy PDF/image thumbnails on visibility; wired `onRequestThumbnail` in archive grid
+  - `AbortSignal` through blob PDF loading and PDF thumbnail generation
+  - RAM limit setting now enforced via `MemoryMonitor.maxUsedBytes`
+  - In-flight thumbnail abort on memory cleanup
+- [x] **PR C — Hygiene**
+  - Replaced `console.error` with `logger` in archive, extraction, security, settings, and audit paths
+  - Added `npm run lint` to GitHub Actions CI (`.github/workflows/ci.yml`); lint scopes to `src/` + `electron/`, ignores build output, and tracks remaining legacy warnings
+  - Updated documentation to reflect pass 2 behavior
+
 ## 📋 Required Actions Before Release
 
 ### Code Signing Certificates
@@ -80,7 +99,7 @@ This document tracks the implementation of all critical blockers for v1.0 releas
 - [ ] Verify crash reporting captures errors correctly
 - [ ] Test uncaught exception handlers don't crash app
 - [ ] Test code signing works (or gracefully skips if certs unavailable)
-- [ ] Test CI/CD workflow builds successfully
+- [ ] Test CI workflow (lint + test + build) on pull requests
 - [ ] Test installer creation on all platforms
 
 ## 🔧 Configuration

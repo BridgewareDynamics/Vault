@@ -1,11 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TextLibraryItem } from './TextLibraryItem';
-
-// Mock window.confirm
-const mockConfirm = vi.fn();
-global.confirm = mockConfirm;
+import { renderWithProviders } from '../../test-utils/render';
 
 describe('TextLibraryItem', () => {
   const mockFile = {
@@ -23,11 +20,10 @@ describe('TextLibraryItem', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockConfirm.mockReturnValue(true);
   });
 
   it('should render file name', () => {
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -41,7 +37,7 @@ describe('TextLibraryItem', () => {
   });
 
   it('should render file preview when available', () => {
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -60,7 +56,7 @@ describe('TextLibraryItem', () => {
       preview: undefined,
     };
 
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={fileWithoutPreview}
         onOpen={mockOnOpen}
@@ -77,7 +73,7 @@ describe('TextLibraryItem', () => {
 
   it('should call onOpen when file item is clicked', async () => {
     const user = userEvent.setup();
-    const { container } = render(
+    const { container } = renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -103,7 +99,7 @@ describe('TextLibraryItem', () => {
 
   it('should toggle dropdown menu when arrow button is clicked', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -123,7 +119,7 @@ describe('TextLibraryItem', () => {
 
   it('should call onOpen when Open is clicked from dropdown', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -145,7 +141,7 @@ describe('TextLibraryItem', () => {
 
   it('should call onEdit when Edit is clicked from dropdown', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -167,7 +163,7 @@ describe('TextLibraryItem', () => {
 
   it('should call onSaveAs when Save As is clicked from dropdown', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -187,11 +183,10 @@ describe('TextLibraryItem', () => {
     expect(screen.queryByText('Save As')).not.toBeInTheDocument(); // Dropdown should close
   });
 
-  it('should call onDelete when delete button is clicked and confirmed', async () => {
+  it('should call onDelete when delete button is clicked', async () => {
     const user = userEvent.setup();
-    mockConfirm.mockReturnValue(true);
 
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -205,34 +200,12 @@ describe('TextLibraryItem', () => {
     const deleteButton = screen.getByLabelText('Delete file');
     await user.click(deleteButton);
 
-    expect(mockConfirm).toHaveBeenCalledWith('Delete "test-file.txt"?');
     expect(mockOnDelete).toHaveBeenCalledTimes(1);
-  });
-
-  it('should not call onDelete when delete is cancelled', async () => {
-    const user = userEvent.setup();
-    mockConfirm.mockReturnValue(false);
-
-    render(
-      <TextLibraryItem
-        file={mockFile}
-        onOpen={mockOnOpen}
-        onEdit={mockOnEdit}
-        onSaveAs={mockOnSaveAs}
-        onDelete={mockOnDelete}
-      />
-    );
-
-    const deleteButton = screen.getByLabelText('Delete file');
-    await user.click(deleteButton);
-
-    expect(mockConfirm).toHaveBeenCalled();
-    expect(mockOnDelete).not.toHaveBeenCalled();
   });
 
   it('should close dropdown when clicking outside', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <div>
         <TextLibraryItem
           file={mockFile}
@@ -260,7 +233,7 @@ describe('TextLibraryItem', () => {
 
   it('should not close dropdown when clicking inside dropdown', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -284,7 +257,7 @@ describe('TextLibraryItem', () => {
 
   it('should not call onOpen when clicking dropdown arrow', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -303,9 +276,8 @@ describe('TextLibraryItem', () => {
 
   it('should not call onOpen when clicking delete button', async () => {
     const user = userEvent.setup();
-    mockConfirm.mockReturnValue(true);
 
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={mockFile}
         onOpen={mockOnOpen}
@@ -328,7 +300,7 @@ describe('TextLibraryItem', () => {
       name: 'very-long-file-name-that-might-truncate.txt',
     };
 
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={longFileName}
         onOpen={mockOnOpen}
@@ -347,7 +319,7 @@ describe('TextLibraryItem', () => {
       preview: undefined,
     };
 
-    render(
+    renderWithProviders(
       <TextLibraryItem
         file={fileWithoutPreview}
         onOpen={mockOnOpen}

@@ -109,7 +109,7 @@ describe('ArchiveFileItem', () => {
     });
     
     // Check for image icon
-    let icon = container.querySelector('svg');
+    const icon = container.querySelector('svg');
     expect(icon).toBeInTheDocument();
     
     const videoFile = createMockFile({ type: 'video', name: 'test.mp4' });
@@ -395,6 +395,53 @@ describe('ArchiveFileItem', () => {
       expect(screen.getByText('PDF Audit')).toBeInTheDocument();
       expect(screen.getByText('Convert to Images')).toBeInTheDocument();
     });
+  });
+
+  it('requests thumbnail when item becomes visible', async () => {
+    const onRequestThumbnail = vi.fn();
+    const observers: Array<{ callback: IntersectionObserverCallback; target: Element | null }> = [];
+
+    class MockIntersectionObserver {
+      callback: IntersectionObserverCallback;
+      target: Element | null = null;
+
+      constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback;
+        observers.push({ callback, target: null });
+      }
+
+      observe(element: Element) {
+        this.target = element;
+        const entry = observers[observers.length - 1];
+        entry.target = element;
+      }
+
+      disconnect() {
+        // no-op
+      }
+    }
+
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+
+    const file = createMockFile();
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onRequestThumbnail,
+    });
+
+    expect(observers).toHaveLength(1);
+    const [{ callback, target }] = observers;
+    expect(target).toBeTruthy();
+
+    callback(
+      [{ isIntersecting: true, target: target as Element } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+
+    expect(onRequestThumbnail).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
   });
 });
 

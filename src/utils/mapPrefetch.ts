@@ -1,4 +1,5 @@
 import type { MapDocument, MapListEntry } from '../types';
+import { isVitestEnv } from './isVitestEnv';
 
 type MapModule = typeof import('../components/Map/MapModule');
 
@@ -131,6 +132,10 @@ export function setCachedMapLibrary(list: MapListEntry[] | null) {
 
 /** Warm module chunk + map library while the user is still on Welcome. */
 export function warmMapEntry(): void {
+  if (isVitestEnv()) {
+    return;
+  }
+
   void prefetchMapModule();
   void prefetchMapLibrary();
   void prefetchMapEditorPage();

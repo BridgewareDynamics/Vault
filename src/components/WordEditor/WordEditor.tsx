@@ -3,7 +3,6 @@ import { WordEditorToolbar } from './WordEditorToolbar';
 import { NewFileConfirmationDialog } from './NewFileConfirmationDialog';
 import { NewFileNameDialog } from './NewFileNameDialog';
 import { useToast } from '../Toast/ToastContext';
-import { debugLog } from '../../utils/debugLogger';
 import { useWordEditorState } from '../../hooks/useWordEditorState';
 import { debounceWithFlush } from '../../utils/debounce';
 import { LexicalEditor, LexicalEditorHandle } from './LexicalEditor';
@@ -87,25 +86,11 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       lexicalEditorRef.current?.focus();
     },
     hasUnsavedChanges: () => {
-      debugLog({
-        location: 'WordEditor.tsx:hasUnsavedChanges',
-        message: 'hasUnsavedChanges called',
-        data: { hasUnsavedChanges, filePath },
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'A',
-      });
+
       return hasUnsavedChanges;
     },
     markAsSaved: () => {
-      debugLog({
-        location: 'WordEditor.tsx:markAsSaved',
-        message: 'markAsSaved called',
-        data: { previousState: hasUnsavedChanges, filePath },
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'D',
-      });
+
       // Use setTimeout to ensure this happens after any pending content change callbacks
       setTimeout(() => {
         setHasUnsavedChanges(false);
@@ -117,41 +102,25 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
   const ensureEditorEditable = () => {
     if (lexicalEditorRef.current) {
       lexicalEditorRef.current.focus();
-      debugLog({
-        location: 'WordEditor.tsx:ensureEditorEditable',
-        message: 'ensureEditorEditable called',
-        data: { filePath, isEditable: lexicalEditorRef.current.isEditable() },
-      });
+
     }
   };
 
   useEffect(() => {
-    debugLog({
-      location: 'WordEditor.tsx:useEffect',
-      message: 'WordEditor mounted',
-      data: { filePath, editorRefExists: !!lexicalEditorRef.current },
-    });
+
     // Ensure editor is editable on mount, especially when filePath is null
     ensureEditorEditable();
     
     // Add window focus handler to ensure editor is editable when window regains focus
     const handleWindowFocus = () => {
-      debugLog({
-        location: 'WordEditor.tsx:handleWindowFocus',
-        message: 'Window focus event',
-        data: { filePath, editorRefExists: !!lexicalEditorRef.current },
-      });
+
       // Small delay to ensure DOM is ready
       requestAnimationFrame(() => {
         ensureEditorEditable();
         if (lexicalEditorRef.current && !filePath) {
           // If no file is open, focus the editor
           lexicalEditorRef.current.focus();
-          debugLog({
-            location: 'WordEditor.tsx:handleWindowFocus',
-            message: 'Editor focused on window focus',
-            data: { filePath },
-          });
+
         }
       });
     };
@@ -160,11 +129,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
     
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
-      debugLog({
-        location: 'WordEditor.tsx:useEffect:cleanup',
-        message: 'WordEditor unmounted',
-        data: { filePath },
-      });
+
     };
   }, [filePath]);
 
@@ -191,17 +156,9 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
   // Load file content when filePath changes
   useEffect(() => {
     const loadFile = async () => {
-      debugLog({
-        location: 'WordEditor.tsx:loadFile',
-        message: 'loadFile useEffect triggered',
-        data: { filePath, hasElectronAPI: !!window.electronAPI, previousFilePath: currentFilePathRef.current },
-      });
+
       if (!filePath || !window.electronAPI) {
-        debugLog({
-          location: 'WordEditor.tsx:loadFile',
-          message: 'loadFile early return',
-          data: { filePath, hasElectronAPI: !!window.electronAPI },
-        });
+
         setIsLoading(false);
         return;
       }
@@ -209,11 +166,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       // Skip if this is the same file path AND we've already loaded it (avoid unnecessary reloads)
       // But allow loading if currentFilePathRef is null (first load) or different
       if (filePath === currentFilePathRef.current && currentFilePathRef.current !== null) {
-        debugLog({
-          location: 'WordEditor.tsx:loadFile',
-          message: 'Skipping load - same file path already loaded',
-          data: { filePath },
-        });
+
         setIsLoading(false);
         return;
       }
@@ -222,17 +175,9 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       // Set isSaving to true temporarily to prevent content change callbacks from setting unsaved changes
       setIsSaving(true);
       try {
-        debugLog({
-          location: 'WordEditor.tsx:loadFile',
-          message: 'About to read file',
-          data: { filePath },
-        });
+
         const fileContent = await window.electronAPI.readTextFile(filePath);
-        debugLog({
-          location: 'WordEditor.tsx:loadFile',
-          message: 'File content read',
-          data: { filePath, fileContentLength: fileContent.length, contentPreview: fileContent.substring(0, 50) },
-        });
+
         
         // For plain text files, wrap in paragraph tags; for HTML, use as-is
         let htmlContent: string;
@@ -259,11 +204,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
         
         // Set content in editor directly via ref (this is the primary method)
         if (lexicalEditorRef.current) {
-          debugLog({
-            location: 'WordEditor.tsx:loadFile',
-            message: 'Setting editor content via ref',
-            data: { filePath, isTxt: filePath.endsWith('.txt'), fileContentLength: fileContent.length },
-          });
+
           lexicalEditorRef.current.setContent(htmlContent);
         }
         
@@ -271,14 +212,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
         setTimeout(() => {
           setHasUnsavedChanges(false);
           setIsSaving(false);
-          debugLog({
-            location: 'WordEditor.tsx:loadFile',
-            message: 'Editor content set and state updated',
-            data: { filePath, contentLength: htmlContent.length },
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'A',
-          });
+
         }, 50);
       } catch (error) {
         setIsSaving(false);
@@ -357,11 +291,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
   // Clear editor when filePath becomes null (file deleted or new file)
   // BUT: Only clear if filePath actually CHANGED to null (not if it was already null)
   useEffect(() => {
-    debugLog({
-      location: 'WordEditor.tsx:filePath:useEffect',
-      message: 'filePath useEffect triggered',
-      data: { filePath, previousFilePath: currentFilePathRef.current, editorRefExists: !!lexicalEditorRef.current },
-    });
+
     
     // Only clear if filePath changed FROM something TO null (deliberate clear action)
     // Don't clear if filePath was already null (user might be typing in a new document)
@@ -378,27 +308,15 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       requestAnimationFrame(() => {
         if (lexicalEditorRef.current) {
           lexicalEditorRef.current.focus();
-          debugLog({
-            location: 'WordEditor.tsx:filePath:useEffect',
-            message: 'Editor focused after filePath became null',
-            data: { isEditable: lexicalEditorRef.current.isEditable() },
-          });
+
         }
       });
       
-      debugLog({
-        location: 'WordEditor.tsx:filePath:useEffect',
-        message: 'Ensuring editor is editable (filePath is null)',
-        data: { isEditable: lexicalEditorRef.current.isEditable() },
-      });
+
     }
     
     if (pathChangedToNull && lexicalEditorRef.current) {
-      debugLog({
-        location: 'WordEditor.tsx:filePath:useEffect',
-        message: 'About to clear editor - path changed to null',
-        data: { previousFilePath: previousPath, newFilePath: filePath },
-      });
+
       // Clear editor content
       lexicalEditorRef.current.setContent('');
       setContent('');
@@ -411,19 +329,12 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
         localStorage.removeItem(oldDraftKey);
       }
       
-      debugLog({
-        location: 'WordEditor.tsx:filePath:useEffect',
-        message: 'Editor cleared',
-      });
+
       
       // Use requestAnimationFrame for immediate focus (faster than setTimeout)
       requestAnimationFrame(() => {
         if (lexicalEditorRef.current) {
-          debugLog({
-            location: 'WordEditor.tsx:filePath:useEffect',
-            message: 'Focusing editor in requestAnimationFrame',
-            data: { editorRefExists: !!lexicalEditorRef.current },
-          });
+
           lexicalEditorRef.current.focus();
         }
       });
@@ -437,20 +348,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
   }, [filePath]);
 
   const handleContentChange = (newContent: string) => {
-    debugLog({
-      location: 'WordEditor.tsx:handleContentChange',
-      message: 'handleContentChange called',
-      data: { 
-        contentLength: newContent.length, 
-        filePath,
-        previousHasUnsavedChanges: hasUnsavedChanges,
-        isSaving,
-        currentContentLength: content.length,
-      },
-      sessionId: 'debug-session',
-      runId: 'run1',
-      hypothesisId: 'E',
-    });
+
     
     // Only update if content actually changed (avoid unnecessary updates)
     if (newContent !== content) {
@@ -535,14 +433,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           onFilePathChange(newPath);
         }
         
-        debugLog({
-          location: 'WordEditor.tsx:handleSave',
-          message: 'Setting hasUnsavedChanges to false after save',
-          data: { format, filePath, previousState: hasUnsavedChanges },
-          sessionId: 'debug-session',
-          runId: 'run1',
-          hypothesisId: 'B',
-        });
+
         
         // Use setTimeout to ensure this happens after any pending content change callbacks
         setTimeout(() => {
@@ -559,7 +450,12 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           }
         });
       } else {
-        // Export to other formats (PDF, DOCX, RTF)
+        if (format === 'pdf') {
+          toast.error('PDF export is not yet supported');
+          return;
+        }
+
+        // Export to other formats (DOCX, RTF)
         const result = await window.electronAPI.exportTextFile({
           content: htmlContent,
           format,
@@ -571,13 +467,12 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           setTimeout(() => {
             setHasUnsavedChanges(false);
           }, 0);
-          if (result.filePath && format !== 'pdf' && format !== 'docx') {
-            // For RTF, update the file path
+          if (result.filePath && format !== 'docx') {
             onFilePathChange(result.filePath);
           }
           toast.success(`File exported as ${format.toUpperCase()}`);
         } else {
-          toast.error(`Failed to export as ${format.toUpperCase()}`);
+          toast.error(result.error || `Failed to export as ${format.toUpperCase()}`);
         }
       }
     } catch (error) {
@@ -790,14 +685,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           {/* Save Button */}
           <button
             onClick={() => {
-              debugLog({
-                location: 'WordEditor.tsx:SaveButton',
-                message: 'Save button clicked in status bar',
-                data: { hasUnsavedChanges, filePath },
-                sessionId: 'debug-session',
-                runId: 'run1',
-                hypothesisId: 'B',
-              });
+
               handleSave('txt');
             }}
             className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs ${

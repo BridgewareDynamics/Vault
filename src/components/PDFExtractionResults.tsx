@@ -1,7 +1,18 @@
-import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { useMemo, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Check,
+  CheckSquare,
+  GalleryHorizontalEnd,
+  LayoutGrid,
+  Square,
+} from 'lucide-react';
 import { ExtractedPage } from '../types';
-import { CheckSquare, Square, Eye } from 'lucide-react';
+import type { ModuleMenuThemeTokens } from '../theme/moduleMenuTheme';
+import { VirtualizedItemGrid } from './Shared/VirtualizedItemGrid';
+import { getExtractionGridColumnCount } from '../utils/virtualGridUtils';
+
+type ViewMode = 'filmstrip' | 'grid';
 
 interface PDFExtractionResultsProps {
   pages: ExtractedPage[];
@@ -11,6 +22,145 @@ interface PDFExtractionResultsProps {
   onSelectAll: () => void;
   onDeselectAll: () => void;
   isPastel?: boolean;
+  activePageNumber?: number | null;
+  t?: ModuleMenuThemeTokens;
+}
+
+interface PageCardProps {
+  page: ExtractedPage;
+  isSelected: boolean;
+  isActive: boolean;
+  isPastel: boolean;
+  t?: ModuleMenuThemeTokens;
+  viewMode: ViewMode;
+  onInspect: () => void;
+  onToggleSelect: () => void;
+}
+
+function PageCard({
+  page,
+  isSelected,
+  isActive,
+  isPastel,
+  t,
+  viewMode,
+  onInspect,
+  onToggleSelect,
+}: PageCardProps) {
+  const shellIdle = t?.promptIdle ?? (isPastel
+    ? 'border-purple-200/50 bg-white/90 text-gray-800 hover:border-purple-300'
+    : 'border-white/10 bg-gray-900/70 text-gray-100 hover:border-cyber-cyan-400/40');
+
+  const activeShell = isPastel
+    ? 'border-purple-500/80 bg-white shadow-[0_0_0_1px_rgba(168,85,247,0.35),0_16px_40px_rgba(168,85,247,0.18)] ring-1 ring-purple-300/50'
+    : 'border-cyan-400/60 bg-gray-900/90 shadow-[0_0_0_1px_rgba(34,211,238,0.25),0_16px_40px_rgba(34,211,238,0.12)] ring-1 ring-cyan-400/30';
+
+  const selectedShell = isPastel
+    ? 'border-pink-400/70 bg-white shadow-[0_8px_24px_rgba(236,72,153,0.12)]'
+    : 'border-cyber-purple-400/50 bg-gray-900/85 shadow-[0_8px_24px_rgba(139,92,246,0.15)]';
+
+  const shellClass = isActive ? activeShell : isSelected ? selectedShell : shellIdle;
+
+  return (
+    <motion.article
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
+      className={`group relative flex shrink-0 flex-col overflow-hidden rounded-[20px] border transition-shadow duration-200 ${
+        viewMode === 'filmstrip' ? 'w-[8.75rem]' : 'w-full'
+      } ${shellClass}`}
+    >
+      {isActive && (
+        <span
+          className={`absolute left-0 top-3 bottom-12 z-10 w-1 rounded-r-full ${
+            isPastel ? 'bg-purple-500' : 'bg-cyan-400'
+          }`}
+          aria-hidden
+        />
+      )}
+
+      <button
+        type="button"
+        onClick={onInspect}
+        className={`relative block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+          isPastel
+            ? 'focus-visible:ring-purple-400 focus-visible:ring-offset-white'
+            : 'focus-visible:ring-cyan-400 focus-visible:ring-offset-gray-950'
+        }`}
+        aria-label={`Inspect page ${page.pageNumber}`}
+        aria-pressed={isActive}
+      >
+        <div
+          className={`relative aspect-[3/4] overflow-hidden ${
+            isPastel ? 'bg-gradient-to-br from-purple-50/90 to-pink-50/50' : 'bg-black/35'
+          }`}
+        >
+          <img
+            src={page.imageData}
+            alt={`Page ${page.pageNumber}`}
+            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+            loading="lazy"
+            draggable={false}
+          />
+
+          {isActive && (
+            <span
+              className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] ${
+                isPastel ? 'bg-purple-600 text-white' : 'bg-cyan-500/90 text-gray-950'
+              }`}
+            >
+              Inspecting
+            </span>
+          )}
+        </div>
+      </button>
+
+      <div
+        className={`flex items-center justify-between gap-2 border-t px-2.5 py-2 ${
+          isPastel ? 'border-purple-100/80 bg-white/95' : 'border-white/10 bg-black/30'
+        }`}
+      >
+        <div className="min-w-0">
+          <p
+            className={`font-mono text-[11px] font-semibold tabular-nums ${
+              isPastel ? 'text-gray-800' : 'text-gray-100'
+            }`}
+          >
+            {String(page.pageNumber).padStart(2, '0')}
+          </p>
+          <p
+            className={`truncate text-[9px] uppercase tracking-[0.12em] opacity-0 transition-opacity group-hover:opacity-100 ${
+              isPastel ? 'text-purple-600' : 'text-cyan-300'
+            }`}
+          >
+            Inspect
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleSelect();
+          }}
+          className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+            isSelected
+              ? isPastel
+                ? 'border-pink-400/70 bg-pink-500 text-white'
+                : 'border-cyber-purple-400/60 bg-cyber-purple-500/90 text-white'
+              : isPastel
+              ? `${t?.toolbar?.iconBtn ?? 'border-purple-200/60 bg-white/90 text-purple-600 hover:bg-purple-50'}`
+              : `${t?.toolbar?.iconBtn ?? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'}`
+          }`}
+          aria-label={isSelected ? `Deselect page ${page.pageNumber}` : `Select page ${page.pageNumber}`}
+          aria-pressed={isSelected}
+        >
+          {isSelected ? <Check className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+    </motion.article>
+  );
 }
 
 export function PDFExtractionResults({
@@ -21,7 +171,11 @@ export function PDFExtractionResults({
   onSelectAll,
   onDeselectAll,
   isPastel = false,
+  activePageNumber = null,
+  t,
 }: PDFExtractionResultsProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>('filmstrip');
+
   const allSelected = useMemo(
     () => pages.length > 0 && pages.every((p) => selectedPages.has(p.pageNumber)),
     [pages, selectedPages]
@@ -40,162 +194,177 @@ export function PDFExtractionResults({
     }
   };
 
+  const toolbarShell =
+    t?.toolbar?.shell ??
+    (isPastel
+      ? 'border-purple-200/50 bg-white/88 text-gray-800'
+      : 'border-cyber-purple-500/35 bg-gray-900/88 text-white');
+
+  const secondaryBtn =
+    t?.secondaryButton ??
+    (isPastel
+      ? 'border-purple-200/60 bg-white/80 text-gray-700 hover:border-purple-300 hover:bg-white'
+      : 'border-white/10 bg-white/5 text-gray-200 hover:border-cyber-cyan-400/50 hover:bg-white/10');
+
+  const sectionLabel = t?.sectionLabel ?? (isPastel ? 'font-semibold text-purple-800' : 'font-semibold text-cyan-200');
+  const mutedText = t?.mutedText ?? (isPastel ? 'text-gray-700' : 'text-gray-200');
+
+  const statBox = t?.statBox ?? (isPastel ? 'bg-white/85' : 'bg-black/25');
+  const badgeNeutral = t?.badgeNeutral ?? (isPastel
+    ? 'border-purple-200/60 bg-white/80 text-gray-700'
+    : 'border-white/10 bg-black/20 text-gray-200');
+
+  const renderGridPage = useCallback(
+    (page: ExtractedPage) => (
+      <PageCard
+        page={page}
+        isSelected={selectedPages.has(page.pageNumber)}
+        isActive={activePageNumber === page.pageNumber}
+        isPastel={isPastel}
+        t={t}
+        viewMode="grid"
+        onInspect={() => onPageClick(page)}
+        onToggleSelect={() => onPageSelect(page.pageNumber, !selectedPages.has(page.pageNumber))}
+      />
+    ),
+    [activePageNumber, isPastel, onPageClick, onPageSelect, selectedPages, t],
+  );
+
   if (pages.length === 0) {
     return (
-      <div className={`text-center py-12 ${
-        isPastel ? 'text-gray-600' : 'text-gray-400'
-      }`}>
-        <p>No pages extracted yet. Start conversion to see results.</p>
+      <div className={`py-10 text-center text-sm ${mutedText}`}>
+        No pages extracted yet. Run conversion to populate the output queue.
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {/* Header with Selection Controls */}
-      <div className={`backdrop-blur-sm border rounded-xl p-4 ${
-        isPastel
-          ? 'bg-white/80 border-pink-200/40'
-          : 'bg-gray-800/60 border-cyber-purple-400/20'
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleToggleAll}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm ${
-                isPastel
-                  ? 'bg-pink-50/80 hover:bg-pink-100/80 text-gray-700 hover:text-gray-900'
-                  : 'bg-gray-700/50 hover:bg-gray-700 text-gray-300 hover:text-white'
-              }`}
-              aria-label={allSelected ? 'Deselect all' : 'Select all'}
-            >
-              {allSelected ? (
-                <CheckSquare className={`w-4 h-4 ${
-                  isPastel ? 'text-pink-500' : 'text-cyber-purple-400'
-                }`} />
-              ) : (
-                <Square className="w-4 h-4" />
-              )}
-              <span>{allSelected ? 'Deselect All' : 'Select All'}</span>
-            </button>
+      <div className={`rounded-[22px] border p-4 ${toolbarShell}`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className={`text-[10px] uppercase tracking-[0.24em] ${sectionLabel}`}>Output queue</p>
+            <p className={`mt-1 text-sm leading-5 ${mutedText}`}>
+              Select pages to save, or inspect any frame in the side preview.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${badgeNeutral}`}>
+              {pages.length} frame{pages.length !== 1 ? 's' : ''}
+            </span>
             {someSelected && (
-              <span className={`text-sm ${
-                isPastel ? 'text-gray-600' : 'text-gray-400'
-              }`}>
-                {selectedPages.size} of {pages.length} selected
+              <span
+                className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${
+                  isPastel ? t?.badgeVault ?? 'border-cyan-200/60 bg-cyan-50/90 text-cyan-700' : 'border-cyber-cyan-400/25 bg-cyber-cyan-500/10 text-cyber-cyan-300'
+                }`}
+              >
+                {selectedPages.size} queued
               </span>
             )}
           </div>
-          <div className={`text-sm ${
-            isPastel ? 'text-gray-600' : 'text-gray-400'
-          }`}>
-            {pages.length} page{pages.length !== 1 ? 's' : ''} extracted
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={handleToggleAll}
+            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${secondaryBtn}`}
+            aria-label={allSelected ? 'Deselect all pages' : 'Select all pages'}
+          >
+            {allSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+            {allSelected ? 'Clear queue' : 'Queue all'}
+          </button>
+
+          <div
+            className={`inline-flex rounded-xl border p-0.5 ${isPastel ? 'border-purple-200/50 bg-white/70' : 'border-white/10 bg-black/25'}`}
+            role="group"
+            aria-label="View mode"
+          >
+            <button
+              type="button"
+              onClick={() => setViewMode('filmstrip')}
+              className={`inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                viewMode === 'filmstrip'
+                  ? isPastel
+                    ? t?.toolbar?.selected ?? 'bg-purple-50 text-gray-900'
+                    : t?.toolbar?.selected ?? 'bg-cyan-500/15 text-white'
+                  : isPastel
+                  ? t?.toolbar?.unselected ?? 'text-gray-600 hover:bg-white'
+                  : t?.toolbar?.unselected ?? 'text-gray-300 hover:bg-white/10'
+              }`}
+              aria-pressed={viewMode === 'filmstrip'}
+            >
+              <GalleryHorizontalEnd className="h-3.5 w-3.5" />
+              Filmstrip
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                viewMode === 'grid'
+                  ? isPastel
+                    ? t?.toolbar?.selected ?? 'bg-purple-50 text-gray-900'
+                    : t?.toolbar?.selected ?? 'bg-cyan-500/15 text-white'
+                  : isPastel
+                  ? t?.toolbar?.unselected ?? 'text-gray-600 hover:bg-white'
+                  : t?.toolbar?.unselected ?? 'text-gray-300 hover:bg-white/10'
+              }`}
+              aria-pressed={viewMode === 'grid'}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Grid
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Grid Layout - Limited to 3 rows with scrolling */}
-      <div className="overflow-y-auto max-h-[600px] pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(139, 92, 246, 0.5) transparent' }}>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {pages.map((page) => {
-          const isSelected = selectedPages.has(page.pageNumber);
-          return (
-            <motion.div
+      <AnimatePresence mode="popLayout">
+        {viewMode === 'grid' ? (
+          <motion.div
+            key="grid"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+          >
+            <VirtualizedItemGrid
+              items={pages}
+              getItemKey={(page) => String(page.pageNumber)}
+              getColumnCount={getExtractionGridColumnCount}
+              nonVirtualClassName={`vault-studio-scroll grid max-h-[min(52vh,520px)] grid-cols-2 gap-3 overflow-y-auto pr-1 md:grid-cols-3 lg:grid-cols-4`}
+              scrollClassName="vault-studio-scroll w-full overflow-y-auto max-h-[min(52vh,520px)] pr-1"
+              heightOffset={64}
+              gap={12}
+              renderItem={renderGridPage}
+            />
+          </motion.div>
+        ) : (
+        <motion.div
+          key={viewMode}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className={`vault-studio-scroll flex gap-3 overflow-x-auto pb-1 pt-0.5 ${statBox} rounded-[22px] border px-3 py-3 ${
+            isPastel ? 'border-purple-200/40' : 'border-white/10'
+          }`}
+        >
+          {pages.map((page) => (
+            <PageCard
               key={page.pageNumber}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3 }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="relative cursor-pointer group"
-            >
-              <div
-                className={`relative rounded-lg overflow-hidden border-2 transition-all ${
-                  isPastel ? 'bg-white' : 'bg-gray-800'
-                } ${
-                  isSelected
-                    ? isPastel
-                      ? 'border-pink-400 shadow-lg shadow-pink-400/50'
-                      : 'border-cyber-purple-400 shadow-lg shadow-cyber-purple-400/50'
-                    : isPastel
-                    ? 'border-pink-200 hover:border-pink-300'
-                    : 'border-gray-700 hover:border-cyber-purple-500'
-                }`}
-              >
-                {/* Selection Checkbox */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPageSelect(page.pageNumber, !isSelected);
-                  }}
-                  className={`absolute top-2 right-2 z-20 p-1.5 rounded-lg transition-all ${
-                    isSelected
-                      ? isPastel
-                        ? 'bg-pink-500 text-white'
-                        : 'bg-cyber-purple-500 text-white'
-                      : isPastel
-                      ? 'bg-white/80 text-gray-600 hover:bg-pink-50'
-                      : 'bg-gray-800/80 text-gray-400 hover:bg-gray-700'
-                  }`}
-                  aria-label={isSelected ? 'Deselect page' : 'Select page'}
-                >
-                  {isSelected ? (
-                    <CheckSquare className="w-4 h-4" />
-                  ) : (
-                    <Square className="w-4 h-4" />
-                  )}
-                </button>
-
-                {/* Page number badge */}
-                <div className={`absolute top-2 left-2 z-10 text-white font-bold px-3 py-1 rounded-full text-sm shadow-lg border ${
-                  isPastel
-                    ? 'bg-gradient-to-r from-pink-400 to-purple-400 border-pink-300/50'
-                    : 'bg-gradient-to-r from-purple-600 to-cyan-600 border-cyber-cyan-400/50'
-                }`}>
-                  #{page.pageNumber}
-                </div>
-
-                {/* Image */}
-                <div className={`aspect-[3/4] relative overflow-hidden ${
-                  isPastel ? 'bg-pink-50' : 'bg-gray-900'
-                }`}>
-                  <img
-                    src={page.imageData}
-                    alt={`Page ${page.pageNumber}`}
-                    className="w-full h-full object-contain"
-                    loading="lazy"
-                    onClick={() => onPageClick(page)}
-                  />
-
-                  {/* Overlay on hover */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                  {/* View icon on hover */}
-                  <div
-                    className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                    onClick={() => onPageClick(page)}
-                    aria-hidden="true"
-                  >
-                    <div className={`rounded-full p-3 backdrop-blur-sm ${
-                      isPastel ? 'bg-pink-500/90' : 'bg-cyber-purple-500/90'
-                    }`}>
-                      <Eye className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Selected Indicator */}
-                {isSelected && (
-                  <div className={`absolute inset-0 border-4 pointer-events-none rounded-lg ${
-                    isPastel ? 'border-pink-400' : 'border-cyber-purple-400'
-                  }`} />
-                )}
-              </div>
-            </motion.div>
-          );
-        })}
-        </div>
-      </div>
+              page={page}
+              isSelected={selectedPages.has(page.pageNumber)}
+              isActive={activePageNumber === page.pageNumber}
+              isPastel={isPastel}
+              t={t}
+              viewMode={viewMode}
+              onInspect={() => onPageClick(page)}
+              onToggleSelect={() => onPageSelect(page.pageNumber, !selectedPages.has(page.pageNumber))}
+            />
+          ))}
+        </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

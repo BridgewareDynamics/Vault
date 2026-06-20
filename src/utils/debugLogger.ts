@@ -7,19 +7,7 @@
  * In production builds, all debug logs are disabled to reduce bundle size and improve performance.
  */
 
-const isDebugEnabled = (): boolean => {
-  // Enable debug logging in development mode
-  if (import.meta.env.DEV) {
-    return true;
-  }
-  
-  // Allow explicit enable via localStorage flag (for production debugging)
-  if (typeof window !== 'undefined' && localStorage.getItem('enable-word-editor-debug') === 'true') {
-    return true;
-  }
-  
-  return false;
-};
+const isDebugEnabled = (): boolean => import.meta.env.DEV;
 
 interface DebugLogData {
   location: string;

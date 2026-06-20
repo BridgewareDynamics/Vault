@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, X, Cpu, MemoryStick, Monitor, Zap, Image, Gauge, FileText, TrendingUp, Palette, Check } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { formatBytes } from '../../utils/memoryMonitor';
+import { logger } from '../../utils/logger';
 import { useToast } from '../Toast/ToastContext';
 import { WordEditorPanel } from '../WordEditor/WordEditorPanel';
 import { WordEditorDialog } from '../WordEditor/WordEditorDialog';
@@ -179,7 +180,7 @@ export function SettingsPanel({
         }
       } catch (error) {
         if (import.meta.env.DEV) {
-          console.error('Failed to get memory info:', error);
+          logger.error('Failed to get memory info:', error);
         }
       }
     };
@@ -975,7 +976,7 @@ export function SettingsPanel({
             toast.success('Document created');
           } catch (error) {
             toast.error('Failed to create document');
-            console.error('Create file error:', error);
+            logger.error('Create file error:', error);
           }
         }}
         onOpenLibrary={() => {

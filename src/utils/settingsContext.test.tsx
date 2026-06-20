@@ -4,15 +4,12 @@ import React from 'react';
 import { SettingsProvider, useSettingsContext } from './settingsContext';
 import { AppSettings } from '../types';
 import { mockElectronAPI } from '../test-utils/mocks';
+import { defaultTestSettings } from '../test-utils/testSettings';
 
 describe('SettingsContext', () => {
   const defaultSettings: AppSettings = {
-    hardwareAcceleration: true,
-    ramLimitMB: 2048,
-    fullscreen: false,
-    extractionQuality: 'high',
-    thumbnailSize: 200,
-    performanceMode: 'auto',
+    ...defaultTestSettings,
+    showOnboarding: true,
   };
 
   beforeEach(() => {
@@ -31,7 +28,6 @@ describe('SettingsContext', () => {
 
     const { result } = renderHook(() => useSettingsContext(), { wrapper });
 
-    // Wait for initial load to complete
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
@@ -132,7 +128,7 @@ describe('SettingsContext', () => {
     });
 
     expect(result.current.settings?.fullscreen).toBe(true);
-    expect(mockElectronAPI.getSettings).toHaveBeenCalledTimes(2); // Once on mount, once on refresh
+    expect(mockElectronAPI.getSettings).toHaveBeenCalledTimes(2);
   });
 
   it('should handle updateSettings error', async () => {
@@ -140,7 +136,7 @@ describe('SettingsContext', () => {
     (mockElectronAPI.updateSettings as any).mockRejectedValue(
       new Error('Update failed')
     );
-    
+
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <SettingsProvider>{children}</SettingsProvider>
     );
@@ -156,7 +152,7 @@ describe('SettingsContext', () => {
         await result.current.updateSettings({ ramLimitMB: 4096 });
       })
     ).rejects.toThrow('Update failed');
-    
+
     consoleErrorSpy.mockRestore();
   });
 
@@ -176,22 +172,9 @@ describe('SettingsContext', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Should use defaults when API is not available
     expect(result.current.settings).toEqual(defaultSettings);
 
-    // Restore
     window.electronAPI = originalAPI;
     consoleErrorSpy.mockRestore();
   });
 });
-
-
-
-
-
-
-
-
-
-
-

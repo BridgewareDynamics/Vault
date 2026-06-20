@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { vi, beforeEach, afterAll } from 'vitest';
 import React from 'react';
 import { mockElectronAPI } from './mocks';
+import { setupTestSettings } from './testSettings';
 
 // Mock Electron API globally
 global.window.electronAPI = mockElectronAPI;
@@ -80,9 +81,50 @@ vi.mock('framer-motion', () => {
   };
 });
 
+class MockIntersectionObserver {
+  private readonly callback: IntersectionObserverCallback;
+
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+  }
+
+  observe(element: Element) {
+    this.callback(
+      [{ isIntersecting: true, target: element } as IntersectionObserverEntry],
+      this as unknown as IntersectionObserver,
+    );
+  }
+
+  disconnect() {
+    // no-op
+  }
+
+  unobserve() {
+    // no-op
+  }
+}
+
+class MockResizeObserver {
+  observe() {
+    // no-op
+  }
+
+  disconnect() {
+    // no-op
+  }
+
+  unobserve() {
+    // no-op
+  }
+}
+
+global.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver;
+global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+
 // Reset mocks before each test
 beforeEach(() => {
   vi.clearAllMocks();
+  setupTestSettings();
   Object.values(mockElectronAPI).forEach((mockFn) => {
     if (vi.isMockFunction(mockFn)) {
       mockFn.mockReset();
@@ -101,15 +143,10 @@ beforeEach(() => {
   mockElectronAPI.listMaps.mockResolvedValue([]);
   mockElectronAPI.listTranscriptions.mockResolvedValue([]);
   mockElectronAPI.listArchiveCases.mockResolvedValue([]);
-  mockElectronAPI.getSettings.mockResolvedValue({
-    hardwareAcceleration: true,
-    ramLimitMB: 2048,
-    fullscreen: false,
-    extractionQuality: 'high',
-    thumbnailSize: 200,
-    performanceMode: 'auto',
-    showOnboarding: false,
-    theme: 'brideware-purple',
+  mockElectronAPI.listNovels.mockResolvedValue([]);
+  mockElectronAPI.getTranscriptionEngineStatus.mockResolvedValue({
+    available: false,
+    reason: 'test',
   });
 });
 

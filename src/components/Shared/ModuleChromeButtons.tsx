@@ -2,7 +2,7 @@ import type { ModuleHostMode } from '../../types/detachableModules';
 import { ModuleDetachButton } from './ModuleDetachButton';
 
 interface ModuleChromeButtonsProps {
-  featureLabel: 'Map' | 'Transcript' | 'File Converter';
+  featureLabel: 'Map' | 'Transcript' | 'File Converter' | 'Novel';
   hostMode?: ModuleHostMode;
   onPopOut?: () => void;
   onReattach?: () => void;

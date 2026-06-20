@@ -1,8 +1,111 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 // Type definitions for IPC
 type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
 type LogArgs = Parameters<typeof console.log>;
+
+type DebugLogEntry = {
+  location: string;
+  message: string;
+  data?: unknown;
+  timestamp: number;
+  sessionId: string;
+  runId: string;
+  hypothesisId: string;
+};
+
+type AppSettingsUpdate = Partial<{
+  hardwareAcceleration: boolean;
+  ramLimitMB: number;
+  fullscreen: boolean;
+  extractionQuality: 'high' | 'medium' | 'low';
+  thumbnailSize: number;
+  performanceMode: 'auto' | 'high' | 'balanced' | 'low';
+  showOnboarding: boolean;
+  theme: 'brideware-purple' | 'pastel';
+}>;
+
+type BookmarkPayload = {
+  id: string;
+  pdfPath: string;
+  pageNumber: number;
+  name: string;
+  description?: string;
+  note?: string;
+  thumbnail?: string;
+  folderId?: string;
+  tags: string[];
+  createdAt: number;
+  updatedAt: number;
+};
+
+type BookmarkUpdatePayload = Partial<Omit<BookmarkPayload, 'id' | 'createdAt'>>;
+
+type BookmarkFolderPayload = {
+  id: string;
+  name: string;
+  pdfPath: string;
+  thumbnail?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type ExtractedPagePayload = {
+  pageNumber: number;
+  imagePath: string;
+  imageData: string;
+};
+
+type ExtractionProgressPayload = {
+  currentPage: number;
+  totalPages: number;
+  percentage: number;
+  currentPageProgress?: number;
+  estimatedTimeRemaining?: number;
+  memoryUsage?: number;
+  statusMessage?: string;
+};
+
+type PdfAuditSettingsPayload = {
+  blackThreshold: number;
+  minOverlapArea: number;
+  minHits: number;
+  includeSecurityAudit: boolean;
+};
+
+type PdfExtractionSettingsPayload = {
+  dpi: number;
+  quality: number;
+  format: 'png' | 'jpeg';
+  pageRange: 'all' | 'custom' | 'selected';
+  customPageRange: string;
+  colorSpace: 'rgb' | 'grayscale';
+  compressionLevel: number;
+};
+
+type PdfAuditWindowOptions = {
+  pdfPath: string | null;
+  settings: PdfAuditSettingsPayload;
+  showSettings: boolean;
+  result: unknown | null;
+  isAuditing: boolean;
+  progressMessage: string;
+};
+
+type PdfExtractionWindowOptions = {
+  pdfPath: string | null;
+  settings: PdfExtractionSettingsPayload;
+  showSettings: boolean;
+  extractedPages: ExtractedPagePayload[];
+  selectedPages: number[];
+  previewPage: ExtractedPagePayload | null;
+  isExtracting: boolean;
+  progress: ExtractionProgressPayload | null;
+  error: string | null;
+  statusMessage: string;
+};
+
+type RedactionAuditOptions = Record<string, unknown>;
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -69,22 +172,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('extract-pdf-from-archive', options),
   // Logging API
   logToMain: (level: LogLevel, ...args: LogArgs) => ipcRenderer.invoke('log-renderer', level, ...args),
+  openDevToolsInDev: () => ipcRenderer.invoke('open-devtools-in-dev'),
   // Debug logging API - writes NDJSON to debug.log
-  debugLog: (logEntry: {
-    location: string;
-    message: string;
-    data?: any;
-    timestamp: number;
-    sessionId: string;
-    runId: string;
-    hypothesisId: string;
-  }) => ipcRenderer.invoke('debug-log', logEntry),
+  debugLog: (logEntry: DebugLogEntry) => ipcRenderer.invoke('debug-log', logEntry),
   // System information
   getSystemMemory: () => ipcRenderer.invoke('get-system-memory'),
-  getSystemFonts: () => ipcRenderer.invoke('get-system-fonts'),
+  getSystemFonts: (forceRefresh?: boolean) => ipcRenderer.invoke('get-system-fonts', forceRefresh),
   // Settings API
   getSettings: () => ipcRenderer.invoke('get-settings'),
-  updateSettings: (updates: any) => ipcRenderer.invoke('update-settings', updates),
+  updateSettings: (updates: AppSettingsUpdate) => ipcRenderer.invoke('update-settings', updates),
   toggleFullscreen: () => ipcRenderer.invoke('toggle-fullscreen'),
   // Word Editor API
   getVaultDirectory: () => ipcRenderer.invoke('get-vault-directory'),
@@ -129,72 +225,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('create-novel-window', state),
       reattachNovelModule: (state: Record<string, unknown>) =>
         ipcRenderer.invoke('reattach-novel-module', state),
-  createPdfAuditWindow: (options: {
-    pdfPath: string | null;
-    settings: {
-      blackThreshold: number;
-      minOverlapArea: number;
-      minHits: number;
-      includeSecurityAudit: boolean;
-    };
-    showSettings: boolean;
-    result: any | null;
-    isAuditing: boolean;
-    progressMessage: string;
-  }) => ipcRenderer.invoke('create-pdf-audit-window', options),
-  reattachPdfAudit: (options: {
-    pdfPath: string | null;
-    settings: {
-      blackThreshold: number;
-      minOverlapArea: number;
-      minHits: number;
-      includeSecurityAudit: boolean;
-    };
-    showSettings: boolean;
-    result: any | null;
-    isAuditing: boolean;
-    progressMessage: string;
-  }) => ipcRenderer.invoke('reattach-pdf-audit', options),
-  createPdfExtractionWindow: (options: {
-    pdfPath: string | null;
-    settings: {
-      dpi: number;
-      quality: number;
-      format: 'png' | 'jpeg';
-      pageRange: 'all' | 'custom' | 'selected';
-      customPageRange: string;
-      colorSpace: 'rgb' | 'grayscale';
-      compressionLevel: number;
-    };
-    showSettings: boolean;
-    extractedPages: any[];
-    selectedPages: number[];
-    previewPage: any | null;
-    isExtracting: boolean;
-    progress: any | null;
-    error: string | null;
-    statusMessage: string;
-  }) => ipcRenderer.invoke('create-pdf-extraction-window', options),
-  reattachPdfExtraction: (options: {
-    pdfPath: string | null;
-    settings: {
-      dpi: number;
-      quality: number;
-      format: 'png' | 'jpeg';
-      pageRange: 'all' | 'custom' | 'selected';
-      customPageRange: string;
-      colorSpace: 'rgb' | 'grayscale';
-      compressionLevel: number;
-    };
-    showSettings: boolean;
-    extractedPages: any[];
-    selectedPages: number[];
-    previewPage: any | null;
-    isExtracting: boolean;
-    progress: any | null;
-    error: string | null;
-    statusMessage: string;
-  }) => ipcRenderer.invoke('reattach-pdf-extraction', options),
+  createPdfAuditWindow: (options: PdfAuditWindowOptions) => ipcRenderer.invoke('create-pdf-audit-window', options),
+  reattachPdfAudit: (options: PdfAuditWindowOptions) => ipcRenderer.invoke('reattach-pdf-audit', options),
+  createPdfExtractionWindow: (options: PdfExtractionWindowOptions) => ipcRenderer.invoke('create-pdf-extraction-window', options),
+  reattachPdfExtraction: (options: PdfExtractionWindowOptions) => ipcRenderer.invoke('reattach-pdf-extraction', options),
   closeWindow: () => ipcRenderer.invoke('close-window'),
   openBookmarkInMainWindow: (options: {
     pdfPath: string;
@@ -202,37 +236,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('open-bookmark-in-main-window', options),
   // Bookmark API
   getBookmarks: () => ipcRenderer.invoke('get-bookmarks'),
-  createBookmark: (bookmark: any) => ipcRenderer.invoke('create-bookmark', bookmark),
-  updateBookmark: (id: string, updates: any) => ipcRenderer.invoke('update-bookmark', id, updates),
+  createBookmark: (bookmark: BookmarkPayload) => ipcRenderer.invoke('create-bookmark', bookmark),
+  updateBookmark: (id: string, updates: BookmarkUpdatePayload) => ipcRenderer.invoke('update-bookmark', id, updates),
   deleteBookmark: (id: string) => ipcRenderer.invoke('delete-bookmark', id),
   getBookmarkFolders: () => ipcRenderer.invoke('get-bookmark-folders'),
-  createBookmarkFolder: (folder: any) => ipcRenderer.invoke('create-bookmark-folder', folder),
+  createBookmarkFolder: (folder: BookmarkFolderPayload) => ipcRenderer.invoke('create-bookmark-folder', folder),
   deleteBookmarkFolder: (id: string) => ipcRenderer.invoke('delete-bookmark-folder', id),
   getBookmarksByFolder: (folderId: string | null) => ipcRenderer.invoke('get-bookmarks-by-folder', folderId),
   saveBookmarkThumbnail: (bookmarkId: string, thumbnailData: string) => ipcRenderer.invoke('save-bookmark-thumbnail', bookmarkId, thumbnailData),
   getBookmarkThumbnail: (bookmarkId: string) => ipcRenderer.invoke('get-bookmark-thumbnail', bookmarkId),
   // File Security Checker API
-  auditPDFRedaction: (pdfPath: string, options?: any) => ipcRenderer.invoke('audit-pdf-redaction', pdfPath, options),
+  auditPDFRedaction: (pdfPath: string, options?: RedactionAuditOptions) => ipcRenderer.invoke('audit-pdf-redaction', pdfPath, options),
   // Listen for audit progress updates
   onAuditProgress: (callback: (message: string) => void) => {
-    const listener = (_event: any, message: string) => callback(message);
+    const listener = (_event: IpcRendererEvent, message: string) => callback(message);
     ipcRenderer.on('audit-progress', listener);
     return () => ipcRenderer.removeListener('audit-progress', listener);
   },
   // Listen for audit completion result
-  onAuditResult: (callback: (result: any) => void) => {
-    const listener = (_event: any, result: any) => callback(result);
+  onAuditResult: (callback: (result: unknown) => void) => {
+    const listener = (_event: IpcRendererEvent, result: unknown) => callback(result);
     ipcRenderer.on('audit-result', listener);
     return () => ipcRenderer.removeListener('audit-result', listener);
   },
   // Listen for audit errors
   onAuditError: (callback: (error: string) => void) => {
-    const listener = (_event: any, error: string) => callback(error);
+    const listener = (_event: IpcRendererEvent, error: string) => callback(error);
     ipcRenderer.on('audit-error', listener);
     return () => ipcRenderer.removeListener('audit-error', listener);
   },
   // Generate PDF Report
-  generateAuditReport: (auditResult: any, outputPath: string) => ipcRenderer.invoke('generate-audit-report', auditResult, outputPath),
+  generateAuditReport: (auditResult: unknown, outputPath: string) => ipcRenderer.invoke('generate-audit-report', auditResult, outputPath),
   // Show Save Dialog
   showSaveDialog: (options: {
     title: string;
@@ -404,7 +438,10 @@ declare global {
       savePDFThumbnail: (filePath: string, thumbnailData: string) => Promise<void>;
       readPDFThumbnail: (filePath: string) => Promise<string | null>;
       deletePDFThumbnail: (filePath: string) => Promise<void>;
-      readFileData: (filePath: string) => Promise<{ data: string; mimeType: string; fileName: string }>;
+      readFileData: (filePath: string) => Promise<
+        | { data: string; mimeType: string; fileName: string }
+        | { type: 'file-path'; path: string; mimeType: string; fileName: string }
+      >;
       extractPDFFromArchive: (options: {
         pdfPath: string;
         casePath: string;
@@ -413,17 +450,10 @@ declare global {
         extractedPages: Array<{ pageNumber: number; imageData: string }>;
       }) => Promise<{ success: boolean; messages: string[]; extractionFolder: string }>;
       logToMain: (level: LogLevel, ...args: LogArgs) => Promise<void>;
-      debugLog: (logEntry: {
-        location: string;
-        message: string;
-        data?: any;
-        timestamp: number;
-        sessionId: string;
-        runId: string;
-        hypothesisId: string;
-      }) => Promise<void>;
+      openDevToolsInDev: () => Promise<{ success: boolean }>;
+      debugLog: (logEntry: DebugLogEntry) => Promise<void>;
       getSystemMemory: () => Promise<{ totalMemory: number; freeMemory: number; usedMemory: number }>;
-      getSystemFonts: () => Promise<string[]>;
+      getSystemFonts: (forceRefresh?: boolean) => Promise<string[]>;
       // Settings API
       getSettings: () => Promise<{
         hardwareAcceleration: boolean;
@@ -433,14 +463,7 @@ declare global {
         thumbnailSize: number;
         performanceMode: 'auto' | 'high' | 'balanced' | 'low';
       }>;
-      updateSettings: (updates: Partial<{
-        hardwareAcceleration: boolean;
-        ramLimitMB: number;
-        fullscreen: boolean;
-        extractionQuality: 'high' | 'medium' | 'low';
-        thumbnailSize: number;
-        performanceMode: 'auto' | 'high' | 'balanced' | 'low';
-      }>) => Promise<{
+      updateSettings: (updates: AppSettingsUpdate) => Promise<{
         hardwareAcceleration: boolean;
         ramLimitMB: number;
         fullscreen: boolean;
@@ -488,46 +511,22 @@ declare global {
         viewState?: 'editor' | 'library' | 'bookmarkLibrary';
         casePath?: string | null;
       }) => Promise<{ success: boolean }>;
-      createPdfAuditWindow: (options: {
-        pdfPath: string | null;
-        settings: {
-          blackThreshold: number;
-          minOverlapArea: number;
-          minHits: number;
-          includeSecurityAudit: boolean;
-        };
-        showSettings: boolean;
-        result: any | null;
-        isAuditing: boolean;
-        progressMessage: string;
-      }) => Promise<{ success: boolean }>;
-      reattachPdfAudit: (options: {
-        pdfPath: string | null;
-        settings: {
-          blackThreshold: number;
-          minOverlapArea: number;
-          minHits: number;
-          includeSecurityAudit: boolean;
-        };
-        showSettings: boolean;
-        result: any | null;
-        isAuditing: boolean;
-        progressMessage: string;
-      }) => Promise<{ success: boolean }>;
+      createPdfAuditWindow: (options: PdfAuditWindowOptions) => Promise<{ success: boolean }>;
+      reattachPdfAudit: (options: PdfAuditWindowOptions) => Promise<{ success: boolean }>;
       closeWindow: () => Promise<{ success: boolean }>;
       openBookmarkInMainWindow: (options: {
         pdfPath: string;
         pageNumber: number;
       }) => Promise<{ success: boolean }>;
       // Bookmark API
-      getBookmarks: () => Promise<Array<any>>;
-      createBookmark: (bookmark: any) => Promise<any>;
-      updateBookmark: (id: string, updates: any) => Promise<any>;
+      getBookmarks: () => Promise<BookmarkPayload[]>;
+      createBookmark: (bookmark: BookmarkPayload) => Promise<BookmarkPayload>;
+      updateBookmark: (id: string, updates: BookmarkUpdatePayload) => Promise<BookmarkPayload>;
       deleteBookmark: (id: string) => Promise<boolean>;
-      getBookmarkFolders: () => Promise<Array<any>>;
-      createBookmarkFolder: (folder: any) => Promise<any>;
+      getBookmarkFolders: () => Promise<BookmarkFolderPayload[]>;
+      createBookmarkFolder: (folder: BookmarkFolderPayload) => Promise<BookmarkFolderPayload>;
       deleteBookmarkFolder: (id: string) => Promise<boolean>;
-      getBookmarksByFolder: (folderId: string | null) => Promise<Array<any>>;
+      getBookmarksByFolder: (folderId: string | null) => Promise<BookmarkPayload[]>;
       saveBookmarkThumbnail: (bookmarkId: string, thumbnailData: string) => Promise<string>;
       getBookmarkThumbnail: (bookmarkId: string) => Promise<string | null>;
       // File Security Checker API
@@ -565,9 +564,9 @@ declare global {
         error?: string;
       }>;
       onAuditProgress: (callback: (message: string) => void) => () => void;
-      onAuditResult: (callback: (result: any) => void) => () => void;
+      onAuditResult: (callback: (result: unknown) => void) => () => void;
       onAuditError: (callback: (error: string) => void) => () => void;
-      generateAuditReport: (auditResult: any, outputPath: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
+      generateAuditReport: (auditResult: unknown, outputPath: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
       showSaveDialog: (options: {
         title: string;
         defaultPath: string;

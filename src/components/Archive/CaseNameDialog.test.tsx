@@ -1,14 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { CaseNameDialog } from './CaseNameDialog';
-import { ToastProvider } from '../Toast/ToastContext';
+import { renderWithProviders } from '../../test-utils/render';
 
-// Helper to render with ToastProvider
-const renderWithToast = (ui: React.ReactElement) => {
-  return render(<ToastProvider>{ui}</ToastProvider>);
-};
+vi.mock('../../hooks/useCategoryTags', () => ({
+  useCategoryTags: () => ({
+    tags: [],
+    createTag: vi.fn(),
+    deleteTag: vi.fn(),
+    getTagById: vi.fn(),
+  }),
+}));
+
+const renderWithToast = (ui: React.ReactElement) =>
+  renderWithProviders(ui, { withToast: true });
 
 describe('CaseNameDialog', () => {
   const mockOnClose = vi.fn();
@@ -26,7 +33,7 @@ describe('CaseNameDialog', () => {
         onConfirm={mockOnConfirm}
       />
     );
-    expect(screen.queryByText('Name File')).not.toBeInTheDocument();
+    expect(screen.queryByText('Case Name')).not.toBeInTheDocument();
   });
 
   it('should render when isOpen is true', () => {
@@ -37,7 +44,7 @@ describe('CaseNameDialog', () => {
         onConfirm={mockOnConfirm}
       />
     );
-    expect(screen.getByText('Name File')).toBeInTheDocument();
+    expect(screen.getByText('Case Name')).toBeInTheDocument();
   });
 
   it('should render case name input', () => {
@@ -61,12 +68,12 @@ describe('CaseNameDialog', () => {
         onConfirm={mockOnConfirm}
       />
     );
-    const textarea = screen.getByPlaceholderText('Description...');
+    const textarea = screen.getByPlaceholderText('Add a description for this case...');
     expect(textarea).toBeInTheDocument();
     expect(textarea.tagName).toBe('TEXTAREA');
   });
 
-  it('should render Cancel and OK buttons', () => {
+  it('should render Cancel and Create Case buttons', () => {
     renderWithToast(
       <CaseNameDialog
         isOpen={true}
@@ -75,7 +82,7 @@ describe('CaseNameDialog', () => {
       />
     );
     expect(screen.getByText('Cancel')).toBeInTheDocument();
-    expect(screen.getByText('OK')).toBeInTheDocument();
+    expect(screen.getByText('Create Case')).toBeInTheDocument();
   });
 
   it('should update case name input when typing', async () => {
@@ -104,13 +111,13 @@ describe('CaseNameDialog', () => {
       />
     );
     
-    const textarea = screen.getByPlaceholderText('Description...') as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText('Add a description for this case...') as HTMLTextAreaElement;
     await user.type(textarea, 'Case description');
     
     expect(textarea.value).toBe('Case description');
   });
 
-  it('should call onConfirm with trimmed values when OK is clicked', async () => {
+  it('should call onConfirm with trimmed values when Create Case is clicked', async () => {
     const user = userEvent.setup();
     renderWithToast(
       <CaseNameDialog
@@ -121,12 +128,12 @@ describe('CaseNameDialog', () => {
     );
     
     const nameInput = screen.getByPlaceholderText('Enter case name...');
-    const descTextarea = screen.getByPlaceholderText('Description...');
+    const descTextarea = screen.getByPlaceholderText('Add a description for this case...');
     
     await user.type(nameInput, '  My Case  ');
     await user.type(descTextarea, '  Description  ');
     
-    const okButton = screen.getByText('OK');
+    const okButton = screen.getByText('Create Case');
     await user.click(okButton);
     
     expect(mockOnConfirm).toHaveBeenCalledTimes(1);
@@ -150,7 +157,7 @@ describe('CaseNameDialog', () => {
     expect(mockOnConfirm).not.toHaveBeenCalled();
   });
 
-  it('should disable OK button when case name is empty', () => {
+  it('should disable Create Case button when case name is empty', () => {
     renderWithToast(
       <CaseNameDialog
         isOpen={true}
@@ -159,11 +166,11 @@ describe('CaseNameDialog', () => {
       />
     );
     
-    const okButton = screen.getByText('OK');
+    const okButton = screen.getByLabelText('Create case');
     expect(okButton).toBeDisabled();
   });
 
-  it('should enable OK button when case name has value', async () => {
+  it('should enable Create Case button when case name has value', async () => {
     const user = userEvent.setup();
     renderWithToast(
       <CaseNameDialog
@@ -174,7 +181,7 @@ describe('CaseNameDialog', () => {
     );
     
     const nameInput = screen.getByPlaceholderText('Enter case name...');
-    const okButton = screen.getByText('OK');
+    const okButton = screen.getByLabelText('Create case');
     
     expect(okButton).toBeDisabled();
     
@@ -227,7 +234,7 @@ describe('CaseNameDialog', () => {
     );
     
     const nameInput = screen.getByPlaceholderText('Enter case name...');
-    const descTextarea = screen.getByPlaceholderText('Description...');
+    const descTextarea = screen.getByPlaceholderText('Add a description for this case...');
     
     await user.type(nameInput, 'My Case');
     await user.click(descTextarea);
@@ -246,7 +253,7 @@ describe('CaseNameDialog', () => {
       />
     );
     
-    const descTextarea = screen.getByPlaceholderText('Description...');
+    const descTextarea = screen.getByPlaceholderText('Add a description for this case...');
     await user.click(descTextarea);
     await user.keyboard('{Escape}');
     
@@ -263,32 +270,28 @@ describe('CaseNameDialog', () => {
     );
     
     screen.getByPlaceholderText('Enter case name...') as HTMLInputElement;
-    screen.getByPlaceholderText('Description...') as HTMLTextAreaElement;
+    screen.getByPlaceholderText('Add a description for this case...') as HTMLTextAreaElement;
     
     // Close dialog
     rerender(
-      <ToastProvider>
-        <CaseNameDialog
-          isOpen={false}
-          onClose={mockOnClose}
-          onConfirm={mockOnConfirm}
-        />
-      </ToastProvider>
+      <CaseNameDialog
+        isOpen={false}
+        onClose={mockOnClose}
+        onConfirm={mockOnConfirm}
+      />
     );
     
     // Reopen dialog
     rerender(
-      <ToastProvider>
-        <CaseNameDialog
-          isOpen={true}
-          onClose={mockOnClose}
-          onConfirm={mockOnConfirm}
-        />
-      </ToastProvider>
+      <CaseNameDialog
+        isOpen={true}
+        onClose={mockOnClose}
+        onConfirm={mockOnConfirm}
+      />
     );
     
     const newNameInput = screen.getByPlaceholderText('Enter case name...') as HTMLInputElement;
-    const newDescTextarea = screen.getByPlaceholderText('Description...') as HTMLTextAreaElement;
+    const newDescTextarea = screen.getByPlaceholderText('Add a description for this case...') as HTMLTextAreaElement;
     
     expect(newNameInput.value).toBe('');
     expect(newDescTextarea.value).toBe('');
@@ -304,7 +307,7 @@ describe('CaseNameDialog', () => {
       />
     );
     
-    const dialogContent = screen.getByText('Name File');
+    const dialogContent = screen.getByText('Case Name');
     await user.click(dialogContent);
     
     expect(mockOnClose).not.toHaveBeenCalled();

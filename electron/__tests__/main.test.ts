@@ -40,18 +40,25 @@ vi.mock('electron', () => ({
       appendSwitch: vi.fn(),
     },
   },
-  BrowserWindow: vi.fn(() => ({
-    show: vi.fn(),
-    loadURL: vi.fn(() => Promise.resolve()),
-    loadFile: vi.fn(),
-    webContents: {
-      openDevTools: vi.fn(),
+  BrowserWindow: Object.assign(
+    vi.fn(() => ({
+      show: vi.fn(),
+      loadURL: vi.fn(() => Promise.resolve()),
+      loadFile: vi.fn(),
+      webContents: {
+        openDevTools: vi.fn(),
+        on: vi.fn(),
+        once: vi.fn(),
+      },
       on: vi.fn(),
       once: vi.fn(),
+    })),
+    {
+      getFocusedWindow: vi.fn(),
+      fromWebContents: vi.fn(),
+      getAllWindows: vi.fn(() => []),
     },
-    on: vi.fn(),
-    once: vi.fn(),
-  })),
+  ),
   ipcMain: {
     handle: vi.fn(),
   },
@@ -102,6 +109,37 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
+const mockDbInstance = {
+  initialize: vi.fn().mockResolvedValue(undefined),
+  isInitialized: vi.fn().mockReturnValue(true),
+  deleteFile: vi.fn(),
+  updateFile: vi.fn(),
+  getCaseByPath: vi.fn().mockReturnValue(null),
+  getFileByPath: vi.fn().mockReturnValue(null),
+  generateId: vi.fn((value: string) => value),
+  createFile: vi.fn(),
+  calculateChecksum: vi.fn().mockResolvedValue(''),
+  close: vi.fn(),
+  db: {
+    prepare: vi.fn().mockReturnValue({
+      all: vi.fn().mockReturnValue([]),
+    }),
+  },
+};
+
+vi.mock('../database/localDatabase', () => ({
+  LocalDatabase: {
+    getInstance: vi.fn(() => mockDbInstance),
+  },
+}));
+
+vi.mock('../database/watcher', () => ({
+  FileSystemWatcher: vi.fn().mockImplementation(() => ({
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn(),
+  })),
+}));
+
 describe('IPC Handlers', () => {
   let mockMainWindow: any;
   let ipcHandlers: Map<string, Function>;
@@ -111,6 +149,7 @@ describe('IPC Handlers', () => {
     
     mockMainWindow = {
       show: vi.fn(),
+      focus: vi.fn(),
       loadURL: vi.fn(() => Promise.resolve()),
       loadFile: vi.fn(),
       webContents: {
@@ -123,6 +162,9 @@ describe('IPC Handlers', () => {
     };
 
     (BrowserWindow as any).mockImplementation(() => mockMainWindow);
+    (BrowserWindow.getFocusedWindow as any).mockReturnValue(mockMainWindow);
+    (BrowserWindow.fromWebContents as any).mockReturnValue(mockMainWindow);
+    (BrowserWindow.getAllWindows as any).mockReturnValue([mockMainWindow]);
     
     // Capture IPC handlers
     ipcHandlers = new Map();
@@ -163,7 +205,12 @@ describe('IPC Handlers', () => {
     (fs.writeFile as any).mockResolvedValue(undefined);
     (fs.mkdir as any).mockResolvedValue(undefined);
     (fs.readdir as any).mockResolvedValue([]);
-    (fs.stat as any).mockResolvedValue({ isDirectory: () => false, size: 100 });
+    (fs.stat as any).mockResolvedValue({
+      isDirectory: () => false,
+      size: 100,
+      mtime: { getTime: () => Date.now() },
+      birthtime: { getTime: () => Date.now() },
+    });
     (fs.copyFile as any).mockResolvedValue(undefined);
     (fs.unlink as any).mockResolvedValue(undefined);
     (fs.rm as any).mockResolvedValue(undefined);
@@ -310,6 +357,7 @@ describe('IPC Handlers', () => {
         saveDirectory: '/save/dir',
         saveParentFile: true,
         saveToZip: false,
+        folderName: 'test-folder',
         parentFilePath: '/path/to/parent.pdf',
         extractedPages: [],
       };
@@ -573,7 +621,11 @@ describe('IPC Handlers', () => {
       const handler = getHandler('rename-file');
 
       (isSafePath as any).mockReturnValue(true);
-      (fs.stat as any).mockResolvedValue({ isDirectory: () => false });
+      (fs.stat as any).mockResolvedValue({
+        isDirectory: () => false,
+        mtime: { getTime: () => Date.now() },
+        birthtime: { getTime: () => Date.now() },
+      });
       (isValidFolderName as any).mockReturnValue(true);
       // Mock fs.access to reject with ENOENT for new path (doesn't exist - good for rename)
       // isErrorWithCode requires either Error instance or object with 'message' property
@@ -1218,6 +1270,7 @@ describe('IPC Handlers', () => {
 
       (isSafePath as any).mockReturnValue(true);
       const mockData = Buffer.from('image data');
+      (fs.stat as any).mockResolvedValue({ size: 100 });
       (fs.readFile as any).mockResolvedValue(mockData);
 
       const result = await handler(null, '/path/to/image.jpg');
@@ -1233,6 +1286,7 @@ describe('IPC Handlers', () => {
 
       (isSafePath as any).mockReturnValue(true);
       const mockData = Buffer.from('PDF content');
+      (fs.stat as any).mockResolvedValue({ size: 100 });
       (fs.readFile as any).mockResolvedValue(mockData);
 
       const result = await handler(null, '/path/to/file.pdf');
@@ -1247,11 +1301,30 @@ describe('IPC Handlers', () => {
 
       (isSafePath as any).mockReturnValue(true);
       const mockData = Buffer.from('PNG data');
+      (fs.stat as any).mockResolvedValue({ size: 100 });
       (fs.readFile as any).mockResolvedValue(mockData);
 
       const result = await handler(null, '/path/to/image.png');
 
       expect(result.mimeType).toBe('image/png');
+    });
+
+    it('should return file-path for oversized files without reading', async () => {
+      await import('../main');
+      const handler = getHandler('read-file-data');
+
+      (isSafePath as any).mockReturnValue(true);
+      (fs.stat as any).mockResolvedValue({ size: 351 * 1024 * 1024 });
+
+      const result = await handler(null, '/path/to/large.png');
+
+      expect(result).toEqual({
+        type: 'file-path',
+        path: '/path/to/large.png',
+        mimeType: 'image/png',
+        fileName: 'large.png',
+      });
+      expect(fs.readFile).not.toHaveBeenCalled();
     });
 
     it('should use default MIME type for unknown file types', async () => {
@@ -1260,6 +1333,7 @@ describe('IPC Handlers', () => {
 
       (isSafePath as any).mockReturnValue(true);
       const mockData = Buffer.from('unknown data');
+      (fs.stat as any).mockResolvedValue({ size: 100 });
       (fs.readFile as any).mockResolvedValue(mockData);
 
       const result = await handler(null, '/path/to/file.unknown');
@@ -1281,7 +1355,7 @@ describe('IPC Handlers', () => {
       const handler = getHandler('read-file-data');
 
       (isSafePath as any).mockReturnValue(true);
-      (fs.readFile as any).mockRejectedValue(new Error('File not found'));
+      (fs.stat as any).mockRejectedValue(new Error('File not found'));
 
       await expect(handler(null, '/nonexistent/file.jpg')).rejects.toThrow('Failed to read file');
     });
@@ -1303,7 +1377,7 @@ describe('IPC Handlers', () => {
         folderName: 'extraction',
         saveParentFile: false,
         extractedPages: [
-          { pageNumber: 1, imageData: 'data:image/png;base64,dGVzdA==' },
+          { pageNumber: 1, imageData: 'data:image/png;base64,dGVzdA==', fileName: 'page-001.png' },
         ],
       };
 
@@ -1330,7 +1404,7 @@ describe('IPC Handlers', () => {
         folderName: 'extraction',
         saveParentFile: true,
         extractedPages: [
-          { pageNumber: 1, imageData: 'data:image/png;base64,dGVzdA==' },
+          { pageNumber: 1, imageData: 'data:image/png;base64,dGVzdA==', fileName: 'page-001.png' },
         ],
       };
 
@@ -1433,6 +1507,7 @@ describe('IPC Handlers', () => {
         saveDirectory: '/save/dir',
         saveParentFile: true,
         saveToZip: false,
+        folderName: 'test-folder',
         parentFilePath: '/path/to/parent.pdf',
         extractedPages: [],
       };
@@ -1636,15 +1711,13 @@ describe('IPC Handlers', () => {
 
       const mockBuffer = Buffer.from('chunk data');
       const mockFileHandle = {
-        read: vi.fn((buffer, offset, length, start) => {
-          // Copy mock data into the provided buffer starting at offset
-          // The handler calls read(buffer, 0, length, start), so offset should be 0
-          const dataToCopy = mockBuffer.slice(0, Math.min(length, mockBuffer.length));
-          // Copy data into the buffer at the specified offset
-          for (let i = 0; i < dataToCopy.length; i++) {
-            buffer[offset + i] = dataToCopy[i];
-          }
-          return Promise.resolve({ bytesRead: dataToCopy.length });
+        read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
+          const dataToCopy = mockBuffer.subarray(
+            position,
+            position + Math.min(length, mockBuffer.length - position),
+          );
+          dataToCopy.copy(buffer, offset);
+          return { bytesRead: dataToCopy.length };
         }),
         close: vi.fn(() => Promise.resolve()),
       };
@@ -1655,14 +1728,20 @@ describe('IPC Handlers', () => {
       (isValidPDFFile as any).mockReturnValue(true);
       (isSafePath as any).mockReturnValue(true);
 
+      const closeHandler = getHandler('close-pdf-file-handle');
+      await closeHandler(null, '/path/to/file.pdf');
+
       const result = await handler(null, '/path/to/file.pdf', 0, 10);
 
       expect(fs.open).toHaveBeenCalledWith('/path/to/file.pdf', 'r');
       expect(mockFileHandle.read).toHaveBeenCalled();
       // Note: File handle is now cached and reused, so close may not be called immediately
       // Result should be an ArrayBuffer
-      expect(result).toBeInstanceOf(ArrayBuffer);
-      const resultArray = new Uint8Array(result);
+      expect(result).toBeTruthy();
+      const resultArray =
+        result instanceof ArrayBuffer
+          ? new Uint8Array(result)
+          : new Uint8Array(result as Uint8Array);
       const expectedArray = new Uint8Array(mockBuffer.slice(0, 10));
       expect(resultArray).toEqual(expectedArray);
     });

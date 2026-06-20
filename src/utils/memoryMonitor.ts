@@ -66,23 +66,52 @@ export function requestGarbageCollection(): void {
   }
 }
 
+export function isMemoryOverLimit(
+  info: MemoryInfo,
+  options: { maxUsedBytes?: number | null; thresholdPercent?: number },
+): boolean {
+  const maxUsedBytes = options.maxUsedBytes ?? null;
+  if (maxUsedBytes !== null) {
+    return info.usedJSHeapSize > maxUsedBytes;
+  }
+  return isMemoryHigh(options.thresholdPercent ?? 80);
+}
+
+export interface MemoryMonitorOptions {
+  /** Percent of jsHeapSizeLimit (used when maxUsedBytes is not set). */
+  thresholdPercent?: number;
+  /** Absolute used-heap limit in bytes (preferred for user RAM settings). */
+  maxUsedBytes?: number;
+  intervalMs?: number;
+}
+
 /**
  * Monitor memory and trigger cleanup callbacks when threshold is exceeded
  */
 export class MemoryMonitor {
   private checkInterval: number | null = null;
-  private threshold: number;
+  private thresholdPercent: number;
+  private maxUsedBytes: number | null;
   private onHighMemory: (info: MemoryInfo) => void;
   private intervalMs: number;
 
   constructor(
     onHighMemory: (info: MemoryInfo) => void,
-    threshold: number = 80,
-    intervalMs: number = 5000
+    thresholdOrOptions: number | MemoryMonitorOptions = 80,
+    intervalMs?: number,
   ) {
     this.onHighMemory = onHighMemory;
-    this.threshold = threshold;
-    this.intervalMs = intervalMs;
+
+    if (typeof thresholdOrOptions === 'number') {
+      this.thresholdPercent = thresholdOrOptions;
+      this.maxUsedBytes = null;
+      this.intervalMs = intervalMs ?? 5000;
+      return;
+    }
+
+    this.thresholdPercent = thresholdOrOptions.thresholdPercent ?? 80;
+    this.maxUsedBytes = thresholdOrOptions.maxUsedBytes ?? null;
+    this.intervalMs = thresholdOrOptions.intervalMs ?? 5000;
   }
 
   start(): void {
@@ -92,7 +121,18 @@ export class MemoryMonitor {
 
     this.checkInterval = window.setInterval(() => {
       const info = getMemoryInfo();
-      if (info && isMemoryHigh(this.threshold)) {
+      if (!info) {
+        return;
+      }
+
+      const overByteLimit =
+        this.maxUsedBytes !== null &&
+        isMemoryOverLimit(info, { maxUsedBytes: this.maxUsedBytes });
+      const overPercentLimit =
+        this.maxUsedBytes === null &&
+        isMemoryOverLimit(info, { thresholdPercent: this.thresholdPercent });
+
+      if (overByteLimit || overPercentLimit) {
         this.onHighMemory(info);
       }
     }, this.intervalMs);

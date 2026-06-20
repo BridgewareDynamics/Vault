@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useState, useRef, useEffect } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import { ArchiveFile, CategoryTag, Theme } from '../../types';
 import { isLightTheme } from '../../theme/themeSemantics';
 import { AudioLines, FileText, Image, Video, File, Trash2, Play, ChevronDown, Pencil, Tag } from 'lucide-react';
@@ -19,12 +19,15 @@ interface ArchiveFileItemProps {
   onTagClick?: () => void;
   onRunAudit?: () => void;
   onTranscribe?: () => void;
+  onRequestThumbnail?: () => void;
 }
 
-export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd, caseTag, onTagClick, onRunAudit, onTranscribe }: ArchiveFileItemProps) {
+export const ArchiveFileItem = memo(function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd, caseTag, onTagClick, onRunAudit, onTranscribe, onRequestThumbnail }: ArchiveFileItemProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const thumbnailRequestedRef = useRef(false);
   const { settings } = useSettingsContext();
   const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
   const isPastel = isLightTheme(theme);
@@ -50,6 +53,33 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
     }
   }, [showDropdown]);
 
+  useEffect(() => {
+    if (!onRequestThumbnail || file.thumbnail || thumbnailRequestedRef.current) {
+      return;
+    }
+
+    const element = rootRef.current;
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      onRequestThumbnail();
+      thumbnailRequestedRef.current = true;
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          thumbnailRequestedRef.current = true;
+          onRequestThumbnail();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '300px', threshold: 0 },
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [file.path, file.thumbnail, onRequestThumbnail]);
+
   const getFileIcon = () => {
     switch (file.type) {
       case 'image':
@@ -66,19 +96,10 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
   };
 
   const handleDragStart = (e: React.DragEvent) => {
-    // #region agent log
-    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchiveFileItem.tsx:56',message:'handleDragStart: Drag started',data:{filePath:file.path,fileName:file.name,fileType:file.type,isFolder:file.isFolder},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
-    // #endregion
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', file.path);
-    // #region agent log
-    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchiveFileItem.tsx:60',message:'handleDragStart: DataTransfer set',data:{dataTransferTypes:Array.from(e.dataTransfer.types),effectAllowed:e.dataTransfer.effectAllowed},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
-    // #endregion
     if (onDragStart) {
       onDragStart(file);
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchiveFileItem.tsx:64',message:'handleDragStart: onDragStart called',data:{filePath:file.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-      // #endregion
     }
   };
 
@@ -90,9 +111,10 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+      ref={rootRef}
+      initial={file.thumbnail ? false : { opacity: 0, y: 8, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      transition={file.thumbnail ? { duration: 0.15 } : { duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
       whileHover={{ y: -4, scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       className={`relative cursor-pointer group ${showDropdown ? 'mb-16' : ''}`}
@@ -123,7 +145,8 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
               src={file.thumbnail}
               alt={file.name}
               className="w-full h-full object-cover"
-              loading="lazy"
+              loading={file.thumbnail.startsWith('data:') ? 'eager' : 'lazy'}
+              decoding="async"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -342,5 +365,12 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
       )}
     </motion.div>
   );
-}
+}, (prev, next) => (
+  prev.file.path === next.file.path
+  && prev.file.thumbnail === next.file.thumbnail
+  && prev.file.name === next.file.name
+  && prev.file.categoryTagId === next.file.categoryTagId
+  && prev.file.type === next.file.type
+  && prev.caseTag?.id === next.caseTag?.id
+));
 

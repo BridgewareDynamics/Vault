@@ -107,6 +107,8 @@ export const mockElectronAPI = {
   createTextFile: vi.fn(),
   exportTextFile: vi.fn(),
   listTextFiles: vi.fn(),
+  listCaseNotes: vi.fn(),
+  createCaseNote: vi.fn(),
   deleteTextFile: vi.fn(),
   createWordEditorWindow: vi.fn(),
   reattachWordEditor: vi.fn(),

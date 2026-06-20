@@ -3,6 +3,7 @@ import {
   formatFontFamilyCss,
   getFontDisplayLabel,
   normalizeFontKey,
+  parseCustomFontInput,
 } from './novelFontUtils';
 
 describe('novelFontUtils', () => {
@@ -23,5 +24,12 @@ describe('novelFontUtils', () => {
   it('normalizes font keys for selection matching', () => {
     expect(normalizeFontKey('"Segoe UI", sans-serif')).toBe('segoe ui');
     expect(normalizeFontKey('Georgia, serif')).toBe('georgia');
+  });
+
+  it('parses custom font input', () => {
+    expect(parseCustomFontInput('  Comic Sans MS  ')).toBe('"Comic Sans MS", sans-serif');
+    expect(parseCustomFontInput('"Fira Sans", sans-serif')).toBe('"Fira Sans", sans-serif');
+    expect(parseCustomFontInput('')).toBeNull();
+    expect(parseCustomFontInput('<<>>')).toBeNull();
   });
 });

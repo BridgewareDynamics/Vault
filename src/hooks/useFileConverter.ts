@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { setupPDFWorker } from '../utils/pdfWorker';
 import { getUserFriendlyError } from '../utils/errorMessages';
+import { cleanupPDFBlobUrl } from '../utils/pdfSource';
 import {
   getCachedFileConverterCapabilities,
   prefetchFileConverterCapabilities,
@@ -41,43 +42,58 @@ async function renderPdfPages(
   }
 
   setupPDFWorker();
-  const pdfjsLib = await import('pdfjs-dist');
+  const [pdfjsLib, { createChunkedPDFSource: loadChunkedPdf }] = await Promise.all([
+    import('pdfjs-dist'),
+    import('../utils/pdfSource'),
+  ]);
 
   const pdfData = await window.electronAPI.readPDFFile(pdfPath);
-  let loadingTask;
+  let pdf: PDFDocument;
 
   if (typeof pdfData === 'object' && pdfData !== null && 'type' in pdfData) {
     if (pdfData.type === 'base64') {
-      loadingTask = pdfjsLib.getDocument({ data: atob(pdfData.data) });
+      const loadingTask = pdfjsLib.getDocument({ data: atob(pdfData.data) });
+      pdf = (await loadingTask.promise) as PDFDocument;
+    } else if (pdfData.type === 'file-path') {
+      pdf = await loadChunkedPdf(pdfData.path, pdfjsLib);
     } else {
-      loadingTask = pdfjsLib.getDocument({ url: pdfData.path });
+      throw new Error('Unsupported PDF data format');
     }
   } else if (typeof pdfData === 'string') {
-    loadingTask = pdfjsLib.getDocument({ data: atob(pdfData) });
+    const loadingTask = pdfjsLib.getDocument({ data: atob(pdfData) });
+    pdf = (await loadingTask.promise) as PDFDocument;
   } else {
     throw new Error('Unsupported PDF data format');
   }
 
-  const pdf = (await loadingTask.promise) as PDFDocument;
   const pages: Array<{ pageNumber: number; imageData: string }> = [];
   const scale = dpi / 96;
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    onProgress(Math.round((pageNum / pdf.numPages) * 50), `Rendering page ${pageNum} of ${pdf.numPages}…`);
-    const page = await pdf.getPage(pageNum);
-    const viewport = page.getViewport({ scale });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const context = canvas.getContext('2d');
-    if (!context) {
-      throw new Error('Could not create canvas context');
-    }
+  try {
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      onProgress(Math.round((pageNum / pdf.numPages) * 50), `Rendering page ${pageNum} of ${pdf.numPages}…`);
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        throw new Error('Could not create canvas context');
+      }
 
-    await page.render({ canvasContext: context, viewport }).promise;
-    pages.push({ pageNumber: pageNum, imageData: canvas.toDataURL('image/jpeg', 0.92) });
-    canvas.width = 0;
-    canvas.height = 0;
+      await page.render({ canvasContext: context, viewport }).promise;
+      pages.push({ pageNumber: pageNum, imageData: canvas.toDataURL('image/jpeg', 0.92) });
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  } finally {
+    try {
+      cleanupPDFBlobUrl(pdf);
+      await pdf.destroy();
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 
   return pages;

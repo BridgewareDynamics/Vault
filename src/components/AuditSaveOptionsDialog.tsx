@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, FolderOpen, Save, FileText, FolderPlus } from 'lucide-react';
 import { ArchiveFile, Theme } from '../types';
 import { useSettingsContext } from '../utils/settingsContext';
+import { logger } from '../utils/logger';
 
 export type AuditSaveOption = 'save-loose' | 'make-pdf-folder' | 'add-to-pdf-folder' | 'add-folder-to-directory';
 
@@ -40,7 +41,7 @@ async function findExtractionFoldersForPDF(
         file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
     ) as ArchiveFile[];
   } catch (error) {
-    console.error('Failed to find extraction folders:', error);
+    logger.error('Failed to find extraction folders:', error);
     return [];
   }
 }
@@ -82,7 +83,7 @@ export function AuditSaveOptionsDialog({
             setIsDetecting(false);
           })
           .catch((error) => {
-            console.error('Error detecting folders:', error);
+            logger.error('Error detecting folders:', error);
             setDetectedFolders([]);
             setIsDetecting(false);
           });

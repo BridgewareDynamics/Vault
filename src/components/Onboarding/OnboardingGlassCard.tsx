@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { memo, type ReactNode } from 'react';
 import { Theme } from '../../types';
+import { AmbientLavaGlow } from '../Shared/AmbientLavaFrame';
 import { getAccentGradients, getOnboardingTheme, type OnboardingAccent } from './onboardingTheme';
 
 interface OnboardingGlassCardProps {
@@ -38,24 +39,12 @@ export const OnboardingGlassCard = memo(function OnboardingGlassCard({
           className={`relative h-full overflow-hidden rounded-[15px] bg-gradient-to-br ${t.cardBg} backdrop-blur-xl ${pad}`}
           style={{ isolation: 'isolate' }}
         >
-          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[15px]">
-            <motion.div
-              className="absolute -inset-[120%] opacity-50"
-              style={{
-                background: `conic-gradient(from 180deg at 50% 50%, transparent 0deg, ${t.sheenFrom} 70deg, ${t.sheenTo} 140deg, transparent 220deg)`,
-              }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 14, repeat: Infinity, ease: 'linear' }}
-            />
-            <div
-              className={`absolute inset-0 ${t.cardSurface}`}
-              style={{
-                maskImage: 'radial-gradient(circle at 50% 0%, transparent 0%, black 72%)',
-                WebkitMaskImage: 'radial-gradient(circle at 50% 0%, transparent 0%, black 72%)',
-              }}
-            />
-          </div>
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+          <AmbientLavaGlow colors={[t.sheenFrom, t.sheenTo]} borderRadiusClass="rounded-[15px]" />
+          <div
+            className={`pointer-events-none absolute inset-0 rounded-[15px] ${t.cardSurface}`}
+            aria-hidden
+          />
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
           <div className="relative z-10 h-full">{children}</div>
         </div>
       </div>

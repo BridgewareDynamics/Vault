@@ -1,8 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ExtractionFolder } from './ExtractionFolder';
 import { ArchiveFile } from '../../types';
+import { renderWithProviders } from '../../test-utils/render';
+
+vi.mock('../../hooks/useCategoryTags', () => ({
+  useCategoryTags: () => ({
+    tags: [],
+    getTagById: vi.fn(() => undefined),
+    createTag: vi.fn(),
+    deleteTag: vi.fn(),
+    loadTags: vi.fn(),
+  }),
+}));
 
 describe('ExtractionFolder', () => {
   const mockFolder: ArchiveFile = {
@@ -25,7 +36,7 @@ describe('ExtractionFolder', () => {
   });
 
   it('should render folder name', () => {
-    render(
+    renderWithProviders(
       <ExtractionFolder
         folder={mockFolder}
         onClick={mockOnClick}
@@ -36,7 +47,7 @@ describe('ExtractionFolder', () => {
 
   it('should call onClick when clicked and onClick is provided', async () => {
     const user = userEvent.setup();
-    const { container } = render(
+    const { container } = renderWithProviders(
       <ExtractionFolder
         folder={mockFolder}
         onClick={mockOnClick}
@@ -52,7 +63,7 @@ describe('ExtractionFolder', () => {
   });
 
   it('should not be clickable when onClick is not provided', () => {
-    const { container } = render(
+    const { container } = renderWithProviders(
       <ExtractionFolder
         folder={mockFolder}
       />
@@ -64,7 +75,7 @@ describe('ExtractionFolder', () => {
 
   it('should call onDelete when delete button is clicked', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <ExtractionFolder
         folder={mockFolder}
         onClick={mockOnClick}
@@ -91,7 +102,7 @@ describe('ExtractionFolder', () => {
 
   it('should call onRename when rename button is clicked', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <ExtractionFolder
         folder={mockFolder}
         onClick={mockOnClick}
@@ -117,7 +128,7 @@ describe('ExtractionFolder', () => {
   });
 
   it('should show loading spinner when isExtracting is true', () => {
-    render(
+    renderWithProviders(
       <ExtractionFolder
         folder={mockFolder}
         onClick={mockOnClick}
@@ -129,7 +140,7 @@ describe('ExtractionFolder', () => {
   });
 
   it('should not show loading spinner when isExtracting is false', () => {
-    render(
+    renderWithProviders(
       <ExtractionFolder
         folder={mockFolder}
         onClick={mockOnClick}
@@ -141,7 +152,7 @@ describe('ExtractionFolder', () => {
   });
 
   it('should not render action buttons when isExtracting is true', () => {
-    render(
+    renderWithProviders(
       <ExtractionFolder
         folder={mockFolder}
         onClick={mockOnClick}
@@ -156,7 +167,7 @@ describe('ExtractionFolder', () => {
   });
 
   it('should not render delete button when onDelete is not provided', () => {
-    render(
+    renderWithProviders(
       <ExtractionFolder
         folder={mockFolder}
         onClick={mockOnClick}
@@ -168,7 +179,7 @@ describe('ExtractionFolder', () => {
   });
 
   it('should not render rename button when onRename is not provided', () => {
-    render(
+    renderWithProviders(
       <ExtractionFolder
         folder={mockFolder}
         onClick={mockOnClick}

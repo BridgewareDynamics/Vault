@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FileText,
   X,
-  Upload,
   Zap,
   Maximize2,
   Save,
-  Eye,
   Image as ImageIcon,
+  FolderOpen,
+  HardDriveDownload,
+  Layers,
 } from 'lucide-react';
 import { usePDFExtraction } from '../hooks/usePDFExtraction';
 import { useToast } from './Toast/ToastContext';
@@ -16,12 +17,45 @@ import { PDFExtractionSettings } from './PDFExtractionSettings';
 import { PDFExtractionProgress } from './PDFExtractionProgress';
 import { PDFExtractionResults } from './PDFExtractionResults';
 import { PDFExtractionSaveOptions } from './PDFExtractionSaveOptions';
+import { PDFExtractionVaultBrowser } from './PDFExtraction/PDFExtractionVaultBrowser';
+import { PDFExtractionSourceHero } from './PDFExtraction/PDFExtractionSourceHero';
+import { PDFExtractionPagePreviewPanel } from './PDFExtraction/PDFExtractionPagePreviewPanel';
+import { CaseSelectionDialog } from './Archive/CaseSelectionDialog';
+import { ArchiveFileViewer } from './Archive/ArchiveFileViewer';
 import { ConversionSettings, ExtractedPage } from '../types';
 import { isLightTheme } from '../theme/themeSemantics';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
+import { getModuleMenuTheme } from '../theme/moduleMenuTheme';
+import { useVaultActiveCase } from '../contexts/VaultActiveCaseContext';
 
 import { ArchiveFile } from '../types';
+import { getUserFriendlyError } from '../utils/errorMessages';
+import { logger } from '../utils/logger';
+import { filterPdfsWithoutExtractionFolders } from '../utils/pdfExtractionCaseFiles';
+
+interface CasePdfEntry {
+  name: string;
+  path: string;
+}
+
+function isPdfFileName(name: string): boolean {
+  return name.toLowerCase().endsWith('.pdf');
+}
+
+function getFileBaseName(filePath: string): string {
+  return filePath.split(/[/\\]/).pop() ?? filePath;
+}
+
+function toArchivePdfFile(filePath: string): ArchiveFile {
+  return {
+    name: getFileBaseName(filePath),
+    path: filePath,
+    size: 0,
+    modified: Date.now(),
+    type: 'pdf',
+  };
+}
 
 interface PDFExtractionModalProps {
   isOpen: boolean;
@@ -58,19 +92,54 @@ export function PDFExtractionModal({
   const [totalPages, setTotalPages] = useState(0);
   const [restoredExtractedPages, setRestoredExtractedPages] = useState<ExtractedPage[]>([]);
   const [pendingPreviewPage, setPendingPreviewPage] = useState<ExtractedPage | null>(null);
+  const [vaultCasePath, setVaultCasePath] = useState<string | null>(null);
+  const [selectedCaseName, setSelectedCaseName] = useState<string | null>(null);
+  const [showCaseDialog, setShowCaseDialog] = useState(false);
+  const [casePdfFiles, setCasePdfFiles] = useState<CasePdfEntry[]>([]);
+  const [loadingCaseFiles, setLoadingCaseFiles] = useState(false);
+  const [hiddenConvertedPdfCount, setHiddenConvertedPdfCount] = useState(0);
+  const [pdfOrigin, setPdfOrigin] = useState<'vault' | 'external' | null>(null);
+  const [viewerFile, setViewerFile] = useState<ArchiveFile | null>(null);
+  const [resolvedExistingFolders, setResolvedExistingFolders] = useState<ArchiveFile[] | undefined>(
+    undefined
+  );
+
+  const effectiveCaseFolderPath = caseFolderPath ?? vaultCasePath;
+  const effectiveExistingFolders = existingFolders ?? resolvedExistingFolders;
+  const displayCaseName =
+    selectedCaseName ||
+    (effectiveCaseFolderPath ? getFileBaseName(effectiveCaseFolderPath) : null);
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, cancel, reset } =
     usePDFExtraction();
   const toast = useToast();
+  const { activeCase } = useVaultActiveCase();
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
   const isPastel = isLightTheme(theme);
+  const t = getModuleMenuTheme(theme);
+  const valueTone = isPastel ? 'text-purple-700' : 'text-cyan-200';
+
+  const hasResults = extractedPages.length > 0 || restoredExtractedPages.length > 0;
+  const resultPages = extractedPages.length > 0 ? extractedPages : restoredExtractedPages;
+  const showSidePanel = showCaseDialog || !!previewPage;
+
+  const openPdfInViewer = useCallback((path: string) => {
+    setViewerFile(toArchivePdfFile(path));
+  }, []);
+
+  const clearPdfSelection = useCallback(() => {
+    setPdfPath(null);
+    setPdfOrigin(null);
+    setTotalPages(0);
+    reset();
+  }, [reset]);
 
   // Restore preview page when extracted pages are available
   useEffect(() => {
     if (pendingPreviewPage) {
       const allPages = extractedPages.length > 0 ? extractedPages : restoredExtractedPages;
-      console.log('PDFExtractionModal: Checking pending preview page', {
+      logger.debug('PDFExtractionModal: Checking pending preview page', {
         hasPendingPreview: !!pendingPreviewPage,
         pendingPageNumber: pendingPreviewPage?.pageNumber,
         extractedPagesCount: extractedPages.length,
@@ -84,12 +153,12 @@ export function PDFExtractionModal({
         );
         if (previewPageInPages) {
           setPreviewPage(previewPageInPages);
-          console.log('PDFExtractionModal: Restored preview page from pending', previewPageInPages.pageNumber);
+          logger.debug('PDFExtractionModal: Restored preview page from pending', previewPageInPages.pageNumber);
           setPendingPreviewPage(null);
         } else {
           // If not found, use the pending one directly
           setPreviewPage(pendingPreviewPage);
-          console.log('PDFExtractionModal: Restored preview page (using pending directly)', pendingPreviewPage.pageNumber);
+          logger.debug('PDFExtractionModal: Restored preview page (using pending directly)', pendingPreviewPage.pageNumber);
           setPendingPreviewPage(null);
         }
       }
@@ -126,10 +195,87 @@ export function PDFExtractionModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isExtracting, pdfPath, extractedPages.length]);
 
+  const loadCasePdfFiles = useCallback(
+    async (casePath: string) => {
+      if (!window.electronAPI?.listCaseFiles) {
+        return;
+      }
+      try {
+        setLoadingCaseFiles(true);
+        const files = await window.electronAPI.listCaseFiles(casePath);
+        const allPdfs = files
+          .filter((file) => !file.isFolder && isPdfFileName(file.name))
+          .map((file) => ({ name: file.name, path: file.path }));
+        const pendingPdfs = filterPdfsWithoutExtractionFolders(allPdfs, files);
+        setHiddenConvertedPdfCount(allPdfs.length - pendingPdfs.length);
+        setCasePdfFiles(pendingPdfs);
+
+        if (
+          pdfPath &&
+          pdfOrigin === 'vault' &&
+          !pendingPdfs.some((file) => file.path === pdfPath)
+        ) {
+          clearPdfSelection();
+        }
+      } catch (loadError) {
+        toast.error(getUserFriendlyError(loadError, { operation: 'loading case files' }));
+        setCasePdfFiles([]);
+        setHiddenConvertedPdfCount(0);
+      } finally {
+        setLoadingCaseFiles(false);
+      }
+    },
+    [toast, pdfPath, pdfOrigin, clearPdfSelection]
+  );
+
+  const loadExistingFoldersForPdf = useCallback(
+    async (casePath: string, selectedPdfPath: string) => {
+      if (!window.electronAPI?.listCaseFiles || existingFolders) {
+        return;
+      }
+      try {
+        const files = await window.electronAPI.listCaseFiles(casePath);
+        const pdfName = getFileBaseName(selectedPdfPath);
+        setResolvedExistingFolders(
+          files.filter(
+            (file) =>
+              file.isFolder &&
+              file.parentPdfName &&
+              file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+          ) as ArchiveFile[]
+        );
+      } catch (loadError) {
+        logger.error('Failed to load extraction folders:', loadError);
+        setResolvedExistingFolders([]);
+      }
+    },
+    [existingFolders]
+  );
+
+  const selectPdfFromPath = useCallback(
+    (filePath: string, origin: 'vault' | 'external') => {
+      setPdfPath(filePath);
+      setPdfOrigin(origin);
+      setTotalPages(0);
+      reset();
+      if (origin === 'vault') {
+        toast.info(`Selected ${getFileBaseName(filePath)}`);
+      } else {
+        toast.info('PDF file selected');
+      }
+    },
+    [reset, toast]
+  );
+
   // Set initial PDF path when modal opens
   useEffect(() => {
     if (isOpen && initialPdfPath) {
-      setPdfPath(initialPdfPath);
+      selectPdfFromPath(initialPdfPath, caseFolderPath ? 'vault' : 'external');
+      if (caseFolderPath) {
+        setVaultCasePath(caseFolderPath);
+        setSelectedCaseName(activeCase?.name ?? getFileBaseName(caseFolderPath));
+        void loadCasePdfFiles(caseFolderPath);
+      }
     } else if (!isOpen) {
       // Reset state when modal closes
       setPdfPath(null);
@@ -140,9 +286,41 @@ export function PDFExtractionModal({
       setPendingPreviewPage(null);
       setTotalPages(0);
       setRestoredExtractedPages([]);
+      setVaultCasePath(null);
+      setSelectedCaseName(null);
+      setCasePdfFiles([]);
+      setHiddenConvertedPdfCount(0);
+      setPdfOrigin(null);
+      setViewerFile(null);
+      setShowCaseDialog(false);
+      setResolvedExistingFolders(undefined);
       reset();
     }
-  }, [isOpen, initialPdfPath, reset]);
+  }, [isOpen, initialPdfPath, caseFolderPath, activeCase?.name, reset, selectPdfFromPath, loadCasePdfFiles]);
+
+  useEffect(() => {
+    if (!isOpen || caseFolderPath || vaultCasePath || !activeCase?.path) {
+      return;
+    }
+    setVaultCasePath(activeCase.path);
+    setSelectedCaseName(activeCase.name);
+  }, [isOpen, caseFolderPath, vaultCasePath, activeCase?.path, activeCase?.name]);
+
+  useEffect(() => {
+    if (effectiveCaseFolderPath) {
+      void loadCasePdfFiles(effectiveCaseFolderPath);
+    } else {
+      setCasePdfFiles([]);
+    }
+  }, [effectiveCaseFolderPath, loadCasePdfFiles]);
+
+  useEffect(() => {
+    if (effectiveCaseFolderPath && pdfPath) {
+      void loadExistingFoldersForPdf(effectiveCaseFolderPath, pdfPath);
+    } else if (!existingFolders) {
+      setResolvedExistingFolders(undefined);
+    }
+  }, [effectiveCaseFolderPath, pdfPath, loadExistingFoldersForPdf, existingFolders]);
 
   // Listen for reattach data from detached window
   useEffect(() => {
@@ -161,7 +339,7 @@ export function PDFExtractionModal({
     }>) => {
       const data = event.detail;
       
-      console.log('PDFExtractionModal: Received reattach data', {
+      logger.debug('PDFExtractionModal: Received reattach data', {
         hasPdfPath: !!data.pdfPath,
         hasExtractedPages: data.extractedPages?.length || 0,
         extractedPagesCount: data.extractedPages?.length || 0,
@@ -174,7 +352,7 @@ export function PDFExtractionModal({
     const checkStoredData = () => {
       const storedData = (window as any).__reattachPdfExtractionData;
       if (storedData) {
-        console.log('PDFExtractionModal: Found stored reattach data');
+        logger.debug('PDFExtractionModal: Found stored reattach data');
         restoreReattachState(storedData);
         // Clear stored data after using it
         delete (window as any).__reattachPdfExtractionData;
@@ -194,7 +372,7 @@ export function PDFExtractionModal({
       statusMessage: string;
       caseFolderPath?: string | null;
     }) => {
-      console.log('PDFExtractionModal: restoreReattachState called', {
+      logger.debug('PDFExtractionModal: restoreReattachState called', {
         hasPreviewPage: !!data.previewPage,
         previewPageNumber: data.previewPage?.pageNumber,
         extractedPagesCount: data.extractedPages?.length || 0,
@@ -214,12 +392,12 @@ export function PDFExtractionModal({
       if (data.extractedPages) {
         setRestoredExtractedPages(data.extractedPages);
         setSelectedPages(new Set(data.selectedPages || []));
-        console.log('PDFExtractionModal: Restored extracted pages', data.extractedPages.length);
+        logger.debug('PDFExtractionModal: Restored extracted pages', data.extractedPages.length);
         
         // Store preview page to be restored after extracted pages are set
         if (data.previewPage) {
           setPendingPreviewPage(data.previewPage);
-          console.log('PDFExtractionModal: Stored pending preview page', data.previewPage.pageNumber);
+          logger.debug('PDFExtractionModal: Stored pending preview page', data.previewPage.pageNumber);
           
           // Also try to restore immediately if pages are already available
           const previewPageInRestored = data.extractedPages.find(
@@ -228,7 +406,7 @@ export function PDFExtractionModal({
           if (previewPageInRestored) {
             setPreviewPage(previewPageInRestored);
             setPendingPreviewPage(null);
-            console.log('PDFExtractionModal: Immediately restored preview page', previewPageInRestored.pageNumber);
+            logger.debug('PDFExtractionModal: Immediately restored preview page', previewPageInRestored.pageNumber);
           }
         } else {
           setPreviewPage(null);
@@ -255,45 +433,61 @@ export function PDFExtractionModal({
 
   // Load PDF to get total pages
   useEffect(() => {
-    if (pdfPath && !totalPages) {
-      loadPDFInfo();
+    if (!pdfPath || totalPages) {
+      return;
     }
-  }, [pdfPath]);
 
-  const loadPDFInfo = async () => {
-    try {
-      if (!window.electronAPI || !pdfPath) return;
+    const abortController = new AbortController();
 
-      const { setupPDFWorker } = await import('../utils/pdfWorker');
-      await setupPDFWorker();
-      const pdfjsLib = await import('pdfjs-dist');
-      const { createChunkedPDFSource } = await import('../utils/pdfSource');
+    const loadPDFInfo = async () => {
+      try {
+        if (!window.electronAPI || !pdfPath) return;
 
-      const fileData = await window.electronAPI.readPDFFile(pdfPath);
-      let pdf: any = null;
+        const { setupPDFWorker } = await import('../utils/pdfWorker');
+        await setupPDFWorker();
+        const pdfjsLib = await import('pdfjs-dist');
+        const { createChunkedPDFSource } = await import('../utils/pdfSource');
 
-      if (fileData && typeof fileData === 'object' && 'type' in fileData) {
-        if (fileData.type === 'file-path') {
-          pdf = await createChunkedPDFSource(fileData.path, pdfjsLib);
-        } else if (fileData.type === 'base64') {
-          const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
-          const binaryString = atob(cleanBase64);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
+        const fileData = await window.electronAPI.readPDFFile(pdfPath);
+        if (abortController.signal.aborted) return;
+
+        let pdf: { numPages: number; destroy: () => Promise<void> } | null = null;
+
+        if (fileData && typeof fileData === 'object' && 'type' in fileData) {
+          if (fileData.type === 'file-path') {
+            pdf = await createChunkedPDFSource(fileData.path, pdfjsLib, undefined, undefined, {
+              skipWarning: true,
+              signal: abortController.signal,
+            });
+          } else if (fileData.type === 'base64') {
+            const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
+            const binaryString = atob(cleanBase64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            pdf = await pdfjsLib.getDocument({ data: bytes.buffer }).promise;
           }
-          pdf = await pdfjsLib.getDocument({ data: bytes.buffer }).promise;
         }
-      }
 
-      if (pdf) {
-        setTotalPages(pdf.numPages);
-        await pdf.destroy();
+        if (abortController.signal.aborted) return;
+
+        if (pdf) {
+          setTotalPages(pdf.numPages);
+          await pdf.destroy();
+        }
+      } catch (error) {
+        if (abortController.signal.aborted) return;
+        logger.error('Failed to load PDF info:', error);
       }
-    } catch (error) {
-      console.error('Failed to load PDF info:', error);
-    }
-  };
+    };
+
+    void loadPDFInfo();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [pdfPath, totalPages]);
 
   const handleSelectFile = async () => {
     try {
@@ -304,14 +498,23 @@ export function PDFExtractionModal({
 
       const filePath = await window.electronAPI.selectPDFFile();
       if (filePath) {
-        setPdfPath(filePath);
-        setTotalPages(0);
-        reset();
-        toast.info('PDF file selected');
+        selectPdfFromPath(filePath, 'external');
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to select file');
+    } catch (selectError) {
+      toast.error(selectError instanceof Error ? selectError.message : 'Failed to select file');
     }
+  };
+
+  const handleSelectVaultPdf = (filePath: string) => {
+    selectPdfFromPath(filePath, 'vault');
+  };
+
+  const handleAssignCase = (casePath: string) => {
+    const match = casePath.split(/[/\\]/).filter(Boolean).pop();
+    setVaultCasePath(casePath);
+    setSelectedCaseName(match ?? 'Case');
+    setShowCaseDialog(false);
+    void loadCasePdfFiles(casePath);
   };
 
   const handleStartExtraction = async () => {
@@ -321,15 +524,18 @@ export function PDFExtractionModal({
     }
 
     try {
-      await extractPDF(pdfPath, settings);
-      
+      const pages = await extractPDF(pdfPath, settings);
+
       // Clear restored pages since we have fresh extraction
       setRestoredExtractedPages([]);
-      
-      toast.success(`Successfully extracted ${extractedPages.length} page${extractedPages.length !== 1 ? 's' : ''}`);
-      
-      // Auto-select all pages
-      setSelectedPages(new Set(extractedPages.map((p) => p.pageNumber)));
+
+      toast.success(`Successfully extracted ${pages.length} page${pages.length !== 1 ? 's' : ''}`);
+
+      // Auto-select all pages and open large preview for the first page
+      setSelectedPages(new Set(pages.map((p) => p.pageNumber)));
+      if (pages.length > 0) {
+        setPreviewPage(pages[0]);
+      }
       
       if (onExtractionComplete) {
         onExtractionComplete();
@@ -379,7 +585,7 @@ export function PDFExtractionModal({
         fileName: `${generateFileName(page.pageNumber, saveOptions.fileNamingPattern)}.${settings.format}`,
       }));
 
-      if (caseFolderPath) {
+      if (effectiveCaseFolderPath) {
         // Handle different save options for archive case folder
         let targetFolderName: string = '';
         let subfolderPath: string | null = null;
@@ -406,7 +612,7 @@ export function PDFExtractionModal({
             // Check if folder already exists
             let existingFolderPath: string | null = null;
             try {
-              const files = await window.electronAPI.listCaseFiles(caseFolderPath);
+              const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
               const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
               const existingFolder = files.find(
                 (file: any) =>
@@ -420,7 +626,7 @@ export function PDFExtractionModal({
                 targetFolderName = existingFolder.name;
               }
             } catch (error) {
-              console.error('Error checking for existing folder:', error);
+              logger.error('Error checking for existing folder:', error);
             }
 
             // Create folder if it doesn't exist
@@ -429,7 +635,7 @@ export function PDFExtractionModal({
                 throw new Error('Folder name is required');
               }
               await window.electronAPI.createExtractionFolder(
-                caseFolderPath,
+                effectiveCaseFolderPath,
                 saveOptions.folderName.trim(),
                 pdfPath || undefined
               );
@@ -441,7 +647,7 @@ export function PDFExtractionModal({
           case 'add-to-pdf-folder': {
             // Find existing folder and use it
             const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
-            const files = await window.electronAPI.listCaseFiles(caseFolderPath);
+            const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
             const existingFolder = files.find(
               (file: any) =>
                 file.isFolder &&
@@ -460,7 +666,7 @@ export function PDFExtractionModal({
           case 'add-folder-to-directory': {
             // Find existing folder and create subfolder
             const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
-            const files = await window.electronAPI.listCaseFiles(caseFolderPath);
+            const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
             const existingFolderForSubfolder = files.find(
               (file: any) =>
                 file.isFolder &&
@@ -507,7 +713,7 @@ export function PDFExtractionModal({
           // If createNewFolderForLoose is true, use the provided folder name
           // If false, use default folder name
           await window.electronAPI.saveFiles({
-            saveDirectory: caseFolderPath, // Base directory (case folder)
+            saveDirectory: effectiveCaseFolderPath, // Base directory (case folder)
             saveParentFile: saveOptions.saveParentFile,
             saveToZip: saveOptions.saveToZip,
             folderName: targetFolderName, // saveFiles will create this subfolder
@@ -522,7 +728,7 @@ export function PDFExtractionModal({
           // Use extractPDFFromArchive for extraction folders (make-pdf-folder, add-to-pdf-folder)
           await window.electronAPI.extractPDFFromArchive({
             pdfPath: pdfPath!,
-            casePath: caseFolderPath,
+            casePath: effectiveCaseFolderPath,
             folderName: targetFolderName,
             saveParentFile: saveOptions.saveParentFile,
             saveToZip: saveOptions.saveToZip,
@@ -572,7 +778,7 @@ export function PDFExtractionModal({
       setShowSaveDialog(false);
       
       // Refresh files list if extracting to archive
-      if (caseFolderPath && onExtractionComplete) {
+      if (effectiveCaseFolderPath && onExtractionComplete) {
         onExtractionComplete();
       }
     } catch (error) {
@@ -613,7 +819,7 @@ export function PDFExtractionModal({
 
       if (!window.electronAPI.createPdfExtractionWindow) {
         toast.error('Detach functionality not available. The createPdfExtractionWindow method is not registered.');
-        console.error('createPdfExtractionWindow method not found on electronAPI');
+        logger.error('createPdfExtractionWindow method not found on electronAPI');
         return;
       }
 
@@ -635,10 +841,10 @@ export function PDFExtractionModal({
         progress: progress || null,
         error: error || null,
         statusMessage,
-        caseFolderPath: caseFolderPath || null,
+        caseFolderPath: effectiveCaseFolderPath || null,
       };
 
-      console.log('PDFExtractionModal: Detaching with state', {
+      logger.debug('PDFExtractionModal: Detaching with state', {
         hasExtractedPages: allPages.length > 0,
         isExtracting,
         pdfPath,
@@ -655,373 +861,336 @@ export function PDFExtractionModal({
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       toast.error(`Failed to open extraction in separate window: ${errorMessage}`);
-      console.error('Detach error:', error);
+      logger.error('Detach error:', error);
       
       // Log additional debugging information
-      console.error('Electron API available:', !!window.electronAPI);
-      console.error('createPdfExtractionWindow available:', !!window.electronAPI?.createPdfExtractionWindow);
+      logger.error('Electron API available:', !!window.electronAPI);
+      logger.error('createPdfExtractionWindow available:', !!window.electronAPI?.createPdfExtractionWindow);
     }
   };
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <motion.div
-        key="modal"
+        key="pdf-extraction-studio"
+        className="fixed inset-0 z-[90] flex items-center justify-center p-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${
-          isPastel ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/70 backdrop-blur-sm'
-        }`}
-        onClick={(e) => {
-          if (e.target === e.currentTarget && !isExtracting) {
-            onClose();
-          }
-        }}
       >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className={`rounded-2xl border-2 shadow-2xl max-w-7xl w-full max-h-[95vh] overflow-hidden flex flex-col ${
-            isPastel
-              ? 'bg-gradient-to-br from-white/95 via-pink-50/40 to-white/95 border-pink-200/40'
-              : 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 border-cyber-purple-400/40'
+        <motion.button
+          type="button"
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          aria-label="Close PDF conversion studio"
+          onClick={() => {
+            if (!isExtracting) {
+              onClose();
+            }
+          }}
+        />
+
+        <div
+          className={`relative z-10 flex w-full flex-col items-stretch gap-4 p-1 ${
+            showSidePanel
+              ? 'max-w-[min(100%,118rem)] xl:flex-row xl:items-stretch xl:justify-center xl:gap-6'
+              : 'max-w-[min(100%,92rem)] items-center lg:flex-row lg:items-start lg:justify-center'
           }`}
-          style={isPastel ? {
-            boxShadow: '0 20px 60px rgba(251, 182, 206, 0.2), 0 0 0 1px rgba(251, 182, 206, 0.1)',
-          } : {}}
-          onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
-          <div className={`relative p-6 border-b backdrop-blur-xl ${
-            isPastel
-              ? 'border-pink-200/30 bg-gradient-to-r from-white/90 via-pink-50/50 to-white/90'
-              : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
-          }`}
-          style={isPastel ? {
-            boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15)',
-          } : {}}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  {isPastel ? (
-                    <>
-                      <div className="absolute inset-0 bg-gradient-to-br from-pink-200/50 via-purple-200/50 to-blue-200/50 rounded-xl blur-xl opacity-50"></div>
-                      <div className="relative p-3 bg-gradient-to-br from-pink-100/80 via-purple-100/80 to-blue-100/80 rounded-xl shadow-lg border-2 border-pink-200/40">
-                        <FileText className="w-6 h-6 text-pink-500" />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl blur-xl opacity-50"></div>
-                      <div className="relative p-3 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-xl shadow-2xl">
-                        <FileText className="w-6 h-6 text-white" />
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div>
-                  <h2 className={`text-2xl font-bold ${
-                    isPastel
-                      ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 bg-clip-text text-transparent'
-                      : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent'
-                  }`}>
-                    PDF to Image Conversion
-                  </h2>
-                  <p className={`text-sm mt-1 ${
-                    isPastel ? 'text-gray-600' : 'text-gray-400'
-                  }`}>
-                    Extract pages from PDF files as high-quality images
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleDetach}
-                  className={`px-4 py-2 rounded-xl transition-all border flex items-center gap-2 text-sm ${
-                    isPastel
-                      ? 'bg-pink-50/80 hover:bg-pink-100/80 border-pink-200/50 hover:border-pink-300/50 text-gray-700 hover:text-gray-900'
-                      : 'bg-gray-800/80 hover:bg-gray-700/80 border-gray-700/50 hover:border-cyber-purple-400/50 text-gray-300 hover:text-white'
-                  }`}
-                  aria-label="Detach to separate window"
-                  title="Open in separate window"
-                >
-                  <Maximize2 size={16} className={isPastel ? 'text-pink-500' : 'text-cyber-purple-400'} />
-                  <span>Detach</span>
-                </button>
-                <button
-                  onClick={onClose}
-                  disabled={isExtracting}
-                  className={`p-2 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                    isPastel ? 'hover:bg-pink-100/50' : 'hover:bg-gray-800'
-                  }`}
-                  aria-label="Close"
-                >
-                  <X className={`w-5 h-5 ${isPastel ? 'text-gray-600' : 'text-gray-400'}`} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left Column - Controls */}
-              <div className="space-y-6">
-                {/* File Selection */}
-                <div className={`backdrop-blur-sm rounded-2xl p-6 shadow-2xl ${
-                  isPastel
-                    ? 'bg-white/80 border-pink-200/40'
-                    : 'bg-gray-800/60 border-cyber-purple-400/20'
-                }`}
-                style={isPastel ? {
-                  boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
-                } : {}}>
-                  <div className="space-y-4">
-                    <div>
-                      <label className={`block text-lg font-bold mb-4 ${
-                        isPastel ? 'text-gray-700' : 'text-gray-200'
-                      }`}>Select PDF File</label>
-                      <button
-                        onClick={handleSelectFile}
-                        disabled={isExtracting}
-                        className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl font-bold text-base transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] ${
-                          isPastel
-                            ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 disabled:from-gray-300 disabled:to-gray-300 text-white'
-                            : 'bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 text-white'
-                        }`}
-                      >
-                        <Upload className="w-5 h-5" />
-                        <span>{pdfPath ? 'Change PDF File' : 'Select PDF File'}</span>
-                      </button>
-                    </div>
-
-                    {pdfPath && (
-                      <div className={`flex items-center gap-4 p-4 rounded-xl border ${
-                        isPastel
-                          ? 'bg-pink-50/60 border-pink-300/30'
-                          : 'bg-gray-900/60 border-cyber-cyan-400/30'
-                      }`}>
-                        <div className={`p-2.5 rounded-lg ${
-                          isPastel
-                            ? 'bg-pink-200/20'
-                            : 'bg-cyber-cyan-400/20'
-                        }`}>
-                          <FileText className={`w-5 h-5 ${
-                            isPastel ? 'text-pink-500' : 'text-cyber-cyan-400'
-                          }`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs mb-1 ${
-                            isPastel ? 'text-gray-600' : 'text-gray-400'
-                          }`}>Selected File</p>
-                          <p className={`text-sm truncate font-medium ${
-                            isPastel ? 'text-gray-700' : 'text-gray-200'
-                          }`}>{pdfPath}</p>
-                          {totalPages > 0 && (
-                            <p className={`text-xs mt-1 ${
-                              isPastel ? 'text-gray-500' : 'text-gray-500'
-                            }`}>{totalPages} pages</p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Settings */}
-                    {pdfPath && totalPages > 0 && (
-                      <PDFExtractionSettings
-                        settings={settings}
-                        onSettingsChange={setSettings}
-                        totalPages={totalPages}
-                        isOpen={showSettings}
-                        onToggle={() => setShowSettings(!showSettings)}
-                        isPastel={isPastel}
-                      />
-                    )}
-
-                    {/* Start Extraction Button */}
-                    {pdfPath && !isExtracting && extractedPages.length === 0 && (
-                      <button
-                        onClick={handleStartExtraction}
-                        className={`w-full flex items-center justify-center gap-3 px-6 py-5 rounded-xl font-bold text-white text-lg transition-all shadow-2xl transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group ${
-                          isPastel
-                            ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 hover:shadow-pink-500/50'
-                            : 'bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 hover:shadow-cyan-500/50'
-                        }`}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                        <Zap className="w-6 h-6 relative z-10" />
-                        <span className="relative z-10">Start Conversion</span>
-                      </button>
-                    )}
-
-                    {/* Progress */}
-                    {isExtracting && progress && (
-                      <PDFExtractionProgress progress={progress} onCancel={cancel} isPastel={isPastel} />
-                    )}
-
-                    {/* Error Display */}
-                    {error && (
-                      <div className={`border-2 rounded-xl p-4 ${
-                        isPastel
-                          ? 'bg-red-50/80 border-red-300/50'
-                          : 'bg-red-900/40 border-red-600/50'
-                      }`}>
-                        <p className={`text-sm font-medium ${
-                          isPastel ? 'text-red-600' : 'text-red-300'
-                        }`}>Error</p>
-                        <p className={`text-xs mt-1 ${
-                          isPastel ? 'text-red-500' : 'text-red-400'
-                        }`}>{error}</p>
-                      </div>
-                    )}
-
-                    {/* Save Button */}
-                    {(extractedPages.length > 0 || restoredExtractedPages.length > 0) && !isExtracting && (
-                      <button
-                        onClick={() => setShowSaveDialog(true)}
-                        disabled={selectedPages.size === 0}
-                        className={`w-full flex items-center justify-center gap-3 px-6 py-4 text-white rounded-xl font-bold transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl flex items-center gap-2 ${
-                          isPastel
-                            ? 'bg-gradient-to-r from-pink-400 to-purple-400 hover:from-pink-500 hover:to-purple-500 disabled:from-gray-300 disabled:to-gray-300'
-                            : 'bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700'
-                        }`}
-                      >
-                        <Save className="w-5 h-5" />
-                        <span>
-                          Save {selectedPages.size > 0 ? `${selectedPages.size} ` : ''}Page
-                          {selectedPages.size !== 1 ? 's' : ''}
-                        </span>
-                      </button>
-                    )}
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pdf-extraction-title"
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
+            className={`flex max-h-[min(90vh,860px)] w-full min-w-0 flex-col overflow-hidden rounded-[32px] border shadow-2xl ${t.dialogShellLarge} ${
+              showSidePanel ? 'xl:max-w-[58rem] xl:flex-1' : 'max-w-6xl shrink-0'
+            }`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={`shrink-0 border-b px-6 py-5 ${t.dialogHeader}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className={`shrink-0 rounded-2xl p-3 ${t.button}`}>
+                    <Layers className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-xs uppercase tracking-[0.28em] ${valueTone}`}>Vault Imaging</p>
+                    <h2
+                      id="pdf-extraction-title"
+                      className={`truncate text-xl font-bold ${isPastel ? 'text-gray-900' : 'text-white'}`}
+                    >
+                      PDF Raster Studio
+                    </h2>
+                    <p className={`mt-1 text-sm ${t.mutedText}`}>
+                      High-fidelity page extraction with Vault case integration
+                    </p>
                   </div>
                 </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDetach}
+                    disabled={isExtracting}
+                    title={isExtracting ? 'Finish or cancel extraction before detaching' : undefined}
+                    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${t.secondaryButton}`}
+                    aria-label="Detach to separate window"
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                    Detach
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={isExtracting}
+                    className={`rounded-xl border p-2.5 disabled:cursor-not-allowed disabled:opacity-50 ${t.dialogCancel}`}
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
+            </div>
 
-              {/* Right Column - Results Gallery and Preview */}
-              <div className="space-y-6">
-                {(extractedPages.length > 0 || restoredExtractedPages.length > 0) ? (
-                  <>
-                    {/* Gallery - Limited to 3 rows with scrolling */}
-                    <div className={`backdrop-blur-sm rounded-2xl p-6 shadow-2xl ${
-                      isPastel
-                        ? 'bg-white/80 border-pink-200/40'
-                        : 'bg-gray-800/60 border-cyber-purple-400/20'
-                    }`}
-                    style={isPastel ? {
-                      boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
-                    } : {}}>
+            <div className="vault-studio-scroll min-h-0 flex-1 overflow-y-auto px-6 py-6">
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1fr)]">
+                <section className="space-y-4">
+                  <div className={`rounded-[26px] border p-5 ${t.compactInsetSurface}`}>
+                    <p className={`text-xs uppercase tracking-[0.22em] ${t.sectionLabel}`}>Vault case</p>
+                    <p className={`mt-2 text-sm leading-6 ${t.mutedText}`}>
+                      {displayCaseName
+                        ? `Browsing PDFs in ${displayCaseName}`
+                        : 'Assign a case to browse its PDF library'}
+                    </p>
+                    {activeCase && effectiveCaseFolderPath === activeCase.path && (
+                      <p
+                        className={`mt-1 text-xs ${isPastel ? 'text-emerald-700' : 'text-emerald-300'}`}
+                      >
+                        Using your current workspace case
+                      </p>
+                    )}
+                    {!caseFolderPath && (
+                      <button
+                        type="button"
+                        disabled={isExtracting}
+                        onClick={() => setShowCaseDialog(true)}
+                        className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-50 ${t.secondaryButton}`}
+                      >
+                        <FolderOpen className="h-4 w-4" />
+                        {effectiveCaseFolderPath ? 'Change case' : 'Select case'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={isExtracting}
+                      onClick={handleSelectFile}
+                      className={`mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-50 ${t.secondaryButton}`}
+                    >
+                      <HardDriveDownload className="h-4 w-4" />
+                      Import external PDF
+                    </button>
+                  </div>
+
+                  {effectiveCaseFolderPath ? (
+                    <div className={`rounded-[26px] border p-4 ${t.dialogInset}`}>
+                      <p className={`text-xs uppercase tracking-[0.22em] ${t.sectionLabel}`}>Case library</p>
+                      <p className={`mt-1 text-xs leading-5 ${t.mutedText}`}>
+                        Hover a card to expand in the PDF viewer. PDFs that already have an
+                        extraction folder above them in the case are hidden to avoid duplicates.
+                      </p>
+                      {hiddenConvertedPdfCount > 0 && (
+                        <p
+                          className={`mt-2 text-xs font-medium ${isPastel ? 'text-amber-800' : 'text-amber-200'}`}
+                        >
+                          {hiddenConvertedPdfCount} PDF{hiddenConvertedPdfCount !== 1 ? 's' : ''}{' '}
+                          hidden — already converted to images in this case.
+                        </p>
+                      )}
+                      <div className="mt-4 max-h-[min(52vh,520px)] overflow-y-auto pr-1">
+                        <PDFExtractionVaultBrowser
+                          files={casePdfFiles}
+                          selectedPath={pdfPath}
+                          loading={loadingCaseFiles}
+                          disabled={isExtracting}
+                          onSelect={handleSelectVaultPdf}
+                          onExpand={openPdfInViewer}
+                          t={t}
+                          isPastel={isPastel}
+                          emptyHint={
+                            hiddenConvertedPdfCount > 0
+                              ? 'Every PDF in this case already has an extraction folder with images. Add a new PDF or use Import external PDF to convert another document.'
+                              : undefined
+                          }
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`rounded-[26px] border px-5 py-10 text-center ${t.dialogInset}`}>
+                      <FolderOpen className={`mx-auto h-10 w-10 ${isPastel ? 'text-purple-300' : 'text-gray-500'}`} />
+                      <p className={`mt-3 text-sm font-medium ${t.mutedText}`}>
+                        Select a Vault case to preview and pick PDFs
+                      </p>
+                    </div>
+                  )}
+                </section>
+
+                <section className="space-y-4">
+                  <PDFExtractionSourceHero
+                    filePath={pdfPath}
+                    fileName={pdfPath ? getFileBaseName(pdfPath) : null}
+                    totalPages={totalPages}
+                    origin={pdfOrigin}
+                    disabled={isExtracting}
+                    onBrowseExternal={handleSelectFile}
+                    onClear={clearPdfSelection}
+                    onExpand={() => pdfPath && openPdfInViewer(pdfPath)}
+                    t={t}
+                    isPastel={isPastel}
+                  />
+
+                  {pdfPath && totalPages > 0 && (
+                    <PDFExtractionSettings
+                      settings={settings}
+                      onSettingsChange={setSettings}
+                      totalPages={totalPages}
+                      isOpen={showSettings}
+                      onToggle={() => setShowSettings(!showSettings)}
+                      isPastel={isPastel}
+                    />
+                  )}
+
+                  {isExtracting && progress && (
+                    <PDFExtractionProgress progress={progress} onCancel={cancel} isPastel={isPastel} />
+                  )}
+
+                  {error && (
+                    <div
+                      className={`rounded-[20px] border px-4 py-3 text-sm ${
+                        isPastel
+                          ? 'border-rose-200 bg-rose-50 text-rose-800'
+                          : 'border-rose-500/30 bg-rose-950/40 text-rose-100'
+                      }`}
+                      role="alert"
+                    >
+                      {error}
+                    </div>
+                  )}
+                </section>
+
+                <section className="space-y-4">
+                  {hasResults ? (
+                    <>
                       <PDFExtractionResults
-                        pages={extractedPages.length > 0 ? extractedPages : restoredExtractedPages}
+                        pages={resultPages}
                         selectedPages={selectedPages}
                         onPageClick={handlePageClick}
                         onPageSelect={handlePageSelect}
                         onSelectAll={handleSelectAll}
                         onDeselectAll={handleDeselectAll}
                         isPastel={isPastel}
+                        activePageNumber={previewPage?.pageNumber ?? null}
+                        t={t}
                       />
+                    </>
+                  ) : (
+                    <div className={`flex min-h-[20rem] flex-col items-center justify-center rounded-[26px] border p-8 text-center ${t.dialogInset}`}>
+                      <ImageIcon className={`h-14 w-14 opacity-40 ${isPastel ? 'text-purple-300' : 'text-gray-500'}`} />
+                      <p className={`mt-4 text-base font-semibold ${isPastel ? 'text-gray-900' : 'text-white'}`}>
+                        Output canvas
+                      </p>
+                      <p className={`mt-2 max-w-xs text-sm leading-6 ${t.mutedText}`}>
+                        Load a PDF, tune parameters, then run conversion. Extracted pages appear here for review
+                        before saving to your case.
+                      </p>
                     </div>
+                  )}
+                </section>
+              </div>
+            </div>
 
-                    {/* Image Preview - Below Gallery */}
-                    {previewPage ? (
-                      <div className={`backdrop-blur-sm rounded-2xl p-6 shadow-2xl ${
-                        isPastel
-                          ? 'bg-white/80 border-pink-200/40'
-                          : 'bg-gray-800/60 border-cyber-purple-400/20'
-                      }`}
-                      style={isPastel ? {
-                        boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
-                      } : {}}>
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <h3 className={`text-lg font-bold ${
-                              isPastel ? 'text-gray-700' : 'text-gray-200'
-                            }`}>
-                              Page {previewPage.pageNumber} Preview
-                            </h3>
-                            <button
-                              onClick={() => setPreviewPage(null)}
-                              className={`p-2 rounded-lg transition-colors ${
-                                isPastel
-                                  ? 'hover:bg-pink-100/50 text-gray-600 hover:text-gray-900'
-                                  : 'hover:bg-gray-700/50 text-gray-400 hover:text-white'
-                              }`}
-                              aria-label="Close preview"
-                            >
-                              <X className="w-5 h-5" />
-                            </button>
-                          </div>
-                          <div className={`rounded-lg p-6 flex items-center justify-center min-h-[500px] ${
-                            isPastel ? 'bg-pink-50/50' : 'bg-gray-900/50'
-                          }`}>
-                            <img
-                              src={previewPage.imageData}
-                              alt={`Page ${previewPage.pageNumber}`}
-                              className={`max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl border ${
-                                isPastel ? 'border-pink-200/50' : 'border-gray-700/50'
-                              }`}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className={`backdrop-blur-sm rounded-2xl p-12 shadow-2xl flex items-center justify-center min-h-[400px] ${
-                        isPastel
-                          ? 'bg-white/80 border-pink-200/40'
-                          : 'bg-gray-800/60 border-cyber-purple-400/20'
-                      }`}
-                      style={isPastel ? {
-                        boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
-                      } : {}}>
-                        <div className={`text-center ${
-                          isPastel ? 'text-gray-600' : 'text-gray-400'
-                        }`}>
-                          <Eye className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                          <p className="text-lg font-medium">No preview selected</p>
-                          <p className="text-sm mt-2">Click the eye icon on any extracted page to preview it here</p>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className={`backdrop-blur-sm rounded-2xl p-12 shadow-2xl flex items-center justify-center h-[400px] ${
-                    isPastel
-                      ? 'bg-white/80 border-pink-200/40'
-                      : 'bg-gray-800/60 border-cyber-purple-400/20'
-                  }`}
-                  style={isPastel ? {
-                    boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
-                  } : {}}>
-                    <div className={`text-center ${
-                      isPastel ? 'text-gray-600' : 'text-gray-400'
-                    }`}>
-                      <ImageIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                      <p className="text-lg font-medium">No pages extracted yet</p>
-                      <p className="text-sm mt-2">Select a PDF file and start conversion to see results</p>
-                    </div>
-                  </div>
+            <div className={`flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-6 py-5 ${t.dialogFooter}`}>
+              <div className="flex flex-wrap gap-2">
+                {pdfPath && !isExtracting && !hasResults && (
+                  <button
+                    type="button"
+                    onClick={handleStartExtraction}
+                    className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold ${t.button}`}
+                  >
+                    <Zap className="h-4 w-4" />
+                    Run conversion
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {hasResults && !isExtracting && (
+                  <button
+                    type="button"
+                    disabled={selectedPages.size === 0}
+                    onClick={() => setShowSaveDialog(true)}
+                    className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${t.button}`}
+                  >
+                    <Save className="h-4 w-4" />
+                    Save {selectedPages.size > 0 ? selectedPages.size : ''} page
+                    {selectedPages.size !== 1 ? 's' : ''}
+                  </button>
                 )}
               </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
 
-        {/* Save Dialog */}
+          <CaseSelectionDialog
+            layout="companion"
+            companionSize="wide"
+            isOpen={showCaseDialog}
+            elevated
+            title="Assign to case"
+            subtitle="Browse PDFs from the selected Vault case"
+            confirmLabel="Use this case"
+            onClose={() => setShowCaseDialog(false)}
+            onSelectCase={handleAssignCase}
+          />
+
+          <AnimatePresence mode="popLayout">
+            {previewPage && !showCaseDialog ? (
+              <PDFExtractionPagePreviewPanel
+                page={previewPage}
+                pages={resultPages}
+                isSelected={selectedPages.has(previewPage.pageNumber)}
+                onClose={() => setPreviewPage(null)}
+                onNavigate={setPreviewPage}
+                onToggleSelect={handlePageSelect}
+                t={t}
+                isPastel={isPastel}
+              />
+            ) : null}
+          </AnimatePresence>
+        </div>
+
         <PDFExtractionSaveOptions
           isOpen={showSaveDialog}
           onClose={() => setShowSaveDialog(false)}
           onConfirm={handleSave}
-          initialSaveDirectory={caseFolderPath || null}
+          initialSaveDirectory={effectiveCaseFolderPath || null}
           defaultFolderName={pdfPath ? pdfPath.split(/[/\\]/).pop()?.replace(/\.pdf$/i, '') : undefined}
           pdfPath={pdfPath}
-          casePath={caseFolderPath || null}
-          existingFolders={existingFolders}
+          casePath={effectiveCaseFolderPath || null}
+          existingFolders={effectiveExistingFolders}
           isPastel={isPastel}
         />
+
+        {viewerFile && (
+          <ArchiveFileViewer
+            file={viewerFile}
+            files={[viewerFile]}
+            onClose={() => setViewerFile(null)}
+            overlayZIndex={110}
+          />
+        )}
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

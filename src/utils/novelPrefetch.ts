@@ -1,4 +1,5 @@
 import type { NovelDocument, NovelListEntry } from '../types';
+import { isVitestEnv } from './isVitestEnv';
 
 type NovelModule = typeof import('../components/Novel/NovelModule');
 
@@ -130,6 +131,10 @@ export function setCachedNovelLibrary(list: NovelListEntry[] | null) {
 }
 
 export function warmNovelEntry(): void {
+  if (isVitestEnv()) {
+    return;
+  }
+
   void prefetchNovelModule();
   void prefetchNovelLibrary();
   void prefetchNovelEditorPage();

@@ -7,6 +7,7 @@ import { useSettingsContext } from '../../utils/settingsContext';
 import { useCategoryTags } from '../../hooks/useCategoryTags';
 import { useToast } from '../Toast/ToastContext';
 import { getUserFriendlyError } from '../../utils/errorMessages';
+import { logger } from '../../utils/logger';
 import { CaseNameDialog } from './CaseNameDialog';
 
 export interface CaseSelectionDialogProps {
@@ -22,6 +23,8 @@ export interface CaseSelectionDialogProps {
   elevated?: boolean;
   /** Side panel beside a parent dialog (no full-screen overlay). */
   layout?: 'overlay' | 'companion';
+  /** Companion width — use `wide` when the parent studio needs readable case lists. */
+  companionSize?: 'compact' | 'wide';
 }
 
 export function CaseSelectionDialog({
@@ -35,6 +38,7 @@ export function CaseSelectionDialog({
   allowCreateCase = true,
   elevated = false,
   layout = 'overlay',
+  companionSize = 'compact',
 }: CaseSelectionDialogProps) {
   const { settings } = useSettingsContext();
   const isPastel = (settings?.theme as Theme) === 'pastel';
@@ -57,7 +61,7 @@ export function CaseSelectionDialog({
       const casesList = await window.electronAPI.listArchiveCases();
       setCases(casesList);
     } catch (error) {
-      console.error('Failed to load cases:', error);
+      logger.error('Failed to load cases:', error);
       toast.error(getUserFriendlyError(error, { operation: 'loading cases' }));
     } finally {
       setLoading(false);
@@ -155,7 +159,15 @@ export function CaseSelectionDialog({
       : 'border-gray-700/50 bg-gray-800/60 hover:border-cyber-purple-500/40 hover:bg-gray-800/80';
   };
 
-  const panelMaxWidth = layout === 'companion' ? 'max-w-md xl:w-[26rem]' : 'max-w-3xl';
+  const isWideCompanion = layout === 'companion' && companionSize === 'wide';
+  const panelMaxWidth =
+    layout === 'companion'
+      ? isWideCompanion
+        ? 'w-full min-w-[min(100%,20rem)] max-w-2xl shrink-0 xl:min-w-[28rem] xl:max-w-[36rem] 2xl:max-w-[40rem]'
+        : 'max-w-md xl:w-[26rem]'
+      : 'max-w-3xl';
+  const panelMaxHeight =
+    layout === 'companion' && isWideCompanion ? 'max-h-[min(90vh,860px)]' : 'max-h-[85vh]';
   const panelMotion =
     layout === 'companion'
       ? {
@@ -175,7 +187,7 @@ export function CaseSelectionDialog({
       {...panelMotion}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
       onClick={(event) => event.stopPropagation()}
-      className={`flex max-h-[85vh] w-full ${panelMaxWidth} flex-col overflow-hidden rounded-2xl border-2 shadow-2xl backdrop-blur-xl ${shellClassName}`}
+      className={`flex ${panelMaxHeight} w-full ${panelMaxWidth} flex-col overflow-hidden rounded-2xl border-2 shadow-2xl backdrop-blur-xl ${shellClassName}`}
       style={
         isPastel
           ? {
@@ -381,7 +393,9 @@ export function CaseSelectionDialog({
 
                             <div className="min-w-0 flex-1">
                               <div
-                                className={`truncate text-base font-semibold ${
+                                className={`text-base font-semibold leading-snug ${
+                                  isWideCompanion ? 'break-words' : 'truncate'
+                                } ${
                                   selected
                                     ? isPastel
                                       ? 'text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-500'
@@ -395,9 +409,9 @@ export function CaseSelectionDialog({
                               </div>
                               {caseItem.description ? (
                                 <div
-                                  className={`mt-1 line-clamp-2 text-sm ${
-                                    isPastel ? 'text-gray-600' : 'text-gray-400'
-                                  }`}
+                                  className={`mt-1 text-sm leading-relaxed ${
+                                    isWideCompanion ? 'line-clamp-4' : 'line-clamp-2'
+                                  } ${isPastel ? 'text-gray-600' : 'text-gray-400'}`}
                                 >
                                   {caseItem.description}
                                 </div>

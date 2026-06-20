@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, ReactNode, useState, useCallback, useRef, useMemo } from 'react';
 import { ArchiveCase } from '../types';
 
 interface ArchiveContextValue {
@@ -19,11 +19,7 @@ export function ArchiveContextProvider({ children }: ArchiveContextProviderProps
   const lastCaseRef = useRef<ArchiveCase | null>(null);
 
   // Wrapped setCurrentCase that tracks state changes
-  const setCurrentCaseWithTracking = useCallback((caseItem: ArchiveCase | null) => {
-    // #region agent log
-    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchiveContext.tsx:22', message: 'ArchiveContext setCurrentCase called', data: { caseItemIsNull: caseItem === null, caseItemPath: caseItem?.path, caseItemName: caseItem?.name, previousCasePath: lastCaseRef.current?.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
-    // #endregion
-    // Always update the state - don't prevent legitimate clears
+  const setCurrentCaseWithTracking = useCallback((caseItem: ArchiveCase | null) => {// Always update the state - don't prevent legitimate clears
     // But track the last case for debugging purposes
     if (caseItem !== null) {
       lastCaseRef.current = caseItem;
@@ -31,8 +27,13 @@ export function ArchiveContextProvider({ children }: ArchiveContextProviderProps
     setCurrentCase(caseItem);
   }, []);
 
+  const value = useMemo(
+    () => ({ currentCase, setCurrentCase: setCurrentCaseWithTracking }),
+    [currentCase, setCurrentCaseWithTracking],
+  );
+
   return (
-    <ArchiveContext.Provider value={{ currentCase, setCurrentCase: setCurrentCaseWithTracking }}>
+    <ArchiveContext.Provider value={value}>
       {children}
     </ArchiveContext.Provider>
   );

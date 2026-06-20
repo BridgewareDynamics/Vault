@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ArchiveDriveDialog } from './ArchiveDriveDialog';
+import { renderWithProviders } from '../../test-utils/render';
 
 describe('ArchiveDriveDialog', () => {
   const mockOnClose = vi.fn();
@@ -12,7 +13,7 @@ describe('ArchiveDriveDialog', () => {
   });
 
   it('should not render when isOpen is false', () => {
-    render(
+    renderWithProviders(
       <ArchiveDriveDialog
         isOpen={false}
         onClose={mockOnClose}
@@ -23,7 +24,7 @@ describe('ArchiveDriveDialog', () => {
   });
 
   it('should render when isOpen is true', () => {
-    render(
+    renderWithProviders(
       <ArchiveDriveDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -34,7 +35,7 @@ describe('ArchiveDriveDialog', () => {
   });
 
   it('should render welcome message', () => {
-    render(
+    renderWithProviders(
       <ArchiveDriveDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -46,7 +47,7 @@ describe('ArchiveDriveDialog', () => {
   });
 
   it('should render Cancel and Select Directory buttons', () => {
-    render(
+    renderWithProviders(
       <ArchiveDriveDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -59,7 +60,7 @@ describe('ArchiveDriveDialog', () => {
 
   it('should call onClose when Cancel button is clicked', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <ArchiveDriveDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -76,7 +77,7 @@ describe('ArchiveDriveDialog', () => {
 
   it('should call onConfirm when Select Directory button is clicked', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <ArchiveDriveDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -93,7 +94,7 @@ describe('ArchiveDriveDialog', () => {
 
   it('should call onClose when clicking on backdrop', async () => {
     const user = userEvent.setup();
-    const { container } = render(
+    const { container } = renderWithProviders(
       <ArchiveDriveDialog
         isOpen={true}
         onClose={mockOnClose}
@@ -110,7 +111,7 @@ describe('ArchiveDriveDialog', () => {
 
   it('should not call onClose when clicking inside dialog', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <ArchiveDriveDialog
         isOpen={true}
         onClose={mockOnClose}

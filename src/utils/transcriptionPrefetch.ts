@@ -2,6 +2,7 @@ import type {
   TranscriptionEngineStatus,
   TranscriptionListEntry,
 } from '../types';
+import { isVitestEnv } from './isVitestEnv';
 
 type TranscriptionModule = typeof import('../components/Transcription/TranscriptionModule');
 
@@ -109,6 +110,10 @@ export function setCachedTranscriptionLibrary(list: TranscriptionListEntry[] | n
 
 /** Warm module chunk + lightweight main-process status while the user is still on Welcome. */
 export function warmTranscriptionEntry(): void {
+  if (isVitestEnv()) {
+    return;
+  }
+
   void prefetchTranscriptionModule();
   void prefetchTranscriptionEngineStatus();
   void prefetchTranscriptionLibrary();
