@@ -1,5 +1,6 @@
 import type { MapDocument, MapListEntry } from '../types';
 import { isVitestEnv } from './isVitestEnv';
+import { LRUCache } from './lruCache';
 
 type MapModule = typeof import('../components/Map/MapModule');
 
@@ -10,7 +11,12 @@ let libraryListCache: MapListEntry[] | null = null;
 let libraryListCachedAt = 0;
 let libraryListInflight: Promise<MapListEntry[] | null> | null = null;
 
-const mapDocumentCache = new Map<string, { doc: MapDocument; cachedAt: number }>();
+/** Hard cap on cached map documents so the lazy TTL cache cannot grow unbounded. */
+export const MAP_DOCUMENT_CACHE_CAPACITY = 12;
+
+const mapDocumentCache = new LRUCache<{ doc: MapDocument; cachedAt: number }>(
+  MAP_DOCUMENT_CACHE_CAPACITY,
+);
 const mapDocumentInflight = new Map<string, Promise<MapDocument | null>>();
 
 export const MAP_LIBRARY_CACHE_TTL_MS = 30_000;
@@ -52,6 +58,11 @@ export function setCachedMapDocument(mapFolderPath: string, doc: MapDocument | n
     return;
   }
   mapDocumentCache.set(mapFolderPath, { doc, cachedAt: Date.now() });
+}
+
+/** Drop all cached map documents (e.g. on memory pressure). */
+export function clearMapDocumentCache(): void {
+  mapDocumentCache.clear();
 }
 
 export async function prefetchMapDocument(mapFolderPath: string): Promise<MapDocument | null> {

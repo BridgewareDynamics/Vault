@@ -10,6 +10,9 @@ export function resolveFfmpegPath(): string {
   }
 
   try {
+    // Lazy require: ffmpeg-static may be absent in packaged builds, where we fall
+    // back to the bundled binary below. A static import would break that fallback.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const ffmpegStatic = require('ffmpeg-static') as string | null | undefined;
     if (ffmpegStatic && existsSync(ffmpegStatic)) {
       cachedFfmpegPath = ffmpegStatic;

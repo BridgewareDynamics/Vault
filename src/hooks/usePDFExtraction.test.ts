@@ -173,7 +173,7 @@ describe('usePDFExtraction', () => {
     // The function signature should accept onProgress (tested by calling it)
     const mockOnProgress = vi.fn();
     expect(() => {
-      result.current.extractPDF('/test.pdf', mockOnProgress).catch(() => {});
+      result.current.extractPDF('/test.pdf', undefined, mockOnProgress).catch(() => {});
     }).not.toThrow();
   });
 

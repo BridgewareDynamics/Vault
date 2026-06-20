@@ -18,7 +18,7 @@ describe('archivePrefetch', () => {
       listArchiveCases: vi.fn().mockResolvedValue([
         { name: 'Case A', path: '/vault/case-a' },
       ]),
-    } as typeof window.electronAPI;
+    } as unknown as typeof window.electronAPI;
   });
 
   afterEach(() => {

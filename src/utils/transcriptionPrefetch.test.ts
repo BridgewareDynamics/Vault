@@ -13,7 +13,7 @@ describe('transcriptionPrefetch', () => {
         available: true,
         running: false,
       }),
-    } as Window['electronAPI'];
+    } as unknown as Window['electronAPI'];
   });
 
   afterEach(() => {

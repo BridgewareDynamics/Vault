@@ -4,37 +4,51 @@ import React from 'react';
 import { mockElectronAPI } from './mocks';
 import { setupTestSettings } from './testSettings';
 
-// Mock Electron API globally
-global.window.electronAPI = mockElectronAPI;
+// Mock Electron API globally. The mock only implements the subset of the API
+// the tests exercise, so cast to the canonical type declared in electronAPI.d.ts.
+global.window.electronAPI = mockElectronAPI as unknown as typeof window.electronAPI;
 
 // Mock framer-motion with lightweight stubs so tests do not load the full animation library.
-const createMotionComponent = (component: string) => {
-  return React.forwardRef<any, any>(({ children, ...props }, ref) => {
-    const {
-      initial,
-      animate,
-      exit,
-      transition,
-      whileHover,
-      whileTap,
-      whileDrag,
-      whileFocus,
-      whileInView,
-      drag,
-      dragConstraints,
-      dragElastic,
-      dragMomentum,
-      dragDirectionLock,
-      dragPropagation,
-      dragTransition,
-      layout,
-      layoutId,
-      layoutDependency,
-      layoutRoot,
-      ...domProps
-    } = props;
+// These motion-only props must be stripped so they never leak onto the real DOM element.
+const MOTION_ONLY_PROPS = new Set([
+  'initial',
+  'animate',
+  'exit',
+  'transition',
+  'whileHover',
+  'whileTap',
+  'whileDrag',
+  'whileFocus',
+  'whileInView',
+  'drag',
+  'dragConstraints',
+  'dragElastic',
+  'dragMomentum',
+  'dragDirectionLock',
+  'dragPropagation',
+  'dragTransition',
+  'layout',
+  'layoutId',
+  'layoutDependency',
+  'layoutRoot',
+]);
 
-    return React.createElement(component, { ...domProps, ref }, children);
+type MotionStubProps = React.PropsWithChildren<Record<string, unknown>>;
+
+const createMotionComponent = (component: string) => {
+  return React.forwardRef<HTMLElement, MotionStubProps>(({ children, ...props }, ref) => {
+    const domProps: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(props)) {
+      if (!MOTION_ONLY_PROPS.has(key)) {
+        domProps[key] = value;
+      }
+    }
+
+    return React.createElement(
+      component,
+      { ...domProps, ref } as React.HTMLAttributes<HTMLElement> & React.ClassAttributes<HTMLElement>,
+      children as React.ReactNode,
+    );
   });
 };
 

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { WelcomeScreen } from './WelcomeScreen';
 import { SettingsProvider } from '../utils/settingsContext';
 import { mockElectronAPI } from '../test-utils/mocks';
@@ -15,6 +14,7 @@ describe('WelcomeScreen', () => {
         <WelcomeScreen
           onSelectFile={mockOnSelectFile}
           onOpenArchive={mockOnOpenArchive}
+          onOpenSecurityChecker={vi.fn()}
         />
       </SettingsProvider>
     );
@@ -92,6 +92,7 @@ describe('WelcomeScreen', () => {
         <WelcomeScreen
           onSelectFile={mockOnSelectFile}
           onOpenArchive={mockOnOpenArchive}
+          onOpenSecurityChecker={vi.fn()}
           onOpenTranscription={vi.fn()}
         />
       </SettingsProvider>
@@ -109,6 +110,7 @@ describe('WelcomeScreen', () => {
         <WelcomeScreen
           onSelectFile={mockOnSelectFile}
           onOpenArchive={mockOnOpenArchive}
+          onOpenSecurityChecker={vi.fn()}
           onOpenFileConverter={vi.fn()}
         />
       </SettingsProvider>
@@ -123,6 +125,7 @@ describe('WelcomeScreen', () => {
         <WelcomeScreen
           onSelectFile={mockOnSelectFile}
           onOpenArchive={mockOnOpenArchive}
+          onOpenSecurityChecker={vi.fn()}
           onOpenFileConverter={mockOnOpenFileConverter}
         />
       </SettingsProvider>

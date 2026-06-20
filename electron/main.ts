@@ -1,6 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, nativeImage, Menu, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, nativeImage, Menu, screen, shell } from 'electron';
 import { join } from 'path';
-import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath } from './utils/pathValidator';
+import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath, isSafeStorageId, isPathWithinBase } from './utils/pathValidator';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
@@ -84,6 +84,31 @@ async function findCasePathFromPath(filePath: string): Promise<string | null> {
   }
   
   return null;
+}
+
+/**
+ * Confirms a path targeted by a write/delete IPC handler resolves inside a
+ * directory the app legitimately manages (the archive drive or userData).
+ *
+ * This is defense-in-depth on top of `isSafePath()`: a compromised renderer
+ * cannot mutate files outside these roots even if it bypasses the basic
+ * traversal-token checks. The check fails closed only when a root is available;
+ * if the archive drive has not been configured yet the userData root still
+ * applies, and callers also retain their existing `isSafePath()` guard.
+ */
+async function isManagedWritePath(filePath: string): Promise<boolean> {
+  const roots: Array<string | null> = [];
+  try {
+    roots.push(await getArchiveDrive());
+  } catch {
+    // Archive drive not resolvable; fall through to userData root.
+  }
+  try {
+    roots.push(app.getPath('userData'));
+  } catch {
+    // App not ready; userData unavailable.
+  }
+  return isPathWithinBase(filePath, roots);
 }
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -312,6 +337,11 @@ async function createWindow() {
       contextIsolation: true,
       webSecurity: true, // Explicitly enable web security
       devTools: isDev, // Only enable DevTools in development
+      // sandbox is intentionally left at its default (false): renderer hardening
+      // is provided by contextIsolation + nodeIntegration:false + webSecurity +
+      // applyWindowSecurity() (deny-by-default navigation/window-open). Enabling
+      // sandbox would require validating the bundled preload across all packaged
+      // targets; deferred to avoid risking current functionality.
       // Note: enableWebGPU is not available in Electron 28, hardware acceleration is enabled via command line switches
       offscreen: false, // Keep onscreen for better performance
     } as Electron.WebPreferences,
@@ -320,6 +350,8 @@ async function createWindow() {
     show: false, // Don't show until ready
     fullscreen: settings?.fullscreen === true, // Apply fullscreen from settings
   });
+
+  applyWindowSecurity(mainWindow);
 
   // Remove menu bar in production for a clean app experience
   if (!isDev) {
@@ -453,7 +485,6 @@ async function runBackgroundVaultMigration(): Promise<void> {
       }
       if (migrationResult.cases === 0 && migrationResult.files === 0) {
         logger.warn('Migration found no cases or files. Archive drive may be empty or migration needs to be re-run.');
-        logger.warn('You can force re-migration by calling the force-remigration IPC handler');
       }
     } else if (!archiveDrive) {
       logger.warn('Archive drive not set - migration will run when archive drive is configured');
@@ -462,7 +493,6 @@ async function runBackgroundVaultMigration(): Promise<void> {
       const caseCount = db.getCases().length;
       if (caseCount === 0 && archiveDrive) {
         logger.warn('Migration marked as complete but database has 0 cases - migration may have failed');
-        logger.warn('You can force re-migration by calling the force-remigration IPC handler');
       } else if (caseCount > 0 && archiveDrive) {
         let totalFiles = 0;
         for (const caseRecord of db.getCases()) {
@@ -1334,36 +1364,6 @@ ipcMain.handle('get-archive-config', async () => {
   return config;
 });
 
-// Force re-run migration (clears migration flag and re-runs)
-ipcMain.handle('force-remigration', async () => {
-  try {
-    if (!isDatabaseReady()) {
-      throw new Error('Database not initialized');
-    }
-
-    const archiveDrive = await getArchiveDrive();
-    if (!archiveDrive) {
-      throw new Error('Archive drive not set');
-    }
-
-    logger.info('Force re-migration requested - clearing migration flag');
-    db!.clearMigrationFlag();
-
-    logger.info('Running forced migration...');
-    const migrationResult = await migrateMetadataFilesToDatabase(archiveDrive, db!);
-    
-    return {
-      success: true,
-      cases: migrationResult.cases,
-      files: migrationResult.files,
-      errors: migrationResult.errors,
-    };
-  } catch (error) {
-    logger.error('Force re-migration failed:', error);
-    throw new Error(`Failed to re-run migration: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-});
-
 // Validate archive directory
 ipcMain.handle('validate-archive-directory', async (event, dirPath: string) => {
   if (!isSafePath(dirPath)) {
@@ -2077,8 +2077,15 @@ ipcMain.handle('get-bookmarks-by-folder', async (event, folderId: string | null)
 // Save bookmark thumbnail (thumbnail is generated in renderer and passed here)
 ipcMain.handle('save-bookmark-thumbnail', async (event, bookmarkId: string, thumbnailData: string) => {
   try {
+    if (!isSafeStorageId(bookmarkId)) {
+      throw new Error('Invalid bookmark id');
+    }
     const thumbnailsDir = await bookmarkStorage.getBookmarkThumbnailsDir();
     const thumbnailPath = path.join(thumbnailsDir, `${bookmarkId}.png`);
+    // Defense-in-depth: ensure the resolved path stays inside the thumbnails dir.
+    if (!isPathWithinBase(thumbnailPath, [thumbnailsDir])) {
+      throw new Error('Invalid bookmark thumbnail path');
+    }
     
     // Extract base64 data if it's a data URL
     const base64Data = thumbnailData.includes(',') 
@@ -2098,8 +2105,15 @@ ipcMain.handle('save-bookmark-thumbnail', async (event, bookmarkId: string, thum
 // Get bookmark thumbnail
 ipcMain.handle('get-bookmark-thumbnail', async (event, bookmarkId: string) => {
   try {
+    if (!isSafeStorageId(bookmarkId)) {
+      throw new Error('Invalid bookmark id');
+    }
     const thumbnailsDir = await bookmarkStorage.getBookmarkThumbnailsDir();
     const thumbnailPath = path.join(thumbnailsDir, `${bookmarkId}.png`);
+    // Defense-in-depth: ensure the resolved path stays inside the thumbnails dir.
+    if (!isPathWithinBase(thumbnailPath, [thumbnailsDir])) {
+      throw new Error('Invalid bookmark thumbnail path');
+    }
     
     try {
       const buffer = await fs.readFile(thumbnailPath);
@@ -2360,7 +2374,7 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     });
     
     // Sort folders within each PDF group alphabetically
-    pdfToFoldersMap.forEach((folderList, pdfName) => {
+    pdfToFoldersMap.forEach((folderList) => {
       folderList.sort((a, b) => a.name.localeCompare(b.name));
     });
     
@@ -2787,6 +2801,11 @@ ipcMain.handle('set-case-background-image', async (event, casePath: string, imag
   if (!isSafePath(casePath) || !isSafePath(imagePath)) {
     throw new Error('Invalid path');
   }
+  // Only the write target (casePath) is containment-checked; imagePath is a
+  // user-selected source file that may live anywhere on disk.
+  if (!(await isManagedWritePath(casePath))) {
+    throw new Error('Path is outside the managed archive');
+  }
 
   try {
     // Check if case path exists and is a directory
@@ -2846,6 +2865,11 @@ ipcMain.handle('set-folder-background-image', async (event, folderPath: string, 
   if (!isSafePath(folderPath) || !isSafePath(imagePath)) {
     throw new Error('Invalid path');
   }
+  // Only the write target (folderPath) is containment-checked; imagePath is a
+  // user-selected source file that may live anywhere on disk.
+  if (!(await isManagedWritePath(folderPath))) {
+    throw new Error('Path is outside the managed archive');
+  }
 
   try {
     // Check if folder path exists and is a directory
@@ -2896,6 +2920,9 @@ ipcMain.handle('set-folder-background-image', async (event, folderPath: string, 
 ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean = false) => {
   if (!isSafePath(filePath)) {
     throw new Error('Invalid file path');
+  }
+  if (!(await isManagedWritePath(filePath))) {
+    throw new Error('Path is outside the managed archive');
   }
 
   logger.log('[Main] delete-file called:', { filePath, isFolder });
@@ -3044,6 +3071,11 @@ ipcMain.handle('move-file-to-folder', async (event, filePath: string, folderPath
     return { success: false, error: 'Invalid folder path' };
   }
 
+  if (!(await isManagedWritePath(filePath)) || !(await isManagedWritePath(folderPath))) {
+    logger.error('[Main] move-file-to-folder: path outside managed archive');
+    return { success: false, error: 'Path is outside the managed archive' };
+  }
+
   try {
     // Verify file exists
     const fileStats = await fs.stat(filePath);
@@ -3138,6 +3170,9 @@ ipcMain.handle('move-file-to-folder', async (event, filePath: string, folderPath
 ipcMain.handle('rename-file', async (event, filePath: string, newName: string) => {
   if (!isSafePath(filePath)) {
     throw new Error('Invalid file path');
+  }
+  if (!(await isManagedWritePath(filePath))) {
+    throw new Error('Path is outside the managed archive');
   }
 
   if (!newName || !newName.trim()) {
@@ -3733,6 +3768,9 @@ ipcMain.handle('save-text-file', async (event, filePath: string, content: string
     if (!isSafePath(filePath)) {
       throw new Error('Invalid file path');
     }
+    if (!(await isManagedWritePath(filePath))) {
+      throw new Error('Path is outside the managed archive');
+    }
     
     await fs.writeFile(filePath, content, 'utf8');
     return { success: true };
@@ -3747,6 +3785,9 @@ ipcMain.handle('delete-text-file', async (event, filePath: string) => {
   try {
     if (!isSafePath(filePath)) {
       throw new Error('Invalid file path');
+    }
+    if (!(await isManagedWritePath(filePath))) {
+      throw new Error('Path is outside the managed archive');
     }
     
     await fs.unlink(filePath);
@@ -3938,12 +3979,45 @@ function getDialogParentWindow(event?: Electron.IpcMainInvokeEvent): BrowserWind
   return senderWindow ?? BrowserWindow.getFocusedWindow() ?? mainWindow;
 }
 
+/**
+ * Applies deny-by-default navigation/window-open hardening to a window.
+ *
+ * The renderer only ever needs to load the app's own pages (the Vite dev server
+ * in development, or the packaged `index.html` in production). Any attempt to
+ * open a new window or navigate elsewhere is blocked; genuine external http(s)
+ * links are instead handed to the OS browser via `shell.openExternal`. This
+ * limits the blast radius if renderer content is ever compromised, without
+ * changing any in-app behavior.
+ */
+function applyWindowSecurity(win: BrowserWindow): void {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      void shell.openExternal(url).catch((err) => {
+        logger.warn('Failed to open external URL:', err);
+      });
+    } else {
+      logger.warn('Blocked window open for non-external URL:', url);
+    }
+    return { action: 'deny' };
+  });
+
+  win.webContents.on('will-navigate', (event, url) => {
+    const devServerBase = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+    const isDevServer = isDev && url.startsWith(devServerBase);
+    const isAppFile = url.startsWith('file://');
+    if (!isDevServer && !isAppFile) {
+      logger.warn('Blocked navigation to:', url);
+      event.preventDefault();
+    }
+  });
+}
+
 function createResearchWorkspaceWindow(options: {
   title: string;
   parent?: BrowserWindow | null;
 }): BrowserWindow {
   const bounds = getResearchWorkspaceBounds(options.parent ?? mainWindow);
-  return new BrowserWindow({
+  const win = new BrowserWindow({
     ...bounds,
     minWidth: 1000,
     minHeight: 700,
@@ -3962,6 +4036,8 @@ function createResearchWorkspaceWindow(options: {
     show: false,
     title: options.title,
   });
+  applyWindowSecurity(win);
+  return win;
 }
 
 function sendJsonEventToWindow(
@@ -4041,6 +4117,8 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
       frame: true,
       show: false,
     });
+
+    applyWindowSecurity(wordEditorWindow);
     
     // Load the app
     if (isDev) {
@@ -4059,12 +4137,12 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
     });
     
     // Handle window close with unsaved changes check
-    wordEditorWindow.on('close', async (event) => {
+    wordEditorWindow.on('close', async () => {
       if (!wordEditorWindow) return;
       
       try {
         // Check for unsaved changes by querying the renderer
-        const hasUnsavedChanges = await wordEditorWindow.webContents.executeJavaScript(`
+        await wordEditorWindow.webContents.executeJavaScript(`
           (function() {
             // Try to get the editor ref from the window
             // This is a fallback - the renderer should handle this via beforeunload
@@ -4502,6 +4580,8 @@ ipcMain.handle('create-pdf-audit-window', async (event, options: {
       show: false,
       title: 'PDF Audit',
     });
+
+    applyWindowSecurity(pdfAuditWindow);
     
     // Load the app
     if (isDev) {
@@ -4712,6 +4792,8 @@ ipcMain.handle('create-pdf-extraction-window', async (event, options: {
       show: false,
       title: 'PDF Extraction',
     });
+
+    applyWindowSecurity(pdfExtractionWindow);
     
     // Load the app
     if (isDev) {
@@ -4874,11 +4956,8 @@ ipcMain.handle('reattach-pdf-extraction', async (event, options: {
 });
 
 // Open bookmark in main window (from detached editor)
-ipcMain.handle('open-bookmark-in-main-window', async (event, options: { pdfPath: string; pageNumber: number }) => {
+ipcMain.handle('open-bookmark-in-main-window', async (_event, options: { pdfPath: string; pageNumber: number }) => {
   try {
-    // Get the window that sent the request (the detached editor window)
-    const senderWindow = BrowserWindow.fromWebContents(event.sender);
-    
     // Send bookmark data to main window
     if (mainWindow && !mainWindow.isDestroyed()) {
       // Focus the main window

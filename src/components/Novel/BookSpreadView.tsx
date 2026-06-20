@@ -192,7 +192,7 @@ export function BookSpreadView({
   );
 
   const handlePageContent = (pageId: string, payload: PageEditorInputPayload) => {
-    let pages = [...novelDoc.pages];
+    const pages = [...novelDoc.pages];
     const startPageIndex = pages.findIndex((p) => p.id === pageId);
     if (startPageIndex < 0) return;
 

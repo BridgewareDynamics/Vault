@@ -119,7 +119,7 @@ describe('WordEditorToolbar', () => {
         />
       );
 
-      let leftButton = screen.getByLabelText('Align left');
+      const leftButton = screen.getByLabelText('Align left');
       expect(leftButton.className).toContain('bg-cyber-purple-500/20');
 
       rerender(

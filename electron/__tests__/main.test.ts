@@ -8,6 +8,8 @@ import {
   isValidDirectory,
   isValidFolderName,
   isSafePath,
+  isSafeStorageId,
+  isPathWithinBase,
 } from '../utils/pathValidator';
 import {
   loadArchiveConfig,
@@ -198,6 +200,8 @@ describe('IPC Handlers', () => {
     // Setup default mocks
     (isValidPDFFile as any).mockReturnValue(true);
     (isSafePath as any).mockReturnValue(true);
+    (isSafeStorageId as any).mockReturnValue(true);
+    (isPathWithinBase as any).mockReturnValue(true);
     (isValidDirectory as any).mockResolvedValue(true);
     (isValidFolderName as any).mockReturnValue(true);
     (fs.access as any).mockResolvedValue(undefined);
@@ -523,7 +527,7 @@ describe('IPC Handlers', () => {
       (getArchiveDrive as any).mockResolvedValue('/archive/drive');
       // Mock fs.access to reject with ENOENT (file doesn't exist) - this is what we want for a new case
       // isErrorWithCode requires either Error instance or object with 'message' property
-      (fs.access as any).mockImplementation((filePath: string) => {
+      (fs.access as any).mockImplementation((_filePath: string) => {
         const error: any = new Error('File not found');
         error.code = 'ENOENT';
         return Promise.reject(error);
@@ -612,6 +616,80 @@ describe('IPC Handlers', () => {
 
       expect(result).toBe(true);
       expect(fs.rm).toHaveBeenCalledWith('/path/to/folder', { recursive: true, force: true });
+    });
+  });
+
+  describe('Phase 1 security: managed-path containment', () => {
+    it('delete-file rejects paths outside the managed archive', async () => {
+      await import('../main');
+      const handler = getHandler('delete-file');
+
+      (isPathWithinBase as any).mockReturnValue(false);
+
+      await expect(handler(null, '/etc/passwd', false)).rejects.toThrow(
+        'Path is outside the managed archive',
+      );
+      expect(fs.unlink).not.toHaveBeenCalled();
+      expect(fs.rm).not.toHaveBeenCalled();
+    });
+
+    it('rename-file rejects paths outside the managed archive', async () => {
+      await import('../main');
+      const handler = getHandler('rename-file');
+
+      (isPathWithinBase as any).mockReturnValue(false);
+
+      await expect(handler(null, '/etc/old.pdf', 'new.pdf')).rejects.toThrow(
+        'Path is outside the managed archive',
+      );
+      expect(fs.rename).not.toHaveBeenCalled();
+    });
+
+    it('move-file-to-folder returns an error for paths outside the managed archive', async () => {
+      await import('../main');
+      const handler = getHandler('move-file-to-folder');
+
+      (isPathWithinBase as any).mockReturnValue(false);
+
+      const result = await handler(null, '/etc/file.pdf', '/etc/dest');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('outside the managed archive');
+      expect(fs.rename).not.toHaveBeenCalled();
+    });
+
+    it('save-text-file rejects paths outside the managed archive', async () => {
+      await import('../main');
+      const handler = getHandler('save-text-file');
+
+      (isPathWithinBase as any).mockReturnValue(false);
+
+      await expect(handler(null, '/etc/notes.txt', 'content')).rejects.toThrow(
+        'Path is outside the managed archive',
+      );
+      expect(fs.writeFile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Phase 1 security: bookmark id validation', () => {
+    it('save-bookmark-thumbnail rejects ids that are not safe storage ids', async () => {
+      await import('../main');
+      const handler = getHandler('save-bookmark-thumbnail');
+
+      (isSafeStorageId as any).mockReturnValue(false);
+
+      await expect(handler(null, '../../evil', 'data:image/png;base64,AAAA')).rejects.toThrow(
+        'Invalid bookmark id',
+      );
+    });
+
+    it('get-bookmark-thumbnail rejects ids that are not safe storage ids', async () => {
+      await import('../main');
+      const handler = getHandler('get-bookmark-thumbnail');
+
+      (isSafeStorageId as any).mockReturnValue(false);
+
+      await expect(handler(null, '..\\..\\evil')).rejects.toThrow('Invalid bookmark id');
     });
   });
 
@@ -1955,8 +2033,6 @@ describe('IPC Handlers', () => {
       await import('../main');
       const handler = getHandler('toggle-fullscreen');
 
-      // Mock mainWindow as null
-      const mainModule = await import('../main');
       // We can't directly set mainWindow, but we can test the error path
       // by ensuring the handler checks for mainWindow
 

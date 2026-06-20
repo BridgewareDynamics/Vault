@@ -42,7 +42,7 @@ describe('BlockExpandModal', () => {
       <BlockExpandModal
         isOpen
         block={makeBlock()}
-        theme="dark"
+        theme="brideware-purple"
         onClose={vi.fn()}
         onNotesChange={vi.fn()}
       />
@@ -82,7 +82,7 @@ describe('BlockExpandModal', () => {
       <BlockExpandModal
         isOpen
         block={makeBlock()}
-        theme="dark"
+        theme="brideware-purple"
         onClose={vi.fn()}
         onNotesChange={vi.fn()}
         onRemoveEvidence={onRemoveEvidence}

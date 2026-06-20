@@ -260,6 +260,8 @@ describe('settings', () => {
         extractionQuality: 'low',
         thumbnailSize: 150,
         performanceMode: 'balanced',
+        showOnboarding: true,
+        theme: 'brideware-purple',
       };
       (fs.readFile as any).mockResolvedValue(JSON.stringify(currentSettings));
       (fs.writeFile as any).mockResolvedValue(undefined);

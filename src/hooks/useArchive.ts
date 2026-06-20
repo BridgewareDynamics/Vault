@@ -4,7 +4,6 @@ import { useToast } from '../components/Toast/ToastContext';
 import { logger } from '../utils/logger';
 import { getUserFriendlyError } from '../utils/errorMessages';
 import { useCategoryTags } from './useCategoryTags';
-import { isMemoryHigh, requestGarbageCollection, formatBytes, getMemoryInfo } from '../utils/memoryMonitor';
 import {
   getThumbnailMemoryCache,
   hasThumbnailInCache,
@@ -130,10 +129,41 @@ export function useArchive() {
     loadingThumbnailsRef.current.clear();
   }, []);
 
+  // Single memory-pressure handler driven by the MemoryManager monitor (one
+  // timer/threshold for the whole app) instead of a second independent interval.
+  // It aborts in-flight renders and prunes thumbnails outside the current view.
+  const handleMemoryPressure = useCallback(() => {
+    abortInFlightThumbnails();
+
+    // Never purge everything mid folder-navigation (file list briefly empty).
+    if (filesRef.current.length === 0) {
+      return;
+    }
+
+    const currentFilePaths = new Set(filesRef.current.map((f) => f.path));
+    const deleted = thumbnailMemoryCache.deleteIf((key) => !currentFilePaths.has(key));
+    if (deleted > 0) {
+      logger.info(`Auto-cleanup: removed ${deleted} thumbnail(s) outside the current view`);
+    }
+
+    // If still large, shrink toward 75% while always keeping the current view.
+    if (thumbnailMemoryCache.size() > 150) {
+      const targetSize = Math.floor(thumbnailMemoryCache.size() * 0.75);
+      const keys = thumbnailMemoryCache.keys();
+      const keysToDelete = keys.slice(0, thumbnailMemoryCache.size() - targetSize);
+      keysToDelete.forEach((key) => {
+        if (!currentFilePaths.has(key)) {
+          thumbnailMemoryCache.delete(key);
+        }
+      });
+      logger.info(`Auto-cleanup: reduced thumbnail cache to ${thumbnailMemoryCache.size()}`);
+    }
+  }, [abortInFlightThumbnails]);
+
   useEffect(() => {
     const memoryManager = getMemoryManager();
-    return memoryManager.registerCleanupCallback(abortInFlightThumbnails);
-  }, [abortInFlightThumbnails]);
+    return memoryManager.registerCleanupCallback(handleMemoryPressure);
+  }, [handleMemoryPressure]);
 
   const flushThumbnailUpdates = useCallback(() => {
     if (!isMountedRef.current) {
@@ -234,49 +264,6 @@ export function useArchive() {
       }
     };
   }, [currentCase?.path]);
-
-  // Automatic memory cleanup when memory usage is high
-  useEffect(() => {
-    const cleanupInterval = setInterval(() => {
-      // Check memory usage every 30 seconds
-      if (isMemoryHigh(85)) {
-        const memoryInfo = getMemoryInfo();
-        logger.warn(`High memory usage detected: ${memoryInfo ? formatBytes(memoryInfo.usedJSHeapSize) : 'unknown'}. Triggering cleanup...`);
-
-        // Never purge the entire cache during in-flight folder navigation
-        if (filesRef.current.length === 0) {
-          requestGarbageCollection();
-          return;
-        }
-        
-        // Clean up thumbnails for files not in current view
-        const currentFilePaths = new Set(filesRef.current.map(f => f.path));
-        const deleted = thumbnailMemoryCache.deleteIf((key) => !currentFilePaths.has(key));
-        
-        if (deleted > 0) {
-          logger.info(`Auto-cleanup: Removed ${deleted} thumbnail(s) from cache`);
-        }
-        
-        // Reduce cache size by 25% if still high
-        if (thumbnailMemoryCache.size() > 150) {
-          const targetSize = Math.floor(thumbnailMemoryCache.size() * 0.75);
-          const keys = thumbnailMemoryCache.keys();
-          const keysToDelete = keys.slice(0, thumbnailMemoryCache.size() - targetSize);
-          keysToDelete.forEach(key => {
-            if (!currentFilePaths.has(key)) {
-              thumbnailMemoryCache.delete(key);
-            }
-          });
-          logger.info(`Auto-cleanup: Reduced cache size to ${thumbnailMemoryCache.size()}`);
-        }
-        
-        // Request garbage collection if available
-        requestGarbageCollection();
-      }
-    }, 30000); // Check every 30 seconds
-
-    return () => clearInterval(cleanupInterval);
-  }, []);
 
   const loadArchiveConfig = useCallback(async () => {
     try {

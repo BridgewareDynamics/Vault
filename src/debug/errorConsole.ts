@@ -30,7 +30,7 @@ interface ErrorConsoleState {
   userDismissed: boolean;
 }
 
-let state: ErrorConsoleState = {
+const state: ErrorConsoleState = {
   errors: [],
   panelVisible: false,
   userDismissed: false,

@@ -210,9 +210,9 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       }, 150);
     };
 
-    window.addEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
+    window.addEventListener('reattach-word-editor-data', handleReattach);
     return () => {
-      window.removeEventListener('reattach-word-editor-data' as any, handleReattach as EventListener);
+      window.removeEventListener('reattach-word-editor-data', handleReattach);
     };
   }, [isOpen, currentCase, setContextOpen]);
 
@@ -233,8 +233,6 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       } else if (showLibrary) {
         viewState = 'library';
       }
-
-      console.log('WordEditorPanel: Detaching with viewState', viewState, { showBookmarkLibrary, showLibrary });
 
       // Create detached window - pass case path if available
       await window.electronAPI.createWordEditorWindow({

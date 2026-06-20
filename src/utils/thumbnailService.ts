@@ -60,18 +60,34 @@ export function getInflightThumbnailCount(): number {
 }
 
 /**
+ * Build the cache/dedup key for a thumbnail request. Size-dependent renders
+ * (e.g. PDF page previews at 240px vs 480px) must NOT collide on `filePath`
+ * alone, so the requested max size is folded into the key when provided. File
+ * thumbnails that have a single canonical size pass no size and key on the path.
+ */
+function buildThumbnailKey(filePath: string, maxSize?: number): string {
+  return maxSize == null ? filePath : `${filePath}@${maxSize}`;
+}
+
+/**
  * Shared thumbnail loader: memory cache, inflight dedup, and bounded concurrency.
+ *
+ * @param maxSize Optional pixel size that distinguishes differently-sized renders
+ *   of the same file so they are cached and deduped independently.
  */
 export async function requestThumbnail(
   filePath: string,
   loader: () => Promise<string>,
+  maxSize?: number,
 ): Promise<string> {
-  const cached = memoryCache.get(filePath);
+  const key = buildThumbnailKey(filePath, maxSize);
+
+  const cached = memoryCache.get(key);
   if (cached) {
     return cached;
   }
 
-  const existing = inflight.get(filePath);
+  const existing = inflight.get(key);
   if (existing) {
     return existing;
   }
@@ -79,21 +95,21 @@ export async function requestThumbnail(
   const promise = (async () => {
     await acquireSlot();
     try {
-      const cachedAfterWait = memoryCache.get(filePath);
+      const cachedAfterWait = memoryCache.get(key);
       if (cachedAfterWait) {
         return cachedAfterWait;
       }
 
       const thumbnail = await loader();
-      memoryCache.set(filePath, thumbnail);
+      memoryCache.set(key, thumbnail);
       return thumbnail;
     } finally {
       releaseSlot();
-      inflight.delete(filePath);
+      inflight.delete(key);
     }
   })();
 
-  inflight.set(filePath, promise);
+  inflight.set(key, promise);
   return promise;
 }
 

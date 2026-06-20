@@ -116,7 +116,6 @@ describe('NewFileConfirmationDialog', () => {
   });
 
   it('should call onClose when backdrop is clicked', async () => {
-    const user = userEvent.setup();
     const { container } = render(
       <NewFileConfirmationDialog
         isOpen={true}

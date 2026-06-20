@@ -129,7 +129,7 @@ export async function writeMapDocument(doc: MapDocumentStored): Promise<void> {
 
 export async function saveMapDocument(doc: MapDocumentStored): Promise<MapDocumentStored> {
   let nextFolderPath = doc.mapFolderPath;
-  let nextCasePath = doc.casePath ?? null;
+  const nextCasePath = doc.casePath ?? null;
 
   if (nextCasePath) {
     if (!isSafePath(nextCasePath)) {

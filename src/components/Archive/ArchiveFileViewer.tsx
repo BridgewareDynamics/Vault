@@ -106,11 +106,11 @@ function ArchiveFileViewerContent({
 
     // Listen to both the reattach event and the open-from-viewer event
     // Both should prevent closing during the opening process
-    window.addEventListener('reattach-word-editor-data' as any, handleOpenEditor as EventListener);
-    window.addEventListener('open-word-editor-from-viewer' as any, handleOpenEditor as EventListener);
+    window.addEventListener('reattach-word-editor-data', handleOpenEditor);
+    window.addEventListener('open-word-editor-from-viewer', handleOpenEditor);
     return () => {
-      window.removeEventListener('reattach-word-editor-data' as any, handleOpenEditor as EventListener);
-      window.removeEventListener('open-word-editor-from-viewer' as any, handleOpenEditor as EventListener);
+      window.removeEventListener('reattach-word-editor-data', handleOpenEditor);
+      window.removeEventListener('open-word-editor-from-viewer', handleOpenEditor);
       if (reattachTimeoutRef.current) {
         clearTimeout(reattachTimeoutRef.current);
         reattachTimeoutRef.current = null;

@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Bookmark, Trash2, ExternalLink } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Bookmark as BookmarkType } from '../../types';
+import { useToast } from '../Toast/ToastContext';
 
 interface BookmarkCardProps {
   bookmark: BookmarkType;
@@ -12,6 +13,7 @@ interface BookmarkCardProps {
 export function BookmarkCard({ bookmark, onDelete, isDetached = false }: BookmarkCardProps) {
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
 
   useEffect(() => {
     loadThumbnail();
@@ -65,6 +67,7 @@ export function BookmarkCard({ bookmark, onDelete, isDetached = false }: Bookmar
           pageNumber: bookmark.pageNumber,
         });
       } catch (error) {
+        toast.error('Failed to open bookmark');
         console.error('Failed to open bookmark in main window:', error);
       }
     } else {

@@ -135,7 +135,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
 
   // Listen for detached window data
   useEffect(() => {
-    const handleData = (event: CustomEvent<{ content: string; filePath?: string | null }>) => {
+    const handleData = (event: WindowEventMap['word-editor-data']) => {
       const data = event.detail;
       if (data.content && lexicalEditorRef.current) {
         lexicalEditorRef.current.setContent(data.content);
@@ -147,9 +147,9 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       }
     };
 
-    window.addEventListener('word-editor-data' as any, handleData as EventListener);
+    window.addEventListener('word-editor-data', handleData);
     return () => {
-      window.removeEventListener('word-editor-data' as any, handleData as EventListener);
+      window.removeEventListener('word-editor-data', handleData);
     };
   }, [onFilePathChange, setContent, setHasUnsavedChanges]);
 

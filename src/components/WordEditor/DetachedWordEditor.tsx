@@ -31,9 +31,8 @@ export function DetachedWordEditor() {
   useEffect(() => {
     // The main process will send data via webContents.send
     // We'll use a custom event listener
-    const handleData = (_event: CustomEvent<{ content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }>) => {
+    const handleData = (_event: WindowEventMap['word-editor-data']) => {
       const data = _event.detail;
-      console.log('DetachedWordEditor: Received word-editor-data event', { viewState: data.viewState, filePath: data.filePath, casePath: data.casePath });
 
       // Set the content in the editor by updating the DOM directly
       // The WordEditor component will handle loading the file if filePath is set
@@ -50,25 +49,21 @@ export function DetachedWordEditor() {
 
       // Restore view state - always set it explicitly to ensure correct state
       const viewState = data.viewState || 'editor';
-      console.log('DetachedWordEditor: Setting view state to', viewState);
 
       if (viewState === 'bookmarkLibrary') {
         setShowBookmarkLibrary(true);
         setShowLibrary(false);
-        console.log('DetachedWordEditor: Set showBookmarkLibrary=true, showLibrary=false');
         // Clear loading immediately for library views
         setIsInitializing(false);
       } else if (viewState === 'library') {
         setShowBookmarkLibrary(false);
         setShowLibrary(true);
-        console.log('DetachedWordEditor: Set showBookmarkLibrary=false, showLibrary=true');
         // Clear loading immediately for library views
         setIsInitializing(false);
       } else {
         // 'editor' or default
         setShowBookmarkLibrary(false);
         setShowLibrary(false);
-        console.log('DetachedWordEditor: Set showBookmarkLibrary=false, showLibrary=false (editor view)');
         // Mark initialization as complete after a short delay to allow the editor to render
         setTimeout(() => {
           setIsInitializing(false);
@@ -77,22 +72,21 @@ export function DetachedWordEditor() {
     };
 
     // Listen for custom event - also check if event was already dispatched
-    window.addEventListener('word-editor-data' as any, handleData as EventListener);
+    window.addEventListener('word-editor-data', handleData);
 
     // Check if event data is already available (in case event fired before listener was attached)
     // This shouldn't happen due to the 500ms delay, but just in case
     const checkExistingData = () => {
-      const existingData = (window as any).__wordEditorInitialData;
+      const existingData = window.__wordEditorInitialData;
       if (existingData) {
-        console.log('DetachedWordEditor: Found existing initial data', existingData);
-        handleData({ detail: existingData } as CustomEvent);
-        delete (window as any).__wordEditorInitialData;
+        handleData(new CustomEvent('word-editor-data', { detail: existingData }));
+        delete window.__wordEditorInitialData;
       }
     };
     checkExistingData();
 
     return () => {
-      window.removeEventListener('word-editor-data' as any, handleData as EventListener);
+      window.removeEventListener('word-editor-data', handleData);
     };
   }, []);
 
@@ -106,11 +100,6 @@ export function DetachedWordEditor() {
 
     return () => clearTimeout(timeout);
   }, [isInitializing]);
-
-  // Debug: Log view state changes
-  useEffect(() => {
-    console.log('DetachedWordEditor: View state changed', { showBookmarkLibrary, showLibrary });
-  }, [showBookmarkLibrary, showLibrary]);
 
   // Track showLibrary changes - ensure editor is ready immediately when library closes
   useEffect(() => {

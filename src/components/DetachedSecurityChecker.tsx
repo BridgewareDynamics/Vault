@@ -81,13 +81,6 @@ export function DetachedSecurityChecker() {
     
     logger.debug('DetachedSecurityChecker: Setting up audit result listener');
     
-    // Also set up a test to verify IPC is working
-    const testListener = () => {
-      logger.debug('DetachedSecurityChecker: IPC listener is active and ready');
-    };
-    // Small delay to log that listener is ready
-    setTimeout(testListener, 100);
-    
     const removeResultListener = window.electronAPI.onAuditResult((auditResult: RedactionAuditResult) => {
       logger.debug('DetachedSecurityChecker: Received audit result via IPC', auditResult);
       logger.debug('DetachedSecurityChecker: Current state before update', {
@@ -170,19 +163,19 @@ export function DetachedSecurityChecker() {
       }
     };
 
-    window.addEventListener('pdf-audit-data' as any, handleData as EventListener);
+    window.addEventListener('pdf-audit-data', handleData);
 
     const checkExistingData = () => {
-      const existingData = (window as any).__pdfAuditInitialData;
+      const existingData = window.__pdfAuditInitialData;
       if (existingData) {
-        handleData({ detail: existingData } as CustomEvent);
-        delete (window as any).__pdfAuditInitialData;
+        handleData(new CustomEvent('pdf-audit-data', { detail: existingData }));
+        delete window.__pdfAuditInitialData;
       }
     };
     checkExistingData();
 
     return () => {
-      window.removeEventListener('pdf-audit-data' as any, handleData as EventListener);
+      window.removeEventListener('pdf-audit-data', handleData);
     };
   }, []);
 

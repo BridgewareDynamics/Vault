@@ -52,7 +52,7 @@ async function findExtractionFoldersForPDF(
     
     // Filter for folders with matching parentPdfName
     return files.filter(
-      (file: any) =>
+      (file) =>
         file.isFolder &&
         file.parentPdfName &&
         file.parentPdfName.toLowerCase() === pdfName.toLowerCase()

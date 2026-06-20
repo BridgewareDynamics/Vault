@@ -118,11 +118,6 @@ vi.mock('../Toast/ToastContext', () => ({
   }),
 }));
 
-// Mock debugLog
-vi.mock('../../utils/debugLogger', () => ({
-  debugLog: vi.fn(),
-}));
-
 describe('WordEditor', () => {
   let mockOnFilePathChange: ReturnType<typeof vi.fn>;
   let mockSetContent: ReturnType<typeof vi.fn>;
@@ -164,7 +159,9 @@ describe('WordEditor', () => {
 
     // Get the mock function from the module
     const useWordEditorStateModule = await import('../../hooks/useWordEditorState');
-    mockUseWordEditorState = vi.mocked(useWordEditorStateModule.useWordEditorState);
+    mockUseWordEditorState = vi.mocked(
+      useWordEditorStateModule.useWordEditorState,
+    ) as unknown as ReturnType<typeof vi.fn>;
     mockUseWordEditorState.mockReturnValue({
       content: '',
       setContent: mockSetContent,

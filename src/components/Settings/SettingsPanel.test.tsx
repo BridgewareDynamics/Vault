@@ -17,6 +17,8 @@ describe('SettingsPanel', () => {
     extractionQuality: 'high',
     thumbnailSize: 200,
     performanceMode: 'auto',
+    showOnboarding: false,
+    theme: 'brideware-purple',
   };
 
   const mockMemoryInfo = {
@@ -28,7 +30,7 @@ describe('SettingsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (mockElectronAPI.getSettings as any).mockResolvedValue(defaultSettings);
-    (mockElectronAPI.updateSettings as any).mockImplementation(async (updates) => ({
+    (mockElectronAPI.updateSettings as any).mockImplementation(async (updates: Partial<AppSettings>) => ({
       ...defaultSettings,
       ...updates,
     }));

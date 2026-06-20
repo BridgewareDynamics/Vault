@@ -28,8 +28,8 @@ export async function generatePdfThumbnailInRenderer(
   options: GeneratePdfThumbnailOptions = {}
 ): Promise<string> {
   const maxSize = options.maxSize ?? 200;
-  let pdf: any = null;
-  let page: any = null;
+  let pdf: import('pdfjs-dist').PDFDocumentProxy | null = null;
+  let page: import('pdfjs-dist').PDFPageProxy | null = null;
   let canvas: HTMLCanvasElement | null = null;
 
   try {
@@ -57,7 +57,7 @@ export async function generatePdfThumbnailInRenderer(
       throw new DOMException('Aborted', 'AbortError');
     }
 
-    page = (await pdf.getPage(1)) as typeof page;
+    page = await pdf!.getPage(1);
 
     const baseViewport = page!.getViewport({ scale: 1.0 });
     const aspectRatio = baseViewport.width / baseViewport.height;

@@ -119,7 +119,10 @@ export const ArchiveFileItem = memo(function ArchiveFileItem({ file, onClick, on
       whileTap={{ scale: 0.98 }}
       className={`relative cursor-pointer group ${showDropdown ? 'mb-16' : ''}`}
       draggable={true}
-      onDragStart={handleDragStart as any}
+      // Native HTML drag (draggable) is used here, but framer-motion types
+      // onDragStart as its own pan handler. Cast to the prop's declared type to
+      // bridge the two without `any`; the runtime handler receives a DragEvent.
+      onDragStart={handleDragStart as unknown as React.ComponentProps<typeof motion.div>['onDragStart']}
       onDragEnd={handleDragEnd}
     >
       <div

@@ -12,7 +12,7 @@ function makeEntry(): TranscriptionListEntry {
     casePath: null,
     modified: Date.now() - 1000 * 60 * 60 * 5,
     sourceCount: 3,
-    status: 'ready',
+    status: 'completed',
     excerpt: 'Opening statement transcript excerpt.',
   };
 }
@@ -22,7 +22,7 @@ describe('DeleteTranscriptionDialog', () => {
     render(
       <DeleteTranscriptionDialog
         isOpen
-        theme="dark"
+        theme="brideware-purple"
         entry={makeEntry()}
         onClose={vi.fn()}
         onConfirm={vi.fn()}

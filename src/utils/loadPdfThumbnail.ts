@@ -53,14 +53,22 @@ export async function loadPdfPreviewThumbnail(
     return null;
   }
 
+  // PDF previews render at a specific max size; key the cache/dedup on it so a
+  // 240px request and a 480px request for the same file do not collide.
+  const maxSize = options.maxSize ?? 200;
+
   try {
-    const thumbnail = await requestThumbnail(filePath, async () => {
-      const loaded = await loadPdfPreviewThumbnailUncached(filePath, options);
-      if (!loaded) {
-        throw new Error('PDF thumbnail unavailable');
-      }
-      return loaded;
-    });
+    const thumbnail = await requestThumbnail(
+      filePath,
+      async () => {
+        const loaded = await loadPdfPreviewThumbnailUncached(filePath, options);
+        if (!loaded) {
+          throw new Error('PDF thumbnail unavailable');
+        }
+        return loaded;
+      },
+      maxSize,
+    );
 
     if (isPdfPlaceholderThumbnail(thumbnail)) {
       return null;

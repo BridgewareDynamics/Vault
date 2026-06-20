@@ -155,18 +155,6 @@ export function buildDefaultTranscriptionProgress(): TranscriptionProgressStored
   };
 }
 
-const AUDIO_EXTENSIONS = new Set([
-  '.aac',
-  '.amr',
-  '.flac',
-  '.m4a',
-  '.mp3',
-  '.ogg',
-  '.wav',
-  '.wma',
-  '.opus',
-]);
-
 const VIDEO_EXTENSIONS = new Set([
   '.asf',
   '.avi',

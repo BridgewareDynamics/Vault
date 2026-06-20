@@ -1,7 +1,6 @@
 import Database from 'better-sqlite3';
 import { app } from 'electron';
 import * as path from 'path';
-import * as fs from 'fs/promises';
 import * as crypto from 'crypto';
 import { calculateStreamingSha256 } from '../utils/streamChecksum';
 import { SCHEMA } from './schema';
@@ -9,7 +8,6 @@ import {
   Case,
   File,
   CategoryTag,
-  SyncMetadata,
   CaseCreateData,
   CaseUpdateData,
   FileCreateData,

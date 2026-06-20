@@ -16,11 +16,12 @@ export function usePdfThumbnail(filePath: string | null, options: LoadPdfThumbna
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setUnavailable(false);
     setThumbnail(null);
 
-    void loadPdfPreviewThumbnail(filePath, { maxSize })
+    void loadPdfPreviewThumbnail(filePath, { maxSize, signal: controller.signal })
       .then((src) => {
         if (cancelled) {
           return;
@@ -42,6 +43,9 @@ export function usePdfThumbnail(filePath: string | null, options: LoadPdfThumbna
 
     return () => {
       cancelled = true;
+      // Abort the in-flight pdf.js render/read so fast navigation or unmount does
+      // not keep burning CPU/IO on a thumbnail nobody will display.
+      controller.abort();
     };
   }, [filePath, maxSize]);
 

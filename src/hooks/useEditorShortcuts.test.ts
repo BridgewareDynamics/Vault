@@ -10,7 +10,6 @@ describe('useEditorShortcuts', () => {
   let mockOnToggleUnderline: ReturnType<typeof vi.fn>;
   let mockOnUndo: ReturnType<typeof vi.fn>;
   let mockOnRedo: ReturnType<typeof vi.fn>;
-  let mockEditorRef: React.RefObject<{ focus: () => void }>;
 
   beforeEach(() => {
     mockOnSave = vi.fn();
@@ -20,7 +19,6 @@ describe('useEditorShortcuts', () => {
     mockOnToggleUnderline = vi.fn();
     mockOnUndo = vi.fn();
     mockOnRedo = vi.fn();
-    mockEditorRef = { current: { focus: vi.fn() } };
 
     // Mock navigator.platform
     Object.defineProperty(navigator, 'platform', {

@@ -138,7 +138,7 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
         
         // Join paragraphs with newlines
         // This correctly converts: <p>line1</p><p></p><p>line2</p> -> "line1\n\nline2"
-        let result = lines.join('\n');
+        const result = lines.join('\n');
         
         // Remove trailing newlines to prevent accumulation on save/reload cycles
         // This normalizes trailing whitespace (standard text editor behavior)

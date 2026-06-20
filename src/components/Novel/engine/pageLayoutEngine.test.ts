@@ -32,14 +32,12 @@ describe('pageLayoutEngine', () => {
       fontSize: 12,
     };
 
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function scrollHeightMock() {
-      const element = this as HTMLElement;
-      const textLength = element.textContent?.length ?? 0;
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function scrollHeightMock(this: HTMLElement) {
+      const textLength = this.textContent?.length ?? 0;
       return textLength > 80 ? 400 : 80;
     });
-    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function clientHeightMock() {
-      const element = this as HTMLElement;
-      const style = element.style.height;
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function clientHeightMock(this: HTMLElement) {
+      const style = this.style.height;
       if (style.endsWith('px')) {
         return Number.parseFloat(style);
       }

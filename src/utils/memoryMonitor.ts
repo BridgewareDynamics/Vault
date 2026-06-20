@@ -8,12 +8,18 @@ interface MemoryInfo {
   jsHeapSizeLimit: number;
 }
 
+/** Non-standard Chromium-only `performance.memory` extension. */
+interface PerformanceWithMemory extends Performance {
+  memory?: MemoryInfo;
+}
+
 /**
  * Get current memory usage if available
  */
 export function getMemoryInfo(): MemoryInfo | null {
-  if (typeof performance !== 'undefined' && (performance as any).memory) {
-    const memory = (performance as any).memory;
+  const perf = typeof performance !== 'undefined' ? (performance as PerformanceWithMemory) : null;
+  if (perf?.memory) {
+    const memory = perf.memory;
     return {
       usedJSHeapSize: memory.usedJSHeapSize || 0,
       totalJSHeapSize: memory.totalJSHeapSize || 0,
@@ -57,10 +63,11 @@ export function isMemoryHigh(threshold: number = 80): boolean {
  * Request garbage collection if available (requires --js-flags=--expose-gc)
  */
 export function requestGarbageCollection(): void {
-  if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+  const globalWithGc = globalThis as typeof globalThis & { gc?: () => void };
+  if (typeof globalThis !== 'undefined' && globalWithGc.gc) {
     try {
-      (globalThis as any).gc();
-    } catch (e) {
+      globalWithGc.gc();
+    } catch {
       // Ignore errors
     }
   }

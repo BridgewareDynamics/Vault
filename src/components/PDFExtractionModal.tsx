@@ -22,7 +22,7 @@ import { PDFExtractionSourceHero } from './PDFExtraction/PDFExtractionSourceHero
 import { PDFExtractionPagePreviewPanel } from './PDFExtraction/PDFExtractionPagePreviewPanel';
 import { CaseSelectionDialog } from './Archive/CaseSelectionDialog';
 import { ArchiveFileViewer } from './Archive/ArchiveFileViewer';
-import { ConversionSettings, ExtractedPage } from '../types';
+import { ConversionSettings, ExtractedPage, ExtractionProgress } from '../types';
 import { isLightTheme } from '../theme/themeSemantics';
 import { useSettingsContext } from '../utils/settingsContext';
 import { Theme } from '../types';
@@ -332,7 +332,7 @@ export function PDFExtractionModal({
       selectedPages: number[];
       previewPage: ExtractedPage | null;
       isExtracting: boolean;
-      progress: any | null;
+      progress: ExtractionProgress | null;
       error: string | null;
       statusMessage: string;
       caseFolderPath?: string | null;
@@ -350,12 +350,12 @@ export function PDFExtractionModal({
 
     // Check for stored reattach data when modal opens
     const checkStoredData = () => {
-      const storedData = (window as any).__reattachPdfExtractionData;
+      const storedData = window.__reattachPdfExtractionData;
       if (storedData) {
         logger.debug('PDFExtractionModal: Found stored reattach data');
         restoreReattachState(storedData);
         // Clear stored data after using it
-        delete (window as any).__reattachPdfExtractionData;
+        delete window.__reattachPdfExtractionData;
       }
     };
 
@@ -367,7 +367,7 @@ export function PDFExtractionModal({
       selectedPages: number[];
       previewPage: ExtractedPage | null;
       isExtracting: boolean;
-      progress: any | null;
+      progress: ExtractionProgress | null;
       error: string | null;
       statusMessage: string;
       caseFolderPath?: string | null;
@@ -425,9 +425,9 @@ export function PDFExtractionModal({
       checkStoredData();
     }
 
-    window.addEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+    window.addEventListener('reattach-pdf-extraction-data', handleReattach);
     return () => {
-      window.removeEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+      window.removeEventListener('reattach-pdf-extraction-data', handleReattach);
     };
   }, [isOpen]);
 
@@ -615,7 +615,7 @@ export function PDFExtractionModal({
               const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
               const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
               const existingFolder = files.find(
-                (file: any) =>
+                (file) =>
                   file.isFolder &&
                   file.parentPdfName &&
                   file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
@@ -649,7 +649,7 @@ export function PDFExtractionModal({
             const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
             const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
             const existingFolder = files.find(
-              (file: any) =>
+              (file) =>
                 file.isFolder &&
                 file.parentPdfName &&
                 file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
@@ -668,7 +668,7 @@ export function PDFExtractionModal({
             const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
             const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
             const existingFolderForSubfolder = files.find(
-              (file: any) =>
+              (file) =>
                 file.isFolder &&
                 file.parentPdfName &&
                 file.parentPdfName.toLowerCase() === pdfName.toLowerCase()

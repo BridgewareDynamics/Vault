@@ -302,9 +302,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
       // when the audit completes or when a new audit is started
     };
 
-    window.addEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+    window.addEventListener('reattach-pdf-audit-data', handleReattach);
     return () => {
-      window.removeEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+      window.removeEventListener('reattach-pdf-audit-data', handleReattach);
     };
   }, [setResult]);
 
@@ -487,7 +487,7 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
           try {
             const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
             const existingFolder = files.find(
-              (file: any) =>
+              (file) =>
                 file.isFolder &&
                 file.parentPdfName &&
                 file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
@@ -520,7 +520,7 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
           const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
           const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
           const existingFolder = files.find(
-            (file: any) =>
+            (file) =>
               file.isFolder &&
               file.parentPdfName &&
               file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
@@ -538,7 +538,7 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
           const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
           const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
           const existingFolder = files.find(
-            (file: any) =>
+            (file) =>
               file.isFolder &&
               file.parentPdfName &&
               file.parentPdfName.toLowerCase() === pdfName.toLowerCase()

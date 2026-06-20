@@ -49,6 +49,8 @@ describe('MemoryManager', () => {
     extractionQuality: 'high',
     thumbnailSize: 200,
     performanceMode: 'auto',
+    showOnboarding: false,
+    theme: 'brideware-purple',
   };
 
   beforeEach(() => {

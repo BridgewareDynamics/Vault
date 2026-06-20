@@ -50,6 +50,24 @@ describe('thumbnailService', () => {
     expect(hasThumbnailInCache('/same.pdf')).toBe(true);
   });
 
+  it('keys requests by maxSize so different sizes do not collide', async () => {
+    const loader240 = vi.fn(async () => 'data:image/jpeg;base64,small');
+    const loader480 = vi.fn(async () => 'data:image/jpeg;base64,large');
+
+    const small = await requestThumbnail('/doc.pdf', loader240, 240);
+    const large = await requestThumbnail('/doc.pdf', loader480, 480);
+
+    expect(small).toBe('data:image/jpeg;base64,small');
+    expect(large).toBe('data:image/jpeg;base64,large');
+    expect(loader240).toHaveBeenCalledTimes(1);
+    expect(loader480).toHaveBeenCalledTimes(1);
+
+    // A repeat request at the same size is served from cache (no new load).
+    const smallAgain = await requestThumbnail('/doc.pdf', loader240, 240);
+    expect(smallAgain).toBe('data:image/jpeg;base64,small');
+    expect(loader240).toHaveBeenCalledTimes(1);
+  });
+
   it('respects concurrency cap', async () => {
     const releaseResolvers: Array<(value: string) => void> = [];
     const loader = vi.fn(

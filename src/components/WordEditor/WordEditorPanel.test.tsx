@@ -59,10 +59,6 @@ vi.mock('../Toast/ToastContext', () => ({
   }),
 }));
 
-vi.mock('../../utils/debugLogger', () => ({
-  debugLog: vi.fn(),
-}));
-
 // Mock WordEditorContext
 const mockSetIsOpen = vi.fn();
 const mockSetPanelWidth = vi.fn();

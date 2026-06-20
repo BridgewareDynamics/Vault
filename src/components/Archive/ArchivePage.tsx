@@ -545,7 +545,7 @@ export function ArchivePage({ onBack, onOpenTranscription }: ArchivePageProps) {
 
   // Listen for reattach data from detached PDF extraction window
   useEffect(() => {
-    const handleReattach = (event: any) => {
+    const handleReattach = (event: WindowEventMap['reattach-pdf-extraction-data']) => {
       const data = event.detail;
       
       // Only handle reattach if caseFolderPath is present (archive usage)
@@ -561,11 +561,11 @@ export function ArchivePage({ onBack, onOpenTranscription }: ArchivePageProps) {
       }
     };
 
-    window.addEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+    window.addEventListener('reattach-pdf-extraction-data', handleReattach);
     
     // Also check for stored data on mount
     const checkStoredData = () => {
-      const storedData = (window as any).__reattachPdfExtractionData;
+      const storedData = window.__reattachPdfExtractionData;
       if (storedData && storedData.caseFolderPath) {
         logger.debug('ArchivePage: Found stored reattach data with caseFolderPath, opening modal');
         if (storedData.pdfPath) {
@@ -579,7 +579,7 @@ export function ArchivePage({ onBack, onOpenTranscription }: ArchivePageProps) {
     const timeoutId = setTimeout(checkStoredData, 100);
     
     return () => {
-      window.removeEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+      window.removeEventListener('reattach-pdf-extraction-data', handleReattach);
       clearTimeout(timeoutId);
     };
   }, []);

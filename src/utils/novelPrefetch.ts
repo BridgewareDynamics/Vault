@@ -1,5 +1,6 @@
 import type { NovelDocument, NovelListEntry } from '../types';
 import { isVitestEnv } from './isVitestEnv';
+import { LRUCache } from './lruCache';
 
 type NovelModule = typeof import('../components/Novel/NovelModule');
 
@@ -10,7 +11,12 @@ let libraryListCache: NovelListEntry[] | null = null;
 let libraryListCachedAt = 0;
 let libraryListInflight: Promise<NovelListEntry[] | null> | null = null;
 
-const novelDocumentCache = new Map<string, { doc: NovelDocument; cachedAt: number }>();
+/** Hard cap on cached novel documents so the lazy TTL cache cannot grow unbounded. */
+export const NOVEL_DOCUMENT_CACHE_CAPACITY = 12;
+
+const novelDocumentCache = new LRUCache<{ doc: NovelDocument; cachedAt: number }>(
+  NOVEL_DOCUMENT_CACHE_CAPACITY,
+);
 const novelDocumentInflight = new Map<string, Promise<NovelDocument | null>>();
 
 export const NOVEL_LIBRARY_CACHE_TTL_MS = 30_000;
@@ -52,6 +58,11 @@ export function setCachedNovelDocument(novelFolderPath: string, doc: NovelDocume
     return;
   }
   novelDocumentCache.set(novelFolderPath, { doc, cachedAt: Date.now() });
+}
+
+/** Drop all cached novel documents (e.g. on memory pressure). */
+export function clearNovelDocumentCache(): void {
+  novelDocumentCache.clear();
 }
 
 export async function prefetchNovelDocument(novelFolderPath: string): Promise<NovelDocument | null> {

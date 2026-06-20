@@ -68,6 +68,71 @@ export function isSafePath(filePath: string): boolean {
 }
 
 /**
+ * Validates that an identifier is safe to use as a filename component.
+ *
+ * Storage identifiers (e.g. bookmark IDs) are interpolated directly into file
+ * paths. Allowing only an explicit alphanumeric/`-`/`_` charset prevents path
+ * traversal (`..`, `/`, `\`) and other filesystem metacharacters from reaching
+ * `path.join`. Generated IDs (e.g. `bookmark-<ts>-<rand>`) match this charset,
+ * so legitimate callers are unaffected.
+ */
+export function isSafeStorageId(id: unknown): id is string {
+  if (!id || typeof id !== 'string') {
+    return false;
+  }
+  // Bound the length to avoid pathologically long filenames.
+  if (id.length > 128) {
+    return false;
+  }
+  return /^[A-Za-z0-9_-]+$/.test(id);
+}
+
+/**
+ * Confirms that a resolved path is contained within one of the allowed base
+ * directories. This is defense-in-depth on top of {@link isSafePath}: even if a
+ * traversal token slips through, the operation is rejected unless it resolves
+ * inside an expected root (e.g. the archive drive or userData directory).
+ *
+ * @param targetPath The path to check (may be relative or absolute).
+ * @param allowedBaseDirs One or more base directories the path must live under.
+ */
+export function isPathWithinBase(
+  targetPath: string,
+  allowedBaseDirs: Array<string | null | undefined>,
+): boolean {
+  if (!targetPath || typeof targetPath !== 'string') {
+    return false;
+  }
+
+  // Windows paths are case-insensitive; normalize casing for comparison there
+  // so a base of `D:\Archive` still matches a target of `d:\archive\file`.
+  const normalizeCase = (p: string): string =>
+    process.platform === 'win32' ? p.toLowerCase() : p;
+
+  const resolvedTarget = normalizeCase(path.resolve(targetPath));
+
+  for (const baseDir of allowedBaseDirs) {
+    if (!baseDir || typeof baseDir !== 'string') {
+      continue;
+    }
+    const resolvedBase = normalizeCase(path.resolve(baseDir));
+    if (resolvedTarget === resolvedBase) {
+      return true;
+    }
+    // Compare against the base dir plus a trailing separator so that a base of
+    // `/data/archive` does not match a sibling like `/data/archive-evil`.
+    const baseWithSep = resolvedBase.endsWith(path.sep)
+      ? resolvedBase
+      : resolvedBase + path.sep;
+    if (resolvedTarget.startsWith(baseWithSep)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Validates if a directory path exists and is accessible
  */
 export async function isValidDirectory(dirPath: string): Promise<boolean> {

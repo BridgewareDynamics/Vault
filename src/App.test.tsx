@@ -8,6 +8,7 @@ import { setupTestSettings } from './test-utils/testSettings';
 // Mock usePDFExtraction hook
 const mockExtractPDF = vi.fn();
 const mockReset = vi.fn();
+const mockCancel = vi.fn();
 
 vi.mock('./hooks/usePDFExtraction', () => ({
   usePDFExtraction: vi.fn(() => ({
@@ -18,6 +19,7 @@ vi.mock('./hooks/usePDFExtraction', () => ({
     error: null,
     statusMessage: '',
     reset: mockReset,
+    cancel: mockCancel,
   })),
 }));
 
@@ -83,6 +85,7 @@ describe('App', () => {
       error: null,
       statusMessage: 'Extracting...',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -102,6 +105,7 @@ describe('App', () => {
       error: 'Failed to extract PDF',
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
     
     render(<App />);
@@ -135,6 +139,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -158,6 +163,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -180,6 +186,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -204,6 +211,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -224,6 +232,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -262,6 +271,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -286,6 +296,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -313,6 +324,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -338,6 +350,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);

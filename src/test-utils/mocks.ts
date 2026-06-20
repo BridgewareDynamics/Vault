@@ -16,8 +16,10 @@ export const mockElectronAPI = {
   getArchiveConfig: vi.fn(),
   validateArchiveDirectory: vi.fn(),
   createCaseFolder: vi.fn(),
+  updateCaseDescription: vi.fn(),
   getCategoryTags: vi.fn(),
   createCategoryTag: vi.fn(),
+  deleteCategoryTag: vi.fn(),
   setCaseCategoryTag: vi.fn(),
   getCaseCategoryTag: vi.fn(),
   setFileCategoryTag: vi.fn(),
@@ -42,8 +44,10 @@ export const mockElectronAPI = {
   readFileData: vi.fn(),
   extractPDFFromArchive: vi.fn(),
   logToMain: vi.fn(),
+  openDevToolsInDev: vi.fn(),
   debugLog: vi.fn(),
   getSystemMemory: vi.fn(),
+  getSystemFonts: vi.fn(),
   // Settings API
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
@@ -121,14 +125,37 @@ export const mockElectronAPI = {
   createNovelWindow: vi.fn(),
   reattachNovelModule: vi.fn(),
   closeWindow: vi.fn(),
+  getVaultDirectory: vi.fn(),
+  // PDF audit / extraction detached windows
+  createPdfAuditWindow: vi.fn(),
+  reattachPdfAudit: vi.fn(),
+  createPdfExtractionWindow: vi.fn(),
+  reattachPdfExtraction: vi.fn(),
+  // Bookmark APIs
+  openBookmarkInMainWindow: vi.fn(),
+  getBookmarks: vi.fn(),
+  createBookmark: vi.fn(),
+  updateBookmark: vi.fn(),
+  deleteBookmark: vi.fn(),
+  getBookmarkFolders: vi.fn(),
+  createBookmarkFolder: vi.fn(),
+  deleteBookmarkFolder: vi.fn(),
+  getBookmarksByFolder: vi.fn(),
+  saveBookmarkThumbnail: vi.fn(),
+  getBookmarkThumbnail: vi.fn(),
+  // Redaction audit APIs
+  auditPDFRedaction: vi.fn(),
+  onAuditProgress: vi.fn(() => () => {}),
+  onAuditResult: vi.fn(() => () => {}),
+  onAuditError: vi.fn(() => () => {}),
+  generateAuditReport: vi.fn(),
 };
 
-// Type declaration for the mock
-declare global {
-  interface Window {
-    electronAPI: typeof mockElectronAPI;
-  }
-}
+// NOTE: We intentionally do NOT declare `Window.electronAPI` here. The canonical
+// type lives in src/types/electronAPI.d.ts; redeclaring it as `typeof
+// mockElectronAPI` conflicts with that (and the preload's) declaration when the
+// test files are type-checked. Tests keep the `Mock` typings by importing
+// `mockElectronAPI` directly; setup.ts assigns it onto `window` with a cast.
 
 
 

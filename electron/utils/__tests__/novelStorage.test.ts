@@ -36,7 +36,7 @@ vi.mock('fs', async (importOriginal) => {
 });
 
 const writeFileMock = vi.fn();
-const readFileMock = vi.fn(async () =>
+const readFileMock = vi.fn(async (..._args: unknown[]) =>
   JSON.stringify({
     id: 'novel-123',
     title: 'Test Novel',
@@ -49,6 +49,8 @@ const readFileMock = vi.fn(async () =>
       showPageNumbers: true,
       fontFamily: 'Georgia, serif',
       fontSize: 12,
+      bookSizeId: 'us-trade',
+      marginMm: 19,
       coverTitle: 'Test Novel',
     },
     pages: [

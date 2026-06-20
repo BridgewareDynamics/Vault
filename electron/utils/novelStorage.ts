@@ -98,7 +98,7 @@ export interface NovelListEntryStored {
   pageCount: number;
 }
 
-function createDefaultPages(title: string): NovelPageStored[] {
+function createDefaultPages(_title: string): NovelPageStored[] {
   const coverId = randomUUID();
   const pages: NovelPageStored[] = [
     {
@@ -191,7 +191,7 @@ export async function writeNovelDocument(doc: NovelDocumentStored): Promise<void
 
 export async function saveNovelDocument(doc: NovelDocumentStored): Promise<NovelDocumentStored> {
   let nextFolderPath = doc.novelFolderPath;
-  let nextCasePath = doc.casePath ?? null;
+  const nextCasePath = doc.casePath ?? null;
 
   if (nextCasePath) {
     if (!isSafePath(nextCasePath)) {

@@ -53,7 +53,7 @@ export function useArchiveExtraction() {
     setExtractingFolderPath(folderPath);
     setStatusMessage('Validating PDF file...');
 
-    let extractionToastId: string | null = toast.info('Starting PDF extraction...', 0);
+    const extractionToastId: string | null = toast.info('Starting PDF extraction...', 0);
 
     setProgress({
       currentPage: 0,

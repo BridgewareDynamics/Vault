@@ -15,7 +15,7 @@ describe('SettingsContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (mockElectronAPI.getSettings as any).mockResolvedValue(defaultSettings);
-    (mockElectronAPI.updateSettings as any).mockImplementation(async (updates) => ({
+    (mockElectronAPI.updateSettings as any).mockImplementation(async (updates: Partial<AppSettings>) => ({
       ...defaultSettings,
       ...updates,
     }));

@@ -37,8 +37,8 @@ import {
   prefetchTranscriptionModule,
   warmTranscriptionEntry,
 } from './utils/transcriptionPrefetch';
-import { prefetchMapModule } from './utils/mapPrefetch';
-import { prefetchNovelModule } from './utils/novelPrefetch';
+import { prefetchMapModule, clearMapDocumentCache } from './utils/mapPrefetch';
+import { prefetchNovelModule, clearNovelDocumentCache } from './utils/novelPrefetch';
 import { warmArchiveEntry, invalidateArchiveModuleCache } from './utils/archivePrefetch';
 import type {
   FileConverterModuleDetachState,
@@ -146,15 +146,15 @@ function AppContent() {
       setShowSecurityChecker(true);
     };
 
-    window.addEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+    window.addEventListener('reattach-pdf-audit-data', handleReattach);
     return () => {
-      window.removeEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+      window.removeEventListener('reattach-pdf-audit-data', handleReattach);
     };
   }, []);
 
   // Listen for reattach data from detached PDF extraction window
   useEffect(() => {
-    const handleReattach = (event: any) => {
+    const handleReattach = (event: WindowEventMap['reattach-pdf-extraction-data']) => {
       const data = event.detail;
       
       // Only handle reattach if caseFolderPath is absent (home menu usage)
@@ -166,11 +166,11 @@ function AppContent() {
       }
     };
 
-    window.addEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+    window.addEventListener('reattach-pdf-extraction-data', handleReattach);
     
     // Also check for stored data on mount
     const checkStoredData = () => {
-      const storedData = (window as any).__reattachPdfExtractionData;
+      const storedData = window.__reattachPdfExtractionData;
       if (storedData && !storedData.caseFolderPath) {
         logger.debug('App: Found stored reattach data without caseFolderPath, opening modal');
         setShowPDFExtraction(true);
@@ -181,7 +181,7 @@ function AppContent() {
     const timeoutId = setTimeout(checkStoredData, 100);
     
     return () => {
-      window.removeEventListener('reattach-pdf-extraction-data' as any, handleReattach as EventListener);
+      window.removeEventListener('reattach-pdf-extraction-data', handleReattach);
       clearTimeout(timeoutId);
     };
   }, []);
@@ -529,7 +529,9 @@ function AppContent() {
       // Register cleanup callback for image caches
       const unregister = memoryManager.registerCleanupCallback(() => {
         getThumbnailMemoryCache().clear();
-        logger.info('[MemoryManager] Cleanup triggered - clearing thumbnail cache');
+        clearMapDocumentCache();
+        clearNovelDocumentCache();
+        logger.info('[MemoryManager] Cleanup triggered - clearing thumbnail and document caches');
       });
 
       return () => {
@@ -614,15 +616,15 @@ function AppContent() {
       setShouldUseOverlayMode(false);
     };
 
-    window.addEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
-    window.addEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
-    window.addEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
-    window.addEventListener('close-word-editor' as any, handleCloseWordEditor as EventListener);
+    window.addEventListener('open-bookmark', handleOpenBookmark);
+    window.addEventListener('navigate-to-case-folder', handleNavigateToCaseFolder);
+    window.addEventListener('open-word-editor-from-viewer', handleOpenWordEditorFromViewer);
+    window.addEventListener('close-word-editor', handleCloseWordEditor);
     return () => {
-      window.removeEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
-      window.removeEventListener('navigate-to-case-folder' as any, handleNavigateToCaseFolder as EventListener);
-      window.removeEventListener('open-word-editor-from-viewer' as any, handleOpenWordEditorFromViewer as EventListener);
-      window.removeEventListener('close-word-editor' as any, handleCloseWordEditor as EventListener);
+      window.removeEventListener('open-bookmark', handleOpenBookmark);
+      window.removeEventListener('navigate-to-case-folder', handleNavigateToCaseFolder);
+      window.removeEventListener('open-word-editor-from-viewer', handleOpenWordEditorFromViewer);
+      window.removeEventListener('close-word-editor', handleCloseWordEditor);
     };
   }, [showArchive, isWordEditorOpen, openArchive]);
 

@@ -76,7 +76,7 @@ declare global {
       debugLog: (logEntry: {
         location: string;
         message: string;
-        data?: any;
+        data?: unknown;
         timestamp: number;
         sessionId: string;
         runId: string;
@@ -181,7 +181,7 @@ declare global {
           includeSecurityAudit: boolean;
         };
         showSettings: boolean;
-        result: any | null;
+        result: import('../hooks/useRedactionAudit').RedactionAuditResult | null;
         isAuditing: boolean;
         progressMessage: string;
       }) => Promise<{ success: boolean }>;
@@ -194,7 +194,7 @@ declare global {
           includeSecurityAudit: boolean;
         };
         showSettings: boolean;
-        result: any | null;
+        result: import('../hooks/useRedactionAudit').RedactionAuditResult | null;
         isAuditing: boolean;
         progressMessage: string;
       }) => Promise<{ success: boolean }>;
@@ -210,11 +210,11 @@ declare global {
           compressionLevel: number;
         };
         showSettings: boolean;
-        extractedPages: any[];
+        extractedPages: import('./index').ExtractedPage[];
         selectedPages: number[];
-        previewPage: any | null;
+        previewPage: import('./index').ExtractedPage | null;
         isExtracting: boolean;
-        progress: any | null;
+        progress: import('./index').ExtractionProgress | null;
         error: string | null;
         statusMessage: string;
         caseFolderPath?: string | null;
@@ -231,11 +231,11 @@ declare global {
           compressionLevel: number;
         };
         showSettings: boolean;
-        extractedPages: any[];
+        extractedPages: import('./index').ExtractedPage[];
         selectedPages: number[];
-        previewPage: any | null;
+        previewPage: import('./index').ExtractedPage | null;
         isExtracting: boolean;
-        progress: any | null;
+        progress: import('./index').ExtractionProgress | null;
         error: string | null;
         statusMessage: string;
         caseFolderPath?: string | null;
@@ -246,14 +246,21 @@ declare global {
         pageNumber: number;
       }) => Promise<{ success: boolean }>;
       // Bookmark API
-      getBookmarks: () => Promise<Array<any>>;
-      createBookmark: (bookmark: any) => Promise<any>;
-      updateBookmark: (id: string, updates: any) => Promise<any>;
+      getBookmarks: () => Promise<import('./index').Bookmark[]>;
+      createBookmark: (
+        bookmark: Omit<import('./index').Bookmark, 'id' | 'createdAt' | 'updatedAt'>
+      ) => Promise<import('./index').Bookmark>;
+      updateBookmark: (
+        id: string,
+        updates: Partial<Omit<import('./index').Bookmark, 'id' | 'createdAt'>>
+      ) => Promise<import('./index').Bookmark>;
       deleteBookmark: (id: string) => Promise<boolean>;
-      getBookmarkFolders: () => Promise<Array<any>>;
-      createBookmarkFolder: (folder: any) => Promise<any>;
+      getBookmarkFolders: () => Promise<import('./index').BookmarkFolder[]>;
+      createBookmarkFolder: (
+        folder: Omit<import('./index').BookmarkFolder, 'id' | 'createdAt' | 'updatedAt'>
+      ) => Promise<import('./index').BookmarkFolder>;
       deleteBookmarkFolder: (id: string) => Promise<boolean>;
-      getBookmarksByFolder: (folderId: string | null) => Promise<Array<any>>;
+      getBookmarksByFolder: (folderId: string | null) => Promise<import('./index').Bookmark[]>;
       saveBookmarkThumbnail: (bookmarkId: string, thumbnailData: string) => Promise<string>;
       getBookmarkThumbnail: (bookmarkId: string) => Promise<string | null>;
       // File Security Checker API
@@ -262,38 +269,11 @@ declare global {
         minOverlapArea?: number;
         minHits?: number;
         includeSecurityAudit?: boolean;
-      }) => Promise<{
-        filename: string;
-        totalPages: number;
-        flaggedPages: Array<{
-          pageNumber: number;
-          blackRectCount: number;
-          overlapCount: number;
-          confidenceScore: number;
-        }>;
-        security?: {
-          has_metadata: boolean;
-          metadata_keys: string[];
-          has_attachments: boolean;
-          attachment_count: number;
-          has_annotations: boolean;
-          annotation_count: number;
-          has_forms: boolean;
-          form_field_count: number;
-          has_layers: boolean;
-          layer_count: number;
-          has_javascript: boolean;
-          has_actions: boolean;
-          has_thumbnails: boolean;
-          incremental_updates_suspected: boolean;
-          notes: string[];
-        };
-        error?: string;
-      }>;
+      }) => Promise<import('../hooks/useRedactionAudit').RedactionAuditResult>;
       onAuditProgress: (callback: (message: string) => void) => () => void;
-      onAuditResult: (callback: (result: any) => void) => () => void;
+      onAuditResult: (callback: (result: import('../hooks/useRedactionAudit').RedactionAuditResult) => void) => () => void;
       onAuditError: (callback: (error: string) => void) => () => void;
-      generateAuditReport: (auditResult: any, outputPath: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
+      generateAuditReport: (auditResult: import('../hooks/useRedactionAudit').AuditReportPayload, outputPath: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
       showSaveDialog: (options: {
         title: string;
         defaultPath: string;

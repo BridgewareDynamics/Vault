@@ -60,10 +60,6 @@ vi.mock('../Toast/ToastContext', () => ({
   }),
 }));
 
-vi.mock('../../utils/debugLogger', () => ({
-  debugLog: vi.fn(),
-}));
-
 describe('DetachedWordEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
