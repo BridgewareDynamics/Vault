@@ -40,6 +40,7 @@ vi.mock('./LexicalEditor', () => ({
         }, 0);
         return () => clearTimeout(timer);
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- test mock intentionally keyed only on the onContentChange callback
     }, [props.onContentChange]);
 
     return <div data-testid="lexical-editor">Lexical Editor</div>;

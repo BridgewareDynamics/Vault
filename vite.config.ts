@@ -2,8 +2,28 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+/**
+ * Production-only CSP hardening. The static CSP in index.html keeps
+ * `script-src 'unsafe-inline'` because the Vite dev server injects an inline
+ * React-refresh preamble during `vite` (dev). Production builds emit only
+ * external module scripts, so we strip `'unsafe-inline'` from `script-src` at
+ * build time. `'unsafe-eval'` is retained because pdf.js requires it.
+ */
+function productionCspPlugin() {
+  return {
+    name: 'production-csp',
+    apply: 'build' as const,
+    transformIndexHtml(html: string) {
+      return html.replace(
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "script-src 'self' 'unsafe-eval'"
+      );
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), productionCspPlugin()],
   base: './', // Use relative paths for Electron compatibility
   resolve: {
     alias: {

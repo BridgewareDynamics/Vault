@@ -84,6 +84,7 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
   const spreadCount = useMemo(() => (novelDoc ? getSpreadCount(novelDoc.pages) : 1), [novelDoc]);
   const bookSizeLabel = useMemo(
     () => (novelDoc ? getBookSizePreset(novelDoc.settings.bookSizeId).name : ''),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the book-size id affects this label; the whole novelDoc identity is intentionally excluded
     [novelDoc?.settings.bookSizeId]
   );
 
@@ -151,6 +152,7 @@ export const NovelEditorPage = forwardRef<unknown, NovelEditorPageProps>(functio
       titleInputRef.current?.select();
     });
     return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the focus effect is intentionally keyed on the novel id, not the whole novelDoc object
   }, [autoFocusTitle, novelDoc?.id]);
 
   useEffect(() => {

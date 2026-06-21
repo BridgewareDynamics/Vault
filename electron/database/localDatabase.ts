@@ -132,6 +132,15 @@ export class LocalDatabase {
     return this.db;
   }
 
+  /**
+   * Get the underlying better-sqlite3 connection for advanced/custom queries
+   * that are not covered by the typed helper methods. Throws if the database
+   * is not initialized.
+   */
+  public getRawDatabase(): Database.Database {
+    return this.getDb();
+  }
+
   // ==================== Case Operations ====================
 
   /**

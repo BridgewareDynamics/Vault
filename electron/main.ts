@@ -14,7 +14,7 @@ import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMa
 import { logger, type LogLevel, type LogArgs } from './utils/logger';
 import { loadSettings } from './utils/settings';
 import * as bookmarkStorage from './utils/bookmarkStorage';
-import { auditPDFRedaction } from './utils/pdfRedactionAudit';
+import { auditPDFRedaction, type AuditOptions, type RedactionAuditResult } from './utils/pdfRedactionAudit';
 import { generateAuditReport } from './utils/generateAuditReport';
 import { LocalDatabase } from './database/localDatabase';
 import { migrateMetadataFilesToDatabase } from './database/migration';
@@ -32,6 +32,12 @@ import {
 import { getConverterCapabilities } from './utils/fileFormatRegistry';
 import { propagateVaultFileReferenceUpdate } from './utils/vaultReferencePropagator';
 import { listSystemFonts } from './utils/systemFonts';
+
+// Enable Chromium's OS-level sandbox for all renderer processes as defense in
+// depth on top of contextIsolation + nodeIntegration:false. Must run before the
+// app is ready. The preload only uses contextBridge/ipcRenderer/Buffer, all of
+// which remain available in sandboxed preloads.
+app.enableSandbox();
 
 // Helper function to detect file type from path
 function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | 'audio' | 'other' {
@@ -153,17 +159,52 @@ if (!isDev) {
   logger.info('Crash reporter initialized');
 }
 
+// Surface fatal main-process errors to the user and offer a clean relaunch
+// instead of silently continuing in a possibly corrupted state. Guarded so we
+// never spam dialogs, and a no-op in development to preserve the dev workflow.
+let handlingFatalError = false;
+function handleFatalError(label: string, error: unknown): void {
+  logger.error(`${label} in main process:`, error);
+
+  if (isDev || !app.isReady() || handlingFatalError) {
+    return;
+  }
+  handlingFatalError = true;
+
+  try {
+    const message = error instanceof Error ? error.message : String(error);
+    const choice = dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'Vault encountered a problem',
+      message: 'An unexpected error occurred.',
+      detail: `${message}\n\nYou can relaunch Vault to recover, or continue (some features may be unstable).`,
+      buttons: ['Relaunch', 'Continue'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (choice === 0) {
+      app.relaunch();
+      app.exit(0);
+      return;
+    }
+  } catch (dialogError) {
+    logger.error('Failed to present fatal error dialog:', dialogError);
+  } finally {
+    handlingFatalError = false;
+  }
+}
+
 // Handle uncaught exceptions in main process
 process.on('uncaughtException', (error: Error) => {
-  logger.error('Uncaught Exception in main process:', error);
-  // Don't exit immediately - log and continue if possible
-  // In production, you might want to show an error dialog to the user
+  handleFatalError('Uncaught Exception', error);
 });
 
-// Handle unhandled promise rejections in main process
-process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-  logger.error('Unhandled Rejection in main process:', reason, promise);
-  // Log the rejection but don't crash the app
+// Handle unhandled promise rejections in main process. Log-only: these are
+// usually recoverable and should not interrupt the user, but the structured
+// message ensures they land clearly in the production file log.
+process.on('unhandledRejection', (reason: unknown) => {
+  logger.error('Unhandled Rejection in main process:', reason);
 });
 
 let mainWindow: BrowserWindow | null = null;
@@ -477,7 +518,7 @@ async function runBackgroundVaultMigration(): Promise<void> {
   try {
     const archiveDrive = await getArchiveDrive();
     if (archiveDrive && !db.isMigrationCompleted()) {
-      logger.info(`Running database migration from: ${archiveDrive}`);
+      logger.debug(`Running database migration from: ${archiveDrive}`);
       const migrationResult = await migrateMetadataFilesToDatabase(archiveDrive, db);
       logger.info(`Migration completed: ${migrationResult.cases} cases, ${migrationResult.files} files`);
       if (migrationResult.errors.length > 0) {
@@ -600,7 +641,7 @@ ipcMain.handle('open-devtools-in-dev', async (event) => {
 ipcMain.handle('debug-log', async (event, logEntry: {
   location: string;
   message: string;
-  data?: any;
+  data?: unknown;
   timestamp: number;
   sessionId: string;
   runId: string;
@@ -1158,7 +1199,7 @@ ipcMain.handle('get-pdf-file-size', async (event, filePath: string) => {
 });
 
 // File Security Checker IPC Handler
-ipcMain.handle('audit-pdf-redaction', async (event, pdfPath: string, options?: any) => {
+ipcMain.handle('audit-pdf-redaction', async (event, pdfPath: string, options?: AuditOptions) => {
   try {
     // Set the progress target to the window that initiated the audit
     // This will be updated to the detached window if user detaches during audit
@@ -1269,8 +1310,11 @@ ipcMain.handle('audit-pdf-redaction', async (event, pdfPath: string, options?: a
 });
 
 // Generate PDF Report IPC Handler
-ipcMain.handle('generate-audit-report', async (event, auditResult: any, outputPath: string) => {
+ipcMain.handle('generate-audit-report', async (event, auditResult: RedactionAuditResult, outputPath: string) => {
   try {
+    if (!isSafePath(outputPath)) {
+      throw new Error('Invalid output path');
+    }
     const result = await generateAuditReport({
       auditResult,
       outputPath,
@@ -1461,7 +1505,7 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
 
 // Update case description
 ipcMain.handle('update-case-description', async (event, casePath: string, description: string) => {
-  logger.log('[Main] update-case-description called:', { casePath, descriptionLength: description.length });
+  logger.debug('[Main] update-case-description called:', { casePath, descriptionLength: description.length });
   
   if (!isSafePath(casePath)) {
     logger.error('[Main] Invalid case path:', casePath);
@@ -1568,7 +1612,7 @@ ipcMain.handle('create-folder', async (event, folderPath: string, folderName: st
 
 // Create extraction folder
 ipcMain.handle('create-extraction-folder', async (event, casePath: string, folderName: string, parentPdfPath?: string) => {
-  logger.log('[Main] create-extraction-folder called:', { casePath, folderName, parentPdfPath });
+  logger.debug('[Main] create-extraction-folder called:', { casePath, folderName, parentPdfPath });
   
   if (!isSafePath(casePath)) {
     logger.error('[Main] Invalid case path:', casePath);
@@ -1888,7 +1932,7 @@ ipcMain.handle('set-file-category-tag', async (event, filePath: string, category
     const tagFileName = `.file-category-tag.${fileName}`;
     const tagPath = path.join(fileDir, tagFileName);
     
-    logger.log('[Main] set-file-category-tag:', { filePath, normalizedFilePath, fileName, tagPath, categoryTagId });
+    logger.debug('[Main] set-file-category-tag:', { filePath, normalizedFilePath, fileName, tagPath, categoryTagId });
     
     if (categoryTagId === null || categoryTagId.trim() === '') {
       // Remove tag by deleting the metadata file
@@ -1926,7 +1970,7 @@ ipcMain.handle('get-file-category-tag', async (event, filePath: string) => {
     const tagFileName = `.file-category-tag.${fileName}`;
     const tagPath = path.join(fileDir, tagFileName);
     
-    logger.log('[Main] get-file-category-tag:', { filePath, normalizedFilePath, fileName, tagPath });
+    logger.debug('[Main] get-file-category-tag:', { filePath, normalizedFilePath, fileName, tagPath });
     
     try {
       const tagContent = await fs.readFile(tagPath, 'utf8');
@@ -2164,7 +2208,7 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     if (folderRecord && folderRecord.is_folder === 1) {
       // This is a folder, get files inside this folder
       logger.debug(`[Main] list-case-files: Path is a folder, getting files inside: ${casePath}`);
-      const dbInstance = (db as any).db;
+      const dbInstance = db!.getRawDatabase();
       const folderFilesStmt = dbInstance.prepare(`
         SELECT * FROM files 
         WHERE parent_folder_id = ? AND deleted_at IS NULL
@@ -2925,7 +2969,7 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
     throw new Error('Path is outside the managed archive');
   }
 
-  logger.log('[Main] delete-file called:', { filePath, isFolder });
+  logger.debug('[Main] delete-file called:', { filePath, isFolder });
 
   // ALWAYS check if it's a directory first using fs.stat
   // This is the most reliable way to determine if we need recursive delete
@@ -3059,7 +3103,7 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
 
 // Move file to folder
 ipcMain.handle('move-file-to-folder', async (event, filePath: string, folderPath: string) => {
-  logger.log('[Main] move-file-to-folder called:', { filePath, folderPath });
+  logger.debug('[Main] move-file-to-folder called:', { filePath, folderPath });
   
   if (!isSafePath(filePath)) {
     logger.error('[Main] Invalid file path:', filePath);
@@ -3103,7 +3147,7 @@ ipcMain.handle('move-file-to-folder', async (event, filePath: string, folderPath
 
     // Move the file
     await fs.rename(filePath, destPath);
-    logger.log('[Main] File moved successfully:', { from: filePath, to: destPath });
+    logger.debug('[Main] File moved successfully:', { from: filePath, to: destPath });
     
     // Update database
     if (isDatabaseReady()) {
@@ -3467,7 +3511,7 @@ ipcMain.handle('extract-pdf-from-archive', async (
         const caseRecord = db!.getCaseByPath(casePath);
         if (caseRecord) {
           // Query database for all folders in this case (not just root-level)
-          const dbInstance = (db as any).db;
+          const dbInstance = db!.getRawDatabase();
           const allFoldersStmt = dbInstance.prepare(`
             SELECT * FROM files 
             WHERE case_id = ? AND deleted_at IS NULL AND is_folder = 1 AND name = ?
@@ -3893,6 +3937,9 @@ ipcMain.handle('export-text-file', async (event, options: {
     let fileName: string;
     
     if (filePath) {
+      if (!isSafePath(filePath)) {
+        return { success: false, error: 'Invalid file path' };
+      }
       const ext = path.extname(filePath);
       fileName = path.basename(filePath, ext) + '.' + format;
       exportPath = path.join(path.dirname(filePath), fileName);
@@ -4082,9 +4129,9 @@ let auditProgressTarget: Electron.WebContents | null = null;
 
 // Store pending audit result in case window is destroyed/reattached
 // This ensures results aren't lost during detach/reattach cycles
-let pendingAuditResult: { result: any; timestamp: number } | null = null;
+let pendingAuditResult: { result: RedactionAuditResult; timestamp: number } | null = null;
 
-ipcMain.handle('create-word-editor-window', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }) => {
+ipcMain.handle('create-word-editor-window', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }) => {
   try {
     if (wordEditorWindow && !wordEditorWindow.isDestroyed()) {
       wordEditorWindow.focus();
@@ -4175,7 +4222,7 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
               content: ${JSON.stringify(options.content)},
               filePath: ${options.filePath ? JSON.stringify(options.filePath) : 'null'},
               viewState: ${JSON.stringify(viewState)},
-              casePath: ${(options as any).casePath ? JSON.stringify((options as any).casePath) : 'null'}
+              casePath: ${options.casePath ? JSON.stringify(options.casePath) : 'null'}
             };
             // Store data in case listener isn't ready yet
             window.__wordEditorInitialData = data;
@@ -4198,7 +4245,7 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
 });
 
 // Reattach word editor window
-ipcMain.handle('reattach-word-editor', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }) => {
+ipcMain.handle('reattach-word-editor', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }) => {
   try {
     // Get the window that sent the request (the detached editor window)
     const senderWindow = BrowserWindow.fromWebContents(event.sender);
@@ -4214,7 +4261,7 @@ ipcMain.handle('reattach-word-editor', async (event, options: { content: string;
               content: ${JSON.stringify(options.content)},
               filePath: ${options.filePath ? JSON.stringify(options.filePath) : 'null'},
               viewState: ${JSON.stringify(viewState)},
-              casePath: ${(options as any).casePath ? JSON.stringify((options as any).casePath) : 'null'}
+              casePath: ${options.casePath ? JSON.stringify(options.casePath) : 'null'}
             }
           });
           window.dispatchEvent(event);
@@ -4533,7 +4580,7 @@ ipcMain.handle('create-pdf-audit-window', async (event, options: {
     includeSecurityAudit: boolean;
   };
   showSettings: boolean;
-  result: any | null;
+  result: RedactionAuditResult | null;
   isAuditing: boolean;
   progressMessage: string;
 }) => {
@@ -4684,7 +4731,7 @@ ipcMain.handle('reattach-pdf-audit', async (event, options: {
     includeSecurityAudit: boolean;
   };
   showSettings: boolean;
-  result: any | null;
+  result: RedactionAuditResult | null;
   isAuditing: boolean;
   progressMessage: string;
 }) => {
@@ -4744,11 +4791,13 @@ ipcMain.handle('create-pdf-extraction-window', async (event, options: {
     compressionLevel: number;
   };
   showSettings: boolean;
-  extractedPages: any[];
+  // Opaque payloads forwarded as-is (JSON-serialized) to the detached
+  // renderer window; main does not inspect their internal shape.
+  extractedPages: unknown[];
   selectedPages: number[];
-  previewPage: any | null;
+  previewPage: unknown;
   isExtracting: boolean;
-  progress: any | null;
+  progress: unknown;
   error: string | null;
   statusMessage: string;
   caseFolderPath?: string | null;
@@ -4872,11 +4921,13 @@ ipcMain.handle('reattach-pdf-extraction', async (event, options: {
     compressionLevel: number;
   };
   showSettings: boolean;
-  extractedPages: any[];
+  // Opaque payloads forwarded as-is (JSON-serialized) to the detached
+  // renderer window; main does not inspect their internal shape.
+  extractedPages: unknown[];
   selectedPages: number[];
-  previewPage: any | null;
+  previewPage: unknown;
   isExtracting: boolean;
-  progress: any | null;
+  progress: unknown;
   error: string | null;
   statusMessage: string;
   caseFolderPath?: string | null;

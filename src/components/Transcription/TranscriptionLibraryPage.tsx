@@ -104,6 +104,7 @@ export function TranscriptionLibraryPage({
 
   useEffect(() => {
     void loadItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-time load on mount
   }, []);
 
   const filteredItems = useMemo(() => {

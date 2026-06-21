@@ -136,6 +136,7 @@ export function MapLibraryPage({
   useEffect(() => {
     void loadMaps();
     void prefetchMapEditorPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-time load/prefetch on mount
   }, []);
 
   const totals = useMemo(

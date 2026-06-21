@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FolderOpen, X, Search, Check, Zap } from 'lucide-react';
 import { ArchiveCase } from '../../types';
+import { logger } from '../../utils/logger';
 
 interface CaseSelectionDialogProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ export function CaseSelectionDialog({
       const casesList = await window.electronAPI.listArchiveCases();
       setCases(casesList);
     } catch (error) {
-      console.error('Failed to load cases:', error);
+      logger.error('Failed to load cases:', error);
     } finally {
       setLoading(false);
     }

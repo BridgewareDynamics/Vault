@@ -3,6 +3,7 @@ import { Bookmark, Trash2, ExternalLink } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Bookmark as BookmarkType } from '../../types';
 import { useToast } from '../Toast/ToastContext';
+import { logger } from '../../utils/logger';
 
 interface BookmarkCardProps {
   bookmark: BookmarkType;
@@ -17,6 +18,7 @@ export function BookmarkCard({ bookmark, onDelete, isDetached = false }: Bookmar
 
   useEffect(() => {
     loadThumbnail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadThumbnail is a stable local loader; intentionally re-run only when the bookmark identity/thumbnail changes
   }, [bookmark.id, bookmark.thumbnail]);
 
   const loadThumbnail = async () => {
@@ -45,7 +47,7 @@ export function BookmarkCard({ bookmark, onDelete, isDetached = false }: Bookmar
         setThumbnail(bookmark.thumbnail);
       }
     } catch (error) {
-      console.error('Failed to load thumbnail:', error);
+      logger.error('Failed to load thumbnail:', error);
     } finally {
       setLoading(false);
     }
@@ -68,7 +70,7 @@ export function BookmarkCard({ bookmark, onDelete, isDetached = false }: Bookmar
         });
       } catch (error) {
         toast.error('Failed to open bookmark');
-        console.error('Failed to open bookmark in main window:', error);
+        logger.error('Failed to open bookmark in main window:', error);
       }
     } else {
       // Dispatch event to open PDF at specific page

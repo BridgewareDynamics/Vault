@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { app } from 'electron';
 import { logger } from './logger';
+import type { RedactionAuditResult } from './pdfRedactionAudit';
 
 /**
  * Find Python executable (3.11+)
@@ -41,7 +42,7 @@ async function findPython(): Promise<string | null> {
 }
 
 export interface GenerateReportOptions {
-  auditResult: any; // The full audit result object
+  auditResult: RedactionAuditResult; // The full audit result object
   outputPath: string; // Where to save the PDF
 }
 

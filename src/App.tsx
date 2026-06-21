@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
-import { ToastProvider, useToast } from './components/Toast/ToastContext';
+import { useToast } from './components/Toast/ToastContext';
+import { ToastProvider } from './components/Toast/ToastProvider';
 import { ToastContainer } from './components/Toast/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -17,19 +18,18 @@ import { ExtractedPage } from './types';
 import { Home } from 'lucide-react';
 import { logger } from './utils/logger';
 import { getUserFriendlyError } from './utils/errorMessages';
-import { SettingsProvider, useSettingsContext } from './utils/settingsContext';
+import { useSettingsContext } from './utils/settingsContext';
+import { SettingsProvider } from './utils/SettingsProvider';
 import { getMemoryManager } from './utils/memoryManager';
 import { getThumbnailMemoryCache } from './utils/thumbnailService';
-import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext';
-import { ArchiveContextProvider } from './contexts/ArchiveContext';
-import { VaultActiveCaseProvider } from './contexts/VaultActiveCaseContext';
-import { AudioRecorderProvider } from './contexts/AudioRecorderContext';
+import { useWordEditor } from './contexts/WordEditorContext';
+import { WordEditorProvider } from './contexts/WordEditorProvider';
+import { ArchiveContextProvider } from './contexts/ArchiveContextProvider';
+import { VaultActiveCaseProvider } from './contexts/VaultActiveCaseProvider';
+import { AudioRecorderProvider } from './contexts/AudioRecorderProvider';
 import { AudioRecorderStudioPanel } from './components/AudioRecorder/AudioRecorderStudioPanel';
 import { VaultActiveCaseSync } from './components/AudioRecorder/VaultActiveCaseSync';
 import { VaultRecorderTopBar } from './components/AudioRecorder/VaultRecorderTopBar';
-import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
-import { DetachedSecurityChecker } from './components/DetachedSecurityChecker';
-import { DetachedPDFExtraction } from './components/DetachedPDFExtraction';
 import { ResizableDivider } from './components/ResizableDivider';
 import { OnboardingModal } from './components/Onboarding/OnboardingModal';
 import { Theme } from './types';
@@ -93,6 +93,33 @@ const NovelModule = lazy(() =>
     }))
   )
 );
+
+// Detached-window route views are selected by URL and only ever render one at a
+// time, standalone, in their own BrowserWindow. They are never part of the main
+// window tree, so deferring them keeps their large UI out of the initial chunk.
+const DetachedWordEditor = lazy(() =>
+  import('./components/WordEditor/DetachedWordEditor').then((module) => ({
+    default: module.DetachedWordEditor,
+  }))
+);
+const DetachedSecurityChecker = lazy(() =>
+  import('./components/DetachedSecurityChecker').then((module) => ({
+    default: module.DetachedSecurityChecker,
+  }))
+);
+const DetachedPDFExtraction = lazy(() =>
+  import('./components/DetachedPDFExtraction').then((module) => ({
+    default: module.DetachedPDFExtraction,
+  }))
+);
+
+function DetachedRouteFallback({ label }: { label: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+      {label}
+    </div>
+  );
+}
 
 function isDetachedRoute(token: string) {
   const search = window.location.search || '';
@@ -656,7 +683,13 @@ function AppContent() {
     window.location.hash.includes('audit=detached');
   
   if (shouldShowDetachedAudit) {
-    return <DetachedSecurityChecker />;
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<DetachedRouteFallback label="Loading Security Audit..." />}>
+          <DetachedSecurityChecker />
+        </Suspense>
+      </ErrorBoundary>
+    );
   }
 
   // If in detached extraction mode, show only the extraction component
@@ -665,7 +698,13 @@ function AppContent() {
     window.location.hash.includes('extraction=detached');
   
   if (shouldShowDetachedExtraction) {
-    return <DetachedPDFExtraction />;
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<DetachedRouteFallback label="Loading PDF Extraction..." />}>
+          <DetachedPDFExtraction />
+        </Suspense>
+      </ErrorBoundary>
+    );
   }
 
   // If in detached editor mode, show only the editor
@@ -675,22 +714,30 @@ function AppContent() {
     window.location.hash.includes('editor=detached');
   
   if (shouldShowDetached) {
-    return <DetachedWordEditor />;
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<DetachedRouteFallback label="Loading Word Editor..." />}>
+          <DetachedWordEditor />
+        </Suspense>
+      </ErrorBoundary>
+    );
   }
 
   if (isDetachedRoute('map=detached')) {
     const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
     return (
       <>
-        <Suspense
-          fallback={
-            <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-              Loading Map...
-            </div>
-          }
-        >
-          <MapModule theme={theme} hostMode="detached" onExit={() => void window.electronAPI?.closeWindow?.()} />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+                Loading Map...
+              </div>
+            }
+          >
+            <MapModule theme={theme} hostMode="detached" onExit={() => void window.electronAPI?.closeWindow?.()} />
+          </Suspense>
+        </ErrorBoundary>
         <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
@@ -707,19 +754,21 @@ function AppContent() {
     const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
     return (
       <>
-        <Suspense
-          fallback={
-            <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-              Loading Transcript...
-            </div>
-          }
-        >
-          <TranscriptionModule
-            theme={theme}
-            hostMode="detached"
-            onExit={() => void window.electronAPI?.closeWindow?.()}
-          />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+                Loading Transcript...
+              </div>
+            }
+          >
+            <TranscriptionModule
+              theme={theme}
+              hostMode="detached"
+              onExit={() => void window.electronAPI?.closeWindow?.()}
+            />
+          </Suspense>
+        </ErrorBoundary>
         <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
@@ -735,20 +784,22 @@ function AppContent() {
     const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
     return (
       <>
-        <Suspense
-          fallback={
-            <FileConverterLoadingShell
+        <ErrorBoundary>
+          <Suspense
+            fallback={
+              <FileConverterLoadingShell
+                theme={theme}
+                onClose={() => void window.electronAPI?.closeWindow?.()}
+              />
+            }
+          >
+            <FileConverterModule
               theme={theme}
-              onClose={() => void window.electronAPI?.closeWindow?.()}
+              hostMode="detached"
+              onExit={() => void window.electronAPI?.closeWindow?.()}
             />
-          }
-        >
-          <FileConverterModule
-            theme={theme}
-            hostMode="detached"
-            onExit={() => void window.electronAPI?.closeWindow?.()}
-          />
-        </Suspense>
+          </Suspense>
+        </ErrorBoundary>
         <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
@@ -760,9 +811,11 @@ function AppContent() {
     const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
     return (
       <>
-        <Suspense fallback={<NovelLoadingShell theme={theme} />}>
-          <NovelModule theme={theme} hostMode="detached" onExit={() => void window.electronAPI?.closeWindow?.()} />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<NovelLoadingShell theme={theme} />}>
+            <NovelModule theme={theme} hostMode="detached" onExit={() => void window.electronAPI?.closeWindow?.()} />
+          </Suspense>
+        </ErrorBoundary>
         <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
@@ -880,23 +933,25 @@ function AppContent() {
     const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
     return (
       <>
-        <Suspense
-          fallback={
-            <FileConverterLoadingShell
+        <ErrorBoundary onReset={() => setShowFileConverter(false)}>
+          <Suspense
+            fallback={
+              <FileConverterLoadingShell
+                theme={theme}
+                onClose={() => setShowFileConverter(false)}
+              />
+            }
+          >
+            <FileConverterModule
               theme={theme}
-              onClose={() => setShowFileConverter(false)}
+              hostMode="embedded"
+              initialNavigationState={fileConverterReattachState}
+              onNavigationStateConsumed={() => setFileConverterReattachState(null)}
+              onPopOutComplete={() => setShowFileConverter(false)}
+              onExit={() => setShowFileConverter(false)}
             />
-          }
-        >
-          <FileConverterModule
-            theme={theme}
-            hostMode="embedded"
-            initialNavigationState={fileConverterReattachState}
-            onNavigationStateConsumed={() => setFileConverterReattachState(null)}
-            onPopOutComplete={() => setShowFileConverter(false)}
-            onExit={() => setShowFileConverter(false)}
-          />
-        </Suspense>
+          </Suspense>
+        </ErrorBoundary>
         <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
@@ -908,16 +963,18 @@ function AppContent() {
     const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
     return (
       <>
-        <Suspense fallback={<NovelLoadingShell theme={theme} />}>
-          <NovelModule
-            theme={theme}
-            hostMode="embedded"
-            initialNavigationState={novelReattachState}
-            onNavigationStateConsumed={() => setNovelReattachState(null)}
-            onPopOutComplete={() => setShowNovel(false)}
-            onExit={() => setShowNovel(false)}
-          />
-        </Suspense>
+        <ErrorBoundary onReset={() => setShowNovel(false)}>
+          <Suspense fallback={<NovelLoadingShell theme={theme} />}>
+            <NovelModule
+              theme={theme}
+              hostMode="embedded"
+              initialNavigationState={novelReattachState}
+              onNavigationStateConsumed={() => setNovelReattachState(null)}
+              onPopOutComplete={() => setShowNovel(false)}
+              onExit={() => setShowNovel(false)}
+            />
+          </Suspense>
+        </ErrorBoundary>
         <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
@@ -935,22 +992,24 @@ function AppContent() {
     const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
     return (
       <>
-        <Suspense
-          fallback={
-            <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-              Loading Map...
-            </div>
-          }
-        >
-          <MapModule
-            theme={theme}
-            hostMode="embedded"
-            initialNavigationState={mapReattachState}
-            onNavigationStateConsumed={() => setMapReattachState(null)}
-            onPopOutComplete={() => setShowMap(false)}
-            onExit={() => setShowMap(false)}
-          />
-        </Suspense>
+        <ErrorBoundary onReset={() => setShowMap(false)}>
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+                Loading Map...
+              </div>
+            }
+          >
+            <MapModule
+              theme={theme}
+              hostMode="embedded"
+              initialNavigationState={mapReattachState}
+              onNavigationStateConsumed={() => setMapReattachState(null)}
+              onPopOutComplete={() => setShowMap(false)}
+              onExit={() => setShowMap(false)}
+            />
+          </Suspense>
+        </ErrorBoundary>
         <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel
@@ -967,32 +1026,40 @@ function AppContent() {
     const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
     return (
       <>
-        <Suspense
-          fallback={
-            <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-              Loading Transcript...
-            </div>
-          }
+        <ErrorBoundary
+          onReset={() => {
+            setShowTranscription(false);
+            setTranscriptionLaunchSourcePath(null);
+            setTranscriptionLaunchCasePath(null);
+          }}
         >
-          <TranscriptionModule
-            theme={theme}
-            hostMode="embedded"
-            initialNavigationState={transcriptionReattachState}
-            onNavigationStateConsumed={() => setTranscriptionReattachState(null)}
-            onPopOutComplete={() => {
-              setShowTranscription(false);
-              setTranscriptionLaunchSourcePath(null);
-              setTranscriptionLaunchCasePath(null);
-            }}
-            onExit={() => {
-              setShowTranscription(false);
-              setTranscriptionLaunchSourcePath(null);
-              setTranscriptionLaunchCasePath(null);
-            }}
-            initialSourcePath={transcriptionLaunchSourcePath}
-            initialCasePath={transcriptionLaunchCasePath}
-          />
-        </Suspense>
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+                Loading Transcript...
+              </div>
+            }
+          >
+            <TranscriptionModule
+              theme={theme}
+              hostMode="embedded"
+              initialNavigationState={transcriptionReattachState}
+              onNavigationStateConsumed={() => setTranscriptionReattachState(null)}
+              onPopOutComplete={() => {
+                setShowTranscription(false);
+                setTranscriptionLaunchSourcePath(null);
+                setTranscriptionLaunchCasePath(null);
+              }}
+              onExit={() => {
+                setShowTranscription(false);
+                setTranscriptionLaunchSourcePath(null);
+                setTranscriptionLaunchCasePath(null);
+              }}
+              initialSourcePath={transcriptionLaunchSourcePath}
+              initialCasePath={transcriptionLaunchCasePath}
+            />
+          </Suspense>
+        </ErrorBoundary>
         <VaultRecorderTopBar visible />
         <ToastContainer />
         <SettingsPanel

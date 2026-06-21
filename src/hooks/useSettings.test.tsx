@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import React from 'react';
 import { useSettings } from './useSettings';
-import { SettingsProvider } from '../utils/settingsContext';
+import { SettingsProvider } from '../utils/SettingsProvider';
 import { AppSettings } from '../types';
 import { mockElectronAPI } from '../test-utils/mocks';
 

@@ -78,7 +78,7 @@ describe('mapStorage.saveMapDocument', () => {
     expect(fs.mkdir).toHaveBeenCalledWith(path.join(casePath, '.maps'), { recursive: true });
     expect(fs.rename).toHaveBeenCalledWith(currentPath, expectedPath);
     expect(fs.writeFile).toHaveBeenCalledWith(
-      path.join(expectedPath, 'map.vault-map.json'),
+      path.join(expectedPath, 'map.vault-map.json') + '.tmp',
       expect.stringContaining(`"casePath": ${JSON.stringify(casePath)}`),
       'utf8',
     );
@@ -100,7 +100,7 @@ describe('mapStorage.saveMapDocument', () => {
     expect(fs.mkdir).toHaveBeenCalledWith(path.join('D:/The Vault App', 'MapLibrary'), { recursive: true });
     expect(fs.rename).toHaveBeenCalledWith(currentPath, expectedPath);
     expect(fs.writeFile).toHaveBeenCalledWith(
-      path.join(expectedPath, 'map.vault-map.json'),
+      path.join(expectedPath, 'map.vault-map.json') + '.tmp',
       expect.stringContaining('"casePath": null'),
       'utf8',
     );

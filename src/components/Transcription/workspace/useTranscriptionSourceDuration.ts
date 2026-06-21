@@ -53,5 +53,6 @@ export function useTranscriptionSourceDuration(
     reloadElement();
 
     return cleanup;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the source is intentionally tracked by its identifying fields rather than object identity
   }, [source?.id, source?.storedPath, source?.originalPath, source?.mediaType]);
 }

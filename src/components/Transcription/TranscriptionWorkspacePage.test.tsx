@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ToastProvider } from '../Toast/ToastContext';
+import { ToastProvider } from '../Toast/ToastProvider';
 import { TranscriptionWorkspacePage } from './TranscriptionWorkspacePage';
 import { mockElectronAPI } from '../../test-utils/mocks';
 import { TranscriptionDocument } from '../../types';
-import { SettingsProvider } from '../../utils/settingsContext';
+import { SettingsProvider } from '../../utils/SettingsProvider';
 
 function makeDocument(overrides: Partial<TranscriptionDocument> = {}): TranscriptionDocument {
   return {

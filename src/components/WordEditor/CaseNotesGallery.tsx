@@ -9,6 +9,7 @@ import { isLightTheme } from '../../theme/themeSemantics';
 import { NewFileNameDialog } from './NewFileNameDialog';
 import { DeleteTextFileConfirmDialog } from './DeleteTextFileConfirmDialog';
 import { useSettingsContext } from '../../utils/settingsContext';
+import { logger } from '../../utils/logger';
 
 interface TextFile {
   name: string;
@@ -41,6 +42,7 @@ export function CaseNotesGallery({ onSelectCase, onClose, onOpenFile, onNewFile,
 
   useEffect(() => {
     loadCases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-time load on mount
   }, []);
 
   // Load note counts for each case
@@ -48,6 +50,7 @@ export function CaseNotesGallery({ onSelectCase, onClose, onOpenFile, onNewFile,
     if (cases.length > 0) {
       loadNoteCounts();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadNoteCounts is a stable local loader; intentionally re-run only when the case list changes
   }, [cases]);
 
   const loadCases = async () => {
@@ -62,7 +65,7 @@ export function CaseNotesGallery({ onSelectCase, onClose, onOpenFile, onNewFile,
       setCases(casesList);
     } catch (error) {
       toast.error('Failed to load cases');
-      console.error('Load cases error:', error);
+      logger.error('Load cases error:', error);
     } finally {
       setLoading(false);
     }
@@ -518,6 +521,7 @@ function CaseNotesView({ casePath, caseName: _caseName, onOpenFile, onNewFile: _
 
   useEffect(() => {
     loadFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadFiles is a stable local loader; intentionally re-run only when casePath changes
   }, [casePath]);
 
   const loadFiles = async () => {
@@ -532,7 +536,7 @@ function CaseNotesView({ casePath, caseName: _caseName, onOpenFile, onNewFile: _
       setFiles(fileList);
     } catch (error) {
       toast.error('Failed to load notes');
-      console.error('Load files error:', error);
+      logger.error('Load files error:', error);
     } finally {
       setLoading(false);
     }
@@ -556,7 +560,7 @@ function CaseNotesView({ casePath, caseName: _caseName, onOpenFile, onNewFile: _
       setFileToDelete(null);
     } catch (error) {
       toast.error('Failed to delete note');
-      console.error('Delete error:', error);
+      logger.error('Delete error:', error);
     }
   };
 
@@ -577,7 +581,7 @@ function CaseNotesView({ casePath, caseName: _caseName, onOpenFile, onNewFile: _
       toast.success('Note created');
     } catch (error) {
       toast.error('Failed to create note');
-      console.error('Create note error:', error);
+      logger.error('Create note error:', error);
     }
   };
 

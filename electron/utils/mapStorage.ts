@@ -5,6 +5,7 @@ import { existsSync } from 'fs';
 import { getArchiveDrive } from './archiveConfig';
 import { isSafePath } from './pathValidator';
 import { logger } from './logger';
+import { writeFileAtomic, readJsonWithBackup } from './atomicWrite';
 import {
   countTopLevelArrayObjects,
   extractJsonNullableStringField,
@@ -110,8 +111,7 @@ export async function readMapDocument(mapFolderPath: string): Promise<MapDocumen
     throw new Error('Invalid map folder path');
   }
   const jsonPath = getMapJsonPath(mapFolderPath);
-  const raw = await fs.readFile(jsonPath, 'utf8');
-  const doc = JSON.parse(raw) as MapDocumentStored;
+  const doc = await readJsonWithBackup<MapDocumentStored>(jsonPath);
   doc.mapFolderPath = mapFolderPath;
   return doc;
 }
@@ -124,7 +124,7 @@ export async function writeMapDocument(doc: MapDocumentStored): Promise<void> {
   const jsonPath = getMapJsonPath(doc.mapFolderPath);
   await fs.mkdir(doc.mapFolderPath, { recursive: true });
   await fs.mkdir(getMapAssetsPath(doc.mapFolderPath), { recursive: true });
-  await fs.writeFile(jsonPath, JSON.stringify(doc, null, 2), 'utf8');
+  await writeFileAtomic(jsonPath, JSON.stringify(doc, null, 2));
 }
 
 export async function saveMapDocument(doc: MapDocumentStored): Promise<MapDocumentStored> {

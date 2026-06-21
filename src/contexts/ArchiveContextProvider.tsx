@@ -1,12 +1,6 @@
-import { createContext, useContext, ReactNode, useState, useCallback, useRef, useMemo } from 'react';
+import { ReactNode, useState, useCallback, useRef, useMemo } from 'react';
 import { ArchiveCase } from '../types';
-
-interface ArchiveContextValue {
-  currentCase: ArchiveCase | null;
-  setCurrentCase: (caseItem: ArchiveCase | null) => void;
-}
-
-const ArchiveContext = createContext<ArchiveContextValue | undefined>(undefined);
+import { ArchiveContext } from './ArchiveContext';
 
 interface ArchiveContextProviderProps {
   children: ReactNode;
@@ -37,13 +31,4 @@ export function ArchiveContextProvider({ children }: ArchiveContextProviderProps
       {children}
     </ArchiveContext.Provider>
   );
-}
-
-export function useArchiveContext(): ArchiveContextValue {
-  const context = useContext(ArchiveContext);
-  if (context === undefined) {
-    // Return default values instead of throwing - allows components to work outside ArchivePage
-    return { currentCase: null, setCurrentCase: () => {} };
-  }
-  return context;
 }

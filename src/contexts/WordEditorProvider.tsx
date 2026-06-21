@@ -1,17 +1,6 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
-
-interface WordEditorContextType {
-  isOpen: boolean;
-  setIsOpen: (open: boolean) => void;
-  panelWidth: number;
-  setPanelWidth: (width: number) => void;
-  dividerPosition: number;
-  setDividerPosition: (position: number) => void;
-  isDividerDragging: boolean;
-  setIsDividerDragging: (dragging: boolean) => void;
-}
-
-const WordEditorContext = createContext<WordEditorContextType | undefined>(undefined);
+import { useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import { logger } from '../utils/logger';
+import { WordEditorContext } from './WordEditorContext';
 
 const STORAGE_KEY = 'word-editor-panel-width';
 const DIVIDER_STORAGE_KEY = 'word-editor-divider-position';
@@ -42,7 +31,7 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (error) {
-      console.warn('Failed to load word editor panel width from localStorage:', error);
+      logger.warn('Failed to load word editor panel width from localStorage:', error);
     }
 
     try {
@@ -55,7 +44,7 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (error) {
-      console.warn('Failed to load divider position from localStorage:', error);
+      logger.warn('Failed to load divider position from localStorage:', error);
     }
   }, []);
 
@@ -69,7 +58,7 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, constrainedWidth.toString());
     } catch (error) {
-      console.warn('Failed to save word editor panel width to localStorage:', error);
+      logger.warn('Failed to save word editor panel width to localStorage:', error);
     }
   }, []);
 
@@ -82,7 +71,7 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(DIVIDER_STORAGE_KEY, constrainedPosition.toString());
     } catch (error) {
-      console.warn('Failed to save divider position to localStorage:', error);
+      logger.warn('Failed to save divider position to localStorage:', error);
     }
   }, []);
 
@@ -113,21 +102,3 @@ export function WordEditorProvider({ children }: { children: ReactNode }) {
     </WordEditorContext.Provider>
   );
 }
-
-export function useWordEditor() {
-  const context = useContext(WordEditorContext);
-  if (context === undefined) {
-    throw new Error('useWordEditor must be used within a WordEditorProvider');
-  }
-  return context;
-}
-
-
-
-
-
-
-
-
-
-

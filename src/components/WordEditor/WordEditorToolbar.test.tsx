@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WordEditorToolbar } from './WordEditorToolbar';
-import { SettingsProvider } from '../../utils/settingsContext';
+import { SettingsProvider } from '../../utils/SettingsProvider';
 
 function renderWithProviders(ui: React.ReactElement) {
   return render(<SettingsProvider>{ui}</SettingsProvider>);

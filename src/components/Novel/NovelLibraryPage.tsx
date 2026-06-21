@@ -94,6 +94,7 @@ export function NovelLibraryPage({
   useEffect(() => {
     void loadNovels();
     void prefetchNovelEditorPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-time load/prefetch on mount
   }, []);
 
   const filtered = useMemo(() => {

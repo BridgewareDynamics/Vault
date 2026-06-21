@@ -193,6 +193,7 @@ export function PDFExtractionModal({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handler functions are read live; the shortcut listener is intentionally re-bound only on the tracked open/extraction state
   }, [isOpen, isExtracting, pdfPath, extractedPages.length]);
 
   const loadCasePdfFiles = useCallback(

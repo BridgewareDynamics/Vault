@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { WelcomeScreen } from './WelcomeScreen';
-import { SettingsProvider } from '../utils/settingsContext';
+import { SettingsProvider } from '../utils/SettingsProvider';
 import { mockElectronAPI } from '../test-utils/mocks';
 
 describe('WelcomeScreen', () => {

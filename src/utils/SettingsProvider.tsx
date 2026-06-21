@@ -1,15 +1,7 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 import { AppSettings } from '../types';
 import { logger } from './logger';
-
-interface SettingsContextValue {
-  settings: AppSettings | null;
-  loading: boolean;
-  updateSettings: (updates: Partial<AppSettings>) => Promise<void>;
-  refreshSettings: () => Promise<void>;
-}
-
-const SettingsContext = createContext<SettingsContextValue | undefined>(undefined);
+import { SettingsContext, SettingsContextValue } from './settingsContext';
 
 interface SettingsProviderProps {
   children: ReactNode;
@@ -24,12 +16,12 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       if (!window.electronAPI) {
         throw new Error('Electron API not available');
       }
-      
+
       // Check if getSettings function exists
       if (typeof window.electronAPI.getSettings !== 'function') {
         throw new Error('Settings API not available - preload script may need to be rebuilt');
       }
-      
+
       const loaded = await window.electronAPI.getSettings() as Partial<AppSettings>;
       // Ensure all required fields are present
       const completeSettings: AppSettings = {
@@ -66,12 +58,12 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       if (!window.electronAPI) {
         throw new Error('Electron API not available');
       }
-      
+
       // Check if updateSettings function exists
       if (typeof window.electronAPI.updateSettings !== 'function') {
         throw new Error('Settings API not available - preload script may need to be rebuilt');
       }
-      
+
       const updated = await window.electronAPI.updateSettings(updates) as Partial<AppSettings>;
       // Ensure all required fields are present
       const completeSettings: AppSettings = {
@@ -111,12 +103,3 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     </SettingsContext.Provider>
   );
 }
-
-export function useSettingsContext(): SettingsContextValue {
-  const context = useContext(SettingsContext);
-  if (context === undefined) {
-    throw new Error('useSettingsContext must be used within a SettingsProvider');
-  }
-  return context;
-}
-

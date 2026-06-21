@@ -36,6 +36,7 @@ vi.mock('electron', () => ({
     whenReady: vi.fn(() => Promise.resolve()),
     on: vi.fn(),
     quit: vi.fn(),
+    enableSandbox: vi.fn(),
     setAppUserModelId: vi.fn(),
     requestSingleInstanceLock: vi.fn(() => true),
     commandLine: {
@@ -51,6 +52,7 @@ vi.mock('electron', () => ({
         openDevTools: vi.fn(),
         on: vi.fn(),
         once: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
       },
       on: vi.fn(),
       once: vi.fn(),
@@ -158,6 +160,7 @@ describe('IPC Handlers', () => {
         openDevTools: vi.fn(),
         on: vi.fn(),
         once: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
       },
       on: vi.fn(),
       once: vi.fn(),

@@ -5,6 +5,7 @@ import { existsSync } from 'fs';
 import { getArchiveDrive } from './archiveConfig';
 import { isSafePath } from './pathValidator';
 import { logger } from './logger';
+import { writeFileAtomic, readJsonWithBackup } from './atomicWrite';
 import {
   countTopLevelArrayObjects,
   extractJsonNullableStringField,
@@ -241,8 +242,7 @@ export async function readTranscriptionDocument(
   }
 
   const jsonPath = getTranscriptionJsonPath(transcriptionFolderPath);
-  const raw = await fs.readFile(jsonPath, 'utf8');
-  const doc = JSON.parse(raw) as TranscriptionDocumentStored;
+  const doc = await readJsonWithBackup<TranscriptionDocumentStored>(jsonPath);
   doc.transcriptionFolderPath = transcriptionFolderPath;
   doc.settings = normalizeTranscriptionEngineSettings(
     doc.settings ?? buildDefaultTranscriptionSettings()
@@ -263,7 +263,7 @@ export async function writeTranscriptionDocument(
   const jsonPath = getTranscriptionJsonPath(doc.transcriptionFolderPath);
   await fs.mkdir(doc.transcriptionFolderPath, { recursive: true });
   await fs.mkdir(getTranscriptionAssetsPath(doc.transcriptionFolderPath), { recursive: true });
-  await fs.writeFile(jsonPath, JSON.stringify(doc, null, 2), 'utf8');
+  await writeFileAtomic(jsonPath, JSON.stringify(doc, null, 2));
 }
 
 export async function saveTranscriptionDocument(
@@ -530,8 +530,8 @@ export async function writeTranscriptOutputs(
     TRANSCRIPTION_SEGMENTS_FILENAME
   );
 
-  await fs.writeFile(transcriptFilePath, transcriptText, 'utf8');
-  await fs.writeFile(segmentsFilePath, JSON.stringify(segments, null, 2), 'utf8');
+  await writeFileAtomic(transcriptFilePath, transcriptText);
+  await writeFileAtomic(segmentsFilePath, JSON.stringify(segments, null, 2));
 
   return {
     transcriptFilePath,

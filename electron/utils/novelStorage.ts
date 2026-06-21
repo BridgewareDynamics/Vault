@@ -5,6 +5,7 @@ import { existsSync } from 'fs';
 import { getArchiveDrive } from './archiveConfig';
 import { isSafePath } from './pathValidator';
 import { logger } from './logger';
+import { writeFileAtomic, readJsonWithBackup } from './atomicWrite';
 import {
   countTopLevelArrayObjects,
   extractJsonNullableStringField,
@@ -168,8 +169,7 @@ export async function readNovelDocument(novelFolderPath: string): Promise<NovelD
     throw new Error('Invalid novel folder path');
   }
   const jsonPath = getNovelJsonPath(novelFolderPath);
-  const raw = await fs.readFile(jsonPath, 'utf8');
-  const doc = JSON.parse(raw) as NovelDocumentStored;
+  const doc = await readJsonWithBackup<NovelDocumentStored>(jsonPath);
   doc.novelFolderPath = novelFolderPath;
   doc.settings = normalizeStoredSettings(doc.settings);
   if (!Array.isArray(doc.pages)) {
@@ -186,7 +186,7 @@ export async function writeNovelDocument(doc: NovelDocumentStored): Promise<void
   const jsonPath = getNovelJsonPath(doc.novelFolderPath);
   await fs.mkdir(doc.novelFolderPath, { recursive: true });
   await fs.mkdir(getNovelAssetsPath(doc.novelFolderPath), { recursive: true });
-  await fs.writeFile(jsonPath, JSON.stringify(doc, null, 2), 'utf8');
+  await writeFileAtomic(jsonPath, JSON.stringify(doc, null, 2));
 }
 
 export async function saveNovelDocument(doc: NovelDocumentStored): Promise<NovelDocumentStored> {
@@ -752,6 +752,6 @@ export async function exportNovelToHtml(
 <body><h1>${doc.settings.coverTitle}</h1>${htmlPages}</body></html>`;
 
   await fs.writeFile(path.join(exportPath, 'index.html'), html, 'utf8');
-  await fs.writeFile(path.join(exportPath, NOVEL_JSON_FILENAME), JSON.stringify(doc, null, 2), 'utf8');
+  await writeFileAtomic(path.join(exportPath, NOVEL_JSON_FILENAME), JSON.stringify(doc, null, 2));
   return exportPath;
 }

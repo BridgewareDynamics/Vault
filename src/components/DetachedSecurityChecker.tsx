@@ -69,6 +69,7 @@ export function DetachedSecurityChecker() {
     return () => {
       removeListener();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- progress listener is intentionally set up once on mount; audit-state values are read live inside the callback
   }, []); // Set up once on mount, don't depend on detachedDuringAudit
 
   // Listen for audit completion result (when audit completes in detached window)
@@ -118,6 +119,7 @@ export function DetachedSecurityChecker() {
         removeErrorListener();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- result listeners are set up once; audit-state values are read live inside the callbacks, so they are intentionally excluded to avoid re-binding
   }, [toast]);
 
   // Listen for initial data from main process

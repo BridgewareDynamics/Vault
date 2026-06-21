@@ -109,6 +109,7 @@ export function NewMapNameDialog({
       inputRef.current?.select();
     }, 60);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mapName is read only behind the first-open guard; intentionally runs on open transitions, not on every keystroke
   }, [isOpen]);
 
   if (!isOpen) return null;

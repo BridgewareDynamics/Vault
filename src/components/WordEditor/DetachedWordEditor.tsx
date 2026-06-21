@@ -10,6 +10,7 @@ import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { useSettingsContext } from '../../utils/settingsContext';
 import { Theme } from '../../types';
 import { isLightTheme } from '../../theme/themeSemantics';
+import { logger } from '../../utils/logger';
 
 export function DetachedWordEditor() {
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -177,7 +178,7 @@ export function DetachedWordEditor() {
       }
     } catch (error) {
       toast.error('Failed to reattach editor');
-      console.error('Reattach error:', error);
+      logger.error('Reattach error:', error);
       setIsReattaching(false);
     }
   };
@@ -235,7 +236,7 @@ export function DetachedWordEditor() {
       toast.success('New file created');
     } catch (error) {
       toast.error('Failed to create file');
-      console.error('Create file error:', error);
+      logger.error('Create file error:', error);
     }
   };
 
@@ -561,7 +562,7 @@ export function DetachedWordEditor() {
 
             } catch (error) {
               toast.error('Failed to save file');
-              console.error('Save error:', error);
+              logger.error('Save error:', error);
               return; // Don't proceed with reattach if save failed
             }
           }

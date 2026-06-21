@@ -13,6 +13,7 @@ import { Theme } from '../../types';
 import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
 import { COLLECT_EVENT, RESPONSE_EVENT } from '../../utils/wordEditorSnapshot';
+import { logger } from '../../utils/logger';
 import type { MapModuleWordEditorSnapshot } from '../../types/detachableModules';
 
 const MIN_WIDTH = 400;
@@ -195,7 +196,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
                 editorRef.current.setContent(data.content);
                 editorRef.current.markAsSaved();
               } catch (error) {
-                console.error('Failed to set content on reattach via ref:', error);
+                logger.error('Failed to set content on reattach via ref:', error);
                 if (attempt < maxAttempts) {
                   setContentWithRetry(attempt + 1);
                 }
@@ -247,7 +248,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       toast.info('Editor opened in separate window');
     } catch (error) {
       toast.error('Failed to open editor in separate window');
-      console.error('Detach error:', error);
+      logger.error('Detach error:', error);
     }
   };
 
@@ -282,7 +283,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
       setEditorKey(prev => prev + 1);
     } catch (error) {
       toast.error('Failed to create file');
-      console.error('Create file error:', error);
+      logger.error('Create file error:', error);
     }
   };
 
@@ -637,7 +638,7 @@ export function WordEditorPanel({ isOpen, onClose, initialFilePath, openLibrary,
               toast.success('File saved');
             } catch (error) {
               toast.error('Failed to save file');
-              console.error('Save error:', error);
+              logger.error('Save error:', error);
               return; // Don't close if save failed
             }
           }

@@ -8,6 +8,7 @@ import { CaseSelectionDialog } from './CaseSelectionDialog';
 import { Theme } from '../../types';
 import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
+import { logger } from '../../utils/logger';
 
 interface TextFile {
   name: string;
@@ -44,6 +45,7 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
     if (isOpen) {
       loadRecentFiles();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadRecentFiles is a stable local loader; intentionally re-run only when the dialog opens or the active case changes
   }, [isOpen, currentCase?.path]);
 
   const loadRecentFiles = async () => {
@@ -64,7 +66,7 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
       setRecentFiles(sorted);
     } catch (error) {
       toast.error('Failed to load recent files');
-      console.error('Load recent files error:', error);
+      logger.error('Load recent files error:', error);
     } finally {
       setLoading(false);
     }

@@ -9,6 +9,7 @@ import { CaseNotesGallery } from './CaseNotesGallery';
 import { Theme } from '../../types';
 import { isLightTheme } from '../../theme/themeSemantics';
 import { useSettingsContext } from '../../utils/settingsContext';
+import { logger } from '../../utils/logger';
 
 // Hook to detect container width for responsive design
 function useContainerWidth(ref: React.RefObject<HTMLDivElement>) {
@@ -158,6 +159,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
       clearTimeout(timeoutId);
       clearTimeout(animationTimeoutId);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- updateContainerWidth/checkWidth are stable local helpers; intentionally re-run only on mount and when containerWidth changes
   }, [containerWidth]); // Re-run when width changes or component mounts
 
   // Give ArchiveContext a brief moment to stabilize before deciding to show gallery
@@ -240,6 +242,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
       loadFiles();
     }
     // If shouldShowGalleryCalc is true, we don't load files - the gallery will be shown instead
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadFiles is a stable local loader and the case objects are intentionally tracked by their .path to avoid redundant reloads on identity change
   }, [selectedCaseForNotes?.path, currentCase?.path, showGallery, contextStabilized, detachedCasePath, refreshKey]);
   const loadFiles = async () => {if (!window.electronAPI) {
       setLoading(false);
@@ -258,7 +261,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
         setFiles(fileList);}
     } catch (error) {
       toast.error('Failed to load notes');
-      console.error('Load files error:', error);} finally {
+      logger.error('Load files error:', error);} finally {
       setLoading(false);
     }
   };
@@ -282,7 +285,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
       setFileToDelete(null);
     } catch (error) {
       toast.error('Failed to delete file');
-      console.error('Delete error:', error);
+      logger.error('Delete error:', error);
     }
   };
 
@@ -313,7 +316,7 @@ export function TextLibrary({ onOpenFile, onNewFile, onClose, isDetached = false
         toast.success('Note created');
       } catch (error) {
         toast.error('Failed to create note');
-        console.error('Create note error:', error);
+        logger.error('Create note error:', error);
       }
     } else {
       // Create global text file

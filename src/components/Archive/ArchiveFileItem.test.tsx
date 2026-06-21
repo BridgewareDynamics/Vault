@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import { ArchiveFileItem } from './ArchiveFileItem';
 import { ArchiveFile } from '../../types';
-import { SettingsProvider } from '../../utils/settingsContext';
+import { SettingsProvider } from '../../utils/SettingsProvider';
 import { mockElectronAPI } from '../../test-utils/mocks';
 
 describe('ArchiveFileItem', () => {

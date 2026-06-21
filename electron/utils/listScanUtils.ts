@@ -14,13 +14,12 @@ export async function mapWithConcurrency<T, R>(
   const workerCount = Math.min(concurrency, items.length);
 
   async function worker() {
-    while (true) {
-      const index = nextIndex;
-      nextIndex += 1;
-      if (index >= items.length) {
-        break;
-      }
+    let index = nextIndex;
+    nextIndex += 1;
+    while (index < items.length) {
       output[index] = await mapper(items[index]);
+      index = nextIndex;
+      nextIndex += 1;
     }
   }
 

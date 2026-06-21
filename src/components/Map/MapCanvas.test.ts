@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getBranchButtonsForBlock, getMiniMapNodeColor } from './MapCanvas';
+import { getBranchButtonsForBlock, getMiniMapNodeColor } from './mapCanvasHelpers';
 import { MAP_BLOCK_DEFAULT_SIZE, MAP_BRANCH_BLOCK_DEFAULT_SIZE } from '../../utils/mapLayout';
 import { buildChronology } from '../../utils/mapChronology';
 import type { MapBlock } from '../../types';

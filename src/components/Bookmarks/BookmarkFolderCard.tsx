@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Folder, Trash2, Bookmark } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { BookmarkFolder } from '../../types';
+import { logger } from '../../utils/logger';
 
 interface BookmarkFolderCardProps {
   folder: BookmarkFolder;
@@ -18,6 +19,7 @@ export function BookmarkFolderCard({ folder, onOpen, onDelete, isDetached = fals
   useEffect(() => {
     loadThumbnail();
     loadBookmarkCount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable local loaders; intentionally re-run only when the folder identity/thumbnail changes
   }, [folder.id, folder.thumbnail]);
 
   const loadThumbnail = async () => {
@@ -49,7 +51,7 @@ export function BookmarkFolderCard({ folder, onOpen, onDelete, isDetached = fals
         }
       }
     } catch (error) {
-      console.error('Failed to load folder thumbnail:', error);
+      logger.error('Failed to load folder thumbnail:', error);
     } finally {
       setLoading(false);
     }
@@ -62,7 +64,7 @@ export function BookmarkFolderCard({ folder, onOpen, onDelete, isDetached = fals
       const bookmarks = await window.electronAPI.getBookmarksByFolder(folder.id);
       setBookmarkCount(bookmarks.length);
     } catch (error) {
-      console.error('Failed to load bookmark count:', error);
+      logger.error('Failed to load bookmark count:', error);
     }
   };
 

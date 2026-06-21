@@ -4,7 +4,8 @@ import { NovelDocument, NovelPage, NovelPageImage } from '../../types';
 import { Theme } from '../../types';
 import { useNovelTheme } from './novelTheme';
 import { BookCoverPage } from './BookCoverPage';
-import { BookPageEditor, buildPageMeasureOptions } from './BookPageEditor';
+import { BookPageEditor } from './BookPageEditor';
+import { buildPageMeasureOptions } from './bookPageMetrics';
 import { BookPageFlipAnimation, BOOK_FLIP_DURATION_MS, type BookPageFlipPivot } from './BookPageFlipAnimation';
 import { BookPageShell } from './BookPageShell';
 import { BookSpineInsertMenu } from './BookSpineInsertMenu';
@@ -105,6 +106,7 @@ export function BookSpreadView({
 
   const measureOptions = useMemo(
     () => buildPageMeasureOptions(metrics, novelDoc),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed on the specific settings that affect measurement rather than the whole novelDoc identity
     [metrics, novelDoc.settings.fontFamily, novelDoc.settings.fontSize, novelDoc.settings.showPageNumbers]
   );
 
@@ -128,6 +130,7 @@ export function BookSpreadView({
       }
       return defaultPage?.id ?? null;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- spread pages are intentionally tracked by their stable ids rather than object identity
   }, [spread?.leftPage?.id, spread?.rightPage?.id, spreadIndex]);
 
   const registerPageFlowRef = useCallback((pageId: string, element: HTMLDivElement | null) => {

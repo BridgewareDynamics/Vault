@@ -35,7 +35,7 @@ import { isLightTheme, toEdgeAppearanceTheme } from '../../theme/themeSemantics'
 import { MapBlockNode, type MapBlockNodeData } from './MapBlockNode';
 import { useMapTheme } from './mapTheme';
 import { getEffectiveBlockAttachments, PendingMapAttachment, findMapBlockIdFromDropPoint, isMapAttachmentDrag, parseDropPendingAttachments } from './mapAttachmentUtils';
-import { getMapBlockMinimapColor } from './mapBlockColors';
+import { getBranchButtonsForBlock, getMiniMapNodeColor } from './mapCanvasHelpers';
 import { MapEdgeColorPicker } from './MapEdgeColorPicker';
 import { MapStyledEdge, type MapStyledFlowEdge } from './MapStyledEdge';
 import {
@@ -363,38 +363,6 @@ function parseHandleSide(handleId?: string): MapHandleSide | null {
   return side === 'top' || side === 'right' || side === 'bottom' || side === 'left' ? side : null;
 }
 
-export function getBranchButtonsForBlock(
-  block: MapBlock,
-  occupiedSides: MapHandleSide[]
-): MapBlockNodeData['branchButtons'] {
-  if (block.kind === 'branch') {
-    return [
-      { branchSide: 'left', buttonSide: 'left' },
-      { branchSide: 'right', buttonSide: 'right' },
-    ];
-  }
-
-  const occupied = new Set<MapHandleSide>(occupiedSides);
-  const usedButtonSides = new Set<MapHandleSide>();
-  const fallbackOrder: MapHandleSide[] = ['bottom', 'top', 'left', 'right'];
-  const preferredByBranchSide: Record<MapBranchSide, MapHandleSide[]> = {
-    left: ['left', 'bottom', 'top', 'right'],
-    right: ['right', 'bottom', 'top', 'left'],
-  };
-
-  return (['left', 'right'] as const).map((branchSide) => {
-    const buttonSide =
-      preferredByBranchSide[branchSide].find(
-        (candidate) => !occupied.has(candidate) && !usedButtonSides.has(candidate)
-      ) ??
-      fallbackOrder.find((candidate) => !usedButtonSides.has(candidate)) ??
-      branchSide;
-
-    usedButtonSides.add(buttonSide);
-    return { branchSide, buttonSide };
-  });
-}
-
 function buildNodeAffordances(
   blocks: MapBlock[],
   edges: MapDocument['edges']
@@ -487,17 +455,6 @@ function blocksSignature(blocks: MapBlock[]): string {
         ].join(':')
     )
     .join('|');
-}
-
-export function getMiniMapNodeColor(block: MapBlock | undefined, theme: Theme): string {
-  return getMapBlockMinimapColor(
-    {
-      surfaceColor: block?.surfaceColor,
-      borderColor: block?.borderColor,
-      legacyColor: block?.color,
-    },
-    toEdgeAppearanceTheme(theme)
-  );
 }
 
 export function MapCanvas({

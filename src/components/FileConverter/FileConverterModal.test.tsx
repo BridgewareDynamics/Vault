@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FileConverterWorkspacePage } from './FileConverterWorkspacePage';
-import { SettingsProvider } from '../../utils/settingsContext';
-import { ToastProvider } from '../Toast/ToastContext';
+import { SettingsProvider } from '../../utils/SettingsProvider';
+import { ToastProvider } from '../Toast/ToastProvider';
 import { mockElectronAPI } from '../../test-utils/mocks';
 
 function renderWorkspace(ui: React.ReactElement) {

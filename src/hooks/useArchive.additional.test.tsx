@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { useArchive } from './useArchive';
-import { ToastProvider } from '../components/Toast/ToastContext';
+import { ToastProvider } from '../components/Toast/ToastProvider';
 import { mockElectronAPI } from '../test-utils/mocks';
 
 import { resetThumbnailServiceForTests } from '../utils/thumbnailService';

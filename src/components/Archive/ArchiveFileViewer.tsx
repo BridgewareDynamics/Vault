@@ -154,7 +154,7 @@ function ArchiveFileViewerContent({
   const [showWarningDialog, setShowWarningDialog] = useState(false);
   const [warningFileSize, setWarningFileSize] = useState(0);
   const [memoryInfo, setMemoryInfo] = useState<{ totalMemory: number; freeMemory: number; usedMemory: number } | null>(null);
-  const [pendingLoad, setPendingLoad] = useState<{ filePath: string; pdfjsLib: any } | null>(null);
+  const [pendingLoad, setPendingLoad] = useState<{ filePath: string; pdfjsLib: typeof import('pdfjs-dist') } | null>(null);
   const warningLoadIdRef = useRef(0);
   const warningResolveRef = useRef<((value: boolean) => void) | null>(null);
   
@@ -205,8 +205,9 @@ function ArchiveFileViewerContent({
     setPdfLoadingProgress(0);
     
     // Force garbage collection hint
-    if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
-      (globalThis as any).gc();
+    const maybeGc = (globalThis as { gc?: () => void }).gc;
+    if (typeof globalThis !== 'undefined' && maybeGc) {
+      maybeGc();
     }
   };
   
@@ -265,8 +266,9 @@ function ArchiveFileViewerContent({
     setFileData(null);
     
     // Force garbage collection hint if available
-    if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
-      (globalThis as any).gc();
+    const maybeGc = (globalThis as { gc?: () => void }).gc;
+    if (typeof globalThis !== 'undefined' && maybeGc) {
+      maybeGc();
     }
     
     onClose();
@@ -495,6 +497,7 @@ function ArchiveFileViewerContent({
       pdfLoadAbortController.abort();
       loadIdRef.current += 1;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- imageX/imageY are stable motion values and pdfDoc/initialPage are managed inside the loader; the viewer must reload only when the file changes
   }, [file]);
 
   // Calculate drag constraints based on canvas and container sizes
@@ -534,6 +537,7 @@ function ArchiveFileViewerContent({
   useEffect(() => {
     if (pdfDoc && pageScale >= 1.0 && isPdfZoomed) {
       let resizeTimeout: NodeJS.Timeout | null = null;
+      let rafId: number | null = null;
       
       const updateConstraints = () => {
         // Don't update constraints during active drag to prevent jitter
@@ -552,7 +556,7 @@ function ArchiveFileViewerContent({
       };
       
       // Immediate update attempt
-      requestAnimationFrame(updateConstraints);
+      rafId = requestAnimationFrame(updateConstraints);
       
       // Also update after multiple checkpoints to catch layout changes when panel opens
       const timeout1 = setTimeout(updateConstraints, 0); // Next tick
@@ -570,7 +574,7 @@ function ArchiveFileViewerContent({
         // Debounce resize updates - only update if not dragging
         resizeTimeout = setTimeout(() => {
           if (!isPdfDraggingRef.current) {
-            requestAnimationFrame(updateConstraints);
+            rafId = requestAnimationFrame(updateConstraints);
           }
         }, 100); // 100ms debounce
       });
@@ -590,6 +594,9 @@ function ArchiveFileViewerContent({
         clearTimeout(timeout4);
         if (resizeTimeout) {
           clearTimeout(resizeTimeout);
+        }
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
         }
         resizeObserver.disconnect();
       };
@@ -945,6 +952,7 @@ function ArchiveFileViewerContent({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- imageScale is intentionally excluded so the keydown listener is not re-bound on every zoom change
   }, [file, fileData, imageX, imageY]);
 
   const currentIndex = files.findIndex(f => f.path === file.path);
@@ -1095,7 +1103,7 @@ function ArchiveFileViewerContent({
       logger.error('Failed to create bookmark:', error);
       toast.error('Failed to create bookmark');
     }
-  }, [generatePageThumbnail, file?.name, toast]);
+  }, [generatePageThumbnail, file?.name, file?.path, currentPage, toast]);
 
   return (
     <>

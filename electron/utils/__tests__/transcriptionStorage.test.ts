@@ -111,7 +111,7 @@ describe('transcriptionStorage.saveTranscriptionDocument', () => {
     );
     expect(fs.rename).toHaveBeenCalledWith(currentPath, expectedPath);
     expect(fs.writeFile).toHaveBeenCalledWith(
-      path.join(expectedPath, 'transcription.vault-transcription.json'),
+      path.join(expectedPath, 'transcription.vault-transcription.json') + '.tmp',
       expect.stringContaining(`"casePath": ${JSON.stringify(casePath)}`),
       'utf8'
     );
@@ -144,7 +144,7 @@ describe('transcriptionStorage.saveTranscriptionDocument', () => {
     );
     expect(fs.rename).toHaveBeenCalledWith(currentPath, expectedPath);
     expect(fs.writeFile).toHaveBeenCalledWith(
-      path.join(expectedPath, 'transcription.vault-transcription.json'),
+      path.join(expectedPath, 'transcription.vault-transcription.json') + '.tmp',
       expect.stringContaining('"casePath": null'),
       'utf8'
     );

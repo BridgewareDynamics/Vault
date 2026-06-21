@@ -3,8 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CaseSelectionDialog } from './CaseSelectionDialog';
 import { mockElectronAPI } from '../../test-utils/mocks';
-import { SettingsProvider } from '../../utils/settingsContext';
-import { ToastProvider } from '../Toast/ToastContext';
+import { SettingsProvider } from '../../utils/SettingsProvider';
+import { ToastProvider } from '../Toast/ToastProvider';
 
 vi.mock('../../hooks/useCategoryTags', () => ({
   useCategoryTags: () => ({

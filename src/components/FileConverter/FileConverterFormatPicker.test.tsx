@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FileConverterFormatPicker } from './FileConverterFormatPicker';
-import { SettingsProvider } from '../../utils/settingsContext';
+import { SettingsProvider } from '../../utils/SettingsProvider';
 import { mockElectronAPI } from '../../test-utils/mocks';
 import type { FileConverterSource } from '../../types';
 

@@ -1,0 +1,379 @@
+﻿# npm audit report
+
+@babel/core  <=7.29.0
+@babel/core: Arbitrary File Read via sourceMappingURL Comment - https://github.com/advisories/GHSA-4x5r-pxfx-6jf8
+fix available via `npm audit fix`
+node_modules/@babel/core
+
+@tootallnate/once  <2.0.1
+@tootallnate/once vulnerable to Incorrect Control Flow Scoping - https://github.com/advisories/GHSA-vpq2-c234-7xj6
+fix available via `npm audit fix`
+node_modules/@tootallnate/once
+
+@xmldom/xmldom  <=0.8.12
+Severity: high
+xmldom: XML injection via unsafe CDATA serialization allows attacker-controlled markup insertion - https://github.com/advisories/GHSA-wh4c-j3r5-mjhp
+xmldom: Uncontrolled recursion in XML serialization leads to DoS - https://github.com/advisories/GHSA-2v35-w6hq-6mfw
+xmldom has XML injection through unvalidated DocumentType serialization - https://github.com/advisories/GHSA-f6ww-3ggp-fr8h
+xmldom has XML node injection through unvalidated processing instruction serialization - https://github.com/advisories/GHSA-x6wf-f3px-wcqx
+xmldom has XML node injection through unvalidated comment serialization - https://github.com/advisories/GHSA-j759-j44w-7fr8
+fix available via `npm audit fix`
+node_modules/@xmldom/xmldom
+
+ajv  <6.14.0
+Severity: moderate
+ajv has ReDoS when using `$data` option - https://github.com/advisories/GHSA-2g4f-4pwh-qvx6
+fix available via `npm audit fix`
+node_modules/ajv
+
+axios  1.0.0 - 1.15.2
+Severity: high
+Axios has a NO_PROXY Hostname Normalization Bypass that Leads to SSRF - https://github.com/advisories/GHSA-3p68-rc4w-qgx5
+Axios: Authentication Bypass via Prototype Pollution Gadget in `validateStatus` Merge Strategy - https://github.com/advisories/GHSA-w9j2-pvgh-6h63
+Axios: Incomplete Fix for CVE-2025-62718 ΓÇö NO_PROXY Protection Bypassed via RFC 1122 Loopback Subnet (127.0.0.0/8) in Axios 1.15.0 - https://github.com/advisories/GHSA-pmwg-cvhr-8vh7
+Axios: Invisible JSON Response Tampering via Prototype Pollution Gadget in `parseReviver` - https://github.com/advisories/GHSA-3w6x-2g7m-8v23
+Axios: Null Byte Injection via Reverse-Encoding in AxiosURLSearchParams - https://github.com/advisories/GHSA-xhjh-pmcv-23jw
+Axios: CRLF Injection in multipart/form-data body via unsanitized blob.type in formDataToStream - https://github.com/advisories/GHSA-445q-vr5w-6q77
+Axios: no_proxy bypass via IP alias allows SSRF - https://github.com/advisories/GHSA-m7pr-hjqh-92cm
+Axios' HTTP adapter-streamed uploads bypass maxBodyLength when maxRedirects: 0 - https://github.com/advisories/GHSA-5c9x-8gcm-mpgx
+Axios: HTTP adapter streamed responses bypass maxContentLength - https://github.com/advisories/GHSA-vf2m-468p-8v99
+Axios: Prototype Pollution Gadgets - Response Tampering, Data Exfiltration, and Request Hijacking - https://github.com/advisories/GHSA-pf86-5x62-jrwf
+Axios: Header Injection via Prototype Pollution - https://github.com/advisories/GHSA-6chq-wfr3-2hj9
+Axios: XSRF Token Cross-Origin Leakage via Prototype Pollution Gadget in `withXSRFToken` Boolean Coercion - https://github.com/advisories/GHSA-xx6v-rp6x-q39c
+Axios is Vulnerable to Denial of Service via __proto__ Key in mergeConfig - https://github.com/advisories/GHSA-43fc-jf86-j433
+Axios has prototype pollution read-side gadgets in HTTP adapter that allow credential injection and request hijacking - https://github.com/advisories/GHSA-q8qp-cvcw-x6jj
+Axios has Unrestricted Cloud Metadata Exfiltration via Header Injection Chain - https://github.com/advisories/GHSA-fvcv-3m26-pcqx
+axios's shouldBypassProxy does not recognize IPv4-mapped IPv6 addresses, allowing NO_PROXY bypass (incomplete fix for CVE-2025-62718) - https://github.com/advisories/GHSA-pjwm-pj3p-43mv
+Axios: unbounded recursion in toFormData causes DoS via deeply nested request data - https://github.com/advisories/GHSA-62hf-57xw-28j9
+Axios: Regular Expression Denial of Service (ReDoS) via Cookie Name Injection - https://github.com/advisories/GHSA-hfxv-24rg-xrqf
+Allocation of Resources Without Limits or Throttling in Axios - https://github.com/advisories/GHSA-777c-7fjr-54vf
+Axios: Proxy-Authorization Credential Leak to Origin Server Across HTTP-to-HTTPS Redirect in Axios Node.js HTTP Adapter - https://github.com/advisories/GHSA-p92q-9vqr-4j8v
+Axios: Proxy-Authorization header leaks to redirect target when proxy is re-evaluated to direct connection - https://github.com/advisories/GHSA-j5f8-grm9-p9fc
+axios Vulnerable to Credential Theft and Response Hijacking via Prototype Pollution Gadget in Config Merge - https://github.com/advisories/GHSA-3g43-6gmg-66jw
+axios Vulnerable to Full Man-in-the-Middle via Prototype Pollution Gadget in `config.proxy` - https://github.com/advisories/GHSA-35jp-ww65-95wh
+axios has DoS & Header Injection via Prototype Pollution Read-Side Gadgets in axios merge functions - https://github.com/advisories/GHSA-898c-q2cr-xwhg
+fix available via `npm audit fix`
+node_modules/axios
+
+brace-expansion  <1.1.13 || >=2.0.0 <2.0.3
+Severity: moderate
+brace-expansion: Zero-step sequence causes process hang and memory exhaustion - https://github.com/advisories/GHSA-f886-m6hf-6m8v
+brace-expansion: Zero-step sequence causes process hang and memory exhaustion - https://github.com/advisories/GHSA-f886-m6hf-6m8v
+fix available via `npm audit fix`
+node_modules/@electron/asar/node_modules/brace-expansion
+node_modules/@electron/universal/node_modules/brace-expansion
+node_modules/@eslint/eslintrc/node_modules/brace-expansion
+node_modules/@humanwhocodes/config-array/node_modules/brace-expansion
+node_modules/brace-expansion
+node_modules/dir-compare/node_modules/brace-expansion
+node_modules/eslint/node_modules/brace-expansion
+node_modules/glob/node_modules/brace-expansion
+node_modules/test-exclude/node_modules/brace-expansion
+
+electron  <=39.8.4
+Severity: high
+Electron has ASAR Integrity Bypass via resource modification - https://github.com/advisories/GHSA-vmqv-hx8q-j7mg
+Electron: AppleScript injection in app.moveToApplicationsFolder on macOS - https://github.com/advisories/GHSA-5rqw-r77c-jp79
+Electron: Service worker can spoof executeJavaScript IPC replies - https://github.com/advisories/GHSA-xj5x-m3f3-5x3h
+Electron: Incorrect origin passed to permission request handler for iframe requests - https://github.com/advisories/GHSA-r5p7-gp4j-qhrx
+Electron: Out-of-bounds read in second-instance IPC on macOS and Linux - https://github.com/advisories/GHSA-3c8v-cfp5-9885
+Electron: nodeIntegrationInWorker not correctly scoped in shared renderer processes - https://github.com/advisories/GHSA-xwr5-m59h-vwqr
+Electron: Use-after-free in offscreen child window paint callback - https://github.com/advisories/GHSA-532v-xpq5-8h95
+Electron: Registry key path injection in app.setAsDefaultProtocolClient on Windows - https://github.com/advisories/GHSA-mwmh-mq4g-g6gr
+Electron: Use-after-free in download save dialog callback - https://github.com/advisories/GHSA-9w97-2464-8783
+Electron: Use-after-free in WebContents fullscreen, pointer-lock, and keyboard-lock permission callbacks - https://github.com/advisories/GHSA-8337-3p73-46f4
+Electron: Use-after-free in PowerMonitor on Windows and macOS - https://github.com/advisories/GHSA-jjp3-mq3x-295m
+Electron: Unquoted executable path in app.setLoginItemSettings on Windows - https://github.com/advisories/GHSA-jfqx-fxh3-c62j
+Electron: HTTP Response Header Injection in custom protocol handlers and webRequest - https://github.com/advisories/GHSA-4p4r-m79c-wq3v
+Electron: USB device selection not validated against filtered device list - https://github.com/advisories/GHSA-9899-m83m-qhpj
+Electron: Crash in clipboard.readImage() on malformed clipboard image data - https://github.com/advisories/GHSA-f37v-82c4-4x64
+Electron: Named window.open targets not scoped to the opener's browsing context - https://github.com/advisories/GHSA-f3pv-wv63-48x8
+Electron: Renderer command-line switch injection via undocumented commandLineSwitches webPreference - https://github.com/advisories/GHSA-9wfr-w7mm-pc7f
+fix available via `npm audit fix --force`
+Will install electron@42.4.1, which is a breaking change
+node_modules/electron
+
+esbuild  <=0.24.2
+Severity: moderate
+esbuild enables any website to send any requests to the development server and read the response - https://github.com/advisories/GHSA-67mh-4wv8-2f99
+fix available via `npm audit fix --force`
+Will install vite@8.0.16, which is a breaking change
+node_modules/esbuild
+  vite  <=6.4.2
+  Depends on vulnerable versions of esbuild
+  node_modules/vite
+    vite-node  <=2.2.0-beta.2
+    Depends on vulnerable versions of vite
+    node_modules/vite-node
+      vitest  <=3.2.5 || 4.0.0-beta.1 - 4.0.0-beta.14
+      Depends on vulnerable versions of @vitest/ui
+      Depends on vulnerable versions of vite
+      Depends on vulnerable versions of vite-node
+      node_modules/vitest
+        @vitest/coverage-v8  <=3.2.5
+        Depends on vulnerable versions of vitest
+        node_modules/@vitest/coverage-v8
+        @vitest/ui  <=0.0.130 || 0.31.0 - 3.2.5
+        Depends on vulnerable versions of vitest
+        node_modules/@vitest/ui
+
+flatted  <=3.4.1
+Severity: high
+flatted vulnerable to unbounded recursion DoS in parse() revive phase - https://github.com/advisories/GHSA-25h7-pfq9-p65f
+Prototype Pollution via parse() in NodeJS flatted - https://github.com/advisories/GHSA-rf6f-7fwh-wjgh
+fix available via `npm audit fix`
+node_modules/flatted
+
+follow-redirects  <=1.15.11
+Severity: moderate
+follow-redirects leaks Custom Authentication Headers to Cross-Domain Redirect Targets - https://github.com/advisories/GHSA-r4q5-vmmm-2653
+fix available via `npm audit fix`
+node_modules/follow-redirects
+
+form-data  <=2.5.5 || 4.0.0 - 4.0.5
+Severity: critical
+form-data uses unsafe random function in form-data for choosing boundary - https://github.com/advisories/GHSA-fjxv-7rqg-78g4
+form-data: CRLF injection in form-data via unescaped multipart field names and filenames - https://github.com/advisories/GHSA-hmw2-7cc7-3qxx
+form-data: CRLF injection in form-data via unescaped multipart field names and filenames - https://github.com/advisories/GHSA-hmw2-7cc7-3qxx
+fix available via `npm audit fix --force`
+Will install to-ico@1.0.1, which is a breaking change
+node_modules/form-data
+node_modules/request/node_modules/form-data
+  request  *
+  Depends on vulnerable versions of form-data
+  Depends on vulnerable versions of qs
+  Depends on vulnerable versions of tough-cookie
+  Depends on vulnerable versions of uuid
+  node_modules/request
+    jimp  <=0.3.5
+    Depends on vulnerable versions of jpeg-js
+    Depends on vulnerable versions of mkdirp
+    Depends on vulnerable versions of request
+    Depends on vulnerable versions of url-regex
+    node_modules/jimp
+      resize-img  <=1.1.2
+      Depends on vulnerable versions of jimp
+      Depends on vulnerable versions of jpeg-js
+      node_modules/resize-img
+        to-ico  >=1.1.0
+        Depends on vulnerable versions of resize-img
+        node_modules/to-ico
+
+ip-address  <=10.1.0
+Severity: moderate
+ip-address has XSS in Address6 HTML-emitting methods - https://github.com/advisories/GHSA-v2v4-37r5-5v8g
+fix available via `npm audit fix`
+node_modules/ip-address
+
+joi  <17.13.4
+Severity: moderate
+joi has an uncaught RangeError on deeply nested input through recursive `link()` schemas - https://github.com/advisories/GHSA-q7cg-457f-vx79
+fix available via `npm audit fix`
+node_modules/joi
+
+jpeg-js  <=0.4.3
+Severity: high
+Infinite loop in jpeg-js - https://github.com/advisories/GHSA-xvf7-4v9q-58w6
+Uncontrolled resource consumption in jpeg-js - https://github.com/advisories/GHSA-w7q9-p3jq-fmhm
+fix available via `npm audit fix --force`
+Will install to-ico@1.0.1, which is a breaking change
+node_modules/jimp/node_modules/jpeg-js
+node_modules/jpeg-js
+
+js-yaml  <=4.1.1
+Severity: moderate
+JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases - https://github.com/advisories/GHSA-h67p-54hq-rp68
+fix available via `npm audit fix`
+node_modules/js-yaml
+
+lodash  <=4.17.23
+Severity: high
+lodash vulnerable to Code Injection via `_.template` imports key names - https://github.com/advisories/GHSA-r5fr-rjxr-66jc
+lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit` - https://github.com/advisories/GHSA-f23m-r3pf-42rh
+Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions - https://github.com/advisories/GHSA-xxjr-mmjv-4gpg
+fix available via `npm audit fix`
+node_modules/lodash
+
+minimatch  <=3.1.3 || 5.0.0 - 5.1.7 || 9.0.0 - 9.0.6
+Severity: high
+minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern - https://github.com/advisories/GHSA-3ppc-4f35-3m26
+minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern - https://github.com/advisories/GHSA-3ppc-4f35-3m26
+minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern - https://github.com/advisories/GHSA-3ppc-4f35-3m26
+minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments - https://github.com/advisories/GHSA-7r86-cg39-jmmj
+minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments - https://github.com/advisories/GHSA-7r86-cg39-jmmj
+minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments - https://github.com/advisories/GHSA-7r86-cg39-jmmj
+minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions - https://github.com/advisories/GHSA-23c5-xmqv-rm74
+minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions - https://github.com/advisories/GHSA-23c5-xmqv-rm74
+minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions - https://github.com/advisories/GHSA-23c5-xmqv-rm74
+fix available via `npm audit fix`
+node_modules/@electron/asar/node_modules/minimatch
+node_modules/@electron/node-gyp/node_modules/minimatch
+node_modules/@electron/universal/node_modules/minimatch
+node_modules/@eslint/eslintrc/node_modules/minimatch
+node_modules/@humanwhocodes/config-array/node_modules/minimatch
+node_modules/app-builder-lib/node_modules/minimatch
+node_modules/cacache/node_modules/minimatch
+node_modules/config-file-ts/node_modules/minimatch
+node_modules/dir-compare/node_modules/minimatch
+node_modules/eslint/node_modules/minimatch
+node_modules/filelist/node_modules/minimatch
+node_modules/glob/node_modules/minimatch
+node_modules/minimatch
+node_modules/readdir-glob/node_modules/minimatch
+node_modules/test-exclude/node_modules/minimatch
+  @typescript-eslint/typescript-estree  6.16.0 - 7.5.0
+  Depends on vulnerable versions of minimatch
+  node_modules/@typescript-eslint/typescript-estree
+    @typescript-eslint/parser  6.16.0 - 7.5.0
+    Depends on vulnerable versions of @typescript-eslint/typescript-estree
+    node_modules/@typescript-eslint/parser
+    @typescript-eslint/type-utils  6.16.0 - 7.5.0
+    Depends on vulnerable versions of @typescript-eslint/typescript-estree
+    Depends on vulnerable versions of @typescript-eslint/utils
+    node_modules/@typescript-eslint/type-utils
+    @typescript-eslint/utils  6.16.0 - 7.5.0
+    Depends on vulnerable versions of @typescript-eslint/typescript-estree
+    node_modules/@typescript-eslint/utils
+      @typescript-eslint/eslint-plugin  6.16.0 - 7.5.0
+      Depends on vulnerable versions of @typescript-eslint/type-utils
+      Depends on vulnerable versions of @typescript-eslint/utils
+      node_modules/@typescript-eslint/eslint-plugin
+
+minimist  <=0.2.3
+Severity: critical
+Prototype Pollution in minimist - https://github.com/advisories/GHSA-vh95-rmgr-6w4m
+Prototype Pollution in minimist - https://github.com/advisories/GHSA-xvch-5gv4-984h
+fix available via `npm audit fix --force`
+Will install to-ico@1.0.1, which is a breaking change
+node_modules/jimp/node_modules/minimist
+  mkdirp  0.4.1 - 0.5.1
+  Depends on vulnerable versions of minimist
+  node_modules/jimp/node_modules/mkdirp
+
+pdfjs-dist  <=4.1.392
+Severity: high
+PDF.js vulnerable to arbitrary JavaScript execution upon opening a malicious PDF - https://github.com/advisories/GHSA-wgrm-67xf-hhpq
+fix available via `npm audit fix --force`
+Will install pdfjs-dist@6.0.227, which is a breaking change
+node_modules/pdfjs-dist
+
+picomatch  <=2.3.1 || 4.0.0 - 4.0.3
+Severity: high
+Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching - https://github.com/advisories/GHSA-3v7f-55p6-f55p
+Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching - https://github.com/advisories/GHSA-3v7f-55p6-f55p
+Picomatch has a ReDoS vulnerability via extglob quantifiers - https://github.com/advisories/GHSA-c2c7-rcm5-vvqj
+Picomatch has a ReDoS vulnerability via extglob quantifiers - https://github.com/advisories/GHSA-c2c7-rcm5-vvqj
+fix available via `npm audit fix`
+node_modules/picomatch
+node_modules/tinyglobby/node_modules/picomatch
+
+postcss  <8.5.10
+Severity: moderate
+PostCSS has XSS via Unescaped </style> in its CSS Stringify Output - https://github.com/advisories/GHSA-qx2v-qp2m-jg93
+fix available via `npm audit fix`
+node_modules/postcss
+
+qs  <6.14.1
+Severity: moderate
+qs's arrayLimit bypass in its bracket notation allows DoS via memory exhaustion - https://github.com/advisories/GHSA-6rw7-vpxm-498p
+fix available via `npm audit fix --force`
+Will install to-ico@1.0.1, which is a breaking change
+node_modules/qs
+
+
+rollup  4.0.0 - 4.58.0
+Severity: high
+Rollup 4 has Arbitrary File Write via Path Traversal - https://github.com/advisories/GHSA-mw96-cpmx-2vgc
+fix available via `npm audit fix`
+node_modules/rollup
+
+shell-quote  1.1.0 - 1.8.3
+Severity: critical
+shell-quote quote() does not escape newlines in object .op values - https://github.com/advisories/GHSA-w7jw-789q-3m8p
+fix available via `npm audit fix`
+node_modules/shell-quote
+
+tar  <=7.5.15
+Severity: high
+node-tar Vulnerable to Arbitrary File Creation/Overwrite via Hardlink Path Traversal - https://github.com/advisories/GHSA-34x7-hfp2-rc4v
+node-tar is Vulnerable to Arbitrary File Overwrite and Symlink Poisoning via Insufficient Path Sanitization - https://github.com/advisories/GHSA-8qq5-rm4j-mr97
+Arbitrary File Read/Write via Hardlink Target Escape Through Symlink Chain in node-tar Extraction - https://github.com/advisories/GHSA-83g3-92jg-28cx
+tar has Hardlink Path Traversal via Drive-Relative Linkpath - https://github.com/advisories/GHSA-qffp-2rhf-9h96
+node-tar Symlink Path Traversal via Drive-Relative Linkpath - https://github.com/advisories/GHSA-9ppj-qmqm-q256
+Race Condition in node-tar Path Reservations via Unicode Ligature Collisions on macOS APFS - https://github.com/advisories/GHSA-r6q2-hw4h-h46w
+node-tar applies PAX size override to intermediary GNU long-name/long-link headers, causing tar parser interpretation differential (file smuggling) - https://github.com/advisories/GHSA-vmf3-w455-68vh
+fix available via `npm audit fix --force`
+Will install @electron/rebuild@4.0.4, which is a breaking change
+node_modules/tar
+  @electron/node-gyp  *
+  Depends on vulnerable versions of make-fetch-happen
+  Depends on vulnerable versions of tar
+  node_modules/@electron/node-gyp
+    @electron/rebuild  3.2.10 - 4.0.2
+    Depends on vulnerable versions of @electron/node-gyp
+    Depends on vulnerable versions of tar
+    node_modules/@electron/rebuild
+  app-builder-lib  23.0.7 - 26.5.0
+  Depends on vulnerable versions of dmg-builder
+  Depends on vulnerable versions of electron-builder-squirrel-windows
+  Depends on vulnerable versions of tar
+  node_modules/app-builder-lib
+    dmg-builder  23.0.7 - 26.5.0
+    Depends on vulnerable versions of app-builder-lib
+    node_modules/dmg-builder
+      electron-builder  19.25.0 || 23.0.7 - 26.5.0
+      Depends on vulnerable versions of app-builder-lib
+      Depends on vulnerable versions of dmg-builder
+      node_modules/electron-builder
+    electron-builder-squirrel-windows  23.0.7 - 26.5.0
+    Depends on vulnerable versions of app-builder-lib
+    node_modules/electron-builder-squirrel-windows
+  cacache  14.0.0 - 18.0.4
+  Depends on vulnerable versions of tar
+  node_modules/cacache
+    make-fetch-happen  7.1.1 - 14.0.0
+    Depends on vulnerable versions of cacache
+    node_modules/make-fetch-happen
+
+tmp  <0.2.6
+Severity: high
+tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape - https://github.com/advisories/GHSA-ph9p-34f9-6g65
+fix available via `npm audit fix`
+node_modules/tmp
+
+tough-cookie  <4.1.3
+Severity: moderate
+tough-cookie Prototype Pollution vulnerability - https://github.com/advisories/GHSA-72xf-g2v4-qvf3
+fix available via `npm audit fix --force`
+Will install to-ico@1.0.1, which is a breaking change
+node_modules/request/node_modules/tough-cookie
+
+url-regex  *
+Severity: high
+Regular expression denial of service in url-regex - https://github.com/advisories/GHSA-v4rh-8p82-6h5w
+fix available via `npm audit fix`
+node_modules/url-regex
+
+uuid  <11.1.1
+Severity: moderate
+uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided - https://github.com/advisories/GHSA-w5hq-g745-h8pq
+fix available via `npm audit fix --force`
+Will install to-ico@1.0.1, which is a breaking change
+node_modules/uuid
+
+
+
+ws  8.0.0 - 8.20.1
+Severity: high
+ws: Uninitialized memory disclosure - https://github.com/advisories/GHSA-58qx-3vcg-4xpx
+ws: Memory exhaustion DoS from tiny fragments and data chunks - https://github.com/advisories/GHSA-96hv-2xvq-fx4p
+fix available via `npm audit fix`
+node_modules/ws
+
+53 vulnerabilities (2 low, 14 moderate, 28 high, 9 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force

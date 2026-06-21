@@ -523,6 +523,7 @@ export function ArchivePage({ onBack, onOpenTranscription }: ArchivePageProps) {
       window.removeEventListener('open-bookmark', handleOpenBookmark as unknown as EventListener);
       window.removeEventListener('navigate-to-case-folder', handleNavigateToCaseFolder as unknown as EventListener);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- archiveContextCase?.path is intentionally excluded so the bookmark/navigation listeners are not re-bound on context case sync
   }, [files, loading, toast, selectedFile, findFileInArchive, currentCase, currentFolderPath, cases, setCurrentCase, setArchiveContextCase, navigateToFolder, openFolder, goBackToCase]);
 
   useEffect(() => {

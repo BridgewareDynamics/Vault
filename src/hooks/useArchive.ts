@@ -99,6 +99,7 @@ export function useArchive() {
   // Load archive config on mount
   useEffect(() => {
     loadArchiveConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-time config load on mount
   }, []);
 
   // Load cases when archive drive is set
@@ -106,6 +107,7 @@ export function useArchive() {
     if (archiveConfig?.archiveDrive) {
       loadCases();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadCases is a stable callback; intentionally re-run only when the archive drive changes
   }, [archiveConfig?.archiveDrive]);
 
   // Refs to store functions and state to avoid circular dependencies
@@ -213,6 +215,7 @@ export function useArchive() {
         window.cancelAnimationFrame(thumbnailFlushRafRef.current);
         thumbnailFlushRafRef.current = null;
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- pendingThumbnailUpdatesRef holds a single Map created once; clearing the live ref at unmount is intentional
       pendingThumbnailUpdatesRef.current.clear();
       abortInFlightThumbnails();
     };
@@ -263,6 +266,7 @@ export function useArchive() {
         logger.debug(`Cleaned up ${deleted} thumbnail(s) from cache`);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed on currentCase?.path; files are read from a ref to avoid re-running on every list change
   }, [currentCase?.path]);
 
   const loadArchiveConfig = useCallback(async () => {
@@ -882,7 +886,7 @@ export function useArchive() {
       toast.error(getUserFriendlyError(error, { operation: 'add files' }));
       return false;
     }
-  }, [toast, currentCase, loadFiles]);
+  }, [toast, currentCase, currentFolderPath, loadFiles]);
 
   const createFolder = useCallback(async (folderName: string): Promise<boolean> => {
     try {
@@ -1032,7 +1036,7 @@ export function useArchive() {
       toast.error(getUserFriendlyError(error, { operation: `delete ${isFolder ? 'folder' : 'file'}`, path: filePath }));
       return false;
     }
-  }, [toast, currentCase, currentFolderPath, folderNavigationStack]);
+  }, [toast, currentCase, currentFolderPath, folderNavigationStack, loadFiles]);
 
   const renameFile = useCallback(async (filePath: string, newName: string): Promise<boolean> => {
     try {

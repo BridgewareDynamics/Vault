@@ -387,8 +387,9 @@ export function usePDFExtraction() {
 
               // Force garbage collection hint every 5 pages
               if ((idx + 1) % 5 === 0) {
-                if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
-                  (globalThis as any).gc();
+                const maybeGc = (globalThis as { gc?: () => void }).gc;
+                if (typeof globalThis !== 'undefined' && maybeGc) {
+                  maybeGc();
                 }
               }
 
@@ -488,6 +489,7 @@ export function usePDFExtraction() {
         }
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getPagesToExtract is read live; this extraction callback is intentionally kept stable across renders
     []
   );
 

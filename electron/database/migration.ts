@@ -37,7 +37,7 @@ export async function migrateMetadataFilesToDatabase(
         !['.bookmark-thumbnails', 'textlibrary'].includes(entry.name.toLowerCase())
     );
 
-    logger.info(`Found ${caseDirs.length} cases to migrate from ${archiveDrive}`);
+    logger.debug(`Found ${caseDirs.length} cases to migrate from ${archiveDrive}`);
     
     if (caseDirs.length === 0) {
       logger.warn(`No case directories found in archive drive: ${archiveDrive}`);

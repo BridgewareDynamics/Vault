@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
-import { ToastProvider, useToast } from './ToastContext';
+import { useToast } from './ToastContext';
+import { ToastProvider } from './ToastProvider';
 import { TOAST_DURATION } from '../../utils/constants';
 
 describe('ToastContext', () => {

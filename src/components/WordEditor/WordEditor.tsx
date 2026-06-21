@@ -12,6 +12,7 @@ import { Save, FilePlus } from 'lucide-react';
 import { useSettingsContext } from '../../utils/settingsContext';
 import { Theme } from '../../types';
 import { isLightTheme } from '../../theme/themeSemantics';
+import { logger } from '../../utils/logger';
 
 export interface WordEditorHandle {
   getContent: () => string;
@@ -66,7 +67,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
         localStorage.setItem(draftKey, draftContent);
       } catch (error) {
         // Silently fail if localStorage is full or unavailable
-        console.warn('Failed to save draft to localStorage:', error);
+        logger.warn('Failed to save draft to localStorage:', error);
       }
     }, 500)
   ).current;
@@ -96,6 +97,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
         setHasUnsavedChanges(false);
       }, 0);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setHasUnsavedChanges is a stable setter from useWordEditorState; the handle only needs to refresh when hasUnsavedChanges changes
   }), [hasUnsavedChanges]);
 
   // Ensure editor is editable and focusable
@@ -229,7 +231,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           setHasUnsavedChanges(false);
         } else {
           toast.error('Failed to load file');
-          console.error('Load file error:', error);
+          logger.error('Load file error:', error);
         }
       } finally {
         setIsLoading(false);
@@ -237,6 +239,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
     };
 
     loadFile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setContent/setHasUnsavedChanges/setIsSaving are stable setters from useWordEditorState; the file should reload only when filePath (or its handlers) change
   }, [filePath, toast, onFilePathChange, setIsLoading]);
 
   // Auto-save draft to localStorage (debounced)
@@ -345,6 +348,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
     if (currentFilePathRef.current !== filePath) {
       currentFilePathRef.current = filePath;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setContent/setHasUnsavedChanges are stable setters from useWordEditorState; this sync must run only on filePath changes
   }, [filePath]);
 
   const handleContentChange = (newContent: string) => {
@@ -477,7 +481,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       }
     } catch (error) {
       toast.error('Failed to save file');
-      console.error('Save error:', error);
+      logger.error('Save error:', error);
     } finally {
       // Delay clearing isSaving to ensure hasUnsavedChanges is set first
       setTimeout(() => {
@@ -545,7 +549,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       toast.success('New file created');
     } catch (error) {
       toast.error('Failed to create new file');
-      console.error('Create new file error:', error);
+      logger.error('Create new file error:', error);
     }
   };
 

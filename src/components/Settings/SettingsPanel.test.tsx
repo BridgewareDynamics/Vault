@@ -3,9 +3,9 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { SettingsPanel } from './SettingsPanel';
-import { SettingsProvider } from '../../utils/settingsContext';
-import { ToastProvider } from '../Toast/ToastContext';
-import { WordEditorProvider } from '../../contexts/WordEditorContext';
+import { SettingsProvider } from '../../utils/SettingsProvider';
+import { ToastProvider } from '../Toast/ToastProvider';
+import { WordEditorProvider } from '../../contexts/WordEditorProvider';
 import { mockElectronAPI } from '../../test-utils/mocks';
 import { AppSettings } from '../../types';
 

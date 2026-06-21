@@ -133,6 +133,7 @@ export function useFileConverterSourcePreview(
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the source is intentionally tracked by sourcePath/category rather than object identity
   }, [source?.sourcePath, source?.category]);
 
   return preview;

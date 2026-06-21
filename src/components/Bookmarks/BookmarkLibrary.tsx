@@ -6,6 +6,7 @@ import { BookmarkCard } from './BookmarkCard';
 import { BookmarkFolderCard } from './BookmarkFolderCard';
 import { useToast } from '../Toast/ToastContext';
 import { useSettingsContext } from '../../utils/settingsContext';
+import { logger } from '../../utils/logger';
 
 interface BookmarkLibraryProps {
   onClose: () => void;
@@ -40,7 +41,7 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
       setFolders(foldersList);
     } catch (error) {
       toast.error('Failed to load bookmarks');
-      console.error('Load bookmarks error:', error);
+      logger.error('Load bookmarks error:', error);
     } finally {
       setLoading(false);
     }
@@ -87,7 +88,7 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
       window.dispatchEvent(deleteEvent);
     } catch (error) {
       toast.error('Failed to delete bookmark');
-      console.error('Delete bookmark error:', error);
+      logger.error('Delete bookmark error:', error);
     }
   };
 
@@ -107,7 +108,7 @@ export function BookmarkLibrary({ isDetached = false }: BookmarkLibraryProps) {
       window.dispatchEvent(deleteEvent);
     } catch (error) {
       toast.error('Failed to delete folder');
-      console.error('Delete folder error:', error);
+      logger.error('Delete folder error:', error);
     }
   };
 
