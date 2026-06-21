@@ -44,7 +44,7 @@
     "@lexical/table": "^0.19.0",
     "@lexical/utils": "^0.19.0",
     "@xyflow/react": "^12.10.2",
-    "better-sqlite3": "^11.6.0",
+    "better-sqlite3": "^12.1.0",
     "docx": "^9.7.1",
     "electron-log": "^5.0.1",
     "ffmpeg-static": "^5.3.0",

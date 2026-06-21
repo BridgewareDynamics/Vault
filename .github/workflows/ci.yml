@@ -43,7 +43,11 @@ jobs:
           NODE_ENV: production
 
   test-and-build-windows:
-    runs-on: windows-latest
+    # Pinned to windows-2022 (VS 2022 / v17). windows-latest now ships
+    # Visual Studio 18 (2026), which the node-gyp bundled with
+    # @electron/rebuild does not recognize, breaking the better-sqlite3
+    # native rebuild in the postinstall step.
+    runs-on: windows-2022
 
     steps:
       - name: Checkout code
