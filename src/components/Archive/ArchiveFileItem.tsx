@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion';
-import { useState, useRef, useEffect } from 'react';
-import { ArchiveFile, CategoryTag } from '../../types';
-import { FileText, Image, Video, File, Trash2, Play, ChevronDown, Pencil, Tag } from 'lucide-react';
+import { memo, useState, useRef, useEffect } from 'react';
+import { ArchiveFile, CategoryTag, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
+import { AudioLines, FileText, Image, Video, File, Trash2, Play, ChevronDown, Pencil, Tag } from 'lucide-react';
 import { PDFOptionsDropdown } from './PDFOptionsDropdown';
 import { CategoryTag as CategoryTagComponent } from './CategoryTag';
+import { useSettingsContext } from '../../utils/settingsContext';
 
 interface ArchiveFileItemProps {
   file: ArchiveFile;
@@ -16,12 +18,19 @@ interface ArchiveFileItemProps {
   caseTag?: CategoryTag | null;
   onTagClick?: () => void;
   onRunAudit?: () => void;
+  onTranscribe?: () => void;
+  onRequestThumbnail?: () => void;
 }
 
-export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd, caseTag, onTagClick, onRunAudit }: ArchiveFileItemProps) {
+export const ArchiveFileItem = memo(function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, onDragStart, onDragEnd, caseTag, onTagClick, onRunAudit, onTranscribe, onRequestThumbnail }: ArchiveFileItemProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const thumbnailRequestedRef = useRef(false);
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = isLightTheme(theme);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -44,33 +53,53 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
     }
   }, [showDropdown]);
 
+  useEffect(() => {
+    if (!onRequestThumbnail || file.thumbnail || thumbnailRequestedRef.current) {
+      return;
+    }
+
+    const element = rootRef.current;
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      onRequestThumbnail();
+      thumbnailRequestedRef.current = true;
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          thumbnailRequestedRef.current = true;
+          onRequestThumbnail();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '300px', threshold: 0 },
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [file.path, file.thumbnail, onRequestThumbnail]);
+
   const getFileIcon = () => {
     switch (file.type) {
       case 'image':
-        return <Image className="w-8 h-8 text-cyber-purple-400" aria-hidden="true" />;
+        return <Image className={`w-8 h-8 ${isPastel ? 'text-pink-500' : 'text-cyber-purple-400'}`} aria-hidden="true" />;
       case 'pdf':
         return <FileText className="w-8 h-8 text-red-400" aria-hidden="true" />;
       case 'video':
         return <Video className="w-8 h-8 text-blue-400" aria-hidden="true" />;
+      case 'audio':
+        return <AudioLines className={`w-8 h-8 ${isPastel ? 'text-fuchsia-500' : 'text-cyber-cyan-400'}`} aria-hidden="true" />;
       default:
-        return <File className="w-8 h-8 text-gray-400" aria-hidden="true" />;
+        return <File className={`w-8 h-8 ${isPastel ? 'text-gray-500' : 'text-gray-400'}`} aria-hidden="true" />;
     }
   };
 
   const handleDragStart = (e: React.DragEvent) => {
-    // #region agent log
-    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchiveFileItem.tsx:56',message:'handleDragStart: Drag started',data:{filePath:file.path,fileName:file.name,fileType:file.type,isFolder:file.isFolder},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
-    // #endregion
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', file.path);
-    // #region agent log
-    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchiveFileItem.tsx:60',message:'handleDragStart: DataTransfer set',data:{dataTransferTypes:Array.from(e.dataTransfer.types),effectAllowed:e.dataTransfer.effectAllowed},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}).catch(()=>{});
-    // #endregion
     if (onDragStart) {
       onDragStart(file);
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'ArchiveFileItem.tsx:64',message:'handleDragStart: onDragStart called',data:{filePath:file.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}).catch(()=>{});
-      // #endregion
     }
   };
 
@@ -82,28 +111,45 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3 }}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
+      ref={rootRef}
+      initial={file.thumbnail ? false : { opacity: 0, y: 8, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={file.thumbnail ? { duration: 0.15 } : { duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      whileHover={{ y: -4, scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
       className={`relative cursor-pointer group ${showDropdown ? 'mb-16' : ''}`}
       draggable={true}
-      onDragStart={handleDragStart as any}
+      // Native HTML drag (draggable) is used here, but framer-motion types
+      // onDragStart as its own pan handler. Cast to the prop's declared type to
+      // bridge the two without `any`; the runtime handler receives a DragEvent.
+      onDragStart={handleDragStart as unknown as React.ComponentProps<typeof motion.div>['onDragStart']}
       onDragEnd={handleDragEnd}
     >
       <div
         onClick={onClick}
-        className="relative rounded-lg overflow-hidden border-2 border-gray-700 hover:border-cyber-purple-500 transition-colors bg-gray-800"
+        className={`relative rounded-2xl overflow-hidden border-2 transition-all duration-300 ease-out backdrop-blur-sm shadow-lg hover:shadow-2xl ${
+          isPastel
+            ? 'border-pink-200/50 hover:border-pink-400/60 bg-white/60 hover:bg-white/80 hover:shadow-pink-400/20'
+            : 'border-gray-700/50 hover:border-cyber-purple-500/60 bg-gray-800/60 hover:bg-gray-800/80 hover:shadow-cyber-purple-500/20'
+        }`}
       >
+        {/* Glowing background effect */}
+        <div className={`absolute inset-0 transition-all duration-500 ${
+          isPastel
+            ? 'bg-gradient-to-br from-pink-400/0 via-pink-400/0 to-purple-400/0 group-hover:from-pink-400/10 group-hover:via-pink-400/5 group-hover:to-purple-400/10'
+            : 'bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10'
+        }`}></div>
         {/* Thumbnail or Icon */}
-        <div className="aspect-[3/4] bg-gray-900 relative overflow-hidden">
+        <div className={`aspect-[3/4] relative overflow-hidden ${
+          isPastel ? 'bg-slate-100' : 'bg-gray-900'
+        }`}>
           {file.thumbnail ? (
             <img
               src={file.thumbnail}
               alt={file.name}
               className="w-full h-full object-cover"
-              loading="lazy"
+              loading={file.thumbnail.startsWith('data:') ? 'eager' : 'lazy'}
+              decoding="async"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -124,11 +170,17 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                     e.stopPropagation();
                     onTagClick();
                   }}
-                  className="p-1 hover:bg-gray-700 rounded transition-colors opacity-0 group-hover:opacity-100"
+                  className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 ${
+                    isPastel ? 'hover:bg-pink-100' : 'hover:bg-gray-700'
+                  }`}
                   aria-label="Add category tag"
                   title="Add category tag"
                 >
-                  <Tag className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" />
+                  <Tag className={`w-3 h-3 ${
+                    isPastel
+                      ? 'text-gray-500 hover:text-pink-500'
+                      : 'text-gray-400 hover:text-cyber-purple-400'
+                  }`} />
                 </button>
               ) : (
                 // Has tag: Show tag badge with small edit button
@@ -139,11 +191,17 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                       e.stopPropagation();
                       onTagClick();
                     }}
-                    className="p-0.5 hover:bg-gray-700/50 rounded transition-colors opacity-0 group-hover:opacity-100"
-                    aria-label="Change category tag"
-                    title="Change category tag"
-                  >
-                    <Pencil className="w-2.5 h-2.5 text-gray-400 hover:text-cyber-purple-400" />
+                    className={`p-0.5 rounded transition-colors opacity-0 group-hover:opacity-100 ${
+                      isPastel ? 'hover:bg-pink-100/50' : 'hover:bg-gray-700/50'
+                    }`}
+                  aria-label="Change category tag"
+                  title="Change category tag"
+                >
+                  <Pencil className={`w-2.5 h-2.5 ${
+                    isPastel
+                      ? 'text-gray-500 hover:text-pink-500'
+                      : 'text-gray-400 hover:text-cyber-purple-400'
+                  }`} />
                   </button>
                 </>
               )}
@@ -151,7 +209,11 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
           )}
 
           {/* File type badge - positioned below tag if tag exists, otherwise normal position */}
-          <div className={`absolute top-2 z-10 bg-black/60 text-white text-xs px-2 py-1 rounded backdrop-blur-sm ${onTagClick && caseTag ? 'left-2 top-10' : 'left-2'}`}>
+          <div className={`absolute top-2 z-10 text-white text-xs font-bold px-3 py-1.5 rounded-lg backdrop-blur-sm shadow-lg ${
+            isPastel
+              ? 'bg-gradient-to-r from-pink-400 to-purple-400'
+              : 'bg-gradient-to-r from-purple-600 to-cyan-600'
+          } ${onTagClick && caseTag ? 'left-2 top-10' : 'left-2'}`}>
             {file.type.toUpperCase()}
           </div>
 
@@ -163,48 +225,114 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
                   e.stopPropagation();
                   onExtract();
                 }}
-                className="p-2 bg-cyber-purple-500/90 hover:bg-cyber-purple-500 rounded-full backdrop-blur-sm"
+                className={`p-2 rounded-full backdrop-blur-sm ${
+                  isPastel
+                    ? 'bg-pink-400/90 hover:bg-pink-400'
+                    : 'bg-cyber-purple-500/90 hover:bg-cyber-purple-500'
+                }`}
                 aria-label="Extract PDF"
                 title="Start frame extraction"
               >
                 <Play className="w-5 h-5 text-white" aria-hidden="true" />
               </button>
             )}
+            {(file.type === 'audio' || file.type === 'video') && onTranscribe && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTranscribe();
+                }}
+                className={`p-2 rounded-full backdrop-blur-sm ${
+                  isPastel
+                    ? 'bg-fuchsia-400/90 hover:bg-fuchsia-400'
+                    : 'bg-cyber-cyan-500/90 hover:bg-cyber-cyan-500'
+                }`}
+                aria-label="Transcribe media"
+                title="Transcribe media"
+              >
+                <AudioLines className="w-5 h-5 text-white" aria-hidden="true" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* File name */}
-        <div className="p-2 flex items-center justify-between gap-2">
-          <p className="text-white text-xs font-medium truncate flex-1">{file.name}</p>
-          <div className="flex items-center gap-1">
-            {onRename && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRename();
-                }}
-                className="flex-shrink-0 p-1 hover:bg-gray-700 rounded transition-colors"
-                aria-label="Rename file"
-                title="Rename file"
-              >
-                <Pencil className="w-3 h-3 text-gray-400 hover:text-cyber-purple-400" aria-hidden="true" />
-              </button>
-            )}
-            {file.type === 'pdf' && (onExtract || onRunAudit) && (
-              <button
-                ref={arrowRef}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowDropdown(!showDropdown);
-                }}
-                className="flex-shrink-0 p-1 hover:bg-gray-700 rounded transition-colors"
-                aria-label="PDF options"
-                title="PDF options"
-                aria-expanded={showDropdown}
-              >
-                <ChevronDown className="w-3 h-3 text-gray-400" aria-hidden="true" />
-              </button>
-            )}
+        <div className={`p-5 space-y-2 backdrop-blur-sm ${
+          isPastel ? 'bg-white/40' : 'bg-gray-800/40'
+        }`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className={`text-base font-bold truncate mb-2 transition-all duration-300 ${
+                isPastel
+                  ? 'text-gray-800 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-pink-400 group-hover:to-purple-400'
+                  : 'text-white group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyber-purple-400 group-hover:to-cyber-cyan-400'
+              }`}>
+                {file.name}
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              {onRename && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRename();
+                  }}
+                  className={`flex-shrink-0 p-2 rounded-lg transition-all ${
+                    isPastel ? 'hover:bg-pink-100/60' : 'hover:bg-gray-700/60'
+                  }`}
+                  aria-label="Rename file"
+                  title="Rename file"
+                >
+                  <Pencil className={`w-4 h-4 ${
+                    isPastel
+                      ? 'text-gray-600 hover:text-pink-500'
+                      : 'text-gray-300 hover:text-cyber-purple-400'
+                  }`} aria-hidden="true" />
+                </button>
+              )}
+              {(file.type === 'audio' || file.type === 'video') && onTranscribe && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTranscribe();
+                  }}
+                  className={`flex-shrink-0 p-2 rounded-lg transition-all ${
+                    isPastel ? 'hover:bg-pink-100/60' : 'hover:bg-gray-700/60'
+                  }`}
+                  aria-label="Transcribe media"
+                  title="Transcribe media"
+                >
+                  <AudioLines className={`w-4 h-4 ${
+                    isPastel
+                      ? 'text-gray-600 hover:text-fuchsia-500'
+                      : 'text-gray-300 hover:text-cyber-cyan-400'
+                  }`} aria-hidden="true" />
+                </button>
+              )}
+              {file.type === 'pdf' && (onExtract || onRunAudit) && (
+                <button
+                  ref={arrowRef}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDropdown(!showDropdown);
+                  }}
+                  className={`flex-shrink-0 p-2 rounded-lg transition-all ${
+                    isPastel
+                      ? `hover:bg-pink-100/60 ${showDropdown ? 'bg-pink-100/60' : ''}`
+                      : `hover:bg-gray-700/60 ${showDropdown ? 'bg-gray-700/60' : ''}`
+                  }`}
+                  aria-label="PDF options"
+                  title="PDF options"
+                  aria-expanded={showDropdown}
+                >
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${
+                    isPastel
+                      ? `text-gray-600 ${showDropdown ? 'rotate-180' : ''}`
+                      : `text-gray-300 ${showDropdown ? 'rotate-180' : ''}`
+                  }`} aria-hidden="true" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -215,7 +343,7 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
               e.stopPropagation();
               onDelete();
             }}
-            className="absolute top-2 right-2 p-2 bg-red-600/80 hover:bg-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-4 right-4 p-2.5 bg-red-600/90 hover:bg-red-600 rounded-xl opacity-0 group-hover:opacity-100 transition-all z-20 shadow-lg hover:shadow-red-500/50 transform hover:scale-110"
             aria-label="Delete file"
           >
             <Trash2 className="w-4 h-4 text-white" aria-hidden="true" />
@@ -240,5 +368,12 @@ export function ArchiveFileItem({ file, onClick, onDelete, onExtract, onRename, 
       )}
     </motion.div>
   );
-}
+}, (prev, next) => (
+  prev.file.path === next.file.path
+  && prev.file.thumbnail === next.file.thumbnail
+  && prev.file.name === next.file.name
+  && prev.file.categoryTagId === next.file.categoryTagId
+  && prev.file.type === next.file.type
+  && prev.caseTag?.id === next.caseTag?.id
+));
 

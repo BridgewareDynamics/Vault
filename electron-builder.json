@@ -5,12 +5,27 @@
     "output": "release",
     "buildResources": "build"
   },
+  "npmRebuild": false,
+  "buildDependenciesFromSource": false,
+  "nodeGypRebuild": false,
+  "publish": null,
   "files": [
     "dist/**/*",
     "dist-electron/**/*",
     "package.json",
     "build/icon.ico",
-    "build/icon.png"
+    "build/icon.png",
+    "THIRD_PARTY_NOTICES.md",
+    "licenses/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "build/transcription-runtime-bundled",
+      "to": "transcription-runtime",
+      "filter": [
+        "**/*"
+      ]
+    }
   ],
   "win": {
     "target": "nsis",
@@ -33,7 +48,13 @@
     "createStartMenuShortcut": true,
     "installerIcon": "build/icon.ico",
     "uninstallerIcon": "build/icon.ico",
-    "installerHeaderIcon": "build/icon.ico"
+    "installerHeaderIcon": "build/icon.ico",
+    "installerLanguages": ["en_US"],
+    "warningsAsErrors": false,
+    "customNsisBinary": {
+      "url": "https://github.com/SoundSafari/NSISBI-ElectronBuilder/releases/download/1.0.0/nsisbi-electronbuilder-3.10.3.7z",
+      "checksum": "WRmZUsACjIc2s7bvsFGFRofK31hfS7riPlcfI1V9uFB2Q8s7tidgI/9U16+X0I9X2ZhNxi8N7Z3gKvm6ojvLvg=="
+    }
   },
   "mac": {
     "target": "dmg",

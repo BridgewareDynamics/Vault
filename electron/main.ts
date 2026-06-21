@@ -1,21 +1,131 @@
-import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, nativeImage, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, nativeImage, Menu, screen, shell } from 'electron';
 import { join } from 'path';
-import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath } from './utils/pathValidator';
+import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath, isSafeStorageId, isPathWithinBase } from './utils/pathValidator';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
 import * as os from 'os';
+import { randomUUID } from 'crypto';
 import JSZip from 'jszip';
 import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive } from './utils/archiveConfig';
 import { generateFileThumbnail } from './utils/thumbnailGenerator';
+import { MAX_FILE_SIZE_FOR_BASE64, readFileDataPayload } from './utils/fileDataUtils';
 import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMarker } from './utils/archiveMarker';
 import { logger, type LogLevel, type LogArgs } from './utils/logger';
 import { loadSettings } from './utils/settings';
 import * as bookmarkStorage from './utils/bookmarkStorage';
-import { auditPDFRedaction } from './utils/pdfRedactionAudit';
+import { auditPDFRedaction, type AuditOptions, type RedactionAuditResult } from './utils/pdfRedactionAudit';
 import { generateAuditReport } from './utils/generateAuditReport';
+import { LocalDatabase } from './database/localDatabase';
+import { migrateMetadataFilesToDatabase } from './database/migration';
+import { FileSystemWatcher } from './database/watcher';
+import { File } from './database/models';
+import * as mapStorage from './utils/mapStorage';
+import * as novelStorage from './utils/novelStorage';
+import * as transcriptionStorage from './utils/transcriptionStorage';
+import { transcriptionEngine } from './transcription/transcriptionEngine';
+import {
+  convertFile,
+  cancelActiveFileConversion,
+  type FileConverterOptions,
+} from './utils/fileConverter';
+import { getConverterCapabilities } from './utils/fileFormatRegistry';
+import { propagateVaultFileReferenceUpdate } from './utils/vaultReferencePropagator';
+import { listSystemFonts } from './utils/systemFonts';
 
+// Enable Chromium's OS-level sandbox for all renderer processes as defense in
+// depth on top of contextIsolation + nodeIntegration:false. Must run before the
+// app is ready. The preload only uses contextBridge/ipcRenderer/Buffer, all of
+// which remain available in sandboxed preloads.
+app.enableSandbox();
+
+// Helper function to detect file type from path
+function detectFileTypeFromPath(filePath: string): 'image' | 'pdf' | 'video' | 'audio' | 'other' {
+  const ext = path.extname(filePath).toLowerCase();
+  const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+  const videoExts = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv'];
+  const audioExts = ['.aac', '.amr', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav', '.wma'];
+  
+  if (ext === '.pdf') {
+    return 'pdf';
+  } else if (imageExts.includes(ext)) {
+    return 'image';
+  } else if (videoExts.includes(ext)) {
+    return 'video';
+  } else if (audioExts.includes(ext)) {
+    return 'audio';
+  } else {
+    return 'other';
+  }
+}
+
+// Helper function to safely check if database is ready
+function isDatabaseReady(): boolean {
+  return db !== null && db.isInitialized();
+}
+
+function shouldUseDatabaseForListing(): boolean {
+  return isDatabaseReady() && !migrationInProgress;
+}
+
+// Helper function to find case path from any file/folder path
+async function findCasePathFromPath(filePath: string): Promise<string | null> {
+  if (!isDatabaseReady()) {
+    return null;
+  }
+  
+  // Walk up the directory tree to find a case
+  let currentPath = filePath;
+  const archiveDrive = await getArchiveDrive();
+  if (!archiveDrive || !isDatabaseReady()) {
+    return null;
+  }
+  
+  while (currentPath !== archiveDrive && currentPath !== path.dirname(currentPath)) {
+    const caseRecord = db!.getCaseByPath(currentPath);
+    if (caseRecord) {
+      return currentPath;
+    }
+    currentPath = path.dirname(currentPath);
+  }
+  
+  return null;
+}
+
+/**
+ * Confirms a path targeted by a write/delete IPC handler resolves inside a
+ * directory the app legitimately manages (the archive drive or userData).
+ *
+ * This is defense-in-depth on top of `isSafePath()`: a compromised renderer
+ * cannot mutate files outside these roots even if it bypasses the basic
+ * traversal-token checks. The check fails closed only when a root is available;
+ * if the archive drive has not been configured yet the userData root still
+ * applies, and callers also retain their existing `isSafePath()` guard.
+ */
+async function isManagedWritePath(filePath: string): Promise<boolean> {
+  const roots: Array<string | null> = [];
+  try {
+    roots.push(await getArchiveDrive());
+  } catch {
+    // Archive drive not resolvable; fall through to userData root.
+  }
+  try {
+    roots.push(app.getPath('userData'));
+  } catch {
+    // App not ready; userData unavailable.
+  }
+  return isPathWithinBase(filePath, roots);
+}
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+function getDevServerUrl(query = ''): string {
+  const base = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+  if (!query) {
+    return base;
+  }
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}${query.replace(/^\?/, '')}`;
+}
 
 // Enable hardware acceleration command line switches
 // These must be set before app is ready
@@ -49,46 +159,88 @@ if (!isDev) {
   logger.info('Crash reporter initialized');
 }
 
+// Surface fatal main-process errors to the user and offer a clean relaunch
+// instead of silently continuing in a possibly corrupted state. Guarded so we
+// never spam dialogs, and a no-op in development to preserve the dev workflow.
+let handlingFatalError = false;
+function handleFatalError(label: string, error: unknown): void {
+  logger.error(`${label} in main process:`, error);
+
+  if (isDev || !app.isReady() || handlingFatalError) {
+    return;
+  }
+  handlingFatalError = true;
+
+  try {
+    const message = error instanceof Error ? error.message : String(error);
+    const choice = dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'Vault encountered a problem',
+      message: 'An unexpected error occurred.',
+      detail: `${message}\n\nYou can relaunch Vault to recover, or continue (some features may be unstable).`,
+      buttons: ['Relaunch', 'Continue'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (choice === 0) {
+      app.relaunch();
+      app.exit(0);
+      return;
+    }
+  } catch (dialogError) {
+    logger.error('Failed to present fatal error dialog:', dialogError);
+  } finally {
+    handlingFatalError = false;
+  }
+}
+
 // Handle uncaught exceptions in main process
 process.on('uncaughtException', (error: Error) => {
-  logger.error('Uncaught Exception in main process:', error);
-  // Don't exit immediately - log and continue if possible
-  // In production, you might want to show an error dialog to the user
+  handleFatalError('Uncaught Exception', error);
 });
 
-// Handle unhandled promise rejections in main process
-process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-  logger.error('Unhandled Rejection in main process:', reason, promise);
-  // Log the rejection but don't crash the app
+// Handle unhandled promise rejections in main process. Log-only: these are
+// usually recoverable and should not interrupt the user, but the structured
+// message ensures they land clearly in the production file log.
+process.on('unhandledRejection', (reason: unknown) => {
+  logger.error('Unhandled Rejection in main process:', reason);
 });
 
 let mainWindow: BrowserWindow | null = null;
+let db: LocalDatabase | null = null;
+let fileWatcher: FileSystemWatcher | null = null;
+let migrationInProgress = false;
 
-// Register custom protocol for video files (more efficient than data URLs)
-function registerVideoProtocol() {
-  protocol.registerFileProtocol('vault-video', (request, callback) => {
+// Register custom protocols for efficient local file access (avoids base64 data URLs)
+function registerVaultPathProtocol(scheme: string) {
+  protocol.registerFileProtocol(scheme, (request, callback) => {
     try {
-      // Extract file path from URL (vault-video://path/to/file.mp4)
-      const url = request.url.replace('vault-video://', '');
+      const prefix = `${scheme}://`;
+      const url = request.url.replace(prefix, '');
       const filePath = decodeURIComponent(url);
 
-      // Validate path
       if (!isSafePath(filePath)) {
-        callback({ error: -2 }); // FAILED
+        callback({ error: -2 });
         return;
       }
 
       if (!existsSync(filePath)) {
-        callback({ error: -6 }); // FILE_NOT_FOUND
+        callback({ error: -6 });
         return;
       }
 
       callback({ path: filePath });
     } catch (error) {
-      logger.error('Video protocol error:', error);
-      callback({ error: -2 }); // FAILED
+      logger.error(`${scheme} protocol error:`, error);
+      callback({ error: -2 });
     }
   });
+}
+
+function registerVaultFileProtocols() {
+  registerVaultPathProtocol('vault-video');
+  registerVaultPathProtocol('vault-file');
 }
 
 async function createWindow() {
@@ -226,6 +378,11 @@ async function createWindow() {
       contextIsolation: true,
       webSecurity: true, // Explicitly enable web security
       devTools: isDev, // Only enable DevTools in development
+      // sandbox is intentionally left at its default (false): renderer hardening
+      // is provided by contextIsolation + nodeIntegration:false + webSecurity +
+      // applyWindowSecurity() (deny-by-default navigation/window-open). Enabling
+      // sandbox would require validating the bundled preload across all packaged
+      // targets; deferred to avoid risking current functionality.
       // Note: enableWebGPU is not available in Electron 28, hardware acceleration is enabled via command line switches
       offscreen: false, // Keep onscreen for better performance
     } as Electron.WebPreferences,
@@ -234,6 +391,8 @@ async function createWindow() {
     show: false, // Don't show until ready
     fullscreen: settings?.fullscreen === true, // Apply fullscreen from settings
   });
+
+  applyWindowSecurity(mainWindow);
 
   // Remove menu bar in production for a clean app experience
   if (!isDev) {
@@ -318,7 +477,7 @@ async function createWindow() {
       // Wait for Vite to be ready, then load
       const loadDevServer = () => {
         if (!mainWindow) return; // Window was closed
-        mainWindow.loadURL('http://localhost:5173').catch((err) => {
+        mainWindow.loadURL(getDevServerUrl()).catch((err) => {
           logger.error('Failed to load Vite dev server, retrying...', err);
           // Retry after 1 second
           setTimeout(loadDevServer, 1000);
@@ -349,17 +508,83 @@ async function createWindow() {
   });
 }
 
+async function runBackgroundVaultMigration(): Promise<void> {
+  if (!db) {
+    return;
+  }
+
+  migrationInProgress = true;
+
+  try {
+    const archiveDrive = await getArchiveDrive();
+    if (archiveDrive && !db.isMigrationCompleted()) {
+      logger.debug(`Running database migration from: ${archiveDrive}`);
+      const migrationResult = await migrateMetadataFilesToDatabase(archiveDrive, db);
+      logger.info(`Migration completed: ${migrationResult.cases} cases, ${migrationResult.files} files`);
+      if (migrationResult.errors.length > 0) {
+        logger.warn(`Migration had ${migrationResult.errors.length} errors:`, migrationResult.errors);
+      }
+      if (migrationResult.cases === 0 && migrationResult.files === 0) {
+        logger.warn('Migration found no cases or files. Archive drive may be empty or migration needs to be re-run.');
+      }
+    } else if (!archiveDrive) {
+      logger.warn('Archive drive not set - migration will run when archive drive is configured');
+    } else if (db.isMigrationCompleted()) {
+      logger.info('Migration already completed - skipping');
+      const caseCount = db.getCases().length;
+      if (caseCount === 0 && archiveDrive) {
+        logger.warn('Migration marked as complete but database has 0 cases - migration may have failed');
+      } else if (caseCount > 0 && archiveDrive) {
+        let totalFiles = 0;
+        for (const caseRecord of db.getCases()) {
+          const files = db.getFiles(caseRecord.path);
+          totalFiles += files.length;
+        }
+        logger.info(`Database has ${caseCount} cases with ${totalFiles} total files`);
+        if (totalFiles === 0) {
+          logger.warn('WARNING: Cases exist but have 0 files - file migration may have failed!');
+          logger.warn('Clearing migration flag to re-run file migration...');
+          db.clearMigrationFlag();
+          logger.info('Re-running migration to migrate files...');
+          const migrationResult = await migrateMetadataFilesToDatabase(archiveDrive, db);
+          logger.info(`Re-migration completed: ${migrationResult.cases} cases, ${migrationResult.files} files`);
+        }
+      } else {
+        logger.info(`Database has ${caseCount} cases`);
+      }
+    }
+
+    if (!fileWatcher) {
+      fileWatcher = new FileSystemWatcher(db);
+      await fileWatcher.start();
+      logger.info('File system watcher started');
+    }
+  } catch (error) {
+    logger.error('Background vault migration failed:', error);
+  } finally {
+    migrationInProgress = false;
+  }
+}
+
 app.whenReady().then(async () => {
-  // Set App User Model ID for Windows icon association
-  // This helps Windows properly associate the icon with the application
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.vault.app');
   }
   
-  // Register custom protocols before creating window
-  registerVideoProtocol();
+  try {
+    db = LocalDatabase.getInstance();
+    await db.initialize();
+    logger.info('Database initialized');
+  } catch (error) {
+    logger.error('Failed to initialize database:', error);
+  }
   
+  registerVaultFileProtocols();
   await createWindow();
+
+  if (db) {
+    void runBackgroundVaultMigration();
+  }
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -377,6 +602,19 @@ app.on('window-all-closed', () => {
 // Cleanup file handles on app exit
 app.on('before-quit', async () => {
   await closeAllFileHandles();
+  await transcriptionEngine.stop();
+  
+  // Stop file watcher
+  if (fileWatcher) {
+    fileWatcher.stop();
+    fileWatcher = null;
+  }
+  
+  // Close database connection
+  if (db && db.isInitialized()) {
+    db.close();
+    db = null;
+  }
 });
 
 // IPC Handlers
@@ -387,16 +625,32 @@ ipcMain.handle('log-renderer', async (event, level: LogLevel, ...args: LogArgs) 
   logger[level](`[Renderer]`, ...args);
 });
 
-// Debug logging handler - writes NDJSON to debug.log file
+ipcMain.handle('open-devtools-in-dev', async (event) => {
+  if (!isDev) {
+    return { success: false };
+  }
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) {
+    return { success: false };
+  }
+  win.webContents.openDevTools({ mode: 'detach' });
+  return { success: true };
+});
+
+// Debug logging handler - dev only; writes NDJSON to debug.log file
 ipcMain.handle('debug-log', async (event, logEntry: {
   location: string;
   message: string;
-  data?: any;
+  data?: unknown;
   timestamp: number;
   sessionId: string;
   runId: string;
   hypothesisId: string;
 }) => {
+  if (!isDev) {
+    return { success: true };
+  }
+
   try {
     // Use workspace path: .cursor/debug.log relative to where the app is running
     // In development, this is typically the workspace root
@@ -435,6 +689,10 @@ ipcMain.handle('get-system-memory', async () => {
   };
 });
 
+ipcMain.handle('get-system-fonts', async (_event, forceRefresh?: boolean) =>
+  listSystemFonts(Boolean(forceRefresh))
+);
+
 // Select PDF file
 ipcMain.handle('select-pdf-file', async () => {
   if (!mainWindow) return null;
@@ -469,11 +727,14 @@ ipcMain.handle('select-pdf-file', async () => {
 });
 
 // Select image file
-ipcMain.handle('select-image-file', async () => {
-  if (!mainWindow) return null;
+ipcMain.handle('select-image-file', async (event) => {
+  const parentWindow = getDialogParentWindow(event);
+  if (!parentWindow) return null;
 
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Select Background Image',
+  parentWindow.focus();
+
+  const result = await dialog.showOpenDialog(parentWindow, {
+    title: 'Select Image',
     filters: [
       { name: 'Image Files', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] },
       { name: 'All Files', extensions: ['*'] },
@@ -548,7 +809,7 @@ ipcMain.handle('save-files', async (
     saveToZip: boolean;
     folderName?: string;
     parentFilePath?: string;
-    extractedPages: Array<{ pageNumber: number; imageData: string }>;
+    extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
   }
 ) => {
   const { saveDirectory, saveParentFile, saveToZip, folderName, parentFilePath, extractedPages } = options;
@@ -558,29 +819,42 @@ ipcMain.handle('save-files', async (
     throw new Error('Invalid save directory');
   }
 
-  // Validate folder name if saving to ZIP
-  if (saveToZip && folderName && !isValidFolderName(folderName)) {
+  // Always require folder name
+  if (!folderName || !folderName.trim()) {
+    throw new Error('Folder name is required');
+  }
+
+  // Validate folder name
+  if (!isValidFolderName(folderName)) {
     throw new Error('Invalid folder name');
   }
 
   const results: string[] = [];
 
   try {
-    // Save parent PDF file if requested
+    // Determine the target directory (subfolder for loose files, or root for ZIP/parent PDF)
+    const targetDirectory = saveToZip ? saveDirectory : path.join(saveDirectory, folderName);
+
+    // Create subfolder if saving individual files
+    if (!saveToZip) {
+      await fs.mkdir(targetDirectory, { recursive: true });
+    }
+
+    // Save parent PDF file if requested (save to target directory)
     if (saveParentFile && parentFilePath) {
       if (!isValidPDFFile(parentFilePath) || !isSafePath(parentFilePath)) {
         throw new Error('Invalid parent PDF file path');
       }
 
       const parentFileName = path.basename(parentFilePath);
-      const destPath = path.join(saveDirectory, parentFileName);
+      const destPath = path.join(targetDirectory, parentFileName);
 
       await fs.copyFile(parentFilePath, destPath);
       results.push(`Parent PDF saved: ${destPath}`);
     }
 
     // Save to ZIP if requested
-    if (saveToZip && folderName) {
+    if (saveToZip) {
       const zip = new JSZip();
       const folder = zip.folder(folderName);
 
@@ -595,28 +869,48 @@ ipcMain.handle('save-files', async (
         const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
         
         let imageData: string;
-        let extension: string;
         
         if (pngMatch) {
           imageData = pngMatch[1];
-          extension = 'png';
         } else if (jpegMatch) {
           imageData = jpegMatch[1];
-          extension = 'jpg';
         } else {
           // Fallback: try to strip any data URL prefix
           imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
-          extension = 'png'; // Default to PNG for backward compatibility
         }
         
         const buffer = Buffer.from(imageData, 'base64');
-        folder.file(`page-${page.pageNumber}.${extension}`, buffer);
+        // Use the provided fileName from the frontend
+        folder.file(page.fileName, buffer);
       }
 
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
       const zipPath = path.join(saveDirectory, `${folderName}.zip`);
       await fs.writeFile(zipPath, zipBuffer);
       results.push(`ZIP file saved: ${zipPath}`);
+    } else {
+      // Save individual image files to subfolder
+      for (const page of extractedPages) {
+        // Detect image format from data URL (supports both PNG and JPEG)
+        const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+        const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+        
+        let imageData: string;
+        
+        if (pngMatch) {
+          imageData = pngMatch[1];
+        } else if (jpegMatch) {
+          imageData = jpegMatch[1];
+        } else {
+          // Fallback: try to strip any data URL prefix
+          imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+        }
+        
+        const buffer = Buffer.from(imageData, 'base64');
+        const imagePath = path.join(targetDirectory, page.fileName);
+        await fs.writeFile(imagePath, buffer);
+        results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
+      }
     }
 
     return { success: true, messages: results };
@@ -648,12 +942,6 @@ ipcMain.handle('read-pdf-file', async (event, filePath: string) => {
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      // Check file size - if larger than ~350MB, return path instead of data
-      // JavaScript strings have a max length of ~512MB (0x1fffffe8 characters = ~536MB)
-      // Base64 encoding increases size by ~33%, so limit to ~350MB raw file size for safety
-      // This leaves ~50MB buffer to account for any overhead
-      const MAX_FILE_SIZE_FOR_BASE64 = 350 * 1024 * 1024; // 350MB
-      
       const stats = await fs.stat(filePath);
       
       if (stats.size > MAX_FILE_SIZE_FOR_BASE64) {
@@ -911,7 +1199,7 @@ ipcMain.handle('get-pdf-file-size', async (event, filePath: string) => {
 });
 
 // File Security Checker IPC Handler
-ipcMain.handle('audit-pdf-redaction', async (event, pdfPath: string, options?: any) => {
+ipcMain.handle('audit-pdf-redaction', async (event, pdfPath: string, options?: AuditOptions) => {
   try {
     // Set the progress target to the window that initiated the audit
     // This will be updated to the detached window if user detaches during audit
@@ -1022,8 +1310,11 @@ ipcMain.handle('audit-pdf-redaction', async (event, pdfPath: string, options?: a
 });
 
 // Generate PDF Report IPC Handler
-ipcMain.handle('generate-audit-report', async (event, auditResult: any, outputPath: string) => {
+ipcMain.handle('generate-audit-report', async (event, auditResult: RedactionAuditResult, outputPath: string) => {
   try {
+    if (!isSafePath(outputPath)) {
+      throw new Error('Invalid output path');
+    }
     const result = await generateAuditReport({
       auditResult,
       outputPath,
@@ -1177,6 +1468,21 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
         await fs.writeFile(tagPath, categoryTagId.trim(), 'utf8');
       }
       
+      // Insert case into database
+      if (isDatabaseReady()) {
+        const stats = await fs.stat(casePath);
+        const caseId = db!.generateId(casePath);
+        db!.createCase({
+          id: caseId,
+          name: caseName,
+          path: casePath,
+          description: description.trim() || null,
+          category_tag_id: categoryTagId?.trim() || null,
+          local_modified_at: stats.mtime.getTime(),
+          created_at: stats.birthtime.getTime(),
+        });
+      }
+      
       // Update archive marker metadata
       try {
         const marker = await readArchiveMarker(archiveDrive);
@@ -1194,6 +1500,55 @@ ipcMain.handle('create-case-folder', async (event, caseName: string, description
       return casePath;
     }
     throw error;
+  }
+});
+
+// Update case description
+ipcMain.handle('update-case-description', async (event, casePath: string, description: string) => {
+  logger.debug('[Main] update-case-description called:', { casePath, descriptionLength: description.length });
+  
+  if (!isSafePath(casePath)) {
+    logger.error('[Main] Invalid case path:', casePath);
+    throw new Error('Invalid case path');
+  }
+
+  try {
+    // Verify the case folder exists
+    await fs.access(casePath);
+    
+    const descriptionPath = path.join(casePath, '.case-description');
+    const now = Date.now();
+    
+    // Dual-write: Update database (source of truth)
+    if (isDatabaseReady()) {
+      db!.updateCase(casePath, {
+        description: description.trim() || null,
+        local_modified_at: now,
+      });
+    }
+    
+    // Also write to metadata file (for backward compatibility)
+    if (description.trim()) {
+      // Save or update description
+      await fs.writeFile(descriptionPath, description.trim(), 'utf8');
+      logger.info('[Main] Case description updated successfully');
+    } else {
+      // Remove description file if empty
+      try {
+        await fs.unlink(descriptionPath);
+        logger.info('[Main] Case description removed');
+      } catch (unlinkError) {
+        // File doesn't exist, that's okay
+        if (isErrorWithCode(unlinkError) && unlinkError.code !== 'ENOENT') {
+          throw unlinkError;
+        }
+      }
+    }
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('[Main] Failed to update case description:', error);
+    throw new Error(`Failed to update case description: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 
@@ -1257,7 +1612,7 @@ ipcMain.handle('create-folder', async (event, folderPath: string, folderName: st
 
 // Create extraction folder
 ipcMain.handle('create-extraction-folder', async (event, casePath: string, folderName: string, parentPdfPath?: string) => {
-  logger.log('[Main] create-extraction-folder called:', { casePath, folderName, parentPdfPath });
+  logger.debug('[Main] create-extraction-folder called:', { casePath, folderName, parentPdfPath });
   
   if (!isSafePath(casePath)) {
     logger.error('[Main] Invalid case path:', casePath);
@@ -1311,85 +1666,117 @@ ipcMain.handle('list-archive-cases', async () => {
   }
 
   try {
-    const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
-    const cases = await Promise.all(
-      entries
-        .filter(entry => {
-          if (!entry.isDirectory()) {
-            return false;
-          }
-          // Exclude .bookmark-thumbnails folder from case list
-          const folderName = entry.name.toLowerCase();
-          if (folderName === '.bookmark-thumbnails') {
-            return false;
-          }
-          return true;
-        })
-        .map(async (entry) => {
-          const casePath = path.join(archiveDrive, entry.name);
-          
-          // Try to read background image metadata
-          let backgroundImage: string | undefined = undefined;
-          try {
-            const metadataPath = path.join(casePath, '.case-background');
-            const backgroundFileName = await fs.readFile(metadataPath, 'utf8');
-            const backgroundFileNameTrimmed = backgroundFileName.trim();
-            if (backgroundFileNameTrimmed) {
-              const backgroundImagePath = path.join(casePath, backgroundFileNameTrimmed);
-              // Verify the file exists
-              try {
-                await fs.access(backgroundImagePath);
-                backgroundImage = backgroundImagePath;
-              } catch {
-                // File doesn't exist, ignore
-              }
-            }
-          } catch (metadataError) {
-            // Metadata file doesn't exist or can't be read - that's okay
-          }
-          
-          // Try to read description metadata
-          let description: string | undefined = undefined;
-          try {
-            const descriptionPath = path.join(casePath, '.case-description');
-            const descriptionContent = await fs.readFile(descriptionPath, 'utf8');
-            const descriptionTrimmed = descriptionContent.trim();
-            if (descriptionTrimmed) {
-              description = descriptionTrimmed;
-            }
-          } catch (descriptionError) {
-            // Description file doesn't exist or can't be read - that's okay
-          }
-          
-          // Try to read category tag metadata
-          let categoryTagId: string | undefined = undefined;
-          try {
-            const tagPath = path.join(casePath, '.case-category-tag');
-            const tagContent = await fs.readFile(tagPath, 'utf8');
-            const tagTrimmed = tagContent.trim();
-            if (tagTrimmed) {
-              categoryTagId = tagTrimmed;
-            }
-          } catch (tagError) {
-            // Tag file doesn't exist or can't be read - that's okay
-          }
-          
-          return {
-            name: entry.name,
-            path: casePath,
-            backgroundImage,
-            description,
-            categoryTagId,
-          };
-        })
-    );
+    // Wait for database initialization if in progress
+    if (db && !db.isInitialized()) {
+      try {
+        await db.waitForInitialization();
+      } catch {
+        // Initialization failed, fall back to file system
+        logger.warn('Database initialization failed, falling back to file system scan');
+        return await listCasesFromFileSystem(archiveDrive);
+      }
+    }
+
+    // Query database instead of scanning file system
+    if (!shouldUseDatabaseForListing()) {
+      // Fallback to file system scan if database not initialized or migration in progress
+      if (migrationInProgress) {
+        logger.debug('Migration in progress, using file system scan for archive cases');
+      } else {
+        logger.warn('Database not initialized, falling back to file system scan');
+      }
+      return await listCasesFromFileSystem(archiveDrive);
+    }
+
+    const cases = db!.getCases();
     
-    cases.sort((a, b) => a.name.localeCompare(b.name)); // Alphabetize
-    return cases;
+    // Convert database records to API format
+    return cases.map((caseRecord) => ({
+      name: caseRecord.name,
+      path: caseRecord.path,
+      backgroundImage: caseRecord.background_image || undefined,
+      description: caseRecord.description || undefined,
+      categoryTagId: caseRecord.category_tag_id || undefined,
+    }));
   } catch (error) {
+    logger.error('Failed to list archive cases:', error);
     throw new Error(`Failed to list archive cases: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
+
+// Fallback function for file system scanning (if database not available)
+async function listCasesFromFileSystem(archiveDrive: string) {
+  const entries = await fs.readdir(archiveDrive, { withFileTypes: true });
+  const cases = await Promise.all(
+    entries
+      .filter(entry => {
+        if (!entry.isDirectory()) {
+          return false;
+        }
+        const folderName = entry.name.toLowerCase();
+        if (folderName === '.bookmark-thumbnails' || folderName === 'textlibrary') {
+          return false;
+        }
+        return true;
+      })
+      .map(async (entry) => {
+        const casePath = path.join(archiveDrive, entry.name);
+        
+        let backgroundImage: string | undefined = undefined;
+        try {
+          const metadataPath = path.join(casePath, '.case-background');
+          const backgroundFileName = await fs.readFile(metadataPath, 'utf8');
+          const backgroundFileNameTrimmed = backgroundFileName.trim();
+          if (backgroundFileNameTrimmed) {
+            const backgroundImagePath = path.join(casePath, backgroundFileNameTrimmed);
+            try {
+              await fs.access(backgroundImagePath);
+              backgroundImage = backgroundImagePath;
+            } catch {
+              // File doesn't exist, ignore
+            }
+          }
+        } catch {
+          // Metadata file doesn't exist
+        }
+        
+        let description: string | undefined = undefined;
+        try {
+          const descriptionPath = path.join(casePath, '.case-description');
+          const descriptionContent = await fs.readFile(descriptionPath, 'utf8');
+          const descriptionTrimmed = descriptionContent.trim();
+          if (descriptionTrimmed) {
+            description = descriptionTrimmed;
+          }
+        } catch {
+          // Description file doesn't exist
+        }
+        
+        let categoryTagId: string | undefined = undefined;
+        try {
+          const tagPath = path.join(casePath, '.case-category-tag');
+          const tagContent = await fs.readFile(tagPath, 'utf8');
+          const tagTrimmed = tagContent.trim();
+          if (tagTrimmed) {
+            categoryTagId = tagTrimmed;
+          }
+        } catch {
+          // Tag file doesn't exist
+        }
+        
+        return {
+          name: entry.name,
+          path: casePath,
+          backgroundImage,
+          description,
+          categoryTagId,
+        };
+      })
+  );
+  
+  cases.sort((a, b) => a.name.localeCompare(b.name));
+  return cases;
+}
 
 // Category Tag Handlers
 
@@ -1473,7 +1860,17 @@ ipcMain.handle('set-case-category-tag', async (event, casePath: string, category
 
   try {
     const tagPath = path.join(casePath, '.case-category-tag');
+    const now = Date.now();
     
+    // Dual-write: Update database (source of truth)
+    if (isDatabaseReady()) {
+      db!.updateCase(casePath, {
+        category_tag_id: categoryTagId?.trim() || null,
+        local_modified_at: now,
+      });
+    }
+    
+    // Also write to metadata file (for backward compatibility)
     if (categoryTagId === null || categoryTagId.trim() === '') {
       // Remove tag by deleting the file
       try {
@@ -1535,7 +1932,7 @@ ipcMain.handle('set-file-category-tag', async (event, filePath: string, category
     const tagFileName = `.file-category-tag.${fileName}`;
     const tagPath = path.join(fileDir, tagFileName);
     
-    logger.log('[Main] set-file-category-tag:', { filePath, normalizedFilePath, fileName, tagPath, categoryTagId });
+    logger.debug('[Main] set-file-category-tag:', { filePath, normalizedFilePath, fileName, tagPath, categoryTagId });
     
     if (categoryTagId === null || categoryTagId.trim() === '') {
       // Remove tag by deleting the metadata file
@@ -1573,7 +1970,7 @@ ipcMain.handle('get-file-category-tag', async (event, filePath: string) => {
     const tagFileName = `.file-category-tag.${fileName}`;
     const tagPath = path.join(fileDir, tagFileName);
     
-    logger.log('[Main] get-file-category-tag:', { filePath, normalizedFilePath, fileName, tagPath });
+    logger.debug('[Main] get-file-category-tag:', { filePath, normalizedFilePath, fileName, tagPath });
     
     try {
       const tagContent = await fs.readFile(tagPath, 'utf8');
@@ -1724,8 +2121,15 @@ ipcMain.handle('get-bookmarks-by-folder', async (event, folderId: string | null)
 // Save bookmark thumbnail (thumbnail is generated in renderer and passed here)
 ipcMain.handle('save-bookmark-thumbnail', async (event, bookmarkId: string, thumbnailData: string) => {
   try {
+    if (!isSafeStorageId(bookmarkId)) {
+      throw new Error('Invalid bookmark id');
+    }
     const thumbnailsDir = await bookmarkStorage.getBookmarkThumbnailsDir();
     const thumbnailPath = path.join(thumbnailsDir, `${bookmarkId}.png`);
+    // Defense-in-depth: ensure the resolved path stays inside the thumbnails dir.
+    if (!isPathWithinBase(thumbnailPath, [thumbnailsDir])) {
+      throw new Error('Invalid bookmark thumbnail path');
+    }
     
     // Extract base64 data if it's a data URL
     const base64Data = thumbnailData.includes(',') 
@@ -1745,8 +2149,15 @@ ipcMain.handle('save-bookmark-thumbnail', async (event, bookmarkId: string, thum
 // Get bookmark thumbnail
 ipcMain.handle('get-bookmark-thumbnail', async (event, bookmarkId: string) => {
   try {
+    if (!isSafeStorageId(bookmarkId)) {
+      throw new Error('Invalid bookmark id');
+    }
     const thumbnailsDir = await bookmarkStorage.getBookmarkThumbnailsDir();
     const thumbnailPath = path.join(thumbnailsDir, `${bookmarkId}.png`);
+    // Defense-in-depth: ensure the resolved path stays inside the thumbnails dir.
+    if (!isPathWithinBase(thumbnailPath, [thumbnailsDir])) {
+      throw new Error('Invalid bookmark thumbnail path');
+    }
     
     try {
       const buffer = await fs.readFile(thumbnailPath);
@@ -1771,171 +2182,163 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
   }
 
   try {
-    const entries = await fs.readdir(casePath, { withFileTypes: true });
-    logger.log('[Main] list-case-files: Found entries:', entries.length, entries.map(e => ({ name: e.name, isFile: e.isFile(), isDirectory: e.isDirectory() })));
-    
-    // Process files (exclude hidden metadata files like .parent-pdf, .case-background, etc.)
-    const files = await Promise.all(
-      entries
-        .filter(entry => {
-          // Only process files
-          if (!entry.isFile()) {
-            return false;
-          }
-          const fileName = entry.name.toLowerCase();
-          
-          // Exclude .parent-pdf metadata files
-          if (fileName === '.parent-pdf' || fileName.startsWith('.parent-pdf')) {
-            logger.log('[Main] Filtering out metadata file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .case-background metadata file
-          if (fileName === '.case-background') {
-            logger.log('[Main] Filtering out case background metadata file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .case-description metadata file
-          if (fileName === '.case-description') {
-            logger.log('[Main] Filtering out case description metadata file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .case-category-tag metadata file
-          if (fileName === '.case-category-tag') {
-            logger.log('[Main] Filtering out case category tag metadata file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .vault-archive.json marker file
-          if (fileName === '.vault-archive.json') {
-            logger.log('[Main] Filtering out vault archive marker file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .case-background-image.* files
-          if (fileName.startsWith('.case-background-image.')) {
-            logger.log('[Main] Filtering out case background image file:', entry.name);
-            return false;
-          }
-          
-          // Exclude .file-category-tag.* metadata files
-          if (fileName.startsWith('.file-category-tag.')) {
-            logger.log('[Main] Filtering out file category tag metadata file:', entry.name);
-            return false;
-          }
-          
-          return true;
-        })
-        .map(async (entry) => {
-          const filePath = path.normalize(path.join(casePath, entry.name));
-          const stats = await fs.stat(filePath);
-          
-          // Try to read file category tag metadata
-          let categoryTagId: string | undefined = undefined;
-          try {
-            const tagFileName = `.file-category-tag.${entry.name}`;
-            const tagPath = path.normalize(path.join(casePath, tagFileName));
-            logger.log('[Main] list-case-files: Reading tag for file:', { entryName: entry.name, filePath, tagFileName, tagPath });
-            const tagContent = await fs.readFile(tagPath, 'utf8');
-            const tagTrimmed = tagContent.trim();
-            if (tagTrimmed) {
-              categoryTagId = tagTrimmed;
-              logger.log('[Main] list-case-files: Found tag for file:', { entryName: entry.name, categoryTagId });
-            }
-          } catch (tagError) {
-            // Tag file doesn't exist or can't be read - that's okay
-            logger.log('[Main] list-case-files: No tag found for file:', { entryName: entry.name, error: tagError instanceof Error ? tagError.message : 'Unknown' });
-          }
-          
-          return {
-            name: entry.name,
-            path: filePath,
-            size: stats.size,
-            modified: stats.mtime.getTime(),
-            isFolder: false,
-            categoryTagId,
-          };
-        })
-    );
+    // Wait for database initialization if in progress
+    if (db && !db.isInitialized()) {
+      try {
+        await db.waitForInitialization();
+      } catch {
+        // Initialization failed, fall back to file system
+        logger.warn('Database initialization failed, falling back to file system scan');
+        return await listCaseFilesFromFileSystem(casePath);
+      }
+    }
 
-    // Process folders
-    const folders = await Promise.all(
-      entries
-        .filter(entry => {
-          if (!entry.isDirectory()) {
-            return false;
-          }
-          // Exclude .thumbnails folder
-          const folderName = entry.name.toLowerCase();
-          if (folderName === '.thumbnails') {
-            logger.log('[Main] Filtering out .thumbnails folder:', entry.name);
-            return false;
-          }
-          
-          // Exclude .bookmark-thumbnails folder
-          if (folderName === '.bookmark-thumbnails') {
-            logger.log('[Main] Filtering out .bookmark-thumbnails folder:', entry.name);
-            return false;
-          }
-          
-          return true;
-        })
-        .map(async (entry) => {
-          const folderPath = path.join(casePath, entry.name);
-          const stats = await fs.stat(folderPath);
-          
-          // Try to read parent PDF metadata to determine folder type
-          let parentPdfName: string | null = null;
-          let folderType: 'extraction' | 'case' = 'case'; // Default to regular folder
-          
-          try {
-            const metadataPath = path.join(folderPath, '.parent-pdf');
-            parentPdfName = await fs.readFile(metadataPath, 'utf8');
-            parentPdfName = parentPdfName.trim();
-            // If .parent-pdf exists, it's an extraction folder
-            if (parentPdfName) {
-              folderType = 'extraction';
-            }
-          } catch (metadataError) {
-            // Metadata file doesn't exist - it's a regular case folder
-            folderType = 'case';
-            parentPdfName = null;
-          }
-          
-          // Try to read folder background image metadata
-          let backgroundImage: string | undefined = undefined;
-          try {
-            const backgroundMetadataPath = path.join(folderPath, '.folder-background');
-            const backgroundImageName = await fs.readFile(backgroundMetadataPath, 'utf8');
-            const trimmedName = backgroundImageName.trim();
-            if (trimmedName) {
-              const backgroundImagePath = path.join(folderPath, trimmedName);
-              // Verify the image file exists
-              try {
-                await fs.access(backgroundImagePath);
-                backgroundImage = backgroundImagePath;
-              } catch {
-                // Image file doesn't exist, ignore
-              }
-            }
-          } catch {
-            // No background image metadata, ignore
-          }
-          
-          return {
-            name: entry.name,
-            path: folderPath,
+    // Query database instead of scanning file system
+    if (!shouldUseDatabaseForListing()) {
+      if (migrationInProgress) {
+        logger.debug(`[Main] list-case-files: Migration in progress, using file system scan for ${casePath}`);
+      } else {
+        logger.warn('Database not initialized, falling back to file system scan');
+      }
+      return await listCaseFilesFromFileSystem(casePath);
+    }
+
+    // Check if this is actually a folder path (not a case path)
+    const folderRecord = db!.getFileByPath(casePath);
+    if (folderRecord && folderRecord.is_folder === 1) {
+      // This is a folder, get files inside this folder
+      logger.debug(`[Main] list-case-files: Path is a folder, getting files inside: ${casePath}`);
+      const dbInstance = db!.getRawDatabase();
+      const folderFilesStmt = dbInstance.prepare(`
+        SELECT * FROM files 
+        WHERE parent_folder_id = ? AND deleted_at IS NULL
+        ORDER BY is_folder DESC, name
+      `);
+      const dbFiles = folderFilesStmt.all(folderRecord.id) as File[];
+      logger.debug(`[Main] list-case-files: Retrieved ${dbFiles.length} files from folder: ${casePath}`);
+      
+      // Process folder contents (same logic as case files)
+      const files: Array<{
+        name: string;
+        path: string;
+        size: number;
+        modified: number;
+        isFolder: false;
+        categoryTagId?: string;
+      }> = [];
+      
+      const folders: Array<{
+        name: string;
+        path: string;
+        size: number;
+        modified: number;
+        isFolder: true;
+        folderType: 'extraction' | 'case';
+        parentPdfName?: string;
+        backgroundImage?: string;
+      }> = [];
+
+      for (const fileRecord of dbFiles) {
+        // Filter out hidden/system folders
+        const fileName = fileRecord.name.toLowerCase();
+        if (fileName === '.thumbnails' || fileName === '.bookmark-thumbnails' || fileName === '.notes') {
+          continue;
+        }
+
+        if (fileRecord.is_folder === 1) {
+          // It's a folder
+          folders.push({
+            name: fileRecord.name,
+            path: fileRecord.path,
             size: 0,
-            modified: stats.mtime.getTime(),
+            modified: fileRecord.local_modified_at,
             isFolder: true,
-            folderType: folderType,
-            parentPdfName: parentPdfName || undefined,
-            backgroundImage: backgroundImage,
-          };
-        })
-    );
+            folderType: (fileRecord.folder_type || 'case') as 'extraction' | 'case',
+            parentPdfName: fileRecord.parent_pdf_name || undefined,
+            backgroundImage: fileRecord.background_image || undefined,
+          });
+        } else {
+          // It's a file
+          files.push({
+            name: fileRecord.name,
+            path: fileRecord.path,
+            size: fileRecord.size,
+            modified: fileRecord.local_modified_at,
+            isFolder: false,
+            categoryTagId: fileRecord.category_tag_id || undefined,
+          });
+        }
+      }
+
+      // Return simple sorted list (no PDF grouping for folder contents)
+      const allItems = [...folders, ...files];
+      allItems.sort((a, b) => {
+        if (a.isFolder !== b.isFolder) {
+          return a.isFolder ? -1 : 1; // Folders first
+        }
+        return a.name.localeCompare(b.name);
+      });
+
+      logger.log('[Main] list-case-files (folder): Processed - Files:', files.length, 'Folders:', folders.length);
+      return allItems;
+    }
+
+    // This is a case path, get root-level files
+    const dbFiles = db!.getFiles(casePath);
+    logger.debug(`[Main] list-case-files: Retrieved ${dbFiles.length} root-level files from database for case: ${casePath}`);
+    
+    // Separate files and folders
+    const files: Array<{
+      name: string;
+      path: string;
+      size: number;
+      modified: number;
+      isFolder: false;
+      categoryTagId?: string;
+    }> = [];
+    
+    const folders: Array<{
+      name: string;
+      path: string;
+      size: number;
+      modified: number;
+      isFolder: true;
+      folderType: 'extraction' | 'case';
+      parentPdfName?: string;
+      backgroundImage?: string;
+    }> = [];
+
+    for (const fileRecord of dbFiles) {
+      // Filter out hidden/system folders
+      const fileName = fileRecord.name.toLowerCase();
+      if (fileName === '.thumbnails' || fileName === '.bookmark-thumbnails' || fileName === '.notes') {
+        continue;
+      }
+
+      if (fileRecord.is_folder === 1) {
+        // It's a folder
+        folders.push({
+          name: fileRecord.name,
+          path: fileRecord.path,
+          size: 0,
+          modified: fileRecord.local_modified_at,
+          isFolder: true,
+          folderType: fileRecord.folder_type || 'case',
+          parentPdfName: fileRecord.parent_pdf_name || undefined,
+          backgroundImage: fileRecord.background_image || undefined,
+        });
+      } else {
+        // It's a file
+        files.push({
+          name: fileRecord.name,
+          path: fileRecord.path,
+          size: fileRecord.size,
+          modified: fileRecord.local_modified_at,
+          isFolder: false,
+          categoryTagId: fileRecord.category_tag_id || undefined,
+        });
+      }
+    }
 
     logger.log('[Main] list-case-files: Processed - Files:', files.length, 'Folders:', folders.length);
     
@@ -2015,7 +2418,7 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     });
     
     // Sort folders within each PDF group alphabetically
-    pdfToFoldersMap.forEach((folderList, pdfName) => {
+    pdfToFoldersMap.forEach((folderList) => {
       folderList.sort((a, b) => a.name.localeCompare(b.name));
     });
     
@@ -2035,13 +2438,14 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     const groupedItems: Array<typeof files[0] | typeof folders[0]> = [];
     
     // Add folders and their PDFs in alphabetical PDF order
+    // CRITICAL: Folders MUST come before their PDF in the array for frontend grouping to work
     // This ensures folders always appear above their associated PDFs
     for (const pdf of pdfFiles) {
       const relatedFolders = pdfToFoldersMap.get(pdf.name) || [];
       // Add folders above the PDF (folders are already sorted alphabetically)
-      groupedItems.push(...relatedFolders);
+      groupedItems.push(...relatedFolders);  // ← Folders first
       // Add the PDF
-      groupedItems.push(pdf);
+      groupedItems.push(pdf);  // ← Then PDF
     }
     
     // Add orphaned folders (folders without a matching PDF) after all PDFs
@@ -2059,6 +2463,187 @@ ipcMain.handle('list-case-files', async (event, casePath: string) => {
     throw new Error(`Failed to list case files: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
+
+// Fallback function for file system scanning (if database not available)
+async function listCaseFilesFromFileSystem(casePath: string) {
+  const entries = await fs.readdir(casePath, { withFileTypes: true });
+  
+  const files = await Promise.all(
+    entries
+      .filter(entry => {
+        if (!entry.isFile()) return false;
+        const fileName = entry.name.toLowerCase();
+        return !fileName.startsWith('.') && !fileName.startsWith('.file-category-tag.');
+      })
+      .map(async (entry) => {
+        const filePath = path.normalize(path.join(casePath, entry.name));
+        const stats = await fs.stat(filePath);
+        
+        let categoryTagId: string | undefined = undefined;
+        try {
+          const tagFileName = `.file-category-tag.${entry.name}`;
+          const tagPath = path.normalize(path.join(casePath, tagFileName));
+          const tagContent = await fs.readFile(tagPath, 'utf8');
+          const tagTrimmed = tagContent.trim();
+          if (tagTrimmed) {
+            categoryTagId = tagTrimmed;
+          }
+        } catch {
+          // Tag file doesn't exist
+        }
+        
+        return {
+          name: entry.name,
+          path: filePath,
+          size: stats.size,
+          modified: stats.mtime.getTime(),
+          isFolder: false as const,
+          categoryTagId,
+        };
+      })
+  );
+
+  const folders = await Promise.all(
+    entries
+      .filter(entry => {
+        if (!entry.isDirectory()) return false;
+        const folderName = entry.name.toLowerCase();
+        return folderName !== '.thumbnails' && folderName !== '.bookmark-thumbnails' && folderName !== '.notes';
+      })
+      .map(async (entry) => {
+        const folderPath = path.join(casePath, entry.name);
+        const stats = await fs.stat(folderPath);
+        
+        let parentPdfName: string | null = null;
+        let folderType: 'extraction' | 'case' = 'case';
+        
+        try {
+          const metadataPath = path.join(folderPath, '.parent-pdf');
+          parentPdfName = await fs.readFile(metadataPath, 'utf8');
+          parentPdfName = parentPdfName.trim();
+          if (parentPdfName) {
+            folderType = 'extraction';
+          }
+        } catch {
+          folderType = 'case';
+          parentPdfName = null;
+        }
+        
+        let backgroundImage: string | undefined = undefined;
+        try {
+          const backgroundMetadataPath = path.join(folderPath, '.folder-background');
+          const backgroundImageName = await fs.readFile(backgroundMetadataPath, 'utf8');
+          const trimmedName = backgroundImageName.trim();
+          if (trimmedName) {
+            const backgroundImagePath = path.join(folderPath, trimmedName);
+            try {
+              await fs.access(backgroundImagePath);
+              backgroundImage = backgroundImagePath;
+            } catch {
+              // Image file doesn't exist
+            }
+          }
+        } catch {
+          // No background image metadata
+        }
+        
+        return {
+          name: entry.name,
+          path: folderPath,
+          size: 0,
+          modified: stats.mtime.getTime(),
+          isFolder: true as const,
+          folderType: folderType,
+          parentPdfName: parentPdfName || undefined,
+          backgroundImage: backgroundImage,
+        };
+      })
+  );
+
+  // Apply same grouping logic as database version
+  const pdfFiles = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+  const otherFiles = files.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
+  pdfFiles.sort((a, b) => a.name.localeCompare(b.name));
+  
+  const pdfToFoldersMap = new Map<string, typeof folders>();
+  const pdfNameLowerToActual = new Map<string, string>();
+  pdfFiles.forEach(pdf => {
+    pdfToFoldersMap.set(pdf.name, []);
+    pdfNameLowerToActual.set(pdf.name.toLowerCase(), pdf.name);
+  });
+  
+  folders.forEach(folder => {
+    const parentPdfName = folder.parentPdfName;
+    let matched = false;
+    
+    if (parentPdfName) {
+      if (pdfToFoldersMap.has(parentPdfName)) {
+        pdfToFoldersMap.get(parentPdfName)!.push(folder);
+        matched = true;
+      } else {
+        const parentPdfNameLower = parentPdfName.toLowerCase();
+        const actualPdfName = pdfNameLowerToActual.get(parentPdfNameLower);
+        if (actualPdfName) {
+          pdfToFoldersMap.get(actualPdfName)!.push(folder);
+          matched = true;
+        }
+      }
+    }
+    
+    if (!matched) {
+      const folderNameLower = folder.name.toLowerCase();
+      const folderModified = folder.modified;
+      let bestMatch: typeof pdfFiles[0] | null = null;
+      let bestMatchScore = 0;
+      
+      for (const pdf of pdfFiles) {
+        const pdfBaseName = pdf.name.replace(/\.pdf$/i, '').toLowerCase();
+        const pdfModified = pdf.modified;
+        let score = 0;
+        if (folderNameLower.includes(pdfBaseName) || pdfBaseName.includes(folderNameLower)) {
+          score += 10;
+        }
+        if (folderModified >= pdfModified && (folderModified - pdfModified) < 3600000) {
+          score += 5;
+        }
+        if (score > bestMatchScore) {
+          bestMatchScore = score;
+          bestMatch = pdf;
+        }
+      }
+      
+      if (bestMatch && bestMatchScore > 0) {
+        pdfToFoldersMap.get(bestMatch.name)!.push(folder);
+      }
+    }
+  });
+  
+  pdfToFoldersMap.forEach((folderList) => {
+    folderList.sort((a, b) => a.name.localeCompare(b.name));
+  });
+  
+  const assignedFolders = new Set<string>();
+  pdfToFoldersMap.forEach((folderList) => {
+    folderList.forEach(folder => {
+      assignedFolders.add(folder.path);
+    });
+  });
+  
+  const orphanedFolders = folders.filter(folder => !assignedFolders.has(folder.path));
+  orphanedFolders.sort((a, b) => a.name.localeCompare(b.name));
+  
+  const groupedItems: Array<typeof files[0] | typeof folders[0]> = [];
+  for (const pdf of pdfFiles) {
+    const relatedFolders = pdfToFoldersMap.get(pdf.name) || [];
+    groupedItems.push(...relatedFolders);
+    groupedItems.push(pdf);
+  }
+  groupedItems.push(...orphanedFolders);
+  otherFiles.sort((a, b) => a.name.localeCompare(b.name));
+  groupedItems.push(...otherFiles);
+  
+  return groupedItems;
+}
 
 // Add files to case
 ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: string[]) => {
@@ -2078,6 +2663,30 @@ ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: 
         const fileName = path.basename(filePath);
         const destPath = path.join(casePath, fileName);
         await fs.copyFile(filePath, destPath);
+        
+        // Insert file into database
+        if (isDatabaseReady()) {
+          const stats = await fs.stat(destPath);
+          const fileId = db!.generateId(destPath);
+          const caseRecord = db!.getCaseByPath(casePath);
+          if (caseRecord) {
+            const fileType = detectFileTypeFromPath(destPath);
+            const checksum = await db!.calculateChecksum(destPath);
+            db!.createFile({
+              id: fileId,
+              case_id: caseRecord.id,
+              name: fileName,
+              path: destPath,
+              size: stats.size,
+              type: fileType === 'audio' ? 'other' : fileType,
+              is_folder: 0,
+              checksum,
+              local_modified_at: stats.mtime.getTime(),
+              created_at: stats.birthtime.getTime(),
+            });
+          }
+        }
+        
         results.push(destPath);
       } catch (error) {
         // Skip files that fail to copy
@@ -2109,6 +2718,30 @@ ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: 
       const fileName = path.basename(filePath);
       const destPath = path.join(casePath, fileName);
       await fs.copyFile(filePath, destPath);
+      
+      // Insert file into database
+      if (isDatabaseReady()) {
+        const stats = await fs.stat(destPath);
+        const fileId = db!.generateId(destPath);
+        const caseRecord = db!.getCaseByPath(casePath);
+        if (caseRecord) {
+          const fileType = detectFileTypeFromPath(destPath);
+          const checksum = await db!.calculateChecksum(destPath);
+          db!.createFile({
+            id: fileId,
+            case_id: caseRecord.id,
+            name: fileName,
+            path: destPath,
+            size: stats.size,
+            type: fileType === 'audio' ? 'other' : fileType,
+            is_folder: 0,
+            checksum,
+            local_modified_at: stats.mtime.getTime(),
+            created_at: stats.birthtime.getTime(),
+          });
+        }
+      }
+      
       copiedFiles.push(destPath);
     } catch (error) {
       logger.error(`Failed to copy file ${filePath}:`, error);
@@ -2118,6 +2751,75 @@ ipcMain.handle('add-files-to-case', async (event, casePath: string, filePaths?: 
   return copiedFiles;
 });
 
+ipcMain.handle(
+  'save-audio-recording-to-case',
+  async (
+    _event,
+    casePath: string,
+    fileName: string,
+    audioData: Uint8Array | Buffer,
+    mimeType?: string
+  ) => {
+    if (!isSafePath(casePath)) {
+      throw new Error('Invalid case path');
+    }
+
+    const sanitizedName = path.basename(fileName).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
+    if (!sanitizedName) {
+      throw new Error('Invalid file name');
+    }
+
+    const extFromMime =
+      mimeType?.includes('wav')
+        ? '.wav'
+        : mimeType?.includes('mpeg') || mimeType?.includes('mp3')
+          ? '.mp3'
+          : mimeType?.includes('ogg')
+            ? '.ogg'
+            : '.webm';
+    const hasExt = path.extname(sanitizedName).length > 0;
+    const resolvedName = hasExt ? sanitizedName : `${sanitizedName}${extFromMime}`;
+
+    let destPath = path.join(casePath, resolvedName);
+    if (await fs.stat(destPath).then(() => true).catch(() => false)) {
+      const stem = path.basename(resolvedName, path.extname(resolvedName));
+      const ext = path.extname(resolvedName);
+      let counter = 1;
+      while (await fs.stat(destPath).then(() => true).catch(() => false)) {
+        destPath = path.join(casePath, `${stem} (${counter})${ext}`);
+        counter += 1;
+      }
+    }
+
+    const buffer = Buffer.isBuffer(audioData) ? audioData : Buffer.from(audioData);
+    await fs.writeFile(destPath, buffer);
+
+    if (isDatabaseReady()) {
+      const stats = await fs.stat(destPath);
+      const fileId = db!.generateId(destPath);
+      const caseRecord = db!.getCaseByPath(casePath);
+      if (caseRecord) {
+        const fileType = detectFileTypeFromPath(destPath);
+        const checksum = await db!.calculateChecksum(destPath);
+        db!.createFile({
+          id: fileId,
+          case_id: caseRecord.id,
+          name: path.basename(destPath),
+          path: destPath,
+          size: stats.size,
+          type: fileType === 'audio' ? 'other' : fileType,
+          is_folder: 0,
+          checksum,
+          local_modified_at: stats.mtime.getTime(),
+          created_at: stats.birthtime.getTime(),
+        });
+      }
+    }
+
+    return destPath;
+  }
+);
+
 // Delete case
 ipcMain.handle('delete-case', async (event, casePath: string) => {
   if (!isSafePath(casePath)) {
@@ -2125,6 +2827,12 @@ ipcMain.handle('delete-case', async (event, casePath: string) => {
   }
 
   try {
+    // Soft delete in database
+    if (isDatabaseReady()) {
+      db!.deleteCase(casePath);
+    }
+    
+    // Delete from file system
     await fs.rm(casePath, { recursive: true, force: true });
     return true;
   } catch (error) {
@@ -2136,6 +2844,11 @@ ipcMain.handle('delete-case', async (event, casePath: string) => {
 ipcMain.handle('set-case-background-image', async (event, casePath: string, imagePath: string) => {
   if (!isSafePath(casePath) || !isSafePath(imagePath)) {
     throw new Error('Invalid path');
+  }
+  // Only the write target (casePath) is containment-checked; imagePath is a
+  // user-selected source file that may live anywhere on disk.
+  if (!(await isManagedWritePath(casePath))) {
+    throw new Error('Path is outside the managed archive');
   }
 
   try {
@@ -2173,7 +2886,15 @@ ipcMain.handle('set-case-background-image', async (event, casePath: string, imag
     // Copy the new image
     await fs.copyFile(imagePath, destPath);
 
-    // Store the filename in metadata file
+    // Dual-write: Update database (source of truth)
+    if (isDatabaseReady()) {
+      db!.updateCase(casePath, {
+        background_image: destPath,
+        local_modified_at: Date.now(),
+      });
+    }
+
+    // Also write to metadata file (for backward compatibility)
     const metadataPath = path.join(casePath, '.case-background');
     await fs.writeFile(metadataPath, backgroundImageName, 'utf8');
 
@@ -2187,6 +2908,11 @@ ipcMain.handle('set-case-background-image', async (event, casePath: string, imag
 ipcMain.handle('set-folder-background-image', async (event, folderPath: string, imagePath: string) => {
   if (!isSafePath(folderPath) || !isSafePath(imagePath)) {
     throw new Error('Invalid path');
+  }
+  // Only the write target (folderPath) is containment-checked; imagePath is a
+  // user-selected source file that may live anywhere on disk.
+  if (!(await isManagedWritePath(folderPath))) {
+    throw new Error('Path is outside the managed archive');
   }
 
   try {
@@ -2239,8 +2965,11 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
   if (!isSafePath(filePath)) {
     throw new Error('Invalid file path');
   }
+  if (!(await isManagedWritePath(filePath))) {
+    throw new Error('Path is outside the managed archive');
+  }
 
-  logger.log('[Main] delete-file called:', { filePath, isFolder });
+  logger.debug('[Main] delete-file called:', { filePath, isFolder });
 
   // ALWAYS check if it's a directory first using fs.stat
   // This is the most reliable way to determine if we need recursive delete
@@ -2271,6 +3000,11 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
+        // Soft delete in database
+        if (isDatabaseReady()) {
+          db!.deleteFile(filePath);
+        }
+        
         await fs.rm(filePath, { recursive: true, force: true });
         logger.log('[Main] Folder deleted successfully');
         return true;
@@ -2312,9 +3046,14 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      await fs.unlink(filePath);
-      logger.log('[Main] File deleted successfully');
-      return true;
+    // Soft delete in database
+    if (db) {
+      db.deleteFile(filePath);
+    }
+    
+    await fs.unlink(filePath);
+    logger.log('[Main] File deleted successfully');
+    return true;
     } catch (unlinkError) {
       const errorMessage = unlinkError instanceof Error ? unlinkError.message : String(unlinkError);
       const errorCode = isErrorWithCode(unlinkError) ? unlinkError.code : undefined;
@@ -2364,7 +3103,7 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
 
 // Move file to folder
 ipcMain.handle('move-file-to-folder', async (event, filePath: string, folderPath: string) => {
-  logger.log('[Main] move-file-to-folder called:', { filePath, folderPath });
+  logger.debug('[Main] move-file-to-folder called:', { filePath, folderPath });
   
   if (!isSafePath(filePath)) {
     logger.error('[Main] Invalid file path:', filePath);
@@ -2374,6 +3113,11 @@ ipcMain.handle('move-file-to-folder', async (event, filePath: string, folderPath
   if (!isSafePath(folderPath)) {
     logger.error('[Main] Invalid folder path:', folderPath);
     return { success: false, error: 'Invalid folder path' };
+  }
+
+  if (!(await isManagedWritePath(filePath)) || !(await isManagedWritePath(folderPath))) {
+    logger.error('[Main] move-file-to-folder: path outside managed archive');
+    return { success: false, error: 'Path is outside the managed archive' };
   }
 
   try {
@@ -2403,7 +3147,24 @@ ipcMain.handle('move-file-to-folder', async (event, filePath: string, folderPath
 
     // Move the file
     await fs.rename(filePath, destPath);
-    logger.log('[Main] File moved successfully:', { from: filePath, to: destPath });
+    logger.debug('[Main] File moved successfully:', { from: filePath, to: destPath });
+    
+    // Update database
+    if (isDatabaseReady()) {
+      // Find the case that contains the destination folder
+      const casePath = await findCasePathFromPath(folderPath);
+      if (casePath) {
+        const caseRecord = db!.getCaseByPath(casePath);
+        if (caseRecord) {
+          const stats = await fs.stat(destPath);
+          db!.updateFile(filePath, {
+            case_id: caseRecord.id,
+            path: destPath,
+            local_modified_at: stats.mtime.getTime(),
+          });
+        }
+      }
+    }
 
     // If it's a PDF, also move/update thumbnail
     if (filePath.toLowerCase().endsWith('.pdf')) {
@@ -2454,6 +3215,9 @@ ipcMain.handle('rename-file', async (event, filePath: string, newName: string) =
   if (!isSafePath(filePath)) {
     throw new Error('Invalid file path');
   }
+  if (!(await isManagedWritePath(filePath))) {
+    throw new Error('Path is outside the managed archive');
+  }
 
   if (!newName || !newName.trim()) {
     throw new Error('New name cannot be empty');
@@ -2484,6 +3248,17 @@ ipcMain.handle('rename-file', async (event, filePath: string, newName: string) =
     }
 
     await fs.rename(filePath, newPath);
+    
+    // Update database
+    if (db) {
+      const stats = await fs.stat(newPath);
+      db.updateFile(filePath, {
+        name: newName.trim(),
+        path: newPath,
+        local_modified_at: stats.mtime.getTime(),
+      });
+    }
+    
     return { success: true, newPath };
   } catch (error) {
     throw new Error(`Failed to rename: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -2650,24 +3425,7 @@ ipcMain.handle('read-file-data', async (event, filePath: string) => {
   }
 
   try {
-    const data = await fs.readFile(filePath);
-    const base64 = data.toString('base64');
-    const ext = path.extname(filePath).toLowerCase();
-    
-    // Determine MIME type
-    let mimeType = 'application/octet-stream';
-    if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
-    else if (ext === '.png') mimeType = 'image/png';
-    else if (ext === '.gif') mimeType = 'image/gif';
-    else if (ext === '.pdf') mimeType = 'application/pdf';
-    else if (['.mp4'].includes(ext)) mimeType = 'video/mp4';
-    else if (['.webm'].includes(ext)) mimeType = 'video/webm';
-
-    return {
-      data: base64,
-      mimeType,
-      fileName: path.basename(filePath),
-    };
+    return await readFileDataPayload(filePath);
   } catch (error) {
     throw new Error(`Failed to read file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
@@ -2681,10 +3439,11 @@ ipcMain.handle('extract-pdf-from-archive', async (
     casePath: string;
     folderName: string;
     saveParentFile: boolean;
-    extractedPages: Array<{ pageNumber: number; imageData: string }>;
+    saveToZip: boolean;
+    extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
   }
 ) => {
-  const { pdfPath, casePath, folderName, saveParentFile, extractedPages } = options;
+  const { pdfPath, casePath, folderName, saveParentFile, saveToZip, extractedPages } = options;
 
   if (!isSafePath(pdfPath) || !isSafePath(casePath)) {
     throw new Error('Invalid path');
@@ -2695,47 +3454,181 @@ ipcMain.handle('extract-pdf-from-archive', async (
   }
 
   try {
-    const extractionFolder = path.join(casePath, folderName);
-    await fs.mkdir(extractionFolder, { recursive: true });
-
+    const parentPdfName = path.basename(pdfPath);
     const results: string[] = [];
 
-    // Save parent PDF if requested
-    if (saveParentFile) {
-      const parentFileName = path.basename(pdfPath);
-      const destPath = path.join(extractionFolder, parentFileName);
-      await fs.copyFile(pdfPath, destPath);
-      results.push(`Parent PDF saved: ${destPath}`);
-    }
+    if (saveToZip) {
+      // Create ZIP file in case folder
+      const zip = new JSZip();
+      const zipFolder = zip.folder(folderName);
 
-    // Save extracted pages
-    for (const page of extractedPages) {
-      // Detect image format from data URL (supports both PNG and JPEG)
-      const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
-      const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+      if (!zipFolder) {
+        throw new Error('Failed to create ZIP folder');
+      }
+
+      // Add parent PDF to ZIP if requested
+      if (saveParentFile) {
+        const pdfBuffer = await fs.readFile(pdfPath);
+        zipFolder.file(parentPdfName, pdfBuffer);
+      }
+
+      // Add all extracted pages to ZIP
+      for (const page of extractedPages) {
+        // Detect image format from data URL (supports both PNG and JPEG)
+        const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+        const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+        
+        let imageData: string;
+        
+        if (pngMatch) {
+          imageData = pngMatch[1];
+        } else if (jpegMatch) {
+          imageData = jpegMatch[1];
+        } else {
+          // Fallback: try to strip any data URL prefix
+          imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+        }
+        
+        const buffer = Buffer.from(imageData, 'base64');
+        // Use the provided fileName from the frontend
+        zipFolder.file(page.fileName, buffer);
+      }
+
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+      const zipPath = path.join(casePath, `${folderName}.zip`);
+      await fs.writeFile(zipPath, zipBuffer);
+      results.push(`ZIP file saved: ${zipPath}`);
+
+      return { success: true, messages: results, extractionFolder: casePath };
+    } else {
+      // Save individual files to folder
+      // Check if folder already exists in database (from migration or previous extraction)
+      let extractionFolder: string = path.join(casePath, folderName);
+      let folderExists = false;
       
-      let imageData: string;
-      let extension: string;
-      
-      if (pngMatch) {
-        imageData = pngMatch[1];
-        extension = 'png';
-      } else if (jpegMatch) {
-        imageData = jpegMatch[1];
-        extension = 'jpg';
-      } else {
-        // Fallback: try to strip any data URL prefix
-        imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
-        extension = 'png'; // Default to PNG for backward compatibility
+      if (isDatabaseReady()) {
+        // Try to find existing folder by name and parent PDF
+        const caseRecord = db!.getCaseByPath(casePath);
+        if (caseRecord) {
+          // Query database for all folders in this case (not just root-level)
+          const dbInstance = db!.getRawDatabase();
+          const allFoldersStmt = dbInstance.prepare(`
+            SELECT * FROM files 
+            WHERE case_id = ? AND deleted_at IS NULL AND is_folder = 1 AND name = ?
+          `);
+          const existingFolders = allFoldersStmt.all(caseRecord.id, folderName) as Array<File & { parent_pdf_name: string | null }>;
+          
+          // Check if any of these folders match the parent PDF
+          const matchingFolder = existingFolders.find(
+            (f: File) => f.parent_pdf_name && f.parent_pdf_name.toLowerCase() === parentPdfName.toLowerCase()
+          );
+          
+          if (matchingFolder) {
+            extractionFolder = matchingFolder.path;
+            folderExists = true;
+            logger.debug(`Using existing extraction folder: ${extractionFolder}`);
+          }
+        }
       }
       
-      const buffer = Buffer.from(imageData, 'base64');
-      const imagePath = path.join(extractionFolder, `page-${page.pageNumber}.${extension}`);
-      await fs.writeFile(imagePath, buffer);
-      results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
-    }
+      if (!folderExists) {
+        // Folder doesn't exist, create it
+        await fs.mkdir(extractionFolder, { recursive: true });
 
-    return { success: true, messages: results, extractionFolder };
+        // Store parent PDF metadata to link folder to PDF
+        const metadataPath = path.join(extractionFolder, '.parent-pdf');
+        await fs.writeFile(metadataPath, parentPdfName, 'utf8');
+        
+        // Add to database if ready
+        if (isDatabaseReady()) {
+          const caseRecord = db!.getCaseByPath(casePath);
+          if (caseRecord) {
+            const stats = await fs.stat(extractionFolder);
+            const folderId = db!.generateId(extractionFolder);
+            db!.createFile({
+              id: folderId,
+              case_id: caseRecord.id,
+              name: folderName,
+              path: extractionFolder,
+              size: 0,
+              type: 'other',
+              is_folder: 1,
+              folder_type: 'extraction',
+              parent_pdf_name: parentPdfName,
+              checksum: '',
+              local_modified_at: stats.mtime.getTime(),
+              created_at: stats.birthtime.getTime(),
+            });
+          }
+        }
+      }
+
+      // Save parent PDF if requested
+      if (saveParentFile) {
+        const destPath = path.join(extractionFolder, parentPdfName);
+        await fs.copyFile(pdfPath, destPath);
+        results.push(`Parent PDF saved: ${destPath}`);
+      }
+
+      // Save extracted pages
+      for (const page of extractedPages) {
+        // Detect image format from data URL (supports both PNG and JPEG)
+        const pngMatch = page.imageData.match(/^data:image\/png;base64,(.+)$/);
+        const jpegMatch = page.imageData.match(/^data:image\/jpeg;base64,(.+)$/);
+        
+        let imageData: string;
+        
+        if (pngMatch) {
+          imageData = pngMatch[1];
+        } else if (jpegMatch) {
+          imageData = jpegMatch[1];
+        } else {
+          // Fallback: try to strip any data URL prefix
+          imageData = page.imageData.replace(/^data:image\/[^;]+;base64,/, '');
+        }
+        
+        const buffer = Buffer.from(imageData, 'base64');
+        // Use the provided fileName from the frontend
+        const imagePath = path.join(extractionFolder, page.fileName);
+        await fs.writeFile(imagePath, buffer);
+        results.push(`Page ${page.pageNumber} saved: ${imagePath}`);
+        
+        // Add file to database if ready
+        if (isDatabaseReady()) {
+          const caseRecord = db!.getCaseByPath(casePath);
+          if (caseRecord) {
+            // Get folder ID
+            const folderRecord = db!.getFileByPath(extractionFolder);
+            if (folderRecord) {
+              const stats = await fs.stat(imagePath);
+              const fileId = db!.generateId(imagePath);
+              const fileType = detectFileTypeFromPath(imagePath);
+              const checksum = await db!.calculateChecksum(imagePath);
+              
+              // Check if file already exists in database
+              const existingFile = db!.getFileByPath(imagePath);
+              if (!existingFile) {
+                db!.createFile({
+                  id: fileId,
+                  case_id: caseRecord.id,
+                  name: page.fileName,
+                  path: imagePath,
+                  size: stats.size,
+                  type: fileType === 'audio' ? 'other' : fileType,
+                  is_folder: 0,
+                  parent_folder_id: folderRecord.id,
+                  checksum,
+                  local_modified_at: stats.mtime.getTime(),
+                  created_at: stats.birthtime.getTime(),
+                });
+              }
+            }
+          }
+        }
+      }
+
+      return { success: true, messages: results, extractionFolder };
+    }
   } catch (error) {
     throw new Error(`Failed to extract PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
@@ -2822,6 +3715,21 @@ async function getTextLibraryPath(): Promise<string> {
   return textLibraryPath;
 }
 
+// Get case notes folder path
+async function getCaseNotesPath(casePath: string): Promise<string> {
+  if (!isSafePath(casePath)) {
+    throw new Error('Invalid case path');
+  }
+  const notesPath = path.join(casePath, '.notes');
+  // Ensure directory exists
+  try {
+    await fs.mkdir(notesPath, { recursive: true });
+  } catch (error) {
+    logger.error('Failed to create case notes directory:', error);
+  }
+  return notesPath;
+}
+
 // List text files
 ipcMain.handle('list-text-files', async () => {
   try {
@@ -2904,6 +3812,9 @@ ipcMain.handle('save-text-file', async (event, filePath: string, content: string
     if (!isSafePath(filePath)) {
       throw new Error('Invalid file path');
     }
+    if (!(await isManagedWritePath(filePath))) {
+      throw new Error('Path is outside the managed archive');
+    }
     
     await fs.writeFile(filePath, content, 'utf8');
     return { success: true };
@@ -2919,12 +3830,86 @@ ipcMain.handle('delete-text-file', async (event, filePath: string) => {
     if (!isSafePath(filePath)) {
       throw new Error('Invalid file path');
     }
+    if (!(await isManagedWritePath(filePath))) {
+      throw new Error('Path is outside the managed archive');
+    }
     
     await fs.unlink(filePath);
     return { success: true };
   } catch (error) {
     logger.error('Failed to delete text file:', error);
     throw new Error(`Failed to delete text file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Case Notes Handlers
+
+// List case notes
+ipcMain.handle('list-case-notes', async (event, casePath: string) => {
+  try {
+    if (!isSafePath(casePath)) {
+      throw new Error('Invalid case path');
+    }
+    
+    const notesPath = await getCaseNotesPath(casePath);
+    const entries = await fs.readdir(notesPath, { withFileTypes: true });
+    
+    const files = await Promise.all(
+      entries
+        .filter(entry => entry.isFile() && !entry.name.startsWith('.'))
+        .map(async (entry) => {
+          const filePath = path.join(notesPath, entry.name);
+          try {
+            const stats = await fs.stat(filePath);
+            // Read first 200 characters for preview
+            let preview: string | undefined;
+            try {
+              const content = await fs.readFile(filePath, 'utf8');
+              preview = content.substring(0, 200).replace(/\n/g, ' ').trim();
+            } catch {
+              // Ignore preview errors
+            }
+            
+            return {
+              name: entry.name,
+              path: filePath,
+              size: stats.size,
+              modified: stats.mtimeMs,
+              preview,
+            };
+          } catch (error) {
+            logger.warn(`Failed to get stats for ${filePath}:`, error);
+            return null;
+          }
+        })
+    );
+    
+    return files.filter((f): f is NonNullable<typeof f> => f !== null);
+  } catch (error) {
+    logger.error('Failed to list case notes:', error);
+    throw new Error(`Failed to list case notes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Create case note
+ipcMain.handle('create-case-note', async (event, casePath: string, fileName: string, content: string) => {
+  try {
+    if (!isSafePath(casePath)) {
+      throw new Error('Invalid case path');
+    }
+    
+    const notesPath = await getCaseNotesPath(casePath);
+    const filePath = path.join(notesPath, fileName);
+    
+    if (!isSafePath(filePath)) {
+      throw new Error('Invalid file name');
+    }
+    
+    await fs.writeFile(filePath, content, 'utf8');
+    return filePath;
+  } catch (error) {
+    logger.error('Failed to create case note:', error);
+    throw new Error(`Failed to create case note: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 
@@ -2938,39 +3923,23 @@ ipcMain.handle('export-text-file', async (event, options: {
     const { content, format, filePath } = options;
     const textLibraryPath = await getTextLibraryPath();
     
-    // Extract plain text from HTML - remove tags and decode entities
-    let plainText = content
-      .replace(/<[^>]*>/g, '') // Remove HTML tags
-      .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
-      .replace(/&amp;/g, '&') // Decode HTML entities
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\s+/g, ' ') // Collapse whitespace
-      .trim();
-    
-    // Try to preserve line breaks from <br> and <p> tags
-    const textWithBreaks = content
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<p[^>]*>/gi, '')
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\n\s*\n/g, '\n') // Remove empty lines
-      .trim();
-    
-    const finalText = textWithBreaks || plainText;
+    if (format === 'pdf') {
+      return {
+        success: false,
+        error: 'PDF export is not yet supported',
+      };
+    }
+
+    const { exportPlainTextToDocx, htmlToExportPlainText, buildRtfContent } = await import('./utils/textExport.js');
+    const finalText = htmlToExportPlainText(content);
     
     let exportPath: string;
     let fileName: string;
     
     if (filePath) {
+      if (!isSafePath(filePath)) {
+        return { success: false, error: 'Invalid file path' };
+      }
       const ext = path.extname(filePath);
       fileName = path.basename(filePath, ext) + '.' + format;
       exportPath = path.join(path.dirname(filePath), fileName);
@@ -2987,31 +3956,10 @@ ipcMain.handle('export-text-file', async (event, options: {
       counter++;
     }
     
-    if (format === 'pdf') {
-      // For PDF export, save as plain text for now
-      // TODO: Add pdfkit library for proper PDF generation
-      await fs.writeFile(exportPath, finalText, 'utf8');
-      logger.warn('PDF export not fully implemented, saved as text file');
-    } else if (format === 'docx') {
-      // For DOCX, create a simple RTF file for now
-      // TODO: Add docx library for proper DOCX generation
-      const rtfContent = `{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}
-\\f0\\fs24 ${finalText.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\n/g, '\\par ')} }`;
-      const rtfPath = exportPath.replace(/\.docx$/i, '.rtf');
-      await fs.writeFile(rtfPath, rtfContent, 'utf8');
-      exportPath = rtfPath;
-      logger.warn('DOCX export not fully implemented, saved as RTF file');
+    if (format === 'docx') {
+      await exportPlainTextToDocx(finalText, exportPath);
     } else if (format === 'rtf') {
-      // Create RTF file with proper formatting
-      const escapedText = finalText
-        .replace(/\\/g, '\\\\') // Escape backslashes
-        .replace(/\{/g, '\\{') // Escape braces
-        .replace(/\}/g, '\\}') // Escape braces
-        .replace(/\n/g, '\\par '); // Convert newlines to RTF paragraph breaks
-      
-      const rtfContent = `{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}
-\\f0\\fs24 ${escapedText} }`;
-      await fs.writeFile(exportPath, rtfContent, 'utf8');
+      await fs.writeFile(exportPath, buildRtfContent(finalText), 'utf8');
     }
     
     return {
@@ -3020,35 +3968,160 @@ ipcMain.handle('export-text-file', async (event, options: {
     };
   } catch (error) {
     logger.error('Failed to export text file:', error);
-    // Fallback: save as plain text
-    try {
-      const textLibraryPath = await getTextLibraryPath();
-      const fallbackPath = path.join(textLibraryPath, `export_${Date.now()}.txt`);
-      const fallbackText = options.content
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .trim();
-      await fs.writeFile(fallbackPath, fallbackText, 'utf8');
-      return {
-        success: true,
-        filePath: fallbackPath,
-      };
-    } catch (fallbackError) {
-      throw new Error(`Failed to export text file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to export text file',
+    };
   }
 });
 
 // Create word editor window
 let wordEditorWindow: BrowserWindow | null = null;
 
+// Research workspace windows (Map / Transcript)
+let mapModuleWindow: BrowserWindow | null = null;
+let transcriptionModuleWindow: BrowserWindow | null = null;
+let fileConverterModuleWindow: BrowserWindow | null = null;
+let novelModuleWindow: BrowserWindow | null = null;
+
 // Create PDF audit window
 let pdfAuditWindow: BrowserWindow | null = null;
+
+// Create PDF extraction window
+let pdfExtractionWindow: BrowserWindow | null = null;
+
+function getElectronPreloadPath(): string {
+  if (isDev) {
+    return join(__dirname, 'preload.cjs');
+  }
+  const appPath = app.getAppPath();
+  return join(appPath, 'dist-electron', 'electron', 'preload.cjs');
+}
+
+function getResearchWorkspaceBounds(parent?: BrowserWindow | null) {
+  const parentBounds = parent && !parent.isDestroyed()
+    ? parent.getBounds()
+    : { x: 0, y: 0, width: 1400, height: 900 };
+  const display = screen.getDisplayMatching(parentBounds);
+  const workArea = display.workArea;
+  const width = Math.round(workArea.width * 0.92);
+  const height = Math.round(workArea.height * 0.92);
+  let x = workArea.x + Math.round((workArea.width - width) / 2);
+  let y = workArea.y + Math.round((workArea.height - height) / 2);
+
+  if (parent && !parent.isDestroyed()) {
+    const parentRight = parentBounds.x + parentBounds.width;
+    const besideX = parentRight + 24;
+    if (besideX + width <= workArea.x + workArea.width) {
+      x = besideX;
+      y = parentBounds.y;
+    }
+  }
+
+  return { x, y, width, height };
+}
+
+function getDialogParentWindow(event?: Electron.IpcMainInvokeEvent): BrowserWindow | null {
+  const senderWindow = event ? BrowserWindow.fromWebContents(event.sender) : null;
+  return senderWindow ?? BrowserWindow.getFocusedWindow() ?? mainWindow;
+}
+
+/**
+ * Applies deny-by-default navigation/window-open hardening to a window.
+ *
+ * The renderer only ever needs to load the app's own pages (the Vite dev server
+ * in development, or the packaged `index.html` in production). Any attempt to
+ * open a new window or navigate elsewhere is blocked; genuine external http(s)
+ * links are instead handed to the OS browser via `shell.openExternal`. This
+ * limits the blast radius if renderer content is ever compromised, without
+ * changing any in-app behavior.
+ */
+function applyWindowSecurity(win: BrowserWindow): void {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      void shell.openExternal(url).catch((err) => {
+        logger.warn('Failed to open external URL:', err);
+      });
+    } else {
+      logger.warn('Blocked window open for non-external URL:', url);
+    }
+    return { action: 'deny' };
+  });
+
+  win.webContents.on('will-navigate', (event, url) => {
+    const devServerBase = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+    const isDevServer = isDev && url.startsWith(devServerBase);
+    const isAppFile = url.startsWith('file://');
+    if (!isDevServer && !isAppFile) {
+      logger.warn('Blocked navigation to:', url);
+      event.preventDefault();
+    }
+  });
+}
+
+function createResearchWorkspaceWindow(options: {
+  title: string;
+  parent?: BrowserWindow | null;
+}): BrowserWindow {
+  const bounds = getResearchWorkspaceBounds(options.parent ?? mainWindow);
+  const win = new BrowserWindow({
+    ...bounds,
+    minWidth: 1000,
+    minHeight: 700,
+    backgroundColor: '#0f0f1e',
+    webPreferences: {
+      preload: getElectronPreloadPath(),
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: true,
+      devTools: isDev,
+    },
+    titleBarStyle: 'hiddenInset',
+    frame: true,
+    movable: true,
+    resizable: true,
+    show: false,
+    title: options.title,
+  });
+  applyWindowSecurity(win);
+  return win;
+}
+
+function sendJsonEventToWindow(
+  target: BrowserWindow | null,
+  eventName: string,
+  storageKey: string,
+  payload: unknown
+) {
+  if (!target || target.isDestroyed()) {
+    return;
+  }
+  const json = JSON.stringify(payload);
+  target.webContents
+    .executeJavaScript(
+      `(function() {
+        const data = ${json};
+        window[${JSON.stringify(storageKey)}] = data;
+        window.dispatchEvent(new CustomEvent(${JSON.stringify(eventName)}, { detail: data }));
+      })();`
+    )
+    .catch((err) => {
+      logger.error(`Failed to send ${eventName} to window:`, err);
+    });
+}
+
+function loadDetachedRoute(win: BrowserWindow, route: string) {
+  if (isDev) {
+    win.loadURL(getDevServerUrl(route)).catch((err) => {
+      logger.error(`Failed to load dev server for ${route}:`, err);
+    });
+  } else {
+    const appPath = app.getAppPath();
+    win.loadFile(join(appPath, 'dist', 'index.html'), { hash: route }).catch((err) => {
+      logger.error(`Failed to load file for ${route}:`, err);
+    });
+  }
+}
 
 // Track which window should receive audit progress updates
 // This allows progress to continue when detaching during an audit
@@ -3056,9 +4129,9 @@ let auditProgressTarget: Electron.WebContents | null = null;
 
 // Store pending audit result in case window is destroyed/reattached
 // This ensures results aren't lost during detach/reattach cycles
-let pendingAuditResult: { result: any; timestamp: number } | null = null;
+let pendingAuditResult: { result: RedactionAuditResult; timestamp: number } | null = null;
 
-ipcMain.handle('create-word-editor-window', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }) => {
+ipcMain.handle('create-word-editor-window', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }) => {
   try {
     if (wordEditorWindow && !wordEditorWindow.isDestroyed()) {
       wordEditorWindow.focus();
@@ -3091,10 +4164,12 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
       frame: true,
       show: false,
     });
+
+    applyWindowSecurity(wordEditorWindow);
     
     // Load the app
     if (isDev) {
-      wordEditorWindow.loadURL('http://localhost:5173?editor=detached').catch((err) => {
+      wordEditorWindow.loadURL(getDevServerUrl('editor=detached')).catch((err) => {
         logger.error('Failed to load dev server in word editor window:', err);
       });
     } else {
@@ -3109,12 +4184,12 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
     });
     
     // Handle window close with unsaved changes check
-    wordEditorWindow.on('close', async (event) => {
+    wordEditorWindow.on('close', async () => {
       if (!wordEditorWindow) return;
       
       try {
         // Check for unsaved changes by querying the renderer
-        const hasUnsavedChanges = await wordEditorWindow.webContents.executeJavaScript(`
+        await wordEditorWindow.webContents.executeJavaScript(`
           (function() {
             // Try to get the editor ref from the window
             // This is a fallback - the renderer should handle this via beforeunload
@@ -3146,9 +4221,9 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
             const data = {
               content: ${JSON.stringify(options.content)},
               filePath: ${options.filePath ? JSON.stringify(options.filePath) : 'null'},
-              viewState: ${JSON.stringify(viewState)}
+              viewState: ${JSON.stringify(viewState)},
+              casePath: ${options.casePath ? JSON.stringify(options.casePath) : 'null'}
             };
-            console.log('Main process: Dispatching word-editor-data event', data);
             // Store data in case listener isn't ready yet
             window.__wordEditorInitialData = data;
             const event = new CustomEvent('word-editor-data', {
@@ -3170,7 +4245,7 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
 });
 
 // Reattach word editor window
-ipcMain.handle('reattach-word-editor', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary' }) => {
+ipcMain.handle('reattach-word-editor', async (event, options: { content: string; filePath?: string | null; viewState?: 'editor' | 'library' | 'bookmarkLibrary'; casePath?: string | null }) => {
   try {
     // Get the window that sent the request (the detached editor window)
     const senderWindow = BrowserWindow.fromWebContents(event.sender);
@@ -3185,7 +4260,8 @@ ipcMain.handle('reattach-word-editor', async (event, options: { content: string;
             detail: {
               content: ${JSON.stringify(options.content)},
               filePath: ${options.filePath ? JSON.stringify(options.filePath) : 'null'},
-              viewState: ${JSON.stringify(viewState)}
+              viewState: ${JSON.stringify(viewState)},
+              casePath: ${options.casePath ? JSON.stringify(options.casePath) : 'null'}
             }
           });
           window.dispatchEvent(event);
@@ -3212,6 +4288,288 @@ ipcMain.handle('reattach-word-editor', async (event, options: { content: string;
   }
 });
 
+// Create Map research workspace window
+ipcMain.handle('create-map-window', async (_event, state: Record<string, unknown>) => {
+  try {
+    if (mapModuleWindow && !mapModuleWindow.isDestroyed()) {
+      mapModuleWindow.focus();
+      sendJsonEventToWindow(mapModuleWindow, 'map-module-data', '__mapModuleInitialData', state);
+      return { success: true };
+    }
+
+    mapModuleWindow = createResearchWorkspaceWindow({
+      title: 'Vault — Map',
+      parent: mainWindow,
+    });
+
+    loadDetachedRoute(mapModuleWindow, 'map=detached');
+
+    mapModuleWindow.once('ready-to-show', () => {
+      mapModuleWindow?.show();
+    });
+
+    mapModuleWindow.on('closed', () => {
+      mapModuleWindow = null;
+    });
+
+    mapModuleWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        sendJsonEventToWindow(mapModuleWindow, 'map-module-data', '__mapModuleInitialData', state);
+      }, 500);
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create map window:', error);
+    throw new Error(
+      `Failed to create map window: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+ipcMain.handle('reattach-map-module', async (event, state: Record<string, unknown>) => {
+  try {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      sendJsonEventToWindow(mainWindow, 'reattach-map-module-data', '__reattachMapModuleData', state);
+    }
+
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    if (mapModuleWindow === senderWindow) {
+      mapModuleWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach map module:', error);
+    throw new Error(
+      `Failed to reattach map module: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+// Create Transcript research workspace window
+ipcMain.handle('create-transcription-window', async (_event, state: Record<string, unknown>) => {
+  try {
+    if (transcriptionModuleWindow && !transcriptionModuleWindow.isDestroyed()) {
+      transcriptionModuleWindow.focus();
+      sendJsonEventToWindow(
+        transcriptionModuleWindow,
+        'transcription-module-data',
+        '__transcriptionModuleInitialData',
+        state
+      );
+      return { success: true };
+    }
+
+    transcriptionModuleWindow = createResearchWorkspaceWindow({
+      title: 'Vault — Transcript',
+      parent: mainWindow,
+    });
+
+    loadDetachedRoute(transcriptionModuleWindow, 'transcription=detached');
+
+    transcriptionModuleWindow.once('ready-to-show', () => {
+      transcriptionModuleWindow?.show();
+    });
+
+    transcriptionModuleWindow.on('closed', () => {
+      transcriptionModuleWindow = null;
+    });
+
+    transcriptionModuleWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        sendJsonEventToWindow(
+          transcriptionModuleWindow,
+          'transcription-module-data',
+          '__transcriptionModuleInitialData',
+          state
+        );
+      }, 500);
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create transcription window:', error);
+    throw new Error(
+      `Failed to create transcription window: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+ipcMain.handle('reattach-transcription-module', async (event, state: Record<string, unknown>) => {
+  try {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      sendJsonEventToWindow(
+        mainWindow,
+        'reattach-transcription-module-data',
+        '__reattachTranscriptionModuleData',
+        state
+      );
+    }
+
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    if (transcriptionModuleWindow === senderWindow) {
+      transcriptionModuleWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach transcription module:', error);
+    throw new Error(
+      `Failed to reattach transcription module: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+// Create File Converter research workspace window
+ipcMain.handle('create-file-converter-window', async (_event, state: Record<string, unknown>) => {
+  try {
+    if (fileConverterModuleWindow && !fileConverterModuleWindow.isDestroyed()) {
+      fileConverterModuleWindow.focus();
+      sendJsonEventToWindow(
+        fileConverterModuleWindow,
+        'file-converter-module-data',
+        '__fileConverterModuleInitialData',
+        state
+      );
+      return { success: true };
+    }
+
+    fileConverterModuleWindow = createResearchWorkspaceWindow({
+      title: 'Vault — File Converter',
+      parent: mainWindow,
+    });
+
+    loadDetachedRoute(fileConverterModuleWindow, 'file-converter=detached');
+
+    fileConverterModuleWindow.once('ready-to-show', () => {
+      fileConverterModuleWindow?.show();
+    });
+
+    fileConverterModuleWindow.on('closed', () => {
+      fileConverterModuleWindow = null;
+    });
+
+    fileConverterModuleWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        sendJsonEventToWindow(
+          fileConverterModuleWindow,
+          'file-converter-module-data',
+          '__fileConverterModuleInitialData',
+          state
+        );
+      }, 500);
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create file converter window:', error);
+    throw new Error(
+      `Failed to create file converter window: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+ipcMain.handle('reattach-file-converter-module', async (event, state: Record<string, unknown>) => {
+  try {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      sendJsonEventToWindow(
+        mainWindow,
+        'reattach-file-converter-module-data',
+        '__reattachFileConverterModuleData',
+        state
+      );
+    }
+
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    if (fileConverterModuleWindow === senderWindow) {
+      fileConverterModuleWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach file converter module:', error);
+    throw new Error(
+      `Failed to reattach file converter module: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+// Create Novel research workspace window
+ipcMain.handle('create-novel-window', async (_event, state: Record<string, unknown>) => {
+  try {
+    if (novelModuleWindow && !novelModuleWindow.isDestroyed()) {
+      novelModuleWindow.focus();
+      sendJsonEventToWindow(novelModuleWindow, 'novel-module-data', '__novelModuleInitialData', state);
+      return { success: true };
+    }
+
+    novelModuleWindow = createResearchWorkspaceWindow({
+      title: 'Vault — Novel',
+      parent: mainWindow,
+    });
+
+    loadDetachedRoute(novelModuleWindow, 'novel=detached');
+
+    novelModuleWindow.once('ready-to-show', () => {
+      novelModuleWindow?.show();
+    });
+
+    novelModuleWindow.on('closed', () => {
+      novelModuleWindow = null;
+    });
+
+    novelModuleWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        sendJsonEventToWindow(novelModuleWindow, 'novel-module-data', '__novelModuleInitialData', state);
+      }, 500);
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create novel window:', error);
+    throw new Error(
+      `Failed to create novel window: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+ipcMain.handle('reattach-novel-module', async (event, state: Record<string, unknown>) => {
+  try {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      sendJsonEventToWindow(mainWindow, 'reattach-novel-module-data', '__reattachNovelModuleData', state);
+    }
+
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    if (novelModuleWindow === senderWindow) {
+      novelModuleWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach novel module:', error);
+    throw new Error(
+      `Failed to reattach novel module: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
 // Create PDF audit window
 ipcMain.handle('create-pdf-audit-window', async (event, options: {
   pdfPath: string | null;
@@ -3222,7 +4580,7 @@ ipcMain.handle('create-pdf-audit-window', async (event, options: {
     includeSecurityAudit: boolean;
   };
   showSettings: boolean;
-  result: any | null;
+  result: RedactionAuditResult | null;
   isAuditing: boolean;
   progressMessage: string;
 }) => {
@@ -3269,10 +4627,12 @@ ipcMain.handle('create-pdf-audit-window', async (event, options: {
       show: false,
       title: 'PDF Audit',
     });
+
+    applyWindowSecurity(pdfAuditWindow);
     
     // Load the app
     if (isDev) {
-      pdfAuditWindow.loadURL('http://localhost:5173?audit=detached').catch((err) => {
+      pdfAuditWindow.loadURL(getDevServerUrl('audit=detached')).catch((err) => {
         logger.error('Failed to load dev server in PDF audit window:', err);
       });
     } else {
@@ -3325,7 +4685,6 @@ ipcMain.handle('create-pdf-audit-window', async (event, options: {
               isAuditing: ${JSON.stringify(options.isAuditing)},
               progressMessage: ${JSON.stringify(options.progressMessage)}
             };
-            console.log('Main process: Dispatching pdf-audit-data event', data);
             // Store data in case listener isn't ready yet
             window.__pdfAuditInitialData = data;
             const event = new CustomEvent('pdf-audit-data', {
@@ -3372,7 +4731,7 @@ ipcMain.handle('reattach-pdf-audit', async (event, options: {
     includeSecurityAudit: boolean;
   };
   showSettings: boolean;
-  result: any | null;
+  result: RedactionAuditResult | null;
   isAuditing: boolean;
   progressMessage: string;
 }) => {
@@ -3419,12 +4778,237 @@ ipcMain.handle('reattach-pdf-audit', async (event, options: {
   }
 });
 
-// Open bookmark in main window (from detached editor)
-ipcMain.handle('open-bookmark-in-main-window', async (event, options: { pdfPath: string; pageNumber: number }) => {
+// Create PDF extraction window
+ipcMain.handle('create-pdf-extraction-window', async (event, options: {
+  pdfPath: string | null;
+  settings: {
+    dpi: number;
+    quality: number;
+    format: 'png' | 'jpeg';
+    pageRange: 'all' | 'custom' | 'selected';
+    customPageRange: string;
+    colorSpace: 'rgb' | 'grayscale';
+    compressionLevel: number;
+  };
+  showSettings: boolean;
+  // Opaque payloads forwarded as-is (JSON-serialized) to the detached
+  // renderer window; main does not inspect their internal shape.
+  extractedPages: unknown[];
+  selectedPages: number[];
+  previewPage: unknown;
+  isExtracting: boolean;
+  progress: unknown;
+  error: string | null;
+  statusMessage: string;
+  caseFolderPath?: string | null;
+}) => {
   try {
-    // Get the window that sent the request (the detached editor window)
+    logger.info('create-pdf-extraction-window handler called', {
+      hasPdfPath: !!options.pdfPath,
+      extractedPagesCount: options.extractedPages?.length || 0,
+    });
+
+    if (pdfExtractionWindow && !pdfExtractionWindow.isDestroyed()) {
+      logger.info('PDF extraction window already exists, focusing it');
+      pdfExtractionWindow.focus();
+      return { success: true, existing: true };
+    }
+    
+    // Determine preload path
+    let preloadPath: string;
+    if (isDev) {
+      preloadPath = join(__dirname, 'preload.cjs');
+    } else {
+      const appPath = app.getAppPath();
+      preloadPath = join(appPath, 'dist-electron', 'electron', 'preload.cjs');
+    }
+    
+    pdfExtractionWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      minWidth: 900,
+      minHeight: 700,
+      backgroundColor: '#0f0f1e',
+      webPreferences: {
+        preload: preloadPath,
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: true,
+        devTools: isDev,
+      },
+      titleBarStyle: 'hiddenInset',
+      frame: true,
+      show: false,
+      title: 'PDF Extraction',
+    });
+
+    applyWindowSecurity(pdfExtractionWindow);
+    
+    // Load the app
+    if (isDev) {
+      pdfExtractionWindow.loadURL(getDevServerUrl('extraction=detached')).catch((err) => {
+        logger.error('Failed to load dev server in PDF extraction window:', err);
+      });
+    } else {
+      const appPath = app.getAppPath();
+      pdfExtractionWindow.loadFile(join(appPath, 'dist', 'index.html'), { hash: 'extraction=detached' }).catch((err) => {
+        logger.error('Failed to load file in PDF extraction window:', err);
+      });
+    }
+    
+    pdfExtractionWindow.once('ready-to-show', () => {
+      pdfExtractionWindow?.show();
+    });
+    
+    pdfExtractionWindow.on('closed', () => {
+      pdfExtractionWindow = null;
+    });
+    
+    // Send initial data to window after it loads
+    pdfExtractionWindow.webContents.once('did-finish-load', () => {
+      // Small delay to ensure React has mounted
+      setTimeout(() => {
+        logger.info('Sending pdf-extraction-data to detached window', {
+          hasPdfPath: !!options.pdfPath,
+          hasExtractedPages: options.extractedPages?.length || 0,
+          isExtracting: options.isExtracting,
+        });
+        pdfExtractionWindow?.webContents.executeJavaScript(`
+          (function() {
+            const data = {
+              pdfPath: ${options.pdfPath ? JSON.stringify(options.pdfPath) : 'null'},
+              settings: ${JSON.stringify(options.settings)},
+              showSettings: ${JSON.stringify(options.showSettings)},
+              extractedPages: ${JSON.stringify(options.extractedPages || [])},
+              selectedPages: ${JSON.stringify(options.selectedPages || [])},
+              previewPage: ${options.previewPage ? JSON.stringify(options.previewPage) : 'null'},
+              isExtracting: ${JSON.stringify(options.isExtracting)},
+              progress: ${options.progress ? JSON.stringify(options.progress) : 'null'},
+              error: ${options.error ? JSON.stringify(options.error) : 'null'},
+              statusMessage: ${JSON.stringify(options.statusMessage || '')},
+              caseFolderPath: ${options.caseFolderPath ? JSON.stringify(options.caseFolderPath) : 'null'}
+            };
+            // Store data in case listener isn't ready yet
+            window.__pdfExtractionInitialData = data;
+            const event = new CustomEvent('pdf-extraction-data', {
+              detail: data
+            });
+            window.dispatchEvent(event);
+          })();
+        `).catch((err) => {
+          logger.error('Failed to send data to PDF extraction window:', err);
+        });
+      }, 500);
+    });
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to create PDF extraction window:', error);
+    throw new Error(`Failed to create PDF extraction window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Reattach PDF extraction window
+ipcMain.handle('reattach-pdf-extraction', async (event, options: {
+  pdfPath: string | null;
+  settings: {
+    dpi: number;
+    quality: number;
+    format: 'png' | 'jpeg';
+    pageRange: 'all' | 'custom' | 'selected';
+    customPageRange: string;
+    colorSpace: 'rgb' | 'grayscale';
+    compressionLevel: number;
+  };
+  showSettings: boolean;
+  // Opaque payloads forwarded as-is (JSON-serialized) to the detached
+  // renderer window; main does not inspect their internal shape.
+  extractedPages: unknown[];
+  selectedPages: number[];
+  previewPage: unknown;
+  isExtracting: boolean;
+  progress: unknown;
+  error: string | null;
+  statusMessage: string;
+  caseFolderPath?: string | null;
+}) => {
+  try {
+    // Get the window that sent the request (the detached extraction window)
     const senderWindow = BrowserWindow.fromWebContents(event.sender);
     
+    // Send data to main window to reopen the modal
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const reattachData = {
+        pdfPath: options.pdfPath,
+        settings: options.settings,
+        showSettings: options.showSettings,
+        extractedPages: options.extractedPages || [],
+        selectedPages: options.selectedPages || [],
+        previewPage: options.previewPage || null,
+        isExtracting: options.isExtracting,
+        progress: options.progress,
+        error: options.error,
+        statusMessage: options.statusMessage || '',
+        caseFolderPath: options.caseFolderPath || null
+      };
+
+      logger.info('Reattaching PDF extraction window', {
+        hasPdfPath: !!reattachData.pdfPath,
+        extractedPagesCount: reattachData.extractedPages.length,
+        selectedPagesCount: reattachData.selectedPages.length,
+        hasPreviewPage: !!reattachData.previewPage,
+        hasCaseFolderPath: !!reattachData.caseFolderPath,
+      });
+
+      // Store data globally first so modal can access it when it mounts
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const data = {
+            pdfPath: ${reattachData.pdfPath ? JSON.stringify(reattachData.pdfPath) : 'null'},
+            settings: ${JSON.stringify(reattachData.settings)},
+            showSettings: ${JSON.stringify(reattachData.showSettings)},
+            extractedPages: ${JSON.stringify(reattachData.extractedPages)},
+            selectedPages: ${JSON.stringify(reattachData.selectedPages)},
+            previewPage: ${reattachData.previewPage ? JSON.stringify(reattachData.previewPage) : 'null'},
+            isExtracting: ${JSON.stringify(reattachData.isExtracting)},
+            progress: ${reattachData.progress ? JSON.stringify(reattachData.progress) : 'null'},
+            error: ${reattachData.error ? JSON.stringify(reattachData.error) : 'null'},
+            statusMessage: ${JSON.stringify(reattachData.statusMessage)},
+            caseFolderPath: ${reattachData.caseFolderPath ? JSON.stringify(reattachData.caseFolderPath) : 'null'}
+          };
+          // Store data globally for modal to access when it mounts
+          window.__reattachPdfExtractionData = data;
+          // Dispatch event for existing listeners
+          const event = new CustomEvent('reattach-pdf-extraction-data', {
+            detail: data
+          });
+          window.dispatchEvent(event);
+        })();
+      `).catch((err) => {
+        logger.error('Failed to send reattach data to main window:', err);
+      });
+    }
+
+    // Close the detached window (the one that sent the request)
+    if (senderWindow && senderWindow !== mainWindow) {
+      senderWindow.close();
+    }
+    
+    // Also clear the pdfExtractionWindow reference if it matches
+    if (pdfExtractionWindow === senderWindow) {
+      pdfExtractionWindow = null;
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to reattach PDF extraction window:', error);
+    throw new Error(`Failed to reattach PDF extraction window: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Open bookmark in main window (from detached editor)
+ipcMain.handle('open-bookmark-in-main-window', async (_event, options: { pdfPath: string; pageNumber: number }) => {
+  try {
     // Send bookmark data to main window
     if (mainWindow && !mainWindow.isDestroyed()) {
       // Focus the main window
@@ -3452,6 +5036,975 @@ ipcMain.handle('open-bookmark-in-main-window', async (event, options: { pdfPath:
     throw new Error(`Failed to open bookmark in main window: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
+
+// Map (Research Timeline) handlers
+ipcMain.handle('list-maps', async () => {
+  try {
+    return await mapStorage.listAllMaps();
+  } catch (error) {
+    logger.error('Failed to list maps:', error);
+    throw new Error(`Failed to list maps: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('list-case-maps', async (event, casePath: string) => {
+  try {
+    return await mapStorage.listCaseMaps(casePath);
+  } catch (error) {
+    logger.error('Failed to list case maps:', error);
+    throw new Error(`Failed to list case maps: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('create-map', async (event, title: string, casePath?: string | null) => {
+  try {
+    return await mapStorage.createMap(title, casePath ?? null);
+  } catch (error) {
+    logger.error('Failed to create map:', error);
+    throw new Error(`Failed to create map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('read-map', async (event, mapFolderPath: string) => {
+  try {
+    return await mapStorage.readMapDocument(mapFolderPath);
+  } catch (error) {
+    logger.error('Failed to read map:', error);
+    throw new Error(`Failed to read map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('save-map', async (event, document: mapStorage.MapDocumentStored) => {
+  try {
+    return await mapStorage.saveMapDocument(document);
+  } catch (error) {
+    logger.error('Failed to save map:', error);
+    throw new Error(`Failed to save map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('delete-map', async (event, mapFolderPath: string) => {
+  try {
+    await mapStorage.deleteMap(mapFolderPath);
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to delete map:', error);
+    throw new Error(`Failed to delete map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('rename-map', async (event, mapFolderPath: string, newTitle: string) => {
+  try {
+    return await mapStorage.renameMap(mapFolderPath, newTitle);
+  } catch (error) {
+    logger.error('Failed to rename map:', error);
+    throw new Error(`Failed to rename map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('select-map-attachments', async (event) => {
+  const parentWindow = getDialogParentWindow(event);
+  if (!parentWindow) return [];
+
+  parentWindow.focus();
+
+  const result = await dialog.showOpenDialog(parentWindow, {
+    title: 'Select Files for Block',
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return [];
+  }
+  return result.filePaths.filter((p) => isSafePath(p));
+});
+
+ipcMain.handle(
+  'copy-map-attachment-to-assets',
+  async (event, mapFolderPath: string, sourcePath: string, attachmentId: string) => {
+    try {
+      return await mapStorage.copyAttachmentToMapAssets(mapFolderPath, sourcePath, attachmentId);
+    } catch (error) {
+      logger.error('Failed to copy map attachment:', error);
+      throw new Error(
+        `Failed to copy attachment: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+);
+
+ipcMain.handle('export-map-to-directory', async (event, mapFolderPath: string, destDirectory: string) => {
+  try {
+    const exportPath = await mapStorage.exportMapToDirectory(mapFolderPath, destDirectory);
+    return { success: true, exportPath };
+  } catch (error) {
+    logger.error('Failed to export map to directory:', error);
+    throw new Error(
+      `Failed to export map: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+});
+
+ipcMain.handle(
+  'export-map-png',
+  async (
+    event,
+    options: { mapFolderPath: string; pngBase64: string; destFilePath?: string }
+  ) => {
+    try {
+      const filePath = await mapStorage.saveMapPng(
+        options.mapFolderPath,
+        options.pngBase64,
+        options.destFilePath
+      );
+      return { success: true, filePath };
+    } catch (error) {
+      logger.error('Failed to export map PNG:', error);
+      throw new Error(
+        `Failed to export PNG: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+);
+
+// Novel handlers
+ipcMain.handle('list-novels', async () => {
+  try {
+    return await novelStorage.listAllNovels();
+  } catch (error) {
+    logger.error('Failed to list novels:', error);
+    throw new Error(`Failed to list novels: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('list-case-novels', async (_event, casePath: string) => {
+  try {
+    return await novelStorage.listCaseNovels(casePath);
+  } catch (error) {
+    logger.error('Failed to list case novels:', error);
+    throw new Error(`Failed to list case novels: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('create-novel', async (_event, title: string, casePath?: string | null, bookSizeId?: string | null) => {
+  try {
+    return await novelStorage.createNovel(title, casePath ?? null, bookSizeId ?? null);
+  } catch (error) {
+    logger.error('Failed to create novel:', error);
+    throw new Error(`Failed to create novel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('read-novel', async (_event, novelFolderPath: string) => {
+  try {
+    return await novelStorage.readNovelDocument(novelFolderPath);
+  } catch (error) {
+    logger.error('Failed to read novel:', error);
+    throw new Error(`Failed to read novel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('save-novel', async (_event, document: novelStorage.NovelDocumentStored) => {
+  try {
+    return await novelStorage.saveNovelDocument(document);
+  } catch (error) {
+    logger.error('Failed to save novel:', error);
+    throw new Error(`Failed to save novel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('delete-novel', async (_event, novelFolderPath: string) => {
+  try {
+    await novelStorage.deleteNovel(novelFolderPath);
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to delete novel:', error);
+    throw new Error(`Failed to delete novel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('move-novel-to-case', async (_event, novelFolderPath: string, casePath: string) => {
+  try {
+    return await novelStorage.moveNovelToCase(novelFolderPath, casePath);
+  } catch (error) {
+    logger.error('Failed to move novel to case:', error);
+    throw new Error(`Failed to move novel to case: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('move-novel-to-library', async (_event, novelFolderPath: string) => {
+  try {
+    return await novelStorage.moveNovelToLibrary(novelFolderPath);
+  } catch (error) {
+    logger.error('Failed to move novel to library:', error);
+    throw new Error(`Failed to move novel to library: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle(
+  'copy-novel-asset-to-novel',
+  async (_event, novelFolderPath: string, sourcePath: string, assetId: string) => {
+    try {
+      return await novelStorage.copyNovelAssetToNovel(novelFolderPath, sourcePath, assetId);
+    } catch (error) {
+      logger.error('Failed to copy novel asset:', error);
+      throw new Error(`Failed to copy asset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+);
+
+ipcMain.handle(
+  'write-novel-asset-from-data-url',
+  async (_event, novelFolderPath: string, relativePath: string, dataUrl: string) => {
+    try {
+      await novelStorage.writeNovelAssetFromDataUrl(novelFolderPath, relativePath, dataUrl);
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to write novel asset:', error);
+      throw new Error(`Failed to write asset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+);
+
+ipcMain.handle('export-novel-pdf', async (_event, novelFolderPath: string, destFilePath: string) => {
+  try {
+    const filePath = await novelStorage.exportNovelToPdf(novelFolderPath, destFilePath);
+    return { success: true, filePath };
+  } catch (error) {
+    logger.error('Failed to export novel PDF:', error);
+    throw new Error(`Failed to export PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('export-novel-html', async (_event, novelFolderPath: string, destDirectory: string) => {
+  try {
+    const exportPath = await novelStorage.exportNovelToHtml(novelFolderPath, destDirectory);
+    return { success: true, exportPath };
+  } catch (error) {
+    logger.error('Failed to export novel HTML:', error);
+    throw new Error(`Failed to export HTML: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('export-novel-docx', async (_event, novelFolderPath: string, destFilePath: string) => {
+  try {
+    const filePath = await novelStorage.exportNovelToDocx(novelFolderPath, destFilePath);
+    return { success: true, filePath };
+  } catch (error) {
+    logger.error('Failed to export novel DOCX:', error);
+    throw new Error(`Failed to export DOCX: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+ipcMain.handle('export-novel-epub', async (_event, novelFolderPath: string, destFilePath: string) => {
+  try {
+    const filePath = await novelStorage.exportNovelToEpub(novelFolderPath, destFilePath);
+    return { success: true, filePath };
+  } catch (error) {
+    logger.error('Failed to export novel EPUB:', error);
+    throw new Error(`Failed to export EPUB: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Transcription handlers
+ipcMain.handle('get-transcription-engine-status', async () => {
+  try {
+    return await transcriptionEngine.getStatus();
+  } catch (error) {
+    logger.error('Failed to get transcription engine status:', error);
+    throw new Error(
+      `Failed to get transcription engine status: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('start-transcription-engine', async () => {
+  try {
+    await transcriptionEngine.ensureStarted();
+    return await transcriptionEngine.getStatus();
+  } catch (error) {
+    logger.error('Failed to start transcription engine:', error);
+    throw new Error(
+      `Failed to start transcription engine: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('stop-transcription-engine', async () => {
+  try {
+    await transcriptionEngine.stop();
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to stop transcription engine:', error);
+    throw new Error(
+      `Failed to stop transcription engine: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('list-transcription-models', async () => {
+  try {
+    return await transcriptionEngine.listModels();
+  } catch (error) {
+    logger.error('Failed to list transcription models:', error);
+    throw new Error(
+      `Failed to list transcription models: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('download-transcription-model', async (_event, modelId: string) => {
+  try {
+    if (typeof modelId !== 'string' || !modelId.trim()) {
+      throw new Error('A model id is required to download a transcription model.');
+    }
+    return await transcriptionEngine.downloadModel(modelId.trim());
+  } catch (error) {
+    logger.error('Failed to download transcription model:', error);
+    throw new Error(
+      `Failed to download transcription model: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('select-transcription-media', async () => {
+  if (!mainWindow) return [];
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Media to Transcribe',
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      {
+        name: 'Audio & Video',
+        extensions: [
+          'aac',
+          'amr',
+          'asf',
+          'avi',
+          'flac',
+          'm4a',
+          'mkv',
+          'mp3',
+          'mp4',
+          'ogg',
+          'opus',
+          'wav',
+          'webm',
+          'wma',
+        ],
+      },
+    ],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return [];
+  }
+
+  return result.filePaths.filter((filePath) => {
+    if (!isSafePath(filePath)) return false;
+    const type = detectFileTypeFromPath(filePath);
+    return type === 'audio' || type === 'video';
+  });
+});
+
+ipcMain.handle('list-transcriptions', async () => {
+  try {
+    return await transcriptionStorage.listAllTranscriptions();
+  } catch (error) {
+    logger.error('Failed to list transcriptions:', error);
+    throw new Error(
+      `Failed to list transcriptions: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle('list-case-transcriptions', async (event, casePath: string) => {
+  try {
+    return await transcriptionStorage.listCaseTranscriptions(casePath);
+  } catch (error) {
+    logger.error('Failed to list case transcriptions:', error);
+    throw new Error(
+      `Failed to list case transcriptions: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    );
+  }
+});
+
+ipcMain.handle(
+  'create-transcription',
+  async (
+    event,
+    title: string,
+    casePath?: string | null,
+    initialSourcePath?: string | null
+  ) => {
+    try {
+      const doc = await transcriptionStorage.createTranscription(
+        title,
+        casePath ?? null
+      );
+
+      if (!initialSourcePath) {
+        return doc;
+      }
+
+      const archiveDrive = await getArchiveDrive();
+      const normalizedArchiveDrive = archiveDrive
+        ? path.normalize(archiveDrive).toLowerCase()
+        : null;
+      const normalizedSourcePath = path.normalize(initialSourcePath).toLowerCase();
+      const isVaultSource =
+        !!normalizedArchiveDrive &&
+        normalizedSourcePath.startsWith(normalizedArchiveDrive);
+      const sourceCasePath =
+        (await findCasePathFromPath(initialSourcePath)) ?? casePath ?? null;
+      const sourceId = randomUUID();
+      let source: transcriptionStorage.TranscriptionSourceStored = {
+        id: sourceId,
+        fileName: path.basename(initialSourcePath),
+        originalPath: initialSourcePath,
+        mediaType: transcriptionStorage.detectTranscriptionMediaType(initialSourcePath),
+        origin: isVaultSource ? 'vault' : 'local',
+        casePath: sourceCasePath,
+      };
+
+      if (!isVaultSource) {
+        const copied = await transcriptionStorage.copySourceToTranscriptionAssets(
+          doc.transcriptionFolderPath,
+          initialSourcePath,
+          sourceId
+        );
+        source = {
+          ...source,
+          storedPath: copied.storedPath,
+          relativePath: copied.relativePath,
+        };
+      }
+
+      const nextDoc = {
+        ...doc,
+        sources: [source],
+      };
+      return await transcriptionStorage.saveTranscriptionDocument(nextDoc);
+    } catch (error) {
+      logger.error('Failed to create transcription:', error);
+      throw new Error(
+        `Failed to create transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'read-transcription',
+  async (event, transcriptionFolderPath: string) => {
+    try {
+      return await transcriptionStorage.readTranscriptionDocument(
+        transcriptionFolderPath
+      );
+    } catch (error) {
+      logger.error('Failed to read transcription:', error);
+      throw new Error(
+        `Failed to read transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'save-transcription',
+  async (
+    event,
+    document: transcriptionStorage.TranscriptionDocumentStored
+  ) => {
+    try {
+      return await transcriptionStorage.saveTranscriptionDocument(document);
+    } catch (error) {
+      logger.error('Failed to save transcription:', error);
+      throw new Error(
+        `Failed to save transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'delete-transcription',
+  async (event, transcriptionFolderPath: string) => {
+    try {
+      await transcriptionStorage.deleteTranscription(transcriptionFolderPath);
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to delete transcription:', error);
+      throw new Error(
+        `Failed to delete transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'rename-transcription',
+  async (event, transcriptionFolderPath: string, newTitle: string) => {
+    try {
+      return await transcriptionStorage.renameTranscription(
+        transcriptionFolderPath,
+        newTitle
+      );
+    } catch (error) {
+      logger.error('Failed to rename transcription:', error);
+      throw new Error(
+        `Failed to rename transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'copy-transcription-source-to-assets',
+  async (event, transcriptionFolderPath: string, sourcePath: string, sourceId: string) => {
+    try {
+      return await transcriptionStorage.copySourceToTranscriptionAssets(
+        transcriptionFolderPath,
+        sourcePath,
+        sourceId
+      );
+    } catch (error) {
+      logger.error('Failed to copy transcription source:', error);
+      throw new Error(
+        `Failed to copy transcription source: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'run-transcription',
+  async (
+    event,
+    options: {
+      transcriptionFolderPath: string;
+      sourcePath: string;
+      casePath?: string | null;
+      title?: string;
+      settings?: Partial<transcriptionStorage.TranscriptionEngineSettingsStored>;
+    }
+  ) => {
+    try {
+      let doc = await transcriptionStorage.readTranscriptionDocument(
+        options.transcriptionFolderPath
+      );
+
+      const archiveDrive = await getArchiveDrive();
+      const normalizedArchiveDrive = archiveDrive
+        ? path.normalize(archiveDrive).toLowerCase()
+        : null;
+      const normalizedSourcePath = path.normalize(options.sourcePath).toLowerCase();
+      const isVaultSource =
+        !!normalizedArchiveDrive &&
+        normalizedSourcePath.startsWith(normalizedArchiveDrive);
+      const linkedCasePath =
+        options.casePath ??
+        doc.casePath ??
+        (await findCasePathFromPath(options.sourcePath)) ??
+        null;
+      const sourceCasePath = (await findCasePathFromPath(options.sourcePath)) ?? linkedCasePath;
+
+      const nextSettings = {
+        ...doc.settings,
+        ...options.settings,
+      };
+
+      let source =
+        doc.sources.find(
+          (candidate) =>
+            candidate.originalPath === options.sourcePath ||
+            candidate.storedPath === options.sourcePath
+        ) ?? null;
+
+      if (!source) {
+        source = {
+          id: randomUUID(),
+          fileName: path.basename(options.sourcePath),
+          originalPath: options.sourcePath,
+          mediaType: transcriptionStorage.detectTranscriptionMediaType(
+            options.sourcePath
+          ),
+          origin: isVaultSource ? 'vault' : 'local',
+          casePath: sourceCasePath,
+        };
+      }
+
+      if (!isVaultSource && !source.storedPath) {
+        const copied = await transcriptionStorage.copySourceToTranscriptionAssets(
+          doc.transcriptionFolderPath,
+          options.sourcePath,
+          source.id
+        );
+        source = {
+          ...source,
+          storedPath: copied.storedPath,
+          relativePath: copied.relativePath,
+        };
+      }
+
+      const nextSources = [
+        source,
+        ...doc.sources.filter((candidate) => candidate.id !== source?.id),
+      ];
+
+      doc = await transcriptionStorage.saveTranscriptionDocument({
+        ...doc,
+        title: options.title?.trim() || doc.title,
+        casePath: linkedCasePath,
+        settings: nextSettings,
+        sources: nextSources,
+        status: 'processing',
+        progress: {
+          stage: 'booting',
+          current: 0,
+          total: 1,
+          percentage: 5,
+          statusMessage: 'Starting Vault transcription engine...',
+        },
+        lastError: undefined,
+      });
+
+      const sourcePathToProcess = source.storedPath ?? source.originalPath;
+      const precision =
+        nextSettings.precision ||
+        (nextSettings.model.includes(' - ')
+          ? nextSettings.model.split(' - ').slice(1).join(' - ')
+          : 'float32');
+      const response = await transcriptionEngine.transcribeMedia({
+        sourcePath: sourcePathToProcess,
+        model: nextSettings.model,
+        precision,
+        device: nextSettings.device,
+        outputFormat: nextSettings.outputFormat,
+        includeTimestamps: nextSettings.includeTimestamps,
+        segmentLength: nextSettings.segmentLength,
+        segmentDuration: nextSettings.segmentDuration,
+      });
+
+      const outputs = await transcriptionStorage.writeTranscriptOutputs(
+        doc.transcriptionFolderPath,
+        response.text,
+        response.segments
+      );
+
+      return await transcriptionStorage.saveTranscriptionDocument({
+        ...doc,
+        settings: {
+          ...nextSettings,
+          precision,
+        },
+        transcriptText: response.text,
+        transcriptFilePath: outputs.transcriptFilePath,
+        segments: response.segments,
+        segmentsFilePath: outputs.segmentsFilePath,
+        status: 'completed',
+        progress: {
+          stage: 'completed',
+          current: 1,
+          total: 1,
+          percentage: 100,
+          statusMessage: `Transcription completed in ${response.processing_time_seconds}s`,
+        },
+        summary: response.text,
+        lastError: undefined,
+      });
+    } catch (error) {
+      logger.error('Failed to run transcription:', error);
+
+      try {
+        const currentDocument = await transcriptionStorage.readTranscriptionDocument(
+          options.transcriptionFolderPath
+        );
+        const message =
+          error instanceof Error ? error.message : 'Unknown transcription error';
+        return await transcriptionStorage.saveTranscriptionDocument({
+          ...currentDocument,
+          status: message.toLowerCase().includes('cancel')
+            ? 'cancelled'
+            : 'failed',
+          progress: {
+            stage: message.toLowerCase().includes('cancelled')
+              ? 'cancelled'
+              : 'failed',
+            current: 0,
+            total: 1,
+            percentage: 0,
+            statusMessage: message,
+          },
+          lastError: message,
+        });
+      } catch (nestedError) {
+        logger.error('Failed to persist transcription failure state:', nestedError);
+      }
+
+      throw new Error(
+        `Failed to run transcription: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+ipcMain.handle(
+  'cancel-transcription-job',
+  async (event, transcriptionFolderPath?: string) => {
+    try {
+      await transcriptionEngine.cancelTranscription();
+
+      if (transcriptionFolderPath) {
+        const doc = await transcriptionStorage.readTranscriptionDocument(
+          transcriptionFolderPath
+        );
+        await transcriptionStorage.saveTranscriptionDocument({
+          ...doc,
+          status: 'cancelled',
+          progress: {
+            stage: 'cancelled',
+            current: 0,
+            total: 1,
+            percentage: 0,
+            statusMessage: 'Cancellation requested',
+          },
+          lastError: 'Cancellation requested',
+        });
+      }
+
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to cancel transcription job:', error);
+      throw new Error(
+        `Failed to cancel transcription job: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+);
+
+// File Converter IPC
+ipcMain.handle('get-converter-capabilities', async () => {
+  return getConverterCapabilities();
+});
+
+ipcMain.handle(
+  'convert-file',
+  async (
+    event,
+    options: FileConverterOptions & {
+      renderedPages?: Array<{ pageNumber: number; imageData: string }>;
+    }
+  ) => {
+    const sender = event.sender;
+    const result = await convertFile(options, (progress) => {
+      if (!sender.isDestroyed()) {
+        sender.send('file-converter-progress', progress);
+      }
+    });
+    return result;
+  }
+);
+
+ipcMain.handle('cancel-file-conversion', async () => {
+  cancelActiveFileConversion();
+  return { success: true };
+});
+
+ipcMain.handle('select-converter-file', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      {
+        name: 'Media & Documents',
+        extensions: [
+          'png',
+          'jpg',
+          'jpeg',
+          'webp',
+          'tiff',
+          'tif',
+          'gif',
+          'pdf',
+          'mp4',
+          'mov',
+          'mkv',
+          'webm',
+          'avi',
+        ],
+      },
+    ],
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+
+ipcMain.handle(
+  'save-converted-file-to-case',
+  async (_event, casePath: string, sourceOutputPath: string, preferredName?: string) => {
+    if (!isSafePath(casePath) || !isSafePath(sourceOutputPath)) {
+      return { success: false, error: 'Invalid path' };
+    }
+
+    try {
+      const fileName = preferredName ?? path.basename(sourceOutputPath);
+      const destPath = path.join(casePath, fileName);
+
+      try {
+        await fs.access(destPath);
+        return { success: false, error: 'A file with this name already exists in the case' };
+      } catch (error) {
+        const errorCode = isErrorWithCode(error) ? error.code : undefined;
+        if (errorCode !== 'ENOENT') {
+          throw error;
+        }
+      }
+
+      await fs.copyFile(sourceOutputPath, destPath);
+
+      if (isDatabaseReady()) {
+        const caseRecord = db!.getCaseByPath(casePath);
+        if (caseRecord) {
+          const stats = await fs.stat(destPath);
+          const fileId = db!.generateId(destPath);
+          const fileType = detectFileTypeFromPath(destPath);
+          const checksum = await db!.calculateChecksum(destPath);
+          db!.createFile({
+            id: fileId,
+            case_id: caseRecord.id,
+            name: fileName,
+            path: destPath,
+            size: stats.size,
+            type: fileType === 'audio' ? 'other' : fileType,
+            is_folder: 0,
+            checksum,
+            local_modified_at: stats.mtime.getTime(),
+            created_at: stats.birthtime.getTime(),
+          });
+        }
+      }
+
+      return { success: true, savedPath: destPath };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to save file to case',
+      };
+    }
+  }
+);
+
+ipcMain.handle(
+  'replace-vault-file-with-conversion',
+  async (
+    _event,
+    options: {
+      casePath: string | null;
+      originalPath: string;
+      convertedPath: string;
+      newFileName?: string;
+    }
+  ) => {
+    const { casePath, originalPath, convertedPath, newFileName } = options;
+
+    if (!isSafePath(originalPath) || !isSafePath(convertedPath)) {
+      return { success: false, error: 'Invalid path' };
+    }
+
+    try {
+      const dir = path.dirname(originalPath);
+      const targetName = newFileName ?? path.basename(convertedPath);
+      const newPath = path.join(dir, targetName);
+
+      const backupDir = path.join(dir, '.vault-backup');
+      await fs.mkdir(backupDir, { recursive: true });
+      const backupPath = path.join(
+        backupDir,
+        `${path.basename(originalPath, path.extname(originalPath))}-${Date.now()}${path.extname(originalPath)}`
+      );
+
+      await fs.copyFile(originalPath, backupPath);
+
+      try {
+        await fs.unlink(originalPath);
+      } catch {
+        // original may already be gone
+      }
+
+      await fs.copyFile(convertedPath, newPath);
+
+      if (db) {
+        const stats = await fs.stat(newPath);
+        const fileType = detectFileTypeFromPath(newPath);
+        db.updateFile(originalPath, {
+          name: targetName,
+          path: newPath,
+          type: fileType === 'audio' ? 'other' : fileType,
+          size: stats.size,
+          local_modified_at: stats.mtime.getTime(),
+        });
+      }
+
+      const propagation = await propagateVaultFileReferenceUpdate(
+        casePath,
+        originalPath,
+        newPath,
+        targetName,
+        db
+      );
+
+      try {
+        await generateFileThumbnail(newPath);
+      } catch {
+        // best effort
+      }
+
+      return {
+        success: true,
+        newPath,
+        backupPath,
+        updatedMaps: propagation.updatedMaps,
+        updatedTranscriptions: propagation.updatedTranscriptions,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Replace failed',
+      };
+    }
+  }
+);
 
 // Close current window
 ipcMain.handle('close-window', async () => {

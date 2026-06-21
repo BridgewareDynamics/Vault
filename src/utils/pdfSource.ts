@@ -3,9 +3,25 @@
 // This prevents loading entire large files (e.g., 6GB) into memory
 
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { logger } from './logger';
+
+/** Align with IPC base64 crossover — strategy boundary, not a file-size cap. */
+export const STREAMING_THRESHOLD_BYTES = 64 * 1024 * 1024;
+
+const WARNING_THRESHOLD_BYTES = 500 * 1024 * 1024;
+
+export type CreateChunkedPDFSourceOptions = {
+  /** Skip the 500MB warning dialog (e.g. background thumbnail generation). */
+  skipWarning?: boolean;
+  /** Abort in-flight range chunk reads when the viewer switches files. */
+  signal?: AbortSignal;
+};
 
 // Track file paths and resources for cleanup when PDF is destroyed
-const filePathMap = new WeakMap<PDFDocumentProxy, string | { type: 'blob'; url: string } | { type: 'streaming'; filePath: string }>();
+const filePathMap = new WeakMap<
+  PDFDocumentProxy,
+  string | { type: 'blob'; url: string; filePath: string } | { type: 'streaming'; filePath: string }
+>();
 
 /**
  * Clean up any resources associated with a PDF document
@@ -15,8 +31,12 @@ export function cleanupPDFBlobUrl(pdf: PDFDocumentProxy): void {
   if (resource && typeof resource === 'object') {
     if (resource.type === 'blob') {
       URL.revokeObjectURL(resource.url);
+      if (window.electronAPI) {
+        window.electronAPI.closePDFFileHandle(resource.filePath).catch(() => {
+          // Ignore errors during cleanup
+        });
+      }
     } else if (resource.type === 'streaming') {
-      // Close file handle for streaming source
       if (window.electronAPI) {
         window.electronAPI.closePDFFileHandle(resource.filePath).catch(() => {
           // Ignore errors during cleanup
@@ -27,215 +47,246 @@ export function cleanupPDFBlobUrl(pdf: PDFDocumentProxy): void {
   filePathMap.delete(pdf);
 }
 
-// Removed StreamingPDFSource class - using optimized parallel loading instead
-
 /**
  * Create a streaming PDF source that loads chunks on-demand
- * This is essential for very large files (e.g., 6GB+) that would cause OOM if loaded entirely
- * 
- * @param filePath - Path to the PDF file
- * @param pdfjsLib - PDF.js library instance
- * @param showWarning - Optional callback to show warning dialog (returns promise that resolves when user decides)
- * @param onProgress - Optional callback to report loading progress (0-100)
  */
 export async function createChunkedPDFSource(
   filePath: string,
   pdfjsLib: typeof import('pdfjs-dist'),
-  showWarning?: (fileSize: number, memoryInfo: { totalMemory: number; freeMemory: number; usedMemory: number }) => Promise<boolean>,
-  onProgress?: (progress: number) => void
+  showWarning?: (
+    fileSize: number,
+    memoryInfo: { totalMemory: number; freeMemory: number; usedMemory: number },
+  ) => Promise<boolean>,
+  onProgress?: (progress: number) => void,
+  options?: CreateChunkedPDFSourceOptions,
 ): Promise<PDFDocumentProxy> {
   if (!window.electronAPI) {
     throw new Error('Electron API not available');
   }
 
-  // Get file size
+  if (options?.signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
   const fileSize = await window.electronAPI.getPDFFileSize(filePath);
-  
-  // For files larger than 500MB, show warning dialog
-  const WARNING_THRESHOLD = 500 * 1024 * 1024; // 500MB
-  
-  if (fileSize > WARNING_THRESHOLD && showWarning) {
-    // Get system memory info
+
+  if (fileSize > WARNING_THRESHOLD_BYTES && showWarning && !options?.skipWarning) {
     const memoryInfo = await window.electronAPI.getSystemMemory();
-    
-    // Show warning and wait for user decision
     const shouldContinue = await showWarning(fileSize, memoryInfo);
-    
+
     if (!shouldContinue) {
       throw new Error('User cancelled loading large PDF file');
     }
   }
-  
-  // For files larger than 100MB, use true streaming source
-  // For smaller files, use optimized blob loading
-  const STREAMING_THRESHOLD = 100 * 1024 * 1024; // 100MB
-  
-  if (fileSize > STREAMING_THRESHOLD) {
-    // Use true streaming for large files
-    return createStreamingPDFSource(filePath, fileSize, pdfjsLib, onProgress);
-  } else {
-    // For smaller files, use optimized blob method
-    return createBlobPDFSource(filePath, fileSize, pdfjsLib, onProgress);
+
+  if (options?.signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
   }
+
+  if (fileSize > STREAMING_THRESHOLD_BYTES) {
+    return createRangePDFSource(filePath, fileSize, pdfjsLib, onProgress, options?.signal);
+  }
+
+  return createBlobPDFSource(filePath, fileSize, pdfjsLib, onProgress, options?.signal);
 }
 
+type RangeTransportInstance = {
+  requestDataRange: (begin: number, end: number) => void;
+  onDataRange: (begin: number, chunk: ArrayBuffer | Uint8Array) => void;
+  onDataProgress: (loaded: number, total: number) => void;
+};
+
+type PDFJSWithRangeTransport = typeof import('pdfjs-dist') & {
+  PDFDataRangeTransport: new (length: number, initialData: Uint8Array) => RangeTransportInstance;
+};
+
 /**
- * Create an optimized streaming PDF source for large files
- * Uses parallel chunk loading with progressive assembly
- * This provides significant performance improvements while maintaining compatibility
+ * Load large PDFs via PDF.js range transport (lazy chunk reads over IPC).
  */
-async function createStreamingPDFSource(
+async function createRangePDFSource(
   filePath: string,
   fileSize: number,
   pdfjsLib: typeof import('pdfjs-dist'),
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<PDFDocumentProxy> {
-  // Adaptive chunk size based on file size for optimal performance
-  // Larger files use larger chunks to reduce IPC overhead
-  const CHUNK_SIZE = fileSize > 1024 * 1024 * 1024 
-    ? 50 * 1024 * 1024  // 50MB for very large files (>1GB)
-    : fileSize > 500 * 1024 * 1024
-    ? 20 * 1024 * 1024  // 20MB for large files (500MB-1GB)
-    : 10 * 1024 * 1024; // 10MB for moderately large files (100MB-500MB)
-  
-  const CONCURRENT_CHUNKS = 4; // Load 4 chunks in parallel for better throughput
-  const chunks: Array<{ offset: number; data: Uint8Array }> = [];
-  let loadedBytes = 0;
-  let totalChunks = 0;
-
-  // Load chunks in parallel batches with progress reporting
-  const loadChunkBatch = async (offsets: number[]): Promise<void> => {
-    const promises = offsets.map(async (offset) => {
-      const length = Math.min(CHUNK_SIZE, fileSize - offset);
-      const arrayBuffer = await window.electronAPI.readPDFFileChunk(filePath, offset, length);
-      const data = new Uint8Array(arrayBuffer);
-      
-      loadedBytes += data.length;
-      totalChunks++;
-      
-      // Report progress (separate metrics for file reading)
-      if (onProgress) {
-        // Use 0-90% for file reading, 90-100% for PDF parsing
-        const fileReadingProgress = Math.min(90, Math.round((loadedBytes / fileSize) * 90));
-        onProgress(fileReadingProgress);
-      }
-      
-      return { offset, data };
-    });
-
-    const results = await Promise.all(promises);
-    chunks.push(...results);
-    
-    // Allow event loop to process other tasks periodically
-    await new Promise(resolve => setTimeout(resolve, 0));
-  };
-
-  // Generate all chunk offsets
-  const offsets: number[] = [];
-  for (let offset = 0; offset < fileSize; offset += CHUNK_SIZE) {
-    offsets.push(offset);
+  if (!window.electronAPI) {
+    throw new Error('Electron API not available');
   }
 
-  // Process offsets in parallel batches
-  for (let i = 0; i < offsets.length; i += CONCURRENT_CHUNKS) {
-    const batch = offsets.slice(i, i + CONCURRENT_CHUNKS);
-    await loadChunkBatch(batch);
+  const PDFDataRangeTransport = (pdfjsLib as PDFJSWithRangeTransport).PDFDataRangeTransport;
+  if (!PDFDataRangeTransport) {
+    throw new Error('PDF.js PDFDataRangeTransport is not available');
   }
 
-  // Sort chunks by offset to ensure correct order
-  chunks.sort((a, b) => a.offset - b.offset);
+  let failed = false;
+  let loadingTask: { promise: Promise<PDFDocumentProxy>; destroy: () => void } | null = null;
 
-  // Report progress: file reading complete, starting PDF parsing
-  if (onProgress) {
-    onProgress(90);
-  }
-
-  // Combine chunks efficiently using Blob constructor
-  // This is more memory efficient than creating a single large Uint8Array
-  const chunkArrays = chunks.map(chunk => chunk.data);
-  const blob = new Blob(chunkArrays as BlobPart[], { type: 'application/pdf' });
-  
-  // Clear chunks array immediately to free memory (Blob has its own copy)
-  chunks.length = 0;
-  chunkArrays.length = 0;
-
-  const blobUrl = URL.createObjectURL(blob);
-
-  try {
-    // Load PDF from blob URL with optimized settings
-    const loadingTask = pdfjsLib.getDocument({
-      url: blobUrl,
-      disableAutoFetch: false,
-      disableStream: false,
-      verbosity: 0,
-      rangeChunkSize: 256 * 1024, // 256KB for PDF.js internal range requests
-    });
-    
-    // Report progress: PDF parsing in progress
-    if (onProgress) {
-      onProgress(95);
-    }
-    
-    const pdf = await loadingTask.promise;
-    
-    // Store blob URL for cleanup
-    filePathMap.set(pdf, { type: 'blob', url: blobUrl });
-    
-    // Report progress: complete
-    if (onProgress) {
-      onProgress(100);
-    }
-    
-    return pdf;
-  } catch (error) {
-    // Clean up blob URL on error
-    URL.revokeObjectURL(blobUrl);
-    
-    // Cleanup file handle on error
+  const closeHandle = () => {
     if (window.electronAPI) {
       window.electronAPI.closePDFFileHandle(filePath).catch(() => {
         // Ignore cleanup errors
       });
     }
-    
+  };
+
+  const failLoad = (error: unknown) => {
+    if (failed) {
+      return;
+    }
+    failed = true;
+    try {
+      loadingTask?.destroy();
+    } catch {
+      // Ignore destroy errors
+    }
+    closeHandle();
+    logger.error('PDF range load failed:', error);
+  };
+
+  const INITIAL_HEADER_SIZE = Math.min(256 * 1024, fileSize);
+  const headerBuffer = await window.electronAPI.readPDFFileChunk(filePath, 0, INITIAL_HEADER_SIZE);
+  if (signal?.aborted) {
+    closeHandle();
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  const initialData = new Uint8Array(headerBuffer);
+  const transport = new PDFDataRangeTransport(fileSize, initialData);
+
+  let highestLoadedByte = initialData.length;
+
+  transport.requestDataRange = (begin: number, end: number) => {
+    if (failed || signal?.aborted) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        const length = end - begin;
+        const arrayBuffer = await window.electronAPI!.readPDFFileChunk(filePath, begin, length);
+        if (failed || signal?.aborted) {
+          return;
+        }
+        const chunk = new Uint8Array(arrayBuffer);
+        highestLoadedByte = Math.max(highestLoadedByte, begin + chunk.length);
+        if (onProgress) {
+          onProgress(Math.min(90, Math.round((highestLoadedByte / fileSize) * 90)));
+        }
+        transport.onDataRange(begin, chunk);
+      } catch (error) {
+        logger.error('Failed to load PDF range chunk:', error);
+        failLoad(error);
+      }
+    })();
+  };
+
+  if (onProgress) {
+    onProgress(Math.min(90, Math.round((INITIAL_HEADER_SIZE / fileSize) * 90)));
+  }
+
+  const onAbort = () => {
+    if (!failed) {
+      failed = true;
+      try {
+        loadingTask?.destroy();
+      } catch {
+        // Ignore destroy errors
+      }
+      closeHandle();
+    }
+  };
+
+  signal?.addEventListener('abort', onAbort, { once: true });
+
+  try {
+    loadingTask = pdfjsLib.getDocument({
+      range: transport,
+      length: fileSize,
+      disableAutoFetch: false,
+      disableStream: false,
+      verbosity: 0,
+      rangeChunkSize: 256 * 1024,
+    });
+
+    if (onProgress) {
+      onProgress(95);
+    }
+
+    const pdf = await loadingTask.promise;
+
+    if (failed || signal?.aborted) {
+      try {
+        cleanupPDFBlobUrl(pdf);
+        await pdf.destroy();
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    filePathMap.set(pdf, { type: 'streaming', filePath });
+
+    if (onProgress) {
+      onProgress(100);
+    }
+
+    return pdf;
+  } catch (error) {
+    closeHandle();
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
     throw new Error(`Failed to load PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
   }
 }
 
-/**
- * Create a blob-based PDF source for smaller files (optimized)
- * Uses parallel chunk loading for better performance
- */
 async function createBlobPDFSource(
   filePath: string,
   fileSize: number,
   pdfjsLib: typeof import('pdfjs-dist'),
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<PDFDocumentProxy> {
-  // Adaptive chunk size based on file size
-  const CHUNK_SIZE = fileSize > 50 * 1024 * 1024 
-    ? 10 * 1024 * 1024  // 10MB for larger files
-    : 2 * 1024 * 1024;  // 2MB for smaller files
-  
-  const CONCURRENT_CHUNKS = 3; // Load 3 chunks in parallel
+  const throwIfAborted = (): void => {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+  };
+
+  const closeHandle = (): void => {
+    void Promise.resolve(window.electronAPI?.closePDFFileHandle?.(filePath)).catch(() => {
+      // Ignore cleanup errors
+    });
+  };
+
+  const CHUNK_SIZE = fileSize > 50 * 1024 * 1024
+    ? 10 * 1024 * 1024
+    : 2 * 1024 * 1024;
+
+  const CONCURRENT_CHUNKS = 3;
   const chunks: Array<{ offset: number; data: Uint8Array }> = [];
   let loadedBytes = 0;
 
-  // Load chunks in parallel batches
   const loadChunkBatch = async (offsets: number[]): Promise<void> => {
+    throwIfAborted();
+
     const promises = offsets.map(async (offset) => {
+      throwIfAborted();
       const length = Math.min(CHUNK_SIZE, fileSize - offset);
-      const arrayBuffer = await window.electronAPI.readPDFFileChunk(filePath, offset, length);
+      const arrayBuffer = await window.electronAPI!.readPDFFileChunk(filePath, offset, length);
+      throwIfAborted();
       const data = new Uint8Array(arrayBuffer);
-      
+
       loadedBytes += data.length;
-      
-      // Report progress
+
       if (onProgress) {
         const progress = Math.min(95, Math.round((loadedBytes / fileSize) * 100));
         onProgress(progress);
       }
-      
+
       return { offset, data };
     });
 
@@ -243,27 +294,26 @@ async function createBlobPDFSource(
     chunks.push(...results);
   };
 
-  // Load all chunks in parallel batches
   const offsets: number[] = [];
   for (let offset = 0; offset < fileSize; offset += CHUNK_SIZE) {
     offsets.push(offset);
   }
 
-  // Process offsets in batches
-  for (let i = 0; i < offsets.length; i += CONCURRENT_CHUNKS) {
-    const batch = offsets.slice(i, i + CONCURRENT_CHUNKS);
-    await loadChunkBatch(batch);
-    
-    // Allow event loop to process other tasks
-    if (i + CONCURRENT_CHUNKS < offsets.length) {
-      await new Promise(resolve => setTimeout(resolve, 0));
+  try {
+    for (let i = 0; i < offsets.length; i += CONCURRENT_CHUNKS) {
+      throwIfAborted();
+      const batch = offsets.slice(i, i + CONCURRENT_CHUNKS);
+      await loadChunkBatch(batch);
+
+      if (i + CONCURRENT_CHUNKS < offsets.length) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
-  }
 
-  // Sort chunks by offset to ensure correct order
-  chunks.sort((a, b) => a.offset - b.offset);
+    throwIfAborted();
 
-  // Combine chunks into a single Uint8Array
+    chunks.sort((a, b) => a.offset - b.offset);
+
   const totalLength = chunks.reduce((sum, chunk) => sum + chunk.data.length, 0);
   const combined = new Uint8Array(totalLength);
   let position = 0;
@@ -272,35 +322,47 @@ async function createBlobPDFSource(
     position += chunk.data.length;
   }
 
-  // Clear chunks array to free memory
   chunks.length = 0;
 
-  // Create blob URL from the combined data
   const blob = new Blob([combined], { type: 'application/pdf' });
   const blobUrl = URL.createObjectURL(blob);
 
   try {
-    // Load PDF from blob URL
     const loadingTask = pdfjsLib.getDocument({
       url: blobUrl,
       disableAutoFetch: false,
       disableStream: false,
       verbosity: 0,
     });
-    
-    const pdf = await loadingTask.promise;
-    
-    // Store blob URL for cleanup
-    filePathMap.set(pdf, { type: 'blob', url: blobUrl });
-    
+
+      const pdf = await loadingTask.promise;
+
+      throwIfAborted();
+
+      filePathMap.set(pdf, { type: 'blob', url: blobUrl, filePath });
+
     if (onProgress) {
       onProgress(100);
     }
-    
+
     return pdf;
+    } catch (error) {
+      URL.revokeObjectURL(blobUrl);
+      closeHandle();
+
+      if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
+      throw error;
+    }
   } catch (error) {
-    // Clean up blob URL on error
-    URL.revokeObjectURL(blobUrl);
+    closeHandle();
+
+    if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     throw error;
   }
 }

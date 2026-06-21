@@ -1,18 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useEffect } from 'react';
 import { ToastContainer } from './ToastContainer';
-import { ToastProvider, useToast } from './ToastContext';
+import { useToast } from './ToastContext';
+import { renderWithProviders } from '../../test-utils/render';
 
 describe('ToastContainer', () => {
   it('should render container when there are no toasts', () => {
-    render(
-      <ToastProvider>
-        <ToastContainer />
-      </ToastProvider>
-    );
-    // Container should exist
+    renderWithProviders(<ToastContainer />, { withToast: true });
     const container = document.querySelector('.fixed.bottom-4.right-4');
     expect(container).toBeInTheDocument();
   });
@@ -28,13 +24,8 @@ describe('ToastContainer', () => {
       return <ToastContainer />;
     };
 
-    render(
-      <ToastProvider>
-        <TestComponent />
-      </ToastProvider>
-    );
+    renderWithProviders(<TestComponent />, { withToast: true });
 
-    // Wait for toasts to appear
     await waitFor(() => {
       expect(screen.getByText('First toast')).toBeInTheDocument();
     });
@@ -61,13 +52,8 @@ describe('ToastContainer', () => {
       );
     };
 
-    render(
-      <ToastProvider>
-        <TestComponent />
-      </ToastProvider>
-    );
+    renderWithProviders(<TestComponent />, { withToast: true });
 
-    // Wait for toast to appear
     await waitFor(() => {
       expect(screen.getByText('Test toast')).toBeInTheDocument();
     });
@@ -77,23 +63,8 @@ describe('ToastContainer', () => {
       await user.click(dismissButton);
     });
 
-    // Toast should be removed
     await waitFor(() => {
       expect(screen.queryByText('Test toast')).not.toBeInTheDocument();
     });
   });
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-

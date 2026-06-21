@@ -1,0 +1,742 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Home, Save, Download, FolderOpen, ArrowLeft, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { ReactFlowProvider } from '@xyflow/react';
+import { toPng } from 'html-to-image';
+import {
+  MapBlock,
+  MapBranchSide,
+  MapCanvasSide,
+  MapDocument,
+  MapEdgeAppearance,
+  MapEdgeStyle,
+  Theme,
+} from '../../types';
+import { useMapDocument } from '../../hooks/useMapDocument';
+import { relayoutDocument } from '../../utils/mapLayout';
+import { useToast } from '../Toast/ToastContext';
+import { getUserFriendlyError } from '../../utils/errorMessages';
+import { CaseSelectionDialog } from '../Archive/CaseSelectionDialog';
+import { useWordEditor } from '../../contexts/WordEditorContext';
+import { ResizableDivider } from '../ResizableDivider';
+import { useMapTheme } from './mapTheme';
+import { MapCanvas } from './MapCanvas';
+import { CreateBlockDialog } from './CreateBlockDialog';
+import { BlockExpandModal } from './BlockExpandModal';
+import { MapExportDialog } from './MapExportDialog';
+import { DeleteBlockDialog } from './DeleteBlockDialog';
+import { normalizeMapEdgeAppearance } from './mapEdgeAppearance';
+import {
+  appendEvidenceAttachmentsToBlocks,
+  assignEvidenceAttachmentsToBlocks,
+  PendingMapAttachment,
+  removeEvidenceAttachmentFromBlocks,
+  resolvePendingAttachmentsToMapAttachments,
+} from './mapAttachmentUtils';
+import type { ModuleChromeProps } from '../../types/detachableModules';
+import type { MapEditorDetachBridge } from './MapModule';
+import { ModuleChromeButtons } from '../Shared/ModuleChromeButtons';
+import { isLightTheme } from '../../theme/themeSemantics';
+import { useRegisterVaultActiveCase } from '../../contexts/VaultActiveCaseContext';
+
+interface MapEditorPageProps extends ModuleChromeProps {
+  theme: Theme;
+  mapFolderPath: string;
+  initialDocument?: MapDocument | null;
+  autoEditTitleKey?: number | null;
+  onBack: () => void;
+  onHome: () => void;
+  registerEditorBridge?: (bridge: MapEditorDetachBridge | null) => void;
+}
+
+interface BranchDraft {
+  parentBlockId: string;
+  parentTitle?: string;
+  side: MapBranchSide;
+  sourceSide: MapCanvasSide;
+}
+
+type CreateBlockDialogSection = 'timeline' | 'details' | 'files' | 'notes';
+
+export function MapEditorPage({
+  theme,
+  mapFolderPath,
+  initialDocument,
+  autoEditTitleKey,
+  onBack,
+  onHome,
+  hostMode,
+  onPopOut,
+  onReattach,
+  popOutDisabled,
+  isPastel: isPastelProp,
+  registerEditorBridge,
+}: MapEditorPageProps) {
+  const t = useMapTheme(theme);
+  const isPastel = isPastelProp ?? isLightTheme(theme);
+  const toast = useToast();
+  const flowRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const {
+    isOpen: isWordEditorOpen,
+    dividerPosition,
+    setDividerPosition,
+    isDividerDragging,
+  } = useWordEditor();
+  const { document, loading, saving, dirty, updateDocument, saveNow, relayout } =
+    useMapDocument(mapFolderPath, { initialDocument });
+
+  const [showCreateBlock, setShowCreateBlock] = useState(false);
+  const [expandBlockId, setExpandBlockId] = useState<string | null>(null);
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [dialogInitialSection, setDialogInitialSection] = useState<CreateBlockDialogSection | undefined>(
+    undefined
+  );
+  const [branchDraft, setBranchDraft] = useState<BranchDraft | null>(null);
+  const [deletingBlockId, setDeletingBlockId] = useState<string | null>(null);
+  const [showExport, setShowExport] = useState(false);
+  const [showCaseDialog, setShowCaseDialog] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const linkedCaseName =
+    document?.casePath?.split(/[\\/]/).filter(Boolean).pop() ?? null;
+
+  useRegisterVaultActiveCase(document?.casePath ?? null, linkedCaseName);
+
+  const expandBlock = document?.blocks.find((b) => b.id === expandBlockId) ?? null;
+  const editingBlock = document?.blocks.find((b) => b.id === editingBlockId) ?? null;
+  const deletingBlock = document?.blocks.find((b) => b.id === deletingBlockId) ?? null;
+  const editingBranchContext =
+    editingBlock?.kind === 'branch'
+      ? {
+          parentBlockId: editingBlock.branchParentBlockId ?? '',
+          parentTitle: document?.blocks.find((block) => block.id === editingBlock.branchParentBlockId)?.title,
+          side: editingBlock.branchSide ?? 'right',
+          sourceSide: editingBlock.branchSourceSide ?? editingBlock.branchSide ?? 'right',
+        }
+      : null;
+  const activeBranchContext = editingBranchContext ?? branchDraft;
+
+  useEffect(() => {
+    if (document?.title) {
+      setTitleDraft(document.title);
+    }
+  }, [document?.title]);
+
+  useEffect(() => {
+    if (!document || !autoEditTitleKey) return;
+    const frame = requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [autoEditTitleKey, document]);
+
+  const commitTitle = useCallback(() => {
+    if (!document) return;
+    const nextTitle = titleDraft.trim() || 'Untitled Map';
+    setTitleDraft(nextTitle);
+    if (nextTitle === document.title) return;
+    updateDocument((prev) => ({ ...prev, title: nextTitle }));
+  }, [document, titleDraft, updateDocument]);
+
+  useEffect(() => {
+    if (!registerEditorBridge) return;
+
+    registerEditorBridge({
+      flushAndSnapshot: async () => {
+        if (!document) return null;
+
+        const nextTitle = titleDraft.trim() || 'Untitled Map';
+        const titleChanged = nextTitle !== document.title;
+        const docToSave = titleChanged ? { ...document, title: nextTitle } : document;
+
+        if (dirty || titleChanged) {
+          await saveNow(docToSave);
+        }
+
+        return { editorDocument: docToSave, editorMapPath: mapFolderPath };
+      },
+    });
+
+    return () => {
+      registerEditorBridge(null);
+    };
+  }, [dirty, document, mapFolderPath, registerEditorBridge, saveNow, titleDraft]);
+
+  const handleAddBlock = useCallback(
+    (block: MapBlock) => {
+      if (!document) return;
+      updateDocument((prev) => {
+        const branchOrder =
+          block.kind === 'branch'
+            ? prev.blocks.filter(
+                (candidate) =>
+                  candidate.kind === 'branch' &&
+                  candidate.branchParentBlockId === block.branchParentBlockId &&
+                  candidate.branchSide === block.branchSide
+              ).length
+            : undefined;
+
+        const blockToInsert =
+          block.kind === 'branch' ? { ...block, branchOrder, attachments: [] } : block;
+        const blocksWithInsert = [...prev.blocks, blockToInsert];
+        const blocks =
+          block.attachments.length > 0
+            ? assignEvidenceAttachmentsToBlocks(blocksWithInsert, blockToInsert.id, block.attachments)
+            : blocksWithInsert;
+
+        return relayoutDocument(
+          {
+            ...prev,
+            blocks,
+          },
+          false
+        );
+      });
+      setBranchDraft(null);
+      setDialogInitialSection(undefined);
+      toast.success(block.kind === 'branch' ? 'Branch card added' : 'Block added to timeline');
+    },
+    [document, updateDocument, toast]
+  );
+
+  const handleSetEdgeStyle = useCallback((next: MapEdgeStyle) => {
+    if (!document) return;
+    if (document.defaultEdgeStyle === next) return;
+    updateDocument((prev) => {
+      const updated = { ...prev, defaultEdgeStyle: next };
+      return relayoutDocument(updated, false);
+    });
+  }, [document, updateDocument]);
+
+  const handleChangeEdgeAppearance = useCallback(
+    (nextAppearance: MapEdgeAppearance) => {
+      updateDocument((prev) => ({
+        ...prev,
+        defaultEdgeAppearance: normalizeMapEdgeAppearance(nextAppearance),
+      }));
+    },
+    [updateDocument]
+  );
+
+  const handleExportPng = async () => {
+    if (!document || !flowRef.current) return;
+    setExporting(true);
+    try {
+      const el = flowRef.current.querySelector('.react-flow__viewport') as HTMLElement;
+      const target = el ?? flowRef.current;
+      const pngBase64 = await toPng(target, {
+        pixelRatio: 2,
+        backgroundColor: t.isPastel ? '#f8fafc' : '#0a0a0f',
+      });
+      if (window.electronAPI?.exportMapPng) {
+        const result = await window.electronAPI.exportMapPng({
+          mapFolderPath: document.mapFolderPath,
+          pngBase64,
+        });
+        toast.success(`PNG saved to ${result.filePath}`);
+      }
+      setShowExport(false);
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'exporting PNG' }));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportJson = async () => {
+    if (!document || !window.electronAPI?.showSaveDialog) return;
+    setExporting(true);
+    try {
+      const result = await window.electronAPI.showSaveDialog({
+        title: 'Export Map JSON',
+        defaultPath: `${document.title}.vault-map.json`,
+        filters: [{ name: 'Vault Map', extensions: ['json'] }],
+      });
+      if (!result.canceled && result.filePath) {
+        const blob = JSON.stringify(document, null, 2);
+        await window.electronAPI.saveTextFile(result.filePath, blob);
+        toast.success('Map exported as JSON');
+      }
+      setShowExport(false);
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'exporting JSON' }));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportFolder = async () => {
+    if (!document || !window.electronAPI?.selectSaveDirectory) return;
+    setExporting(true);
+    try {
+      await saveNow();
+      const dir = await window.electronAPI.selectSaveDirectory();
+      if (dir && window.electronAPI.exportMapToDirectory) {
+        const result = await window.electronAPI.exportMapToDirectory(
+          document.mapFolderPath,
+          dir
+        );
+        toast.success(`Exported to ${result.exportPath}`);
+      }
+      setShowExport(false);
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'exporting map' }));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleAssignCase = async (casePath: string) => {
+    if (!document) return;
+    try {
+      const updatedDocument = { ...document, casePath };
+      updateDocument(() => updatedDocument, { skipAutosave: true });
+      await saveNow(updatedDocument);
+      setShowCaseDialog(false);
+      toast.success('Map linked to case');
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'linking map to case' }));
+    }
+  };
+
+  const handleMoveToLibrary = async () => {
+    if (!document?.casePath) return;
+    if (!confirm('Move this map back to the Vault library and unlink it from the current case?')) {
+      return;
+    }
+
+    try {
+      const updatedDocument = { ...document, casePath: null };
+      updateDocument(() => updatedDocument, { skipAutosave: true });
+      await saveNow(updatedDocument);
+      toast.success('Map moved to Vault library');
+    } catch (error) {
+      toast.error(getUserFriendlyError(error, { operation: 'moving map to Vault library' }));
+    }
+  };
+
+  const handleDeleteBlock = useCallback(
+    (blockId: string) => {
+      if (!document) return;
+      const blockToDelete = document.blocks.find((block) => block.id === blockId);
+      if (!blockToDelete) return;
+      setDeletingBlockId(blockId);
+    },
+    [document]
+  );
+
+  const collectBranchSubtreeIds = useCallback((rootBlockId: string, blocks: MapBlock[]): Set<string> => {
+    const ids = new Set<string>([rootBlockId]);
+    const queue = [rootBlockId];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+      if (!currentId) continue;
+      blocks.forEach((block) => {
+        if (block.kind === 'branch' && block.branchParentBlockId === currentId && !ids.has(block.id)) {
+          ids.add(block.id);
+          queue.push(block.id);
+        }
+      });
+    }
+
+    return ids;
+  }, []);
+
+  const handleConfirmDeleteBlock = useCallback(() => {
+    if (!document || !deletingBlockId) return;
+    const idsToDelete = collectBranchSubtreeIds(deletingBlockId, document.blocks);
+
+    if (expandBlockId === deletingBlockId) {
+      setExpandBlockId(null);
+    }
+    if (editingBlockId === deletingBlockId) {
+      setEditingBlockId(null);
+    }
+
+    updateDocument((prev) => {
+      const blocks = prev.blocks.filter((block) => !idsToDelete.has(block.id));
+      return relayoutDocument({ ...prev, blocks }, false);
+    });
+    setDeletingBlockId(null);
+    toast.success(idsToDelete.size > 1 ? 'Block and branch notes deleted' : 'Block deleted');
+    },
+    [collectBranchSubtreeIds, deletingBlockId, document, editingBlockId, expandBlockId, toast, updateDocument]
+  );
+
+  const handleEditBlock = useCallback(
+    (blockId: string) => {
+      if (expandBlockId === blockId) {
+        setExpandBlockId(null);
+      }
+      setBranchDraft(null);
+      setDialogInitialSection(undefined);
+      setEditingBlockId(blockId);
+    },
+    [expandBlockId]
+  );
+
+  const handleEditBlockColor = useCallback(
+    (blockId: string) => {
+      if (expandBlockId === blockId) {
+        setExpandBlockId(null);
+      }
+      setBranchDraft(null);
+      setDialogInitialSection('details');
+      setEditingBlockId(blockId);
+    },
+    [expandBlockId]
+  );
+
+  const handleSaveEditedBlock = useCallback(
+    (updatedBlock: MapBlock) => {
+      if (!document) return;
+
+      updateDocument((prev) => {
+        const existingBlock = prev.blocks.find((block) => block.id === updatedBlock.id);
+        if (!existingBlock) {
+          return prev;
+        }
+
+        const chronologyChanged =
+          existingBlock.kind !== 'branch' &&
+          updatedBlock.kind !== 'branch' &&
+          existingBlock.chronology?.sortKey !== updatedBlock.chronology?.sortKey;
+
+        const nextBlock =
+          chronologyChanged && updatedBlock.kind !== 'branch'
+            ? {
+                ...updatedBlock,
+                size: existingBlock.size,
+                positionLocked: false,
+              }
+            : updatedBlock.kind === 'branch'
+              ? {
+                  ...updatedBlock,
+                  size: existingBlock.size,
+                  positionLocked: false,
+                  attachments: [],
+                }
+              : {
+                  ...updatedBlock,
+                  position: existingBlock.position,
+                  size: existingBlock.size,
+                  positionLocked: existingBlock.positionLocked,
+                };
+
+        let blocks = prev.blocks.map((block) =>
+          block.id === updatedBlock.id ? nextBlock : block
+        );
+
+        if (updatedBlock.attachments.length > 0 || updatedBlock.kind === 'branch') {
+          blocks = assignEvidenceAttachmentsToBlocks(
+            blocks,
+            updatedBlock.id,
+            updatedBlock.attachments
+          );
+        }
+
+        return relayoutDocument({ ...prev, blocks }, false);
+      });
+
+      setEditingBlockId(null);
+      setBranchDraft(null);
+      setDialogInitialSection(undefined);
+      toast.success('Block updated');
+    },
+    [document, toast, updateDocument]
+  );
+
+  const handleAttachEvidenceToBlock = useCallback(
+    async (blockId: string, additions: PendingMapAttachment[]) => {
+      if (!document || additions.length === 0) {
+        return;
+      }
+
+      try {
+        const resolvedAttachments = await resolvePendingAttachmentsToMapAttachments(
+          additions,
+          document.mapFolderPath
+        );
+
+        if (resolvedAttachments.length === 0) {
+          return;
+        }
+
+        updateDocument((prev) => {
+          const blocks = appendEvidenceAttachmentsToBlocks(prev.blocks, blockId, resolvedAttachments);
+          return relayoutDocument({ ...prev, blocks }, false);
+        });
+
+        toast.success(
+          `${resolvedAttachments.length} file${resolvedAttachments.length === 1 ? '' : 's'} attached`
+        );
+      } catch (error) {
+        toast.error(getUserFriendlyError(error, { operation: 'attaching evidence' }));
+      }
+    },
+    [document, toast, updateDocument]
+  );
+
+  const handleRemoveEvidenceFromBlock = useCallback(
+    (blockId: string, attachmentId: string) => {
+      if (!document) {
+        return;
+      }
+
+      updateDocument((prev) => {
+        const blocks = removeEvidenceAttachmentFromBlocks(prev.blocks, blockId, attachmentId);
+        return relayoutDocument({ ...prev, blocks }, false);
+      });
+
+      toast.success('Evidence removed');
+    },
+    [document, toast, updateDocument]
+  );
+
+  const handleCreateBranch = useCallback(
+    (parentBlockId: string, side: MapBranchSide, sourceSide: MapCanvasSide) => {
+      if (!document) return;
+      const parentBlock = document.blocks.find((block) => block.id === parentBlockId);
+      if (!parentBlock) return;
+      setEditingBlockId(null);
+      setDialogInitialSection(undefined);
+      if (expandBlockId === parentBlockId) {
+        setExpandBlockId(null);
+      }
+      setBranchDraft({
+        parentBlockId,
+        parentTitle: parentBlock.title,
+        side,
+        sourceSide,
+      });
+      setShowCreateBlock(true);
+    },
+    [document, expandBlockId]
+  );
+
+  const handleToggleWordEditor = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent(isWordEditorOpen ? 'close-word-editor-panel' : 'open-word-editor-panel')
+    );
+  }, [isWordEditorOpen]);
+
+  if (loading || !document) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${t.bg}`}>
+        <p className={t.muted}>Loading map...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`h-screen flex flex-col overflow-hidden ${t.bg}`}>
+      <header className={`flex items-center gap-3 p-4 border-b shrink-0 flex-wrap ${t.editorHeader}`}>
+        <button type="button" onClick={onBack} className={`p-2 rounded-lg border ${t.card}`}>
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <button type="button" onClick={onHome} className={`p-2 rounded-lg border ${t.card}`} aria-label="Home">
+          <Home className="w-5 h-5" />
+        </button>
+        <ModuleChromeButtons
+          featureLabel="Map"
+          hostMode={hostMode}
+          onPopOut={onPopOut}
+          onReattach={onReattach}
+          popOutDisabled={popOutDisabled}
+          isPastel={isPastel}
+        />
+        <div className="flex-1 min-w-[220px] max-w-[520px]">
+          <input
+            ref={titleInputRef}
+            type="text"
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              }
+              if (e.key === 'Escape') {
+                setTitleDraft(document.title);
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder="Untitled Map"
+            className={`w-full px-3 py-2 rounded-xl border text-lg font-bold outline-none ${t.titleInput}`}
+            aria-label="Map title"
+          />
+        </div>
+        {dirty && <span className={`text-xs ${t.muted}`}>Unsaved</span>}
+        <button
+          type="button"
+          onClick={() => setShowCaseDialog(true)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${t.card}`}
+          title={linkedCaseName ? `Linked to ${linkedCaseName}` : 'Assign this map to a case'}
+        >
+          <FolderOpen className="w-4 h-4" />
+          {document.casePath ? `Change case${linkedCaseName ? `: ${linkedCaseName}` : ''}` : 'Assign case'}
+        </button>
+        {document.casePath && (
+          <button
+            type="button"
+            onClick={handleMoveToLibrary}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${t.card}`}
+            title="Move this map back to the Vault library"
+          >
+            <Home className="w-4 h-4" />
+            Move to Vault Library
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => saveNow()}
+          disabled={saving}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${t.card}`}
+        >
+          <Save className="w-4 h-4" />
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowExport(true)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${t.button}`}
+        >
+          <Download className="w-4 h-4" />
+          Export
+        </button>
+        <button
+          type="button"
+          onClick={handleToggleWordEditor}
+          className={`ml-auto flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
+            isWordEditorOpen ? t.button : t.card
+          }`}
+          aria-pressed={isWordEditorOpen}
+          title={isWordEditorOpen ? 'Hide word editor' : 'Open word editor'}
+        >
+          {isWordEditorOpen ? (
+            <PanelRightClose className="w-4 h-4" />
+          ) : (
+            <PanelRightOpen className="w-4 h-4" />
+          )}
+          Word Editor
+        </button>
+      </header>
+
+      <div className={`flex-1 min-h-0 ${isWordEditorOpen ? 'flex' : ''}`}>
+        <div
+          className={`min-w-0 h-full ${isDividerDragging ? '' : 'transition-all duration-300'}`}
+          style={isWordEditorOpen ? { width: `${dividerPosition}%` } : { width: '100%' }}
+        >
+          <div ref={flowRef} className="w-full h-full">
+            <ReactFlowProvider>
+              <MapCanvas
+                document={document}
+                theme={theme}
+                edgeStyle={document.defaultEdgeStyle}
+                edgeAppearance={document.defaultEdgeAppearance}
+                onBlocksChange={(blocks) => {
+                  updateDocument((prev) => relayoutDocument({ ...prev, blocks }, false));
+                }}
+                onViewportChange={(viewport) => {
+                  updateDocument((prev) => ({ ...prev, viewport }), { skipAutosave: false });
+                }}
+                onExpandBlock={setExpandBlockId}
+                onPreviewBlock={setExpandBlockId}
+                onDeleteBlock={handleDeleteBlock}
+                onEditBlock={handleEditBlock}
+                onEditBlockColor={handleEditBlockColor}
+                onCreateBranch={handleCreateBranch}
+                onAttachEvidence={handleAttachEvidenceToBlock}
+                onNewBlock={() => {
+                  setBranchDraft(null);
+                  setDialogInitialSection(undefined);
+                  setShowCreateBlock(true);
+                }}
+                onEdgeStyleChange={handleSetEdgeStyle}
+                onEdgeAppearanceChange={handleChangeEdgeAppearance}
+                onRelayout={() => relayout(true)}
+              />
+            </ReactFlowProvider>
+          </div>
+        </div>
+        {isWordEditorOpen && (
+          <>
+            <ResizableDivider
+              position={dividerPosition}
+              onResize={setDividerPosition}
+              minLeft={30}
+              minRight={26}
+            />
+            <div
+              id="map-word-editor-inline-container"
+              className={`overflow-hidden h-full ${isDividerDragging ? '' : 'transition-all duration-300'}`}
+              style={{ width: `${100 - dividerPosition}%` }}
+            />
+          </>
+        )}
+      </div>
+
+      <CreateBlockDialog
+        isOpen={showCreateBlock || !!editingBlock}
+        onClose={() => {
+          setShowCreateBlock(false);
+          setEditingBlockId(null);
+          setBranchDraft(null);
+          setDialogInitialSection(undefined);
+        }}
+        theme={theme}
+        mapFolderPath={document.mapFolderPath}
+        linkedCasePath={document.casePath}
+        onSubmit={editingBlock ? handleSaveEditedBlock : handleAddBlock}
+        blockToEdit={editingBlock}
+        allBlocks={document.blocks}
+        initialSection={dialogInitialSection}
+        branchContext={activeBranchContext}
+      />
+
+      <BlockExpandModal
+        isOpen={!!expandBlockId}
+        block={expandBlock}
+        allBlocks={document.blocks}
+        theme={theme}
+        onClose={() => setExpandBlockId(null)}
+        onNotesChange={(blockId, notesHtml) => {
+          updateDocument((prev) => ({
+            ...prev,
+            blocks: prev.blocks.map((b) =>
+              b.id === blockId ? { ...b, notesHtml } : b
+            ),
+          }));
+        }}
+        onAttachEvidence={handleAttachEvidenceToBlock}
+        onRemoveEvidence={handleRemoveEvidenceFromBlock}
+      />
+
+      <MapExportDialog
+        isOpen={showExport}
+        theme={theme}
+        onClose={() => setShowExport(false)}
+        onExportPng={handleExportPng}
+        onExportJson={handleExportJson}
+        onExportFolder={handleExportFolder}
+        exporting={exporting}
+      />
+
+      <CaseSelectionDialog
+        isOpen={showCaseDialog}
+        onClose={() => setShowCaseDialog(false)}
+        onSelectCase={handleAssignCase}
+      />
+
+      <DeleteBlockDialog
+        isOpen={!!deletingBlockId}
+        theme={theme}
+        blockTitle={deletingBlock?.title}
+        onClose={() => setDeletingBlockId(null)}
+        onConfirm={handleConfirmDeleteBlock}
+      />
+    </div>
+  );
+}

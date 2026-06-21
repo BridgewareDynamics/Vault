@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WordEditorErrorBoundary } from './WordEditorErrorBoundary';
-import { WordEditorErrorFallback } from './WordEditorErrorFallback';
 
 // Component that throws an error
 const ThrowError = ({ shouldThrow }: { shouldThrow: boolean }) => {
@@ -118,7 +117,7 @@ describe('WordEditorErrorBoundary', () => {
   });
 
   it('should handle multiple errors', () => {
-    const { rerender } = render(
+    render(
       <WordEditorErrorBoundary>
         <ThrowError shouldThrow={true} />
       </WordEditorErrorBoundary>

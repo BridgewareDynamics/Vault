@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useSettingsContext } from '../utils/settingsContext';
 import { AppSettings } from '../types';
+import { logger } from '../utils/logger';
 
 export function useSettings() {
   const { settings, loading, updateSettings, refreshSettings } = useSettingsContext();
@@ -27,7 +28,7 @@ export function useSettings() {
       // Refresh settings to get updated fullscreen state
       await refreshSettings();
     } catch (error) {
-      console.error('Failed to toggle fullscreen:', error);
+      logger.error('Failed to toggle fullscreen:', error);
       throw error;
     }
   }, [refreshSettings]);

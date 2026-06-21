@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as path from 'path';
 import { isValidPDFFile, isSafePath, isValidDirectory, isValidFolderName } from './pathValidator';
 
 describe('pathValidator', () => {
@@ -64,7 +65,7 @@ describe('pathValidator', () => {
       // On Windows, // at start is a UNC path and may normalize differently
       // We test that the function correctly identifies unsafe paths
       // Paths where // remains after normalization should fail
-      const pathModule = require('path');
+      const pathModule = path;
       
       // Test a path that should still contain // after normalization (if any)
       // On most systems, // at the very start might remain for network paths

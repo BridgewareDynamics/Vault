@@ -16,7 +16,8 @@ LICENSE TERMS AND CONDITIONS
      source code, object code, documentation, graphics, user interfaces, and 
      all associated files and materials, but excluding third-party components 
      that are subject to separate license agreements (such as PDF.js, which is 
-     licensed under Apache 2.0, and Electron, which is licensed under MIT/BSD).
+     licensed under Apache 2.0, Electron, which is licensed under MIT/BSD, and 
+     NVIDIA Parakeet transcription models, which are licensed under CC BY 4.0).
 
 1.2. "Personal Use" means use of the Software by an individual for personal, 
      non-commercial purposes only, excluding any use in connection with any 
@@ -322,6 +323,39 @@ communications, proposals, and agreements relating to the Software.
       to exercise the rights granted by those licenses with respect to third-party 
       components. This Proprietary License does not restrict Your rights under 
       those licenses with respect to third-party components.
+
+14.11. NVIDIA PARAKEET TRANSCRIPTION MODELS
+      This Software may download, cache, or bundle NVIDIA Parakeet automatic 
+      speech recognition (ASR) model weights, including but not limited to 
+      nvidia/parakeet-tdt-0.6b-v2 and nvidia/parakeet-tdt-0.6b-v3. These model 
+      weights are separate components with their own license terms, and the 
+      provisions of this Proprietary License do not apply to those model weights.
+
+14.12. PARAKEET LICENSE TERMS (CC BY 4.0)
+      NVIDIA Parakeet model weights remain subject to the Creative Commons 
+      Attribution 4.0 International (CC BY 4.0) license regardless of this 
+      Proprietary License. The CC BY 4.0 license requires appropriate credit to 
+      NVIDIA, a link to the license, and indication of modifications where 
+      applicable. The full attribution notice is in 
+      licenses/nvidia-parakeet-cc-by-4.0.txt and THIRD_PARTY_NOTICES.md. The 
+      license terms are available at 
+      https://creativecommons.org/licenses/by/4.0/
+
+14.13. PARAKEET MODEL SOURCES
+      Official model cards and weights are published by NVIDIA at:
+      - https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2
+      - https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+      You may obtain model weights from those sources subject to CC BY 4.0.
+
+14.14. NEMO TOOLKIT
+      Transcription inference may use the NVIDIA NeMo toolkit, which is licensed 
+      under the Apache License 2.0. NeMo is a separate component; see 
+      https://github.com/NVIDIA/NeMo
+
+14.15. PARAKEET ATTRIBUTION IN DISTRIBUTIONS
+      Installers and runtime bundles that include Parakeet model weights also 
+      include MODEL_ATTRIBUTION.txt in the transcription models directory, in 
+      compliance with CC BY 4.0 attribution requirements.
 
 ================================================================================
 END OF LICENSE

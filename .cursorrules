@@ -1,0 +1,323 @@
+# The Vault - Cursor Rules
+
+## Project Overview
+
+The Vault is an Electron-based desktop application for PDF extraction and research organization. It features:
+- PDF page extraction to PNG/JPEG images
+- Case-based file organization system (The Vault)
+- Rich text editor (Lexical-based)
+- Bookmark system for PDF pages
+- PDF security/redaction auditing
+- Cyberpunk-themed UI with TailwindCSS
+
+## Tech Stack
+
+- **Frontend**: React 18.2, TypeScript 5.3, TailwindCSS, Framer Motion
+- **Backend**: Electron 28.1, Node.js 24.12.0
+- **PDF Processing**: PDF.js 3.11.174
+- **Image Processing**: Sharp 0.33.2
+- **Rich Text**: Lexical 0.19.0
+- **Testing**: Vitest 1.1.0, Testing Library
+- **Build**: Vite 5.0, Electron Builder 24.9
+
+## Code Style & Conventions
+
+### TypeScript
+- Use strict TypeScript (`strict: true` in tsconfig.json)
+- **NEVER use `any` type** - use proper types or `unknown` with type guards
+- Use path aliases: `@/` for `src/`, `@electron/` for `electron/`
+- Define types in `src/types/index.ts` for shared types
+- Use interfaces for object shapes, types for unions/intersections
+- Export types alongside implementations
+
+### React Patterns
+- Use functional components with hooks exclusively
+- Prefer `useState`, `useEffect`, `useRef`, `useCallback`, `useMemo`
+- Use custom hooks for complex logic (in `src/hooks/`)
+- Use Context API for global state (Toast, Settings, Archive, WordEditor)
+- Component files should be PascalCase: `ComponentName.tsx`
+- Test files co-located: `ComponentName.test.tsx`
+- Use `forwardRef` and `useImperativeHandle` when exposing component APIs
+- Prefer composition over prop drilling
+
+### Component Structure
+```typescript
+// Component file structure
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Icon } from 'lucide-react';
+import { useToast } from '../Toast/ToastContext';
+import { logger } from '@/utils/logger';
+
+interface ComponentProps {
+  // Props with clear types
+}
+
+export function ComponentName({ prop }: ComponentProps) {
+  // Hooks
+  // State
+  // Effects
+  // Handlers
+  // Render
+}
+```
+
+### Electron IPC Patterns
+- All IPC handlers in `electron/main.ts`
+- Preload script exposes safe APIs in `electron/preload.ts`
+- IPC channel names use kebab-case: `select-pdf-file`, `create-case-folder`
+- Always validate paths with `isSafePath()` before file operations
+- Use `logger` from `electron/utils/logger` for logging
+- Handle errors gracefully with try-catch and user-friendly messages
+- IPC handlers should return `{ success: boolean, ... }` objects
+
+### File Organization
+- **Components**: `src/components/` organized by feature (Archive/, Toast/, WordEditor/, etc.)
+- **Hooks**: `src/hooks/` - custom React hooks
+- **Utils**: `src/utils/` - pure utility functions
+- **Types**: `src/types/` - TypeScript type definitions
+- **Contexts**: `src/contexts/` - React Context providers
+- **Electron Utils**: `electron/utils/` - Node.js utilities
+- **Tests**: Co-located with source files (`.test.ts`, `.test.tsx`)
+
+### Naming Conventions
+- **Components**: PascalCase (`ArchivePage.tsx`)
+- **Hooks**: camelCase starting with `use` (`useArchive.ts`)
+- **Utils**: camelCase (`logger.ts`, `pathValidator.ts`)
+- **Types/Interfaces**: PascalCase (`ArchiveFile`, `ExtractionProgress`)
+- **Constants**: UPPER_SNAKE_CASE or camelCase for exported constants
+- **Files**: Match export name (export `ArchivePage` → `ArchivePage.tsx`)
+
+## UI/UX Patterns
+
+### Cyberpunk Theme
+- Use TailwindCSS custom colors: `cyber-purple-*`, `cyber-cyan-*`
+- Background gradients: `bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950`
+- Use Framer Motion for animations (`motion.div`, `AnimatePresence`)
+- Custom animations: `shimmer`, `pulse-neon`, `glow-pulse`, `neon-flicker`
+- Glassmorphism effects: `backdrop-blur`, semi-transparent backgrounds
+- Consistent spacing: Use Tailwind spacing scale (4px increments)
+
+### Component Patterns
+- **Modals**: Use `AnimatePresence` for enter/exit animations
+- **Toasts**: Use `ToastContext` for notifications (`toast.success()`, `toast.error()`, etc.)
+- **Loading States**: Show spinners with gradient animations
+- **Error States**: Red borders, error messages, retry options
+- **Empty States**: Helpful messages with action buttons
+- **Progress**: Use `ProgressBar` component for extraction progress
+
+### Accessibility
+- Use semantic HTML elements
+- Add `aria-label` for icon-only buttons
+- Keyboard navigation support (Enter, Escape, Arrow keys)
+- Focus management in modals
+
+## Error Handling
+
+### Frontend
+- Use `getUserFriendlyError()` from `src/utils/errorMessages.ts` for user-facing errors
+- Use `logger` from `src/utils/logger.ts` for debugging
+- Show errors via Toast notifications
+- Use ErrorBoundary for component error catching
+
+### Backend (Electron)
+- Always validate paths with `isSafePath()` before file operations
+- Use `logger` from `electron/utils/logger.ts` for all logging
+- Return structured error responses: `{ success: false, error: string }`
+- Handle file system errors gracefully (ENOENT, EACCES, etc.)
+
+## Testing Patterns
+
+### Test Structure
+- Use Vitest with Testing Library
+- Test files co-located: `ComponentName.test.tsx`
+- Setup file: `src/test-utils/setup.ts`
+- Mocks: `src/test-utils/mocks.ts`
+- Test timeout: 10 seconds (configured in vitest.config.ts)
+
+### Testing Best Practices
+- Test user interactions, not implementation details
+- Use `screen.getByRole`, `getByLabelText`, `getByText` queries
+- Mock Electron APIs in tests
+- Test error states and edge cases
+- Use `describe` blocks to group related tests
+- Use `beforeEach`/`afterEach` for setup/teardown
+
+### Coverage Goals
+- Statements: 80%
+- Branches: 85%
+- Functions: 80%
+- Lines: 80%
+
+## Performance Considerations
+
+### Memory Management
+- Use `memoryManager` from `src/utils/memoryManager.ts` for memory limits
+- Clear image caches when memory is low
+- Use `react-window` for large lists (already implemented in Gallery)
+- Debounce expensive operations (use `debounce` from `src/utils/debounce.ts`)
+
+### PDF Processing
+- Use PDF.js worker for PDF rendering
+- Process pages incrementally, not all at once
+- Show progress updates during extraction
+- Clean up resources after extraction
+
+### Image Handling
+- Generate thumbnails lazily (on-demand)
+- Cache thumbnails to avoid regeneration
+- Use Sharp for efficient image processing
+- Consider WebP format for better compression
+
+## Security Best Practices
+
+### Path Validation
+- **ALWAYS** validate paths with `isSafePath()` before file operations
+- Use `isValidPDFFile()`, `isValidDirectory()`, `isValidFolderName()` validators
+- Never trust user input - validate and sanitize
+- Prevent directory traversal attacks
+
+### Electron Security
+- Context isolation enabled (via preload script)
+- No Node.js access in renderer process
+- IPC handlers validate all inputs
+- File operations only in main process
+
+## Common Patterns
+
+### Custom Hooks
+```typescript
+// Hook pattern
+export function useFeature() {
+  const [state, setState] = useState<StateType>(initialState);
+  const toast = useToast();
+  
+  useEffect(() => {
+    // Side effects
+  }, [dependencies]);
+  
+  const handler = useCallback(() => {
+    // Handler logic
+  }, [dependencies]);
+  
+  return { state, handler };
+}
+```
+
+### IPC Handler Pattern
+```typescript
+// In electron/main.ts
+ipcMain.handle('channel-name', async (event, data) => {
+  try {
+    // Validate input
+    if (!isSafePath(data.path)) {
+      return { success: false, error: 'Invalid path' };
+    }
+    
+    // Perform operation
+    const result = await performOperation(data);
+    
+    // Log and return
+    logger.info('Operation successful');
+    return { success: true, result };
+  } catch (error) {
+    logger.error('Operation failed:', error);
+    return { success: false, error: getUserFriendlyError(error) };
+  }
+});
+```
+
+### Component with State Management
+```typescript
+export function Component({ prop }: Props) {
+  const [localState, setLocalState] = useState();
+  const { globalState } = useContext();
+  const toast = useToast();
+  
+  useEffect(() => {
+    // Side effects
+    return () => {
+      // Cleanup
+    };
+  }, [dependencies]);
+  
+  const handleAction = useCallback(async () => {
+    try {
+      // Action logic
+      toast.success('Success');
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    }
+  }, [dependencies]);
+  
+  return <div>...</div>;
+}
+```
+
+## Import Order
+
+1. React imports
+2. Third-party libraries (framer-motion, lucide-react, etc.)
+3. Internal hooks
+4. Internal components
+5. Internal utils
+6. Types
+7. Styles (CSS imports last)
+
+## Code Quality Rules
+
+- **No `any` types** - use proper TypeScript types
+- **No console.log** - use `logger` utility
+- **No unused variables** - TypeScript strict mode enforces this
+- **No magic numbers** - use named constants
+- **Consistent formatting** - use Prettier (if configured)
+- **ESLint compliance** - follow `.eslintrc.cjs` rules
+
+## Build & Development
+
+- **Dev**: `npm run electron:dev` (builds Electron + Vite dev server)
+- **Build**: `npm run build:all` (builds both frontend and Electron)
+- **Test**: `npm run test` (run tests), `npm run test:watch` (watch mode)
+- **Lint**: `npm run lint`
+
+## Key Files Reference
+
+- **Main App**: `src/App.tsx`
+- **Electron Main**: `electron/main.ts`
+- **Preload**: `electron/preload.ts`
+- **Types**: `src/types/index.ts`
+- **Vite Config**: `vite.config.ts`
+- **Vitest Config**: `vitest.config.ts`
+- **Tailwind Config**: `tailwind.config.js`
+- **TSConfig**: `tsconfig.json`
+
+## When Adding New Features
+
+1. **Plan the architecture** - Where does it fit? (component, hook, util, IPC?)
+2. **Define types first** - Add to `src/types/index.ts` if shared
+3. **Create components** - Follow existing patterns
+4. **Add IPC handlers** - If needed, add to `electron/main.ts` and `preload.ts`
+5. **Write tests** - Co-locate test files
+6. **Update documentation** - README.md if user-facing feature
+7. **Test manually** - Run `npm run electron:dev` and test the feature
+
+## Common Gotchas
+
+- **Path separators**: Use `path.join()` or normalize paths (Windows uses `\`, Unix uses `/`)
+- **Async operations**: Always handle errors in async functions
+- **Memory leaks**: Clean up event listeners, timeouts, intervals in useEffect cleanup
+- **State updates**: Use functional updates when state depends on previous state
+- **IPC communication**: Always check `window.electronAPI` exists before calling
+- **File operations**: Always validate paths before file system operations
+
+## Questions to Ask When Coding
+
+1. Is this path validated?
+2. Are errors handled gracefully?
+3. Is this logged appropriately?
+4. Are there memory leaks?
+5. Is the UI accessible?
+6. Are there tests for this?
+7. Does this follow existing patterns?
+8. Is TypeScript strict mode satisfied?
+

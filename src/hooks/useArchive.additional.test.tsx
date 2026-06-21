@@ -3,8 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { useArchive } from './useArchive';
-import { ToastProvider } from '../components/Toast/ToastContext';
+import { ToastProvider } from '../components/Toast/ToastProvider';
 import { mockElectronAPI } from '../test-utils/mocks';
+
+import { resetThumbnailServiceForTests } from '../utils/thumbnailService';
+import { resetArchivePrefetchForTests } from '../utils/archivePrefetch';
 
 describe('useArchive – additional coverage', () => {
   const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -13,6 +16,8 @@ describe('useArchive – additional coverage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetThumbnailServiceForTests();
+    resetArchivePrefetchForTests();
     mockElectronAPI.getArchiveConfig.mockResolvedValue({ archiveDrive: '/vault' });
     mockElectronAPI.listArchiveCases.mockResolvedValue([]);
     mockElectronAPI.listCaseFiles.mockResolvedValue([]);
@@ -21,6 +26,61 @@ describe('useArchive – additional coverage', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('does not apply thumbnail updates after unmount', async () => {
+    let resolveThumbnail: (value: string) => void = () => {};
+    const thumbnailPromise = new Promise<string>((resolve) => {
+      resolveThumbnail = resolve;
+    });
+
+    const mockCase = { name: 'Case', path: '/vault/case' };
+    mockElectronAPI.listCaseFiles.mockResolvedValue([
+      {
+        name: 'image1.jpg',
+        path: '/vault/case/image1.jpg',
+        size: 200,
+        modified: Date.now(),
+        isFolder: false,
+      },
+    ]);
+    mockElectronAPI.getFileThumbnail.mockReturnValue(thumbnailPromise);
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { result, unmount } = renderHook(() => useArchive(), { wrapper });
+
+    act(() => {
+      result.current.setCurrentCase(mockCase);
+    });
+
+    await waitFor(() => {
+      expect(result.current.files.some((file) => file.name === 'image1.jpg')).toBe(true);
+    });
+
+    act(() => {
+      result.current.ensureThumbnailForFile('/vault/case/image1.jpg', 'image');
+    });
+
+    await waitFor(() => {
+      expect(mockElectronAPI.getFileThumbnail).toHaveBeenCalled();
+    });
+
+    unmount();
+
+    await act(async () => {
+      resolveThumbnail('data:image/png;base64,thumb');
+      await thumbnailPromise;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const unmountWarnings = consoleError.mock.calls.filter((call) => {
+      const message = String(call[0]);
+      return message.includes('not wrapped in act') || message.includes('unmounted component');
+    });
+    expect(unmountWarnings).toHaveLength(0);
+
+    consoleError.mockRestore();
   });
 
   it('filters out archive metadata files and sets file types correctly', async () => {
@@ -228,7 +288,8 @@ describe('useArchive – additional coverage', () => {
       },
     ]);
 
-    // Mock PDF read to fail
+    // Mock PDF read to fail during thumbnail generation
+    mockElectronAPI.readPDFThumbnail.mockResolvedValue(null);
     mockElectronAPI.readPDFFile.mockRejectedValue(new Error('PDF read failed'));
 
     const { result } = renderHook(() => useArchive(), { wrapper });
@@ -237,18 +298,24 @@ describe('useArchive – additional coverage', () => {
       result.current.setCurrentCase(mockCase);
     });
 
+    await waitFor(() => {
+      expect(result.current.files.some((file) => file.name === 'test.pdf')).toBe(true);
+    });
+
+    act(() => {
+      result.current.ensureThumbnailForFile('/vault/case/test.pdf', 'pdf');
+    });
+
     await waitFor(
       () => {
-        expect(result.current.files.length).toBeGreaterThan(0);
+        const pdfFile = result.current.files.find(f => f.name === 'test.pdf');
+        expect(pdfFile?.thumbnail).toBeDefined();
       },
-      { timeout: 2000 },
+      { timeout: 3000 },
     );
 
-    // File should still exist even if thumbnail generation failed
     const pdfFile = result.current.files.find(f => f.name === 'test.pdf');
     expect(pdfFile).toBeDefined();
-    // Thumbnail should be a placeholder SVG on error
-    expect(pdfFile?.thumbnail).toBeDefined();
     expect(pdfFile?.thumbnail).toContain('data:image/svg+xml');
   });
 
@@ -271,6 +338,14 @@ describe('useArchive – additional coverage', () => {
 
     act(() => {
       result.current.setCurrentCase(mockCase);
+    });
+
+    await waitFor(() => {
+      expect(result.current.files.some((file) => file.name === 'image.jpg')).toBe(true);
+    });
+
+    act(() => {
+      result.current.ensureThumbnailForFile('/vault/case/image.jpg', 'image');
     });
 
     // Wait for thumbnail to load
@@ -405,6 +480,51 @@ describe('useArchive – additional coverage', () => {
 
     // File should still be 'newname.pdf' (rollback should restore)
     expect(result.current.files.find(f => f.name === 'newname.pdf')).toBeDefined();
+  });
+
+  it('aborts in-flight video thumbnail generation on unmount', async () => {
+    const abortSpy = vi.spyOn(AbortController.prototype, 'abort');
+    const contextMock = {
+      fillStyle: '',
+      fillRect: vi.fn(),
+      drawImage: vi.fn(),
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(contextMock as never);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/png;base64,thumb');
+
+    const mockCase = { name: 'Case', path: '/vault/case' };
+    mockElectronAPI.listCaseFiles.mockResolvedValue([
+      {
+        name: 'clip.mp4',
+        path: '/vault/case/clip.mp4',
+        size: 1024,
+        modified: Date.now(),
+        isFolder: false,
+      },
+    ]);
+
+    const { result, unmount } = renderHook(() => useArchive(), { wrapper });
+
+    act(() => {
+      result.current.setCurrentCase(mockCase);
+    });
+
+    await waitFor(() => {
+      expect(result.current.files.some((file) => file.name === 'clip.mp4')).toBe(true);
+    });
+
+    act(() => {
+      result.current.ensureThumbnailForFile('/vault/case/clip.mp4', 'video');
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    unmount();
+
+    expect(abortSpy).toHaveBeenCalled();
+    abortSpy.mockRestore();
   });
 
   it('handles thumbnail loading errors gracefully', async () => {

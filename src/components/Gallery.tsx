@@ -2,31 +2,28 @@ import { memo, useState, useEffect, useCallback, useRef } from 'react';
 import { FixedSizeGrid } from 'react-window';
 import { ExtractedPage } from '../types';
 import { GalleryItem } from './GalleryItem';
-
-interface GalleryProps {
-  pages: ExtractedPage[];
-  onPageClick: (page: ExtractedPage) => void;
-}
+import {
+  calculateVirtualGridDimensions,
+  getResponsiveColumnCount,
+  VIRTUALIZATION_THRESHOLD,
+} from '../utils/virtualGridUtils';
 
 // Threshold for using virtualization (50 items as per plan)
-const VIRTUALIZATION_THRESHOLD = 50;
+const VIRTUALIZATION_THRESHOLD_LOCAL = VIRTUALIZATION_THRESHOLD;
 
 // Calculate column count based on window width
 function getColumnCount(width: number): number {
-  if (width >= 1280) return 6; // xl
-  if (width >= 1024) return 5; // lg
-  if (width >= 768) return 4;  // md
-  if (width >= 640) return 3;  // sm
-  return 2; // default
+  return getResponsiveColumnCount(width);
 }
 
 // Calculate item dimensions based on column count and container width
 function calculateItemDimensions(containerWidth: number, columnCount: number, gap: number = 16): { columnWidth: number; rowHeight: number } {
-  const availableWidth = containerWidth - (gap * 2); // Account for padding
-  const columnWidth = Math.floor((availableWidth - (gap * (columnCount - 1))) / columnCount);
-  // Row height based on 3:4 aspect ratio (as seen in GalleryItem)
-  const rowHeight = Math.floor(columnWidth * (4 / 3)) + 40; // Add some padding for badge
-  return { columnWidth, rowHeight };
+  return calculateVirtualGridDimensions(containerWidth, columnCount, gap, 4 / 3, 40);
+}
+
+interface GalleryProps {
+  pages: ExtractedPage[];
+  onPageClick: (page: ExtractedPage) => void;
 }
 
 export const Gallery = memo(function Gallery({ pages, onPageClick }: GalleryProps) {
@@ -40,11 +37,11 @@ export const Gallery = memo(function Gallery({ pages, onPageClick }: GalleryProp
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         setContainerSize({ width: rect.width, height: rect.height });
-        setUseVirtualization(pages.length >= VIRTUALIZATION_THRESHOLD);
+        setUseVirtualization(pages.length >= VIRTUALIZATION_THRESHOLD_LOCAL);
       } else {
         // Fallback: use window dimensions
         setContainerSize({ width: window.innerWidth, height: window.innerHeight });
-        setUseVirtualization(pages.length >= VIRTUALIZATION_THRESHOLD);
+        setUseVirtualization(pages.length >= VIRTUALIZATION_THRESHOLD_LOCAL);
       }
     };
 

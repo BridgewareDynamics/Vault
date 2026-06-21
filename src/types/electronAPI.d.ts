@@ -1,0 +1,437 @@
+// Type definitions for Electron API exposed via preload script
+// This file ensures TypeScript recognizes window.electronAPI in the renderer process
+
+type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
+type LogArgs = Parameters<typeof console.log>;
+
+declare global {
+  interface Window {
+    electronAPI: {
+      selectPDFFile: () => Promise<string | null>;
+      selectImageFile: () => Promise<string | null>;
+      selectSaveDirectory: () => Promise<string | null>;
+      validatePDFForExtraction: (pdfPath: string) => Promise<{ valid: boolean; path: string }>;
+      saveFiles: (options: {
+        saveDirectory: string;
+        saveParentFile: boolean;
+        saveToZip: boolean;
+        folderName?: string;
+        parentFilePath?: string;
+        extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
+      }) => Promise<{ success: boolean; messages: string[] }>;
+      validatePath: (filePath: string) => Promise<{ isValid: boolean; isPDF: boolean }>;
+      readPDFFile: (filePath: string) => Promise<{ type: 'base64'; data: string } | { type: 'file-path'; path: string } | string | number[]>;
+      readPDFFileChunk: (filePath: string, start: number, length: number) => Promise<ArrayBuffer>;
+      closePDFFileHandle: (filePath: string) => Promise<void>;
+      getPDFFileSize: (filePath: string) => Promise<number>;
+      // Archive APIs
+      selectArchiveDrive: () => Promise<{ path: string; autoDetected: boolean } | null>;
+      getArchiveConfig: () => Promise<{ archiveDrive: string | null }>;
+      validateArchiveDirectory: (dirPath: string) => Promise<{ isValid: boolean; marker?: { version: string; createdAt: number; lastModified: number; caseCount?: number; archiveId: string } }>;
+      createCaseFolder: (caseName: string, description?: string, categoryTagId?: string) => Promise<string>;
+      updateCaseDescription: (casePath: string, description: string) => Promise<{ success: boolean }>;
+      getCategoryTags: () => Promise<Array<{ id: string; name: string; color: string }>>;
+      createCategoryTag: (tag: { id: string; name: string; color: string }) => Promise<{ id: string; name: string; color: string }>;
+      deleteCategoryTag: (tagId: string) => Promise<boolean>;
+      setCaseCategoryTag: (casePath: string, categoryTagId: string | null) => Promise<boolean>;
+      getCaseCategoryTag: (casePath: string) => Promise<string | null>;
+      setFileCategoryTag: (filePath: string, categoryTagId: string | null) => Promise<boolean>;
+      getFileCategoryTag: (filePath: string) => Promise<string | null>;
+      createFolder: (folderPath: string, folderName: string) => Promise<string>;
+      createExtractionFolder: (casePath: string, folderName: string, parentPdfPath?: string) => Promise<string>;
+      moveFileToFolder: (filePath: string, folderPath: string) => Promise<{ success: boolean; error?: string; newPath?: string }>;
+      listArchiveCases: () => Promise<Array<{ name: string; path: string; backgroundImage?: string; description?: string; categoryTagId?: string }>>;
+      listCaseFiles: (casePath: string) => Promise<Array<{ name: string; path: string; size: number; modified: number; isFolder?: boolean; folderType?: 'extraction' | 'case'; parentPdfName?: string; categoryTagId?: string }>>;
+      addFilesToCase: (casePath: string, filePaths?: string[]) => Promise<string[]>;
+      saveAudioRecordingToCase: (
+        casePath: string,
+        fileName: string,
+        audioData: ArrayBuffer,
+        mimeType?: string
+      ) => Promise<string>;
+      deleteCase: (casePath: string) => Promise<boolean>;
+      setCaseBackgroundImage: (casePath: string, imagePath: string) => Promise<string>;
+      setFolderBackgroundImage: (folderPath: string, imagePath: string) => Promise<string>;
+      deleteFile: (filePath: string, isFolder?: boolean) => Promise<boolean>;
+      renameFile: (filePath: string, newName: string) => Promise<{ success: boolean; newPath: string }>;
+      getFileThumbnail: (filePath: string) => Promise<string>;
+      getPDFThumbnailPath: (filePath: string) => Promise<string>;
+      savePDFThumbnail: (filePath: string, thumbnailData: string) => Promise<void>;
+      readPDFThumbnail: (filePath: string) => Promise<string | null>;
+      deletePDFThumbnail: (filePath: string) => Promise<void>;
+      readFileData: (filePath: string) => Promise<
+        | { data: string; mimeType: string; fileName: string }
+        | { type: 'file-path'; path: string; mimeType: string; fileName: string }
+      >;
+      extractPDFFromArchive: (options: {
+        pdfPath: string;
+        casePath: string;
+        folderName: string;
+        saveParentFile: boolean;
+        saveToZip: boolean;
+        extractedPages: Array<{ pageNumber: number; imageData: string; fileName: string }>;
+      }) => Promise<{ success: boolean; messages: string[]; extractionFolder: string }>;
+      logToMain: (level: LogLevel, ...args: LogArgs) => Promise<void>;
+      openDevToolsInDev: () => Promise<{ success: boolean }>;
+      debugLog: (logEntry: {
+        location: string;
+        message: string;
+        data?: unknown;
+        timestamp: number;
+        sessionId: string;
+        runId: string;
+        hypothesisId: string;
+      }) => Promise<void>;
+      getSystemMemory: () => Promise<{ totalMemory: number; freeMemory: number; usedMemory: number }>;
+      getSystemFonts: (forceRefresh?: boolean) => Promise<string[]>;
+      // Settings API
+      getSettings: () => Promise<{
+        hardwareAcceleration: boolean;
+        ramLimitMB: number;
+        fullscreen: boolean;
+        extractionQuality: 'high' | 'medium' | 'low';
+        thumbnailSize: number;
+        performanceMode: 'auto' | 'high' | 'balanced' | 'low';
+      }>;
+      updateSettings: (updates: Partial<{
+        hardwareAcceleration: boolean;
+        ramLimitMB: number;
+        fullscreen: boolean;
+        extractionQuality: 'high' | 'medium' | 'low';
+        thumbnailSize: number;
+        performanceMode: 'auto' | 'high' | 'balanced' | 'low';
+      }>) => Promise<{
+        hardwareAcceleration: boolean;
+        ramLimitMB: number;
+        fullscreen: boolean;
+        extractionQuality: 'high' | 'medium' | 'low';
+        thumbnailSize: number;
+        performanceMode: 'auto' | 'high' | 'balanced' | 'low';
+      }>;
+      toggleFullscreen: () => Promise<boolean>;
+      // Word Editor API
+      getVaultDirectory: () => Promise<string | null>;
+      listTextFiles: () => Promise<Array<{
+        name: string;
+        path: string;
+        size: number;
+        modified: number;
+        preview?: string;
+      }>>;
+      readTextFile: (filePath: string) => Promise<string>;
+      createTextFile: (fileName: string, content: string) => Promise<string>;
+      saveTextFile: (filePath: string, content: string) => Promise<{ success: boolean }>;
+      deleteTextFile: (filePath: string) => Promise<{ success: boolean }>;
+      // Case Notes API
+      listCaseNotes: (casePath: string) => Promise<Array<{
+        name: string;
+        path: string;
+        size: number;
+        modified: number;
+        preview?: string;
+      }>>;
+      createCaseNote: (casePath: string, fileName: string, content: string) => Promise<string>;
+      exportTextFile: (options: {
+        content: string;
+        format: 'pdf' | 'docx' | 'rtf';
+        filePath?: string;
+      }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
+      createWordEditorWindow: (options: {
+        content: string;
+        filePath?: string | null;
+        viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
+      }) => Promise<{ success: boolean }>;
+      reattachWordEditor: (options: {
+        content: string;
+        filePath?: string | null;
+        viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
+      }) => Promise<{ success: boolean }>;
+      createMapWindow: (
+        state: import('./detachableModules').MapModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      reattachMapModule: (
+        state: import('./detachableModules').MapModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      createTranscriptionWindow: (
+        state: import('./detachableModules').TranscriptionModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      reattachTranscriptionModule: (
+        state: import('./detachableModules').TranscriptionModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      createFileConverterWindow: (
+        state: import('./detachableModules').FileConverterModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      reattachFileConverterModule: (
+        state: import('./detachableModules').FileConverterModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      createNovelWindow: (
+        state: import('./detachableModules').NovelModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      reattachNovelModule: (
+        state: import('./detachableModules').NovelModuleDetachState
+      ) => Promise<{ success: boolean }>;
+      createPdfAuditWindow: (options: {
+        pdfPath: string | null;
+        settings: {
+          blackThreshold: number;
+          minOverlapArea: number;
+          minHits: number;
+          includeSecurityAudit: boolean;
+        };
+        showSettings: boolean;
+        result: import('../hooks/useRedactionAudit').RedactionAuditResult | null;
+        isAuditing: boolean;
+        progressMessage: string;
+      }) => Promise<{ success: boolean }>;
+      reattachPdfAudit: (options: {
+        pdfPath: string | null;
+        settings: {
+          blackThreshold: number;
+          minOverlapArea: number;
+          minHits: number;
+          includeSecurityAudit: boolean;
+        };
+        showSettings: boolean;
+        result: import('../hooks/useRedactionAudit').RedactionAuditResult | null;
+        isAuditing: boolean;
+        progressMessage: string;
+      }) => Promise<{ success: boolean }>;
+      createPdfExtractionWindow: (options: {
+        pdfPath: string | null;
+        settings: {
+          dpi: number;
+          quality: number;
+          format: 'png' | 'jpeg';
+          pageRange: 'all' | 'custom' | 'selected';
+          customPageRange: string;
+          colorSpace: 'rgb' | 'grayscale';
+          compressionLevel: number;
+        };
+        showSettings: boolean;
+        extractedPages: import('./index').ExtractedPage[];
+        selectedPages: number[];
+        previewPage: import('./index').ExtractedPage | null;
+        isExtracting: boolean;
+        progress: import('./index').ExtractionProgress | null;
+        error: string | null;
+        statusMessage: string;
+        caseFolderPath?: string | null;
+      }) => Promise<{ success: boolean }>;
+      reattachPdfExtraction: (options: {
+        pdfPath: string | null;
+        settings: {
+          dpi: number;
+          quality: number;
+          format: 'png' | 'jpeg';
+          pageRange: 'all' | 'custom' | 'selected';
+          customPageRange: string;
+          colorSpace: 'rgb' | 'grayscale';
+          compressionLevel: number;
+        };
+        showSettings: boolean;
+        extractedPages: import('./index').ExtractedPage[];
+        selectedPages: number[];
+        previewPage: import('./index').ExtractedPage | null;
+        isExtracting: boolean;
+        progress: import('./index').ExtractionProgress | null;
+        error: string | null;
+        statusMessage: string;
+        caseFolderPath?: string | null;
+      }) => Promise<{ success: boolean }>;
+      closeWindow: () => Promise<{ success: boolean }>;
+      openBookmarkInMainWindow: (options: {
+        pdfPath: string;
+        pageNumber: number;
+      }) => Promise<{ success: boolean }>;
+      // Bookmark API
+      getBookmarks: () => Promise<import('./index').Bookmark[]>;
+      createBookmark: (
+        bookmark: Omit<import('./index').Bookmark, 'id' | 'createdAt' | 'updatedAt'>
+      ) => Promise<import('./index').Bookmark>;
+      updateBookmark: (
+        id: string,
+        updates: Partial<Omit<import('./index').Bookmark, 'id' | 'createdAt'>>
+      ) => Promise<import('./index').Bookmark>;
+      deleteBookmark: (id: string) => Promise<boolean>;
+      getBookmarkFolders: () => Promise<import('./index').BookmarkFolder[]>;
+      createBookmarkFolder: (
+        folder: Omit<import('./index').BookmarkFolder, 'id' | 'createdAt' | 'updatedAt'>
+      ) => Promise<import('./index').BookmarkFolder>;
+      deleteBookmarkFolder: (id: string) => Promise<boolean>;
+      getBookmarksByFolder: (folderId: string | null) => Promise<import('./index').Bookmark[]>;
+      saveBookmarkThumbnail: (bookmarkId: string, thumbnailData: string) => Promise<string>;
+      getBookmarkThumbnail: (bookmarkId: string) => Promise<string | null>;
+      // File Security Checker API
+      auditPDFRedaction: (pdfPath: string, options?: {
+        blackThreshold?: number;
+        minOverlapArea?: number;
+        minHits?: number;
+        includeSecurityAudit?: boolean;
+      }) => Promise<import('../hooks/useRedactionAudit').RedactionAuditResult>;
+      onAuditProgress: (callback: (message: string) => void) => () => void;
+      onAuditResult: (callback: (result: import('../hooks/useRedactionAudit').RedactionAuditResult) => void) => () => void;
+      onAuditError: (callback: (error: string) => void) => () => void;
+      generateAuditReport: (auditResult: import('../hooks/useRedactionAudit').AuditReportPayload, outputPath: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
+      showSaveDialog: (options: {
+        title: string;
+        defaultPath: string;
+        filters: Array<{ name: string; extensions: string[] }>;
+      }) => Promise<{ canceled: boolean; filePath?: string }>;
+      // Map API
+      listMaps: () => Promise<Array<{
+        id: string;
+        title: string;
+        mapFolderPath: string;
+        casePath: string | null;
+        caseName?: string;
+        modified: number;
+        blockCount: number;
+      }>>;
+      listCaseMaps: (casePath: string) => Promise<Array<{
+        id: string;
+        title: string;
+        mapFolderPath: string;
+        casePath: string | null;
+        caseName?: string;
+        modified: number;
+        blockCount: number;
+      }>>;
+      createMap: (title: string, casePath?: string | null) => Promise<import('./index').MapDocument>;
+      readMap: (mapFolderPath: string) => Promise<import('./index').MapDocument>;
+      saveMap: (document: import('./index').MapDocument) => Promise<import('./index').MapDocument>;
+      deleteMap: (mapFolderPath: string) => Promise<{ success: boolean }>;
+      renameMap: (mapFolderPath: string, newTitle: string) => Promise<import('./index').MapDocument>;
+      selectMapAttachments: () => Promise<string[]>;
+      copyMapAttachmentToAssets: (
+        mapFolderPath: string,
+        sourcePath: string,
+        attachmentId: string
+      ) => Promise<{
+        relativePath: string;
+        vaultPath: string;
+        fileName: string;
+        type: 'image' | 'pdf' | 'video' | 'other';
+      }>;
+      exportMapToDirectory: (
+        mapFolderPath: string,
+        destDirectory: string
+      ) => Promise<{ success: boolean; exportPath: string }>;
+      exportMapPng: (options: {
+        mapFolderPath: string;
+        pngBase64: string;
+        destFilePath?: string;
+      }) => Promise<{ success: boolean; filePath: string }>;
+      // Novel API
+      listNovels: () => Promise<import('./index').NovelListEntry[]>;
+      listCaseNovels: (casePath: string) => Promise<import('./index').NovelListEntry[]>;
+      createNovel: (
+        title: string,
+        casePath?: string | null,
+        bookSizeId?: string | null
+      ) => Promise<import('./index').NovelDocument>;
+      readNovel: (novelFolderPath: string) => Promise<import('./index').NovelDocument>;
+      saveNovel: (document: import('./index').NovelDocument) => Promise<import('./index').NovelDocument>;
+      deleteNovel: (novelFolderPath: string) => Promise<{ success: boolean }>;
+      moveNovelToCase: (novelFolderPath: string, casePath: string) => Promise<import('./index').NovelDocument>;
+      moveNovelToLibrary: (novelFolderPath: string) => Promise<import('./index').NovelDocument>;
+      copyNovelAssetToNovel: (
+        novelFolderPath: string,
+        sourcePath: string,
+        assetId: string
+      ) => Promise<{ relativePath: string; vaultPath: string; fileName: string }>;
+      writeNovelAssetFromDataUrl: (
+        novelFolderPath: string,
+        relativePath: string,
+        dataUrl: string
+      ) => Promise<{ success: boolean }>;
+      exportNovelPdf: (
+        novelFolderPath: string,
+        destFilePath: string
+      ) => Promise<{ success: boolean; filePath: string }>;
+      exportNovelHtml: (
+        novelFolderPath: string,
+        destDirectory: string
+      ) => Promise<{ success: boolean; exportPath: string }>;
+      exportNovelDocx: (
+        novelFolderPath: string,
+        destFilePath: string
+      ) => Promise<{ success: boolean; filePath: string }>;
+      exportNovelEpub: (
+        novelFolderPath: string,
+        destFilePath: string
+      ) => Promise<{ success: boolean; filePath: string }>;
+      // Transcription API
+      getTranscriptionEngineStatus: () => Promise<import('./index').TranscriptionEngineStatus>;
+      startTranscriptionEngine: () => Promise<import('./index').TranscriptionEngineStatus>;
+      stopTranscriptionEngine: () => Promise<{ success: boolean }>;
+      listTranscriptionModels: () => Promise<import('./index').TranscriptionEngineModel[]>;
+      downloadTranscriptionModel: (
+        modelId: string
+      ) => Promise<import('./index').TranscriptionModelDownloadResult>;
+      selectTranscriptionMedia: () => Promise<string[]>;
+      listTranscriptions: () => Promise<import('./index').TranscriptionListEntry[]>;
+      listCaseTranscriptions: (casePath: string) => Promise<import('./index').TranscriptionListEntry[]>;
+      createTranscription: (
+        title: string,
+        casePath?: string | null,
+        initialSourcePath?: string | null
+      ) => Promise<import('./index').TranscriptionDocument>;
+      readTranscription: (transcriptionFolderPath: string) => Promise<import('./index').TranscriptionDocument>;
+      saveTranscription: (document: import('./index').TranscriptionDocument) => Promise<import('./index').TranscriptionDocument>;
+      deleteTranscription: (transcriptionFolderPath: string) => Promise<{ success: boolean }>;
+      renameTranscription: (
+        transcriptionFolderPath: string,
+        newTitle: string
+      ) => Promise<import('./index').TranscriptionDocument>;
+      copyTranscriptionSourceToAssets: (
+        transcriptionFolderPath: string,
+        sourcePath: string,
+        sourceId: string
+      ) => Promise<{
+        relativePath: string;
+        storedPath: string;
+        fileName: string;
+        mediaType: import('./index').TranscriptionMediaType;
+      }>;
+      runTranscription: (options: {
+        transcriptionFolderPath: string;
+        sourcePath: string;
+        casePath?: string | null;
+        title?: string;
+        settings?: Partial<import('./index').TranscriptionEngineSettings>;
+      }) => Promise<import('./index').TranscriptionDocument>;
+      cancelTranscriptionJob: (transcriptionFolderPath?: string) => Promise<{ success: boolean }>;
+      // File Converter API
+      getConverterCapabilities: () => Promise<import('./index').FileConverterCapabilities>;
+      convertFile: (options: {
+        sourcePath: string;
+        outputFormat: import('./index').FileConverterOutputFormat;
+        outputDirectory?: string;
+        quality?: number;
+        dpi?: number;
+        renderedPages?: Array<{ pageNumber: number; imageData: string }>;
+      }) => Promise<{ success: boolean; outputPath?: string; outputPaths?: string[]; error?: string }>;
+      cancelFileConversion: () => Promise<{ success: boolean }>;
+      selectConverterFile: () => Promise<string | null>;
+      saveConvertedFileToCase: (
+        casePath: string,
+        sourceOutputPath: string,
+        preferredName?: string
+      ) => Promise<{ success: boolean; savedPath?: string; error?: string }>;
+      replaceVaultFileWithConversion: (options: {
+        casePath: string | null;
+        originalPath: string;
+        convertedPath: string;
+        newFileName?: string;
+      }) => Promise<import('./index').ReplaceVaultFileResult>;
+      onFileConverterProgress: (
+        callback: (progress: import('./index').FileConverterProgress) => void
+      ) => () => void;
+    };
+  }
+}
+
+export {};
+

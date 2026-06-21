@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, FolderPlus, Upload, ArrowLeft, FolderOpen } from 'lucide-react';
+import { Home, FolderPlus, Upload, ArrowLeft, FolderOpen, FileText } from 'lucide-react';
 import { useArchive } from '../../hooks/useArchive';
 import { useArchiveExtraction } from '../../hooks/useArchiveExtraction';
 import { useToast } from '../Toast/ToastContext';
@@ -8,30 +8,46 @@ import { useCategoryTags } from '../../hooks/useCategoryTags';
 import { CaseFolder } from './CaseFolder';
 import { RegularFolder } from './RegularFolder';
 import { ArchiveFileItem } from './ArchiveFileItem';
-import { ArchiveFileViewer } from './ArchiveFileViewer';
 import { ArchiveSearchBar } from './ArchiveSearchBar';
 import { ArchiveDriveDialog } from './ArchiveDriveDialog';
 import { CaseNameDialog } from './CaseNameDialog';
+import { CaseDescriptionDialog } from './CaseDescriptionDialog';
 import { ExtractionFolderDialog } from './ExtractionFolderDialog';
 import { SaveParentDialog } from './SaveParentDialog';
 import { FolderSelectionDialog } from './FolderSelectionDialog';
 import { DeleteFolderConfirmDialog } from './DeleteFolderConfirmDialog';
+import { DeletePDFConfirmDialog } from './DeletePDFConfirmDialog';
 import { RenameFileDialog } from './RenameFileDialog';
 import { CreateFolderDialog } from './CreateFolderDialog';
 import { ExtractionFolder } from './ExtractionFolder';
 import { CategoryTagSelector } from './CategoryTagSelector';
-import { ArchiveFile } from '../../types';
+import { ArchiveFile, ArchiveCase } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { ProgressBar } from '../ProgressBar';
-import { SecurityCheckerModal } from '../SecurityCheckerModal';
 import { ActionToolbar } from '../ActionToolbar';
 import { logger } from '../../utils/logger';
-import { useWordEditor } from '../../contexts/WordEditorContext';
+// import { useWordEditor } from '../../contexts/WordEditorContext'; // Unused for now
+import { useArchiveContext } from '../../contexts/ArchiveContext';
+import { useSettingsContext } from '../../utils/settingsContext';
+import { Theme } from '../../types';
+import { prefetchArchiveHeavyDeps } from '../../utils/archivePrefetch';
+
+const ArchiveFileViewer = lazy(() =>
+  import('./ArchiveFileViewer').then((module) => ({ default: module.ArchiveFileViewer })),
+);
+const SecurityCheckerModal = lazy(() =>
+  import('../SecurityCheckerModal').then((module) => ({ default: module.SecurityCheckerModal })),
+);
+const PDFExtractionModal = lazy(() =>
+  import('../PDFExtractionModal').then((module) => ({ default: module.PDFExtractionModal })),
+);
 
 interface ArchivePageProps {
   onBack: () => void;
+  onOpenTranscription: (sourcePath: string, casePath: string | null) => void;
 }
 
-export function ArchivePage({ onBack }: ArchivePageProps) {
+export function ArchivePage({ onBack, onOpenTranscription }: ArchivePageProps) {
   const {
     archiveConfig,
     cases,
@@ -57,6 +73,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     navigateToFolder,
     updateCaseBackgroundImage,
     updateFolderBackgroundImage,
+    updateCaseDescription,
     refreshFiles,
     refreshCases,
     selectedTagId,
@@ -64,13 +81,121 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     tags,
     getTagById,
     findFileInArchive,
+    ensureThumbnailForFile,
   } = useArchive();
+
+  const requestFileThumbnail = useCallback((file: ArchiveFile) => {
+    ensureThumbnailForFile(file.path, file.type ?? 'other');
+  }, [ensureThumbnailForFile]);
 
   const { createTag, deleteTag, assignTagToCase, assignTagToFile } = useCategoryTags();
 
-  const { extractPDF, isExtracting, progress, statusMessage, extractingCasePath, extractingFolderPath } = useArchiveExtraction();
+  const { extractPDF, isExtracting, progress, statusMessage, extractingCasePath, extractingFolderPath, cancel: cancelArchiveExtraction } = useArchiveExtraction();
   const toast = useToast();
-  const { isOpen: isWordEditorOpen } = useWordEditor();
+
+  useEffect(() => {
+    void prefetchArchiveHeavyDeps();
+  }, []);
+  // const { isOpen: isWordEditorOpen } = useWordEditor(); // Unused for now
+  const { currentCase: archiveContextCase, setCurrentCase: setArchiveContextCase } = useArchiveContext();
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = isLightTheme(theme);
+  
+  // Track if we've attempted to restore case from context (prevents multiple restorations)
+  const hasRestoredCaseRef = useRef(false);
+  // Track if we've processed the sessionStorage bookmark (prevents re-processing)
+  const hasProcessedSessionBookmarkRef = useRef(false);
+  // Track the last restored case path to detect remount scenarios
+  const lastRestoredCasePathRef = useRef<string | null>(null);
+
+  // Restore currentCase from ArchiveContext on mount if local state is null
+  // This fixes the issue where ArchivePage remounts (due to layout changes) and loses case selection
+  // OPTIMIZED: Use useLayoutEffect for immediate restoration to prevent visual refresh
+  useLayoutEffect(() => {
+    // Fast path: If we're remounting and context has the same case we just restored, restore immediately
+    // This prevents the menu from showing null state before restoration
+    if (currentCase === null && 
+        archiveContextCase !== null && 
+        lastRestoredCasePathRef.current === archiveContextCase.path &&
+        cases.length > 0) {
+      // Verify the case still exists
+      const caseExists = cases.some(c => c.path === archiveContextCase.path);
+      if (caseExists) {
+        // Immediate restoration to prevent visual refresh
+        setCurrentCase(archiveContextCase);
+        return;
+      }
+    }
+  }, [currentCase, archiveContextCase, cases, setCurrentCase]);
+
+  // Full restoration logic for initial mount or case changes
+  useEffect(() => {
+
+    
+    // Update last restored path if we have a current case
+    if (currentCase?.path) {
+      lastRestoredCasePathRef.current = currentCase.path;
+    }
+    
+    // Only restore if:
+    // 1. We haven't already restored this case (or it's a different case)
+    // 2. Cases are loaded (we need the list to validate)
+    // 3. Local currentCase is null (we just mounted/remounted)
+    // 4. ArchiveContext has a case (there was a previous selection)
+    // 5. We haven't already restored this exact case (prevents refresh on remount)
+    const isSameCase = lastRestoredCasePathRef.current === archiveContextCase?.path;
+    const shouldRestore = cases.length > 0 && 
+                          currentCase === null && 
+                          archiveContextCase !== null &&
+                          (!hasRestoredCaseRef.current || !isSameCase);
+    
+    if (shouldRestore) {
+
+      // Verify the case still exists in our cases list
+      const caseExists = cases.some(c => c.path === archiveContextCase.path);
+      if (caseExists) {
+
+        setCurrentCase(archiveContextCase);
+        hasRestoredCaseRef.current = true;
+        lastRestoredCasePathRef.current = archiveContextCase.path;
+      } else {
+
+        // Case doesn't exist anymore, mark as restored to prevent retrying
+        hasRestoredCaseRef.current = true;
+        lastRestoredCasePathRef.current = null;
+      }
+    } else if (currentCase === null && archiveContextCase === null) {
+      // Both are null - reset flags to allow future restoration
+      // This happens when user navigates back to case gallery
+      hasRestoredCaseRef.current = false;
+      lastRestoredCasePathRef.current = null;
+    }
+  }, [cases, currentCase, archiveContextCase, setCurrentCase]);
+
+  // Update global ArchiveContext when currentCase changes
+  // Use useLayoutEffect to ensure synchronous update before browser paint
+  // This prevents race conditions when word editor opens and needs to read currentCase
+  // OPTIMIZED: Only sync if values actually changed to prevent unnecessary re-renders
+  useLayoutEffect(() => {
+
+    
+    // Only sync if values actually differ to prevent unnecessary updates
+    if (currentCase !== null) {
+      // Only sync if context doesn't already have the same case (by path comparison)
+      if (archiveContextCase?.path !== currentCase.path) {
+
+        setArchiveContextCase(currentCase);
+      }
+    } else if (archiveContextCase === null) {
+      // Both are null - no need to sync (already in sync)
+
+    } else {
+      // currentCase is null but archiveContextCase is not - skip syncing
+      // This allows the useEffect to restore from context first
+
+    }
+  }, [currentCase, setArchiveContextCase, archiveContextCase]);
 
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showCaseDialog, setShowCaseDialog] = useState(false);
@@ -79,9 +204,13 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const [showSaveParentDialog, setShowSaveParentDialog] = useState(false);
   const [showDeleteFolderDialog, setShowDeleteFolderDialog] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<ArchiveFile | null>(null);
+  const [showDeletePDFDialog, setShowDeletePDFDialog] = useState(false);
+  const [pdfToDelete, setPdfToDelete] = useState<ArchiveFile | null>(null);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [fileToRename, setFileToRename] = useState<ArchiveFile | null>(null);
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
+  const [showDescriptionDialog, setShowDescriptionDialog] = useState(false);
+  const [caseForDescription, setCaseForDescription] = useState<ArchiveCase | null>(null);
   const [selectedFileForExtraction, setSelectedFileForExtraction] = useState<ArchiveFile | null>(null);
   const [selectedFile, setSelectedFile] = useState<ArchiveFile | null>(null);
   const [fileViewerIndex, setFileViewerIndex] = useState(0);
@@ -89,10 +218,12 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const [showTagSelector, setShowTagSelector] = useState(false);
   const [tagSelectorCasePath, setTagSelectorCasePath] = useState<string | null>(null);
   const [tagSelectorFilePath, setTagSelectorFilePath] = useState<string | null>(null);
-  const [pendingBookmarkOpen, setPendingBookmarkOpen] = useState<{ pdfPath: string; pageNumber: number } | null>(null);
+  const [pendingBookmarkOpen, setPendingBookmarkOpen] = useState<{ pdfPath: string; pageNumber: number; timestamp?: number } | null>(null);
   const [targetFolderPath, setTargetFolderPath] = useState<string | null>(null);
   const [showSecurityChecker, setShowSecurityChecker] = useState(false);
   const [pdfPathForAudit, setPdfPathForAudit] = useState<string | null>(null);
+  const [showPDFExtraction, setShowPDFExtraction] = useState(false);
+  const [pdfPathForExtraction, setPdfPathForExtraction] = useState<string | null>(null);
 
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -108,24 +239,38 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   }, [archiveConfig]);
 
   // Check for pending bookmark open on mount (handles case where archive was just opened)
+  // Only process once to prevent re-opening bookmarks when navigating
   useEffect(() => {
+    // Only process if we haven't already processed it
+    if (hasProcessedSessionBookmarkRef.current) {
+      return;
+    }
+
     // Check if there's a pending bookmark open stored in sessionStorage
     const pendingBookmark = sessionStorage.getItem('pending-bookmark-open');
-    if (pendingBookmark && files.length > 0) {
+    if (pendingBookmark && files.length > 0 && !loading) {
       try {
         const { pdfPath, pageNumber } = JSON.parse(pendingBookmark);
+        // Mark as processed immediately to prevent re-processing
+        hasProcessedSessionBookmarkRef.current = true;
         sessionStorage.removeItem('pending-bookmark-open');
 
         // Dispatch the event so the normal handler can process it
-        const event = new CustomEvent('open-bookmark', {
-          detail: { pdfPath, pageNumber }
-        });
-        window.dispatchEvent(event);
+        // Use a small delay to ensure all state is ready
+        setTimeout(() => {
+          const event = new CustomEvent('open-bookmark', {
+            detail: { pdfPath, pageNumber }
+          });
+          window.dispatchEvent(event);
+        }, 100);
       } catch (error) {
-        console.error('Failed to parse pending bookmark:', error);
+        logger.error('Failed to parse pending bookmark:', error);
+        // Mark as processed even on error to prevent retries
+        hasProcessedSessionBookmarkRef.current = true;
+        sessionStorage.removeItem('pending-bookmark-open');
       }
     }
-  }, [files.length]); // Only check when files are loaded
+  }, [files.length, loading]); // Check when files are loaded and not loading
 
   // Navigate to target folder after case is loaded
   useEffect(() => {
@@ -137,17 +282,39 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       if (!currentFolderPath || normalizePath(currentFolderPath) !== normalizePath(targetFolderPath)) {
         if (currentCase) {
           openFolder(targetFolderPath);
+          // Don't clear targetFolderPath here - let it be cleared after folder files are loaded
+          // The pending bookmark will open once we're in the correct folder
+          return;
         }
       }
 
-      // Clear target folder path
-      setTargetFolderPath(null);
+      // Only clear target folder path if we're already in the target folder
+      // This ensures we don't clear it before folder navigation completes
+      if (currentFolderPath && normalizePath(currentFolderPath) === normalizePath(targetFolderPath)) {
+        setTargetFolderPath(null);
+      }
     }
   }, [targetFolderPath, currentCase, files, loading, currentFolderPath, openFolder]);
 
   // Handle opening pending bookmark after navigation completes
   useEffect(() => {
     if (!pendingBookmarkOpen || files.length === 0 || loading) {
+      return;
+    }
+
+    // Only process if we're not currently viewing a file (to prevent re-opening after close)
+    if (selectedFile) {
+      // If a file is already open, don't process pending bookmark
+      // This prevents re-opening bookmarks when user closes viewer and navigates
+      return;
+    }
+
+    // Only process bookmarks that were set recently (within last 30 seconds)
+    // This prevents old bookmarks from opening when navigating
+    const bookmarkAge = pendingBookmarkOpen.timestamp ? Date.now() - pendingBookmarkOpen.timestamp : Infinity;
+    if (bookmarkAge > 30000) {
+      // Bookmark is too old, clear it
+      setPendingBookmarkOpen(null);
       return;
     }
 
@@ -174,29 +341,42 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         // Don't show toast - the PDF opening is visual feedback enough
       }
     }
-  }, [pendingBookmarkOpen, files, loading]);
+  }, [pendingBookmarkOpen, files, loading, selectedFile]);
 
   // Listen for bookmark open events
   useEffect(() => {
     // Track if we're currently processing a bookmark to prevent duplicates
     let isProcessing = false;
 
-    const handleOpenBookmark = async (event: CustomEvent<{ pdfPath: string; pageNumber: number }>) => {
+    const handleOpenBookmark = async (event: CustomEvent<{ pdfPath: string; pageNumber: number; keepPanelOpen?: boolean }>) => {
       // Prevent duplicate handling
       if (isProcessing) {
         return;
       }
 
       const { pdfPath, pageNumber } = event.detail;
+      
+      // If we're in a case and files aren't loaded yet, store in sessionStorage and wait for files to load
+      // But if we're in the case gallery (currentCase is null), we should still proceed to search and navigate
+      if (currentCase && (files.length === 0 || loading)) {
+        sessionStorage.setItem('pending-bookmark-open', JSON.stringify({ pdfPath, pageNumber }));
+        return;
+      }
+
       isProcessing = true;
+      
+      // Reset the session bookmark processing flag when a new bookmark is explicitly opened
+      hasProcessedSessionBookmarkRef.current = false;
 
       try {
         // Normalize paths for comparison (handle different path separators)
         const normalizePath = (path: string) => path.replace(/\\/g, '/');
         const normalizedPdfPath = normalizePath(pdfPath);
 
-        // First, check if the file is in the current view
-        const matchingFile = files.find(f => !f.isFolder && normalizePath(f.path) === normalizedPdfPath);
+        // First, check if the file is in the current view (only if we have files loaded)
+        const matchingFile = files.length > 0 
+          ? files.find(f => !f.isFolder && normalizePath(f.path) === normalizedPdfPath)
+          : null;
 
         if (matchingFile) {
           // File is in current view - open it immediately
@@ -235,17 +415,26 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             fileFound = true; // Mark that we successfully found the file
 
             // Check if we need to navigate to a different case
+            // If currentCase is null (in case gallery), we always need to navigate
             const needsCaseNavigation = !currentCase || normalizePath(currentCase.path) !== normalizePath(result.casePath);
 
             // Check if we need to navigate to a different folder
+            // When in case gallery (currentCase is null), we always need folder navigation if file is in a folder
             const currentPath = currentFolderPath || currentCase?.path;
             const needsFolderNavigation = result.folderPath &&
               (!currentPath || normalizePath(currentPath) !== normalizePath(result.folderPath));
+            
+            // If we're in the gallery and the file is in a folder, we definitely need folder navigation
+            const isInGallery = !currentCase;
+            const fileIsInFolder = !!result.folderPath;
 
             // File was found successfully - proceed with navigation
-            if (needsCaseNavigation || needsFolderNavigation) {
-              // Store bookmark info for opening after navigation
-              setPendingBookmarkOpen({ pdfPath, pageNumber });
+            // Navigate if: switching cases or switching folders
+            // Note: needsCaseNavigation will be true if currentCase is null (in case gallery)
+            // Also navigate if we're in gallery and file is in a folder
+            if (needsCaseNavigation || needsFolderNavigation || (isInGallery && fileIsInFolder)) {
+              // Store bookmark info for opening after navigation (with timestamp)
+              setPendingBookmarkOpen({ pdfPath, pageNumber, timestamp: Date.now() });
 
               // Navigate to the correct case if needed
               if (needsCaseNavigation) {
@@ -256,8 +445,9 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   return;
                 }
 
-                // Store target folder path if we need to navigate to a folder
-                if (needsFolderNavigation && result.folderPath) {
+                // Always store target folder path if the file is in a folder
+                // This ensures we navigate to the folder even when coming from the case gallery
+                if (result.folderPath) {
                   setTargetFolderPath(result.folderPath);
                 } else {
                   setTargetFolderPath(null);
@@ -280,8 +470,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
               return;
             } else {
               // We're already in the right location, but file might not be loaded yet
-              // Set pending bookmark to trigger file open once files are loaded
-              setPendingBookmarkOpen({ pdfPath, pageNumber });
+              // Set pending bookmark to trigger file open once files are loaded (with timestamp)
+              setPendingBookmarkOpen({ pdfPath, pageNumber, timestamp: Date.now() });
               // File found and we're in the right location - no error
               return;
             }
@@ -302,18 +492,103 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       }
     };
 
+    const handleNavigateToCaseFolder = (event: CustomEvent<{ casePath: string }>) => {
+      const { casePath } = event.detail;
+      
+      // Find the case by path
+      const targetCase = cases.find(c => c.path === casePath);
+      if (targetCase) {
+        // Only navigate if we're not already in this case
+        // This prevents UI refresh and back button issues when reattaching
+        if (currentCase?.path !== casePath) {
+          // Set the case and navigate to case root
+          setCurrentCase(targetCase);
+          setArchiveContextCase(targetCase);
+          goBackToCase();
+        } else {
+          // Already in the target case - just ensure context is synced
+          // Don't call goBackToCase() as it resets navigation stack unnecessarily
+          if (archiveContextCase?.path !== casePath) {
+            setArchiveContextCase(targetCase);
+          }
+        }
+      } else {
+        toast.error('Case not found in archive');
+      }
+    };
+
     window.addEventListener('open-bookmark', handleOpenBookmark as unknown as EventListener);
+    window.addEventListener('navigate-to-case-folder', handleNavigateToCaseFolder as unknown as EventListener);
     return () => {
       window.removeEventListener('open-bookmark', handleOpenBookmark as unknown as EventListener);
+      window.removeEventListener('navigate-to-case-folder', handleNavigateToCaseFolder as unknown as EventListener);
     };
-  }, [files, toast, selectedFile, findFileInArchive, currentCase, currentFolderPath, cases, setCurrentCase, navigateToFolder, openFolder, goBackToCase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- archiveContextCase?.path is intentionally excluded so the bookmark/navigation listeners are not re-bound on context case sync
+  }, [files, loading, toast, selectedFile, findFileInArchive, currentCase, currentFolderPath, cases, setCurrentCase, setArchiveContextCase, navigateToFolder, openFolder, goBackToCase]);
+
+  useEffect(() => {
+    const handleRecordingSaved = (event: Event) => {
+      const detail = (event as CustomEvent<{ casePath?: string }>).detail;
+      if (!currentCase?.path || !detail?.casePath) {
+        return;
+      }
+      const normalizePath = (pathValue: string) => pathValue.replace(/\\/g, '/');
+      if (normalizePath(currentCase.path) === normalizePath(detail.casePath)) {
+        void refreshFiles();
+      }
+    };
+
+    window.addEventListener('vault-audio-recording-saved', handleRecordingSaved as EventListener);
+    return () => {
+      window.removeEventListener('vault-audio-recording-saved', handleRecordingSaved as EventListener);
+    };
+  }, [currentCase?.path, refreshFiles]);
+
+  // Listen for reattach data from detached PDF extraction window
+  useEffect(() => {
+    const handleReattach = (event: WindowEventMap['reattach-pdf-extraction-data']) => {
+      const data = event.detail;
+      
+      // Only handle reattach if caseFolderPath is present (archive usage)
+      if (data && data.caseFolderPath) {
+        logger.debug('ArchivePage: Received reattach-pdf-extraction-data event with caseFolderPath, opening modal');
+        // Set the PDF path from reattach data
+        if (data.pdfPath) {
+          setPdfPathForExtraction(data.pdfPath);
+        }
+        // Open the ArchivePage's PDFExtractionModal
+        // The modal will automatically restore state from window.__reattachPdfExtractionData
+        setShowPDFExtraction(true);
+      }
+    };
+
+    window.addEventListener('reattach-pdf-extraction-data', handleReattach);
+    
+    // Also check for stored data on mount
+    const checkStoredData = () => {
+      const storedData = window.__reattachPdfExtractionData;
+      if (storedData && storedData.caseFolderPath) {
+        logger.debug('ArchivePage: Found stored reattach data with caseFolderPath, opening modal');
+        if (storedData.pdfPath) {
+          setPdfPathForExtraction(storedData.pdfPath);
+        }
+        setShowPDFExtraction(true);
+      }
+    };
+    
+    // Check after a short delay to ensure component is mounted
+    const timeoutId = setTimeout(checkStoredData, 100);
+    
+    return () => {
+      window.removeEventListener('reattach-pdf-extraction-data', handleReattach);
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   // Handle drag and drop
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:88', message: 'Global handleDragOver: Drag over', data: { hasFiles: e.dataTransfer?.files?.length || 0, dataTransferTypes: Array.from(e.dataTransfer?.types || []), hasTextPlain: e.dataTransfer?.types?.includes('text/plain') || false }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' }).catch(() => { });
-      // #endregion
+
 
       // Only prevent default for external file drags
       // Internal drags should be allowed to propagate to folder handlers
@@ -352,9 +627,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
     };
 
     const handleDrop = async (e: DragEvent) => {
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:102', message: 'Global handleDrop: Drop event', data: { hasFiles: e.dataTransfer?.files?.length || 0, dataTransferTypes: Array.from(e.dataTransfer?.types || []), hasTextPlain: e.dataTransfer?.types?.includes('text/plain') || false }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' }).catch(() => { });
-      // #endregion
+
 
       // Only handle external file drops (from file explorer)
       // Internal drags (within app) should be handled by folder drop handlers
@@ -362,15 +635,10 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
       const hasExternalFiles = droppedFiles.length > 0;
       const hasInternalDrag = e.dataTransfer?.types?.includes('text/plain') && !hasExternalFiles;
 
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:109', message: 'Global handleDrop: Checking drop type', data: { hasExternalFiles, hasInternalDrag, willHandle: hasExternalFiles }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' }).catch(() => { });
-      // #endregion
 
       // If this is an internal drag (no external files), let it propagate to folder handlers
       if (hasInternalDrag && !hasExternalFiles) {
-        // #region agent log
-        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:113', message: 'Global handleDrop: Internal drag - allowing propagation', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' }).catch(() => { });
-        // #endregion
+
         setIsDragging(false);
         return; // Don't prevent default, let folder handlers handle it
       }
@@ -436,7 +704,6 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   };
 
   const handleFileTagClick = (filePath: string) => {
-    console.log('[ArchivePage] handleFileTagClick:', { filePath, file: files.find(f => f.path === filePath) });
     setTagSelectorFilePath(filePath);
     setTagSelectorCasePath(null);
     setShowTagSelector(true);
@@ -445,7 +712,6 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   const handleTagSelect = async (tagId: string | null) => {
     if (tagSelectorFilePath) {
       // Assign tag to specific file
-      console.log('[ArchivePage] handleTagSelect - assigning tag to file:', { tagSelectorFilePath, tagId, file: files.find(f => f.path === tagSelectorFilePath) });
       const success = await assignTagToFile(tagSelectorFilePath, tagId);
       if (success) {
         // Reload files to update the UI with the new tag
@@ -478,29 +744,18 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   };
 
   const handleMoveFileToFolder = async (filePath: string, folderPath: string) => {
-    // #region agent log
-    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:164', message: 'handleMoveFileToFolder: Entry', data: { filePath, folderPath, hasFilePath: !!filePath, hasFolderPath: !!folderPath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
-    // #endregion
+
     if (!filePath || !folderPath) {
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:166', message: 'handleMoveFileToFolder: Missing paths - returning early', data: { filePath, folderPath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
-      // #endregion
+
       logger.warn('handleMoveFileToFolder: Missing filePath or folderPath', { filePath, folderPath });
       return;
     }
     try {
       logger.log('handleMoveFileToFolder: Moving file', { filePath, folderPath });
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:171', message: 'handleMoveFileToFolder: Calling moveFileToFolder hook', data: { filePath, folderPath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'D' }).catch(() => { });
-      // #endregion
-      const result = await moveFileToFolder(filePath, folderPath);
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:173', message: 'handleMoveFileToFolder: moveFileToFolder completed', data: { filePath, folderPath, result }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'D' }).catch(() => { });
-      // #endregion
+
+      await moveFileToFolder(filePath, folderPath);
     } catch (error) {
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:175', message: 'handleMoveFileToFolder: Error caught', data: { filePath, folderPath, error: error instanceof Error ? error.message : String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }).catch(() => { });
-      // #endregion
+
       logger.error('Failed to move file to folder:', error);
     }
   };
@@ -537,13 +792,17 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
   };
 
   const handleExtractPDF = (file: ArchiveFile) => {
-    setSelectedFileForExtraction(file);
-    setShowFolderSelectionDialog(true);
+    setPdfPathForExtraction(file.path);
+    setShowPDFExtraction(true);
   };
 
   const handleRunPDFAudit = (file: ArchiveFile) => {
     setPdfPathForAudit(file.path);
     setShowSecurityChecker(true);
+  };
+
+  const handleTranscribeMedia = (file: ArchiveFile) => {
+    onOpenTranscription(file.path, currentCase?.path || null);
   };
 
   const handleReportSaved = () => {
@@ -667,159 +926,347 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 transition-all duration-300"
+      className={`min-h-screen transition-all duration-300 ${
+        isPastel
+          ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
+          : 'bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900'
+      }`}
     >
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-6 relative flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-4 mb-2">
-              <button
-                onClick={onBack}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
-                aria-label="Return to home screen"
-              >
-                <Home size={18} aria-hidden="true" />
-                <span className="text-sm font-medium">Home</span>
-              </button>
-              {currentCase && (
-                <button
-                  onClick={() => setCurrentCase(null)}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors"
-                  aria-label="Go back to cases list"
+      <div className="flex flex-col h-screen overflow-hidden">
+        {/* Enhanced Header */}
+        <motion.div 
+          className={`relative p-8 border-b backdrop-blur-xl ${
+            isPastel
+              ? 'border-pink-200/40 bg-gradient-to-r from-slate-100/80 via-pink-50/30 to-slate-100/80'
+              : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+          }`}
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ 
+            duration: 0.9,
+            ease: [0.25, 0.1, 0.25, 1],
+            delay: 0.1,
+          }}
+        >
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                <div className={`absolute inset-0 rounded-2xl blur-xl opacity-50 ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                    : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                }`}></div>
+                <div className={`relative p-5 rounded-2xl shadow-2xl ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                    : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                }`}>
+                  <FolderOpen className="w-10 h-10 text-white" />
+                </div>
+              </div>
+              <div className="flex-1">
+                <motion.h1
+                  className={`text-4xl font-bold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                    isPastel
+                      ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400'
+                      : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                  }`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ 
+                    duration: 0.9,
+                    ease: [0.25, 0.1, 0.25, 1],
+                    delay: 0.2,
+                  }}
                 >
-                  <ArrowLeft size={18} aria-hidden="true" />
-                  <span className="text-sm font-medium">Back</span>
-                </button>
-              )}
+                  The Vault
+                </motion.h1>
+                <motion.p 
+                  className={`text-lg mt-2 ${
+                    isPastel ? 'text-gray-600' : 'text-gray-400'
+                  }`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ 
+                    duration: 0.8,
+                    ease: [0.25, 0.1, 0.25, 1],
+                    delay: 0.3,
+                  }}
+                >
+                  {currentCase 
+                    ? `Case: ${currentCase.name}${currentFolderPath ? ` / ${currentFolderPath.split(/[/\\]/).pop() || currentFolderPath}` : ''}`
+                    : 'Your case file archive'}
+                </motion.p>
+                {currentCase && (
+                  <div className="flex items-center gap-2 flex-wrap mt-2">
+                    <button
+                      onClick={() => navigateToFolder(currentCase.path)}
+                      className={`text-sm ${
+                        currentFolderPath
+                          ? isPastel
+                            ? 'text-pink-500 hover:text-pink-600 underline'
+                            : 'text-cyber-purple-400 hover:text-cyber-purple-300 underline'
+                          : isPastel
+                            ? 'text-gray-800 font-medium'
+                            : 'text-white font-medium'
+                      }`}
+                      aria-label={`Navigate to case ${currentCase.name}`}
+                    >
+                      {currentCase.name}
+                    </button>
+                    {currentFolderPath && (
+                      <>
+                        <span className={isPastel ? 'text-gray-400' : 'text-gray-500'}>/</span>
+                        <div className="flex items-center gap-2">
+                          {folderNavigationStack.map((path) => {
+                            const folderName = path.split(/[/\\]/).pop() || path;
+                            return (
+                              <span key={path} className="flex items-center gap-2">
+                                <button
+                                  onClick={() => navigateToFolder(path)}
+                                  className={`text-sm underline ${
+                                    isPastel
+                                      ? 'text-pink-500 hover:text-pink-600'
+                                      : 'text-cyber-purple-400 hover:text-cyber-purple-300'
+                                  }`}
+                                  aria-label={`Navigate to folder ${folderName}`}
+                                >
+                                  {folderName}
+                                </button>
+                                <span className={isPastel ? 'text-gray-400' : 'text-gray-500'}>/</span>
+                              </span>
+                            );
+                          })}
+                          <span className={`text-sm font-medium ${
+                            isPastel ? 'text-gray-800' : 'text-white'
+                          }`}>
+                            {currentFolderPath.split(/[/\\]/).pop() || currentFolderPath}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-4">
-              <h1 className="text-4xl font-bold bg-gradient-purple bg-clip-text text-transparent mb-2">
-                The Vault
-              </h1>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onBack}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-full border shadow-sm transition-colors ${
+                    isPastel
+                      ? 'bg-white/80 hover:bg-white text-gray-800 border-pink-300/60'
+                      : 'bg-gray-800/80 hover:bg-gray-700 text-white border-cyber-purple-500/60'
+                  }`}
+                  aria-label="Return to home screen"
+                >
+                  <Home size={18} aria-hidden="true" />
+                  <span className="text-sm font-medium">Home</span>
+                </button>
+                {currentCase && (
+                  <button
+                    onClick={() => {
+
+                      // Clear both local state and context to prevent restoration
+                      setCurrentCase(null);
+                      setArchiveContextCase(null);
+                      // Reset restoration flag so it can restore in the future if needed
+                      hasRestoredCaseRef.current = false;
+                    }}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-full border shadow-sm transition-colors ${
+                    isPastel
+                      ? 'bg-white/80 hover:bg-white text-gray-800 border-pink-300/60'
+                      : 'bg-gray-800/80 hover:bg-gray-700 text-white border-cyber-purple-500/60'
+                  }`}
+                    aria-label="Go back to cases list"
+                  >
+                    <ArrowLeft size={18} aria-hidden="true" />
+                    <span className="text-sm font-medium">Back</span>
+                  </button>
+                )}
+                {currentCase && currentFolderPath && (
+                  <button
+                    onClick={goBackToParentFolder}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-full border shadow-sm transition-colors ${
+                    isPastel
+                      ? 'bg-white/80 hover:bg-white text-gray-800 border-pink-300/60'
+                      : 'bg-gray-800/80 hover:bg-gray-700 text-white border-cyber-purple-500/60'
+                  }`}
+                    aria-label={`Go back to ${folderNavigationStack.length > 0 && folderNavigationStack[folderNavigationStack.length - 1] !== currentCase.path ? 'parent folder' : 'case'}`}
+                  >
+                    <ArrowLeft size={18} aria-hidden="true" />
+                    <span className="text-sm font-medium">
+                      Back to {folderNavigationStack.length > 0 && folderNavigationStack[folderNavigationStack.length - 1] !== currentCase.path ? 'Parent' : 'Case'}
+                    </span>
+                  </button>
+                )}
+              </div>
               <ActionToolbar />
             </div>
-            {currentCase && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={() => navigateToFolder(currentCase.path)}
-                  className={`text-sm ${currentFolderPath ? 'text-cyber-purple-400 hover:text-cyber-purple-300 underline' : 'text-white font-medium'}`}
-                  aria-label={`Navigate to case ${currentCase.name}`}
-                >
-                  {currentCase.name}
-                </button>
-                {currentFolderPath && (
-                  <>
-                    <span className="text-gray-500">/</span>
-                    <div className="flex items-center gap-2">
-                      {folderNavigationStack.map((path) => {
-                        const folderName = path.split(/[/\\]/).pop() || path;
-                        return (
-                          <span key={path} className="flex items-center gap-2">
-                            <button
-                              onClick={() => navigateToFolder(path)}
-                              className="text-cyber-purple-400 hover:text-cyber-purple-300 text-sm underline"
-                              aria-label={`Navigate to folder ${folderName}`}
-                            >
-                              {folderName}
-                            </button>
-                            <span className="text-gray-500">/</span>
-                          </span>
-                        );
-                      })}
-                      <span className="text-white text-sm font-medium">
-                        {currentFolderPath.split(/[/\\]/).pop() || currentFolderPath}
-                      </span>
+          </div>
+        </motion.div>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {/* Progress Bar */}
+          {isExtracting && progress && (
+            <div className="px-8 pt-6 pb-4">
+              <ProgressBar
+                progress={progress}
+                statusMessage={statusMessage}
+                onCancel={cancelArchiveExtraction}
+              />
+            </div>
+          )}
+
+          {/* Enhanced Toolbar */}
+          <div className={`relative z-50 px-6 sm:px-8 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b backdrop-blur-sm ${
+            isPastel
+              ? 'border-pink-200/20 bg-white/30'
+              : 'border-cyber-purple-400/20 bg-gray-900/30'
+          }`}>
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              {/* Action Buttons Group */}
+              <div className="flex items-center gap-3 sm:gap-4">
+                {!currentCase && (
+                  <motion.button
+                    onClick={() => setShowCaseDialog(true)}
+                    whileHover={{ scale: 1.02, y: -1 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl border ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-400/90 via-purple-400/90 to-pink-400/90 hover:from-pink-400 hover:via-purple-400 hover:to-pink-400 hover:shadow-pink-400/30 border-pink-300/30'
+                        : 'bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 hover:shadow-purple-500/30 border-purple-400/30'
+                    }`}
+                    aria-label="Create new case file"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                    <div className="relative flex items-center gap-2.5">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-white/20 rounded-lg blur-sm"></div>
+                        <FolderPlus size={18} className="relative z-10" />
+                      </div>
+                      <span className="relative z-10 text-sm sm:text-base">Start Case File</span>
                     </div>
+                  </motion.button>
+                )}
+
+                {currentCase && (
+                  <>
+                    <motion.button
+                      onClick={handleAddFiles}
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl border ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-400/90 via-purple-400/90 to-pink-400/90 hover:from-pink-400 hover:via-purple-400 hover:to-pink-400 hover:shadow-pink-400/30 border-pink-300/30'
+                        : 'bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 hover:shadow-purple-500/30 border-purple-400/30'
+                    }`}
+                      aria-label="Add files to case"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                      <div className="relative flex items-center gap-2.5">
+                        <div className="relative">
+                          <div className="absolute inset-0 bg-white/20 rounded-lg blur-sm"></div>
+                          <Upload size={18} className="relative z-10" />
+                        </div>
+                        <span className="relative z-10 text-sm sm:text-base">Add Files</span>
+                      </div>
+                    </motion.button>
+                    <motion.button
+                      onClick={() => setShowCreateFolderDialog(true)}
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`relative overflow-hidden group flex items-center gap-2.5 px-5 py-2.5 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl border ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-400/90 via-purple-400/90 to-pink-400/90 hover:from-pink-400 hover:via-purple-400 hover:to-pink-400 hover:shadow-pink-400/30 border-pink-300/30'
+                        : 'bg-gradient-to-br from-purple-600/90 via-purple-500/90 to-cyan-600/90 hover:from-purple-600 hover:via-purple-500 hover:to-cyan-600 hover:shadow-purple-500/30 border-purple-400/30'
+                    }`}
+                      aria-label="Create new folder"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                      <div className="relative flex items-center gap-2.5">
+                        <div className="relative">
+                          <div className="absolute inset-0 bg-white/20 rounded-lg blur-sm"></div>
+                          <FolderPlus size={18} className="relative z-10" />
+                        </div>
+                        <span className="relative z-10 text-sm sm:text-base">+ Folder</span>
+                      </div>
+                    </motion.button>
                   </>
                 )}
               </div>
-            )}
-            {currentCase && currentFolderPath && (
-              <button
-                onClick={goBackToParentFolder}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full border border-cyber-purple-500/60 shadow-sm transition-colors mt-2"
-                aria-label={`Go back to ${folderNavigationStack.length > 0 ? 'parent folder' : 'case'}`}
+
+              {/* Search Bar - Enhanced */}
+              <div className="flex-1 min-w-[200px] max-w-md">
+                <ArchiveSearchBar
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder={currentCase ? 'Search files...' : 'Search cases...'}
+                  tags={tags}
+                  selectedTagId={selectedTagId}
+                  onTagSelect={setSelectedTagId}
+                />
+              </div>
+
+              {/* Switch Vault Directory - Enhanced */}
+              <motion.button
+                onClick={() => setShowDriveDialog(true)}
+                whileHover={{ scale: 1.02, y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                className={`relative overflow-hidden group flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-xl border-2 transition-all duration-300 font-medium shadow-md hover:shadow-lg backdrop-blur-sm ${
+                  isPastel
+                    ? 'bg-white/70 hover:bg-white/90 text-gray-800 border-pink-200/50 hover:border-pink-400/60 hover:shadow-pink-400/20'
+                    : 'bg-gray-800/70 hover:bg-gray-800/90 text-white border-gray-700/50 hover:border-cyber-purple-400/60 hover:shadow-cyber-purple-500/20'
+                }`}
+                aria-label="Switch vault directory"
               >
-                <ArrowLeft size={18} aria-hidden="true" />
-                <span className="text-sm font-medium">Back to {folderNavigationStack.length > 0 ? 'Parent' : 'Case'}</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        {isExtracting && progress && (
-          <div className="mb-6">
-            <ProgressBar progress={progress} statusMessage={statusMessage} />
-          </div>
-        )}
-
-        {/* Toolbar */}
-        <div className="mb-6 flex flex-wrap items-center gap-4">
-          {!currentCase && (
-            <button
-              onClick={() => setShowCaseDialog(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
-              aria-label="Create new case file"
-            >
-              <FolderPlus size={20} aria-hidden="true" />
-              Start Case File
-            </button>
-          )}
-
-          {currentCase && (
-            <>
-              <button
-                onClick={handleAddFiles}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
-                aria-label="Add files to case"
-              >
-                <Upload size={20} aria-hidden="true" />
-                Add Files
-              </button>
-              <button
-                onClick={() => setShowCreateFolderDialog(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
-                aria-label="Create new folder"
-              >
-                <FolderPlus size={20} aria-hidden="true" />
-                + Folder
-              </button>
-            </>
-          )}
-
-          <div className="flex-1 max-w-md">
-            <ArchiveSearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
-              placeholder={currentCase ? 'Search files...' : 'Search cases...'}
-              tags={tags}
-              selectedTagId={selectedTagId}
-              onTagSelect={setSelectedTagId}
-            />
+                <div className={`absolute inset-0 transition-all duration-500 ${
+                  isPastel
+                    ? 'bg-gradient-to-br from-pink-400/0 via-pink-400/0 to-purple-400/0 group-hover:from-pink-400/5 group-hover:via-pink-400/3 group-hover:to-purple-400/5'
+                    : 'bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/3 group-hover:to-cyan-600/5'
+                }`}></div>
+                <div className="relative flex items-center gap-2.5">
+                  <div className="relative">
+                    <div className={`absolute inset-0 rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-400/20 to-purple-400/20'
+                        : 'bg-gradient-to-br from-purple-600/20 to-cyan-600/20'
+                    }`}></div>
+                    <FolderOpen size={16} className={`relative z-10 transition-colors ${
+                      isPastel
+                        ? 'text-gray-600 group-hover:text-pink-500'
+                        : 'text-gray-300 group-hover:text-cyber-purple-400'
+                    }`} />
+                  </div>
+                  <span className={`relative z-10 text-sm sm:text-base transition-colors ${
+                    isPastel
+                      ? 'text-gray-600 group-hover:text-gray-800'
+                      : 'text-gray-300 group-hover:text-white'
+                  }`}>Switch Vault</span>
+                </div>
+              </motion.button>
+            </div>
           </div>
 
-          <button
-            onClick={() => setShowDriveDialog(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-lg border border-cyber-purple-500/60 transition-colors font-medium"
-            aria-label="Switch vault directory"
+          {/* Content */}
+          <div
+            ref={dropZoneRef}
+            className={`relative z-0 flex-1 overflow-y-auto px-8 pt-6 pb-8 ${
+              isDragging
+                ? isPastel
+                  ? 'bg-pink-300/20 border-2 border-pink-400 border-dashed rounded-lg m-4'
+                  : 'bg-cyber-purple-500/20 border-2 border-cyber-purple-500 border-dashed rounded-lg m-4'
+                : ''
+            }`}
           >
-            <FolderOpen size={18} aria-hidden="true" />
-            Switch Vault Directory
-          </button>
-        </div>
-
-        {/* Content */}
-        <div
-          ref={dropZoneRef}
-          className={`relative min-h-[400px] ${isDragging ? 'bg-cyber-purple-500/20 border-2 border-cyber-purple-500 border-dashed rounded-lg' : ''}`}
-        >
           {loading ? (
             <div className="flex items-center justify-center min-h-[400px]">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                <p className="text-gray-300">Loading...</p>
+              <div className="text-center space-y-6">
+                <div className="inline-flex p-6 bg-gradient-to-br from-cyan-900/40 to-purple-900/40 rounded-2xl border-2 border-cyber-cyan-400/30">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-cyan-400"></div>
+                </div>
+                <p className="text-gray-300 text-lg">Loading...</p>
               </div>
             </div>
           ) : currentCase ? (
@@ -830,14 +1277,22 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, ease: "easeOut" }}
-                  className="mb-6 p-4 bg-gray-800/50 border border-cyber-purple-500/30 rounded-lg backdrop-blur-sm"
+                  className={`mb-6 p-4 rounded-lg backdrop-blur-sm ${
+                    isPastel
+                      ? 'bg-white/50 border border-pink-300/30'
+                      : 'bg-gray-800/50 border border-cyber-purple-500/30'
+                  }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0 mt-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-cyber-purple-400"></div>
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        isPastel ? 'bg-pink-400' : 'bg-cyber-purple-400'
+                      }`}></div>
                     </div>
                     <div className="flex-1">
-                      <p className="text-gray-300 text-sm leading-relaxed">
+                      <p className={`text-sm leading-relaxed ${
+                        isPastel ? 'text-gray-700' : 'text-gray-300'
+                      }`}>
                         {currentCase.description}
                       </p>
                     </div>
@@ -847,7 +1302,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
               {/* Unified Grid: Folders and Files in Backend Order */}
               {/* Group folders with their PDFs so folders appear above PDFs in the same column */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                 <AnimatePresence>
                   {(() => {
                     // Check if we're inside a folder
@@ -898,9 +1353,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 }}
                                 onEditBackground={() => updateFolderBackgroundImage(item.path)}
                                 onDragOver={(e) => {
-                                  // #region agent log
-                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:578', message: 'onDragOver: Dragging over folder (inside folder)', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
-                                  // #endregion
+
                                   e.preventDefault();
                                   e.stopPropagation();
                                   e.dataTransfer.dropEffect = 'move';
@@ -909,9 +1362,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     const filePath = draggedFile?.path;
                                     if (filePath && filePath !== item.path) {
                                       setDragOverFolder(item.path);
-                                      // #region agent log
-                                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:590', message: 'onDragOver: Setting dragOverFolder (inside folder)', data: { folderPath: item.path, filePath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
-                                      // #endregion
+
                                     }
                                   }
                                 }}
@@ -921,9 +1372,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   setDragOverFolder(null);
                                 }}
                                 onDrop={(e) => {
-                                  // #region agent log
-                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:600', message: 'onDrop: Drop event fired (inside folder)', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
-                                  // #endregion
+
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setDragOverFolder(null);
@@ -931,9 +1380,6 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   const filePathFromData = e.dataTransfer.getData('text/plain');
                                   const filePath = filePathFromData || draggedFile?.path;
 
-                                  // #region agent log
-                                  if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:610', message: 'onDrop: File path extracted (inside folder)', data: { filePathFromData, filePathFromDataLength: filePathFromData?.length || 0, draggedFilePath: draggedFile?.path, finalFilePath: filePath, folderPath: item.path, isValid: !!(filePath && filePath !== item.path) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
-                                  // #endregion
 
                                   logger.log('onDrop: File dropped on folder (inside folder)', {
                                     filePath,
@@ -943,15 +1389,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   });
 
                                   if (filePath && filePath !== item.path) {
-                                    // #region agent log
-                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:622', message: 'onDrop: Calling handleMoveFileToFolder (inside folder)', data: { filePath, folderPath: item.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
-                                    // #endregion
+
                                     handleMoveFileToFolder(filePath, item.path);
                                     setDraggedFile(null);
                                   } else {
-                                    // #region agent log
-                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:627', message: 'onDrop: Invalid drop - skipping (inside folder)', data: { filePath, folderPath: item.path, reason: !filePath ? 'noFilePath' : filePath === item.path ? 'samePath' : 'unknown' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
-                                    // #endregion
+
                                     logger.warn('onDrop: Invalid drop (inside folder)', { filePath, folderPath: item.path });
                                   }
                                 }}
@@ -977,6 +1419,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                               }}
                               onExtract={undefined} // No extraction inside folders
                               onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
+                              onTranscribe={item.type === 'audio' || item.type === 'video' ? () => handleTranscribeMedia(item) : undefined}
                               onRename={() => {
                                 setFileToRename(item);
                                 setShowRenameDialog(true);
@@ -984,10 +1427,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                               onDragStart={(file) => setDraggedFile(file)}
                               onDragEnd={() => setDraggedFile(null)}
                               caseTag={item.categoryTagId ? getTagById(item.categoryTagId) : null}
-                              onTagClick={() => {
-                                console.log('[ArchivePage] onTagClick for file:', { name: item.name, path: item.path, categoryTagId: item.categoryTagId });
-                                handleFileTagClick(item.path);
-                              }}
+                              onTagClick={() => handleFileTagClick(item.path)}
+                              onRequestThumbnail={() => requestFileThumbnail(item)}
                             />
                           );
                         }
@@ -997,17 +1438,16 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                     const groupedItems: Array<{ type: 'group' | 'single'; items: ArchiveFile[] }> = [];
                     const processedPaths = new Set<string>();
 
-                    // Build a map of PDF paths to their folders (for quick lookup)
+                    // Build complete map first (all folders for all PDFs)
                     const pdfToFoldersMap = new Map<string, ArchiveFile[]>();
                     const pdfFiles = files.filter(f => !f.isFolder && f.type === 'pdf');
 
+                    // First pass: Collect ALL folders for each PDF
                     files.forEach((item) => {
                       if (item.isFolder && item.parentPdfName) {
-                        // Find the PDF this folder belongs to (case-insensitive match)
                         const associatedPdf = pdfFiles.find(pdf =>
                           pdf.name.toLowerCase() === item.parentPdfName!.toLowerCase()
                         );
-
                         if (associatedPdf) {
                           const pdfKey = associatedPdf.path;
                           if (!pdfToFoldersMap.has(pdfKey)) {
@@ -1018,59 +1458,27 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                       }
                     });
 
-                    // Process items in backend order to maintain sorting
+                    // Second pass: Create groups in backend order
+                    // Process PDFs first (which have folders before them in backend order)
+                    // This ensures all folders for a PDF are collected before creating the group
                     files.forEach((item) => {
                       if (processedPaths.has(item.path)) return;
 
-                      if (item.isFolder && item.parentPdfName) {
-                        // Find the PDF this folder belongs to
-                        const associatedPdf = pdfFiles.find(pdf =>
-                          pdf.name.toLowerCase() === item.parentPdfName!.toLowerCase() &&
-                          !processedPaths.has(pdf.path)
-                        );
-
-                        if (associatedPdf) {
-                          // Get all folders for this PDF (maintain order from backend)
-                          const allFoldersForPdf = pdfToFoldersMap.get(associatedPdf.path) || [];
-                          // Sort folders by their position in the original array to maintain backend order
-                          const sortedFolders = allFoldersForPdf.sort((a, b) => {
-                            const indexA = files.findIndex(f => f.path === a.path);
-                            const indexB = files.findIndex(f => f.path === b.path);
-                            return indexA - indexB;
-                          });
-
-                          // Group all folders with their PDF (folders first, then PDF)
-                          groupedItems.push({
-                            type: 'group',
-                            items: [...sortedFolders, associatedPdf]
-                          });
-
-                          // Mark all as processed
-                          sortedFolders.forEach(folder => processedPaths.add(folder.path));
-                          processedPaths.add(associatedPdf.path);
-                        } else {
-                          // Folder without associated PDF found - render as single
-                          groupedItems.push({
-                            type: 'single',
-                            items: [item]
-                          });
-                          processedPaths.add(item.path);
-                        }
-                      } else if (item.type === 'pdf' && !processedPaths.has(item.path)) {
+                      if (item.type === 'pdf' && !processedPaths.has(item.path)) {
                         // Check if this PDF has unprocessed folders
                         const foldersForPdf = (pdfToFoldersMap.get(item.path) || []).filter(
                           folder => !processedPaths.has(folder.path)
                         );
 
                         if (foldersForPdf.length > 0) {
-                          // Sort folders by their position in the original array
+                          // Sort folders by backend order (their position in the original array)
                           const sortedFolders = foldersForPdf.sort((a, b) => {
                             const indexA = files.findIndex(f => f.path === a.path);
                             const indexB = files.findIndex(f => f.path === b.path);
                             return indexA - indexB;
                           });
 
-                          // Group folders with this PDF
+                          // Group: folders first, then PDF
                           groupedItems.push({
                             type: 'group',
                             items: [...sortedFolders, item]
@@ -1079,25 +1487,28 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                           processedPaths.add(item.path);
                         } else {
                           // Standalone PDF
-                          groupedItems.push({
-                            type: 'single',
-                            items: [item]
-                          });
+                          groupedItems.push({ type: 'single', items: [item] });
                           processedPaths.add(item.path);
                         }
+                      } else if (item.isFolder && item.parentPdfName) {
+                        // Folder with parentPdfName but PDF not found or already processed
+                        // This shouldn't happen if backend ordering is correct, but handle gracefully
+                        const associatedPdf = pdfFiles.find(pdf =>
+                          pdf.name.toLowerCase() === item.parentPdfName!.toLowerCase()
+                        );
+                        if (!associatedPdf || processedPaths.has(associatedPdf.path)) {
+                          // Orphaned folder or PDF already grouped - render as single
+                          groupedItems.push({ type: 'single', items: [item] });
+                          processedPaths.add(item.path);
+                        }
+                        // If PDF exists and not processed, it will be handled when we reach the PDF
+                      } else if (item.isFolder && !item.parentPdfName) {
+                        // Regular folder without parent PDF
+                        groupedItems.push({ type: 'single', items: [item] });
+                        processedPaths.add(item.path);
                       } else if (!item.isFolder && item.type !== 'pdf') {
                         // Non-PDF file
-                        groupedItems.push({
-                          type: 'single',
-                          items: [item]
-                        });
-                        processedPaths.add(item.path);
-                      } else if (item.isFolder && !item.parentPdfName) {
-                        // Folder without parentPdfName metadata
-                        groupedItems.push({
-                          type: 'single',
-                          items: [item]
-                        });
+                        groupedItems.push({ type: 'single', items: [item] });
                         processedPaths.add(item.path);
                       }
                     });
@@ -1133,9 +1544,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                         }}
                                         onEditBackground={() => updateFolderBackgroundImage(item.path)}
                                         onDragOver={(e) => {
-                                          // #region agent log
-                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:695', message: 'onDragOver: Dragging over folder', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
-                                          // #endregion
+
                                           e.preventDefault();
                                           e.stopPropagation();
                                           // Set drop effect to allow drop
@@ -1146,9 +1555,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                             const filePath = draggedFile?.path;
                                             if (filePath && filePath !== item.path) {
                                               setDragOverFolder(item.path);
-                                              // #region agent log
-                                              if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:706', message: 'onDragOver: Setting dragOverFolder', data: { folderPath: item.path, filePath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
-                                              // #endregion
+
                                             }
                                           }
                                         }}
@@ -1158,9 +1565,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                           setDragOverFolder(null);
                                         }}
                                         onDrop={(e) => {
-                                          // #region agent log
-                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:714', message: 'onDrop: Drop event fired', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
-                                          // #endregion
+
                                           e.preventDefault();
                                           e.stopPropagation();
                                           setDragOverFolder(null);
@@ -1169,9 +1574,6 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                           const filePathFromData = e.dataTransfer.getData('text/plain');
                                           const filePath = filePathFromData || draggedFile?.path;
 
-                                          // #region agent log
-                                          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:723', message: 'onDrop: File path extracted', data: { filePathFromData, filePathFromDataLength: filePathFromData?.length || 0, draggedFilePath: draggedFile?.path, finalFilePath: filePath, folderPath: item.path, isValid: !!(filePath && filePath !== item.path) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
-                                          // #endregion
 
                                           logger.log('onDrop: File dropped on folder', {
                                             filePath,
@@ -1181,15 +1583,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                           });
 
                                           if (filePath && filePath !== item.path) {
-                                            // #region agent log
-                                            if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:731', message: 'onDrop: Calling handleMoveFileToFolder', data: { filePath, folderPath: item.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
-                                            // #endregion
+
                                             handleMoveFileToFolder(filePath, item.path);
                                             setDraggedFile(null);
                                           } else {
-                                            // #region agent log
-                                            if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:735', message: 'onDrop: Invalid drop - skipping', data: { filePath, folderPath: item.path, reason: !filePath ? 'noFilePath' : filePath === item.path ? 'samePath' : 'unknown' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
-                                            // #endregion
+
                                             logger.warn('onDrop: Invalid drop', { filePath, folderPath: item.path });
                                           }
                                         }}
@@ -1222,16 +1620,24 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     file={item}
                                     onClick={() => handleFileClick(item)}
                                     onDelete={async () => {
-                                      // Close file viewer if this file is currently open
-                                      if (selectedFile?.path === item.path) {
-                                        setSelectedFile(null);
-                                        // Small delay to ensure viewer closes and releases file handle
-                                        await new Promise(resolve => setTimeout(resolve, 100));
+                                      if (item.type === 'pdf') {
+                                        // Show confirmation dialog for PDFs
+                                        setPdfToDelete(item);
+                                        setShowDeletePDFDialog(true);
+                                      } else {
+                                        // Direct deletion for non-PDF files
+                                        // Close file viewer if this file is currently open
+                                        if (selectedFile?.path === item.path) {
+                                          setSelectedFile(null);
+                                          // Small delay to ensure viewer closes and releases file handle
+                                          await new Promise(resolve => setTimeout(resolve, 100));
+                                        }
+                                        await deleteFile(item.path);
                                       }
-                                      await deleteFile(item.path);
                                     }}
                                     onExtract={item.type === 'pdf' ? () => handleExtractPDF(item) : undefined}
                                     onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
+                                    onTranscribe={item.type === 'audio' || item.type === 'video' ? () => handleTranscribeMedia(item) : undefined}
                                     onRename={() => {
                                       setFileToRename(item);
                                       setShowRenameDialog(true);
@@ -1240,6 +1646,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     onDragEnd={() => setDraggedFile(null)}
                                     caseTag={item.categoryTagId ? getTagById(item.categoryTagId) : null}
                                     onTagClick={() => handleFileTagClick(item.path)}
+                                    onRequestThumbnail={() => requestFileThumbnail(item)}
                                   />
                                 );
                               }
@@ -1274,9 +1681,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   }}
                                   onEditBackground={() => updateFolderBackgroundImage(item.path)}
                                   onDragOver={(e) => {
-                                    // #region agent log
-                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:813', message: 'onDragOver: Dragging over folder (single)', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
-                                    // #endregion
+
                                     e.preventDefault();
                                     e.stopPropagation();
                                     // Set drop effect to allow drop
@@ -1287,9 +1692,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                       const filePath = draggedFile?.path;
                                       if (filePath && filePath !== item.path) {
                                         setDragOverFolder(item.path);
-                                        // #region agent log
-                                        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:825', message: 'onDragOver: Setting dragOverFolder (single)', data: { folderPath: item.path, filePath }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }).catch(() => { });
-                                        // #endregion
+
                                       }
                                     }
                                   }}
@@ -1299,9 +1702,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     setDragOverFolder(null);
                                   }}
                                   onDrop={(e) => {
-                                    // #region agent log
-                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:832', message: 'onDrop: Drop event fired (single)', data: { folderPath: item.path, folderName: item.name, dataTransferTypes: Array.from(e.dataTransfer.types), draggedFilePath: draggedFile?.path, draggedFileName: draggedFile?.name, hasDraggedFile: !!draggedFile }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
-                                    // #endregion
+
                                     e.preventDefault();
                                     e.stopPropagation();
                                     setDragOverFolder(null);
@@ -1310,9 +1711,6 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     const filePathFromData = e.dataTransfer.getData('text/plain');
                                     const filePath = filePathFromData || draggedFile?.path;
 
-                                    // #region agent log
-                                    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:841', message: 'onDrop: File path extracted (single)', data: { filePathFromData, filePathFromDataLength: filePathFromData?.length || 0, draggedFilePath: draggedFile?.path, finalFilePath: filePath, folderPath: item.path, isValid: !!(filePath && filePath !== item.path) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }).catch(() => { });
-                                    // #endregion
 
                                     logger.log('onDrop: File dropped on folder', {
                                       filePath,
@@ -1322,15 +1720,11 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                     });
 
                                     if (filePath && filePath !== item.path) {
-                                      // #region agent log
-                                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:849', message: 'onDrop: Calling handleMoveFileToFolder (single)', data: { filePath, folderPath: item.path }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
-                                      // #endregion
+
                                       handleMoveFileToFolder(filePath, item.path);
                                       setDraggedFile(null);
                                     } else {
-                                      // #region agent log
-                                      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({ location: 'ArchivePage.tsx:853', message: 'onDrop: Invalid drop - skipping (single)', data: { filePath, folderPath: item.path, reason: !filePath ? 'noFilePath' : filePath === item.path ? 'samePath' : 'unknown' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }).catch(() => { });
-                                      // #endregion
+
                                       logger.warn('onDrop: Invalid drop', { filePath, folderPath: item.path });
                                     }
                                   }}
@@ -1373,13 +1767,20 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 file={item}
                                 onClick={() => handleFileClick(item)}
                                 onDelete={async () => {
-                                  // Close file viewer if this file is currently open
-                                  if (selectedFile?.path === item.path) {
-                                    setSelectedFile(null);
-                                    // Small delay to ensure viewer closes and releases file handle
-                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                  if (item.type === 'pdf') {
+                                    // Show confirmation dialog for PDFs
+                                    setPdfToDelete(item);
+                                    setShowDeletePDFDialog(true);
+                                  } else {
+                                    // Direct deletion for non-PDF files
+                                    // Close file viewer if this file is currently open
+                                    if (selectedFile?.path === item.path) {
+                                      setSelectedFile(null);
+                                      // Small delay to ensure viewer closes and releases file handle
+                                      await new Promise(resolve => setTimeout(resolve, 100));
+                                    }
+                                    await deleteFile(item.path);
                                   }
-                                  await deleteFile(item.path);
                                 }}
                                 onExtract={() => handleExtractPDF(item)}
                                 onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
@@ -1391,6 +1792,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 onDragEnd={() => setDraggedFile(null)}
                                 caseTag={item.categoryTagId ? getTagById(item.categoryTagId) : null}
                                 onTagClick={() => handleFileTagClick(item.path)}
+                                onRequestThumbnail={() => requestFileThumbnail(item)}
                               />
                             </div>
                           );
@@ -1419,7 +1821,8 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                   await deleteFile(item.path);
                                 }}
                                 onExtract={undefined}
-                                onRunAudit={item.type === 'pdf' ? () => handleRunPDFAudit(item) : undefined}
+                                onRunAudit={undefined}
+                                onTranscribe={item.type === 'audio' || item.type === 'video' ? () => handleTranscribeMedia(item) : undefined}
                                 onRename={() => {
                                   setFileToRename(item);
                                   setShowRenameDialog(true);
@@ -1428,6 +1831,7 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
                                 onDragEnd={() => setDraggedFile(null)}
                                 caseTag={item.categoryTagId ? getTagById(item.categoryTagId) : null}
                                 onTagClick={() => handleFileTagClick(item.path)}
+                                onRequestThumbnail={() => requestFileThumbnail(item)}
                               />
                             </div>
                           );
@@ -1440,30 +1844,41 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             </>
           ) : (
             // Cases Grid
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
               <AnimatePresence>
-                {cases.map((caseItem) => (
-                  <CaseFolder
-                    key={caseItem.path}
-                    caseItem={caseItem}
-                    isExtracting={isExtracting && extractingCasePath === caseItem.path}
-                    onClick={() => setCurrentCase(caseItem)}
-                    onDelete={() => deleteCase(caseItem.path)}
-                    onRename={() => {
-                      setFileToRename({
-                        name: caseItem.name,
-                        path: caseItem.path,
-                        size: 0,
-                        modified: 0,
-                        type: 'other',
-                        isFolder: true
-                      });
-                      setShowRenameDialog(true);
-                    }}
-                    onEditBackground={() => updateCaseBackgroundImage(caseItem.path)}
-                    onTagClick={() => handleTagClick(caseItem.path)}
-                  />
-                ))}
+                {cases.map((caseItem) => {
+                  const casePath = caseItem.path;
+                  const caseName = caseItem.name;
+                  return (
+                    <CaseFolder
+                      key={casePath}
+                      caseItem={caseItem}
+                      isExtracting={isExtracting && extractingCasePath === casePath}
+                      onClick={() => {
+
+                        setCurrentCase(caseItem);
+                      }}
+                      onDelete={() => deleteCase(casePath)}
+                      onRename={() => {
+                        setFileToRename({
+                          name: caseName,
+                          path: casePath,
+                          size: 0,
+                          modified: 0,
+                          type: 'other',
+                          isFolder: true
+                        });
+                        setShowRenameDialog(true);
+                      }}
+                      onEditBackground={() => updateCaseBackgroundImage(casePath)}
+                      onTagClick={() => handleTagClick(casePath)}
+                      onEditDescription={() => {
+                        setCaseForDescription(caseItem);
+                        setShowDescriptionDialog(true);
+                      }}
+                    />
+                  );
+                })}
               </AnimatePresence>
             </div>
           )}
@@ -1473,30 +1888,69 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
             <>
               {!currentCase && cases.length === 0 && (
                 <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-                  <p className="text-gray-400 text-lg mb-4">No cases yet</p>
+                  <div className={`inline-flex p-8 rounded-2xl border mb-6 ${
+                    isPastel
+                      ? 'bg-white/50 border-pink-300/20'
+                      : 'bg-gray-800/50 border-cyber-purple-400/20'
+                  }`}>
+                    <FolderOpen className={`w-20 h-20 ${
+                      isPastel ? 'text-pink-400/50' : 'text-cyber-purple-400/50'
+                    }`} />
+                  </div>
+                  <h3 className={`text-2xl font-bold mb-2 ${
+                    isPastel ? 'text-gray-800' : 'text-gray-300'
+                  }`}>No cases yet</h3>
+                  <p className={`text-lg mb-6 ${
+                    isPastel ? 'text-gray-600' : 'text-gray-400'
+                  }`}>Create your first case file to get started</p>
                   <button
                     onClick={() => setShowCaseDialog(true)}
-                    className="px-6 py-3 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
+                    className={`px-6 py-3 rounded-lg font-semibold text-white text-base transition-all shadow-lg transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group ${
+                      isPastel
+                        ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 hover:shadow-pink-400/50'
+                        : 'bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 hover:shadow-cyan-500/50'
+                    }`}
                     aria-label="Create your first case"
                   >
-                    Create Your First Case
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                    <span className="relative z-10">Create Your First Case</span>
                   </button>
                 </div>
               )}
               {currentCase && files.filter(f => !f.isFolder).length === 0 && (
                 <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-                  <p className="text-gray-400 text-lg mb-4">No files in this case</p>
+                  <div className={`inline-flex p-8 rounded-2xl border mb-6 ${
+                    isPastel
+                      ? 'bg-white/50 border-pink-300/20'
+                      : 'bg-gray-800/50 border-cyber-purple-400/20'
+                  }`}>
+                    <FileText className={`w-20 h-20 ${
+                      isPastel ? 'text-pink-400/50' : 'text-cyber-purple-400/50'
+                    }`} />
+                  </div>
+                  <h3 className={`text-2xl font-bold mb-2 ${
+                    isPastel ? 'text-gray-800' : 'text-gray-300'
+                  }`}>No files in this case</h3>
+                  <p className={`text-lg mb-6 ${
+                    isPastel ? 'text-gray-600' : 'text-gray-400'
+                  }`}>Add files to get started organizing your case</p>
                   <button
                     onClick={handleAddFiles}
-                    className="px-6 py-3 bg-gradient-purple text-white rounded-lg hover:opacity-90 transition-opacity font-semibold"
+                    className={`px-6 py-3 rounded-lg font-semibold text-white text-base transition-all shadow-lg transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group ${
+                      isPastel
+                        ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 hover:shadow-pink-400/50'
+                        : 'bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 hover:shadow-cyan-500/50'
+                    }`}
                     aria-label="Add files to this case"
                   >
-                    Add Files
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                    <span className="relative z-10">Add Files</span>
                   </button>
                 </div>
               )}
             </>
           )}
+          </div>
         </div>
       </div>
 
@@ -1511,6 +1965,22 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         isOpen={showCaseDialog}
         onClose={() => setShowCaseDialog(false)}
         onConfirm={handleCreateCase}
+      />
+
+      <CaseDescriptionDialog
+        isOpen={showDescriptionDialog}
+        onClose={() => {
+          setShowDescriptionDialog(false);
+          setCaseForDescription(null);
+        }}
+        onConfirm={async (description) => {
+          if (caseForDescription) {
+            await updateCaseDescription(caseForDescription.path, description);
+            setShowDescriptionDialog(false);
+            setCaseForDescription(null);
+          }
+        }}
+        initialDescription={caseForDescription?.description || ''}
       />
 
       <CreateFolderDialog
@@ -1573,6 +2043,62 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         }}
       />
 
+      <DeletePDFConfirmDialog
+        isOpen={showDeletePDFDialog}
+        fileName={pdfToDelete?.name || ''}
+        hasExistingFolder={pdfToDelete ? files.some(
+          (file) =>
+            file.isFolder &&
+            file.parentPdfName &&
+            pdfToDelete.name &&
+            file.parentPdfName.toLowerCase() === pdfToDelete.name.toLowerCase()
+        ) : false}
+        onClose={() => {
+          setShowDeletePDFDialog(false);
+          setPdfToDelete(null);
+        }}
+        onConfirm={async (deleteImageFolder: boolean) => {
+          if (pdfToDelete) {
+            // Close file viewer if this PDF is currently open
+            if (selectedFile?.path === pdfToDelete.path) {
+              setSelectedFile(null);
+              // Small delay to ensure viewer closes and releases file handle
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            // Find and delete associated extraction folders if checkbox is checked
+            if (deleteImageFolder) {
+              const pdfName = pdfToDelete.name;
+              const associatedFolders = files.filter(
+                (file) =>
+                  file.isFolder &&
+                  file.parentPdfName &&
+                  file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+              );
+
+              // Delete all associated extraction folders
+              for (const folder of associatedFolders) {
+                try {
+                  // Close file viewer if we're deleting a folder we're currently viewing
+                  if (selectedFile && selectedFile.path.startsWith(folder.path)) {
+                    setSelectedFile(null);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                  }
+                  await deleteFile(folder.path, true);
+                } catch (error) {
+                  logger.error(`Failed to delete extraction folder ${folder.path}:`, error);
+                  // Continue with PDF deletion even if folder deletion fails
+                }
+              }
+            }
+
+            // Delete the PDF file
+            await deleteFile(pdfToDelete.path);
+            setPdfToDelete(null);
+          }
+        }}
+      />
+
       <RenameFileDialog
         isOpen={showRenameDialog}
         currentName={fileToRename?.name || ''}
@@ -1596,21 +2122,28 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
 
       {/* File Viewer */}
       {selectedFile && !selectedFile.isFolder && (
-        <ArchiveFileViewer
-          file={selectedFile}
-          files={files.filter(f => !f.isFolder)}
-          onClose={() => {
-            setSelectedFile(null);
-            setInitialPage(undefined);
-          }}
-          onNext={fileViewerIndex < files.filter(f => !f.isFolder).length - 1 ? handleNextFile : undefined}
-          onPrevious={fileViewerIndex > 0 ? handlePreviousFile : undefined}
-          initialPage={initialPage}
-          onInitialPageApplied={() => {
-            // Clear initialPage after it's been applied so it doesn't interfere with navigation
-            setInitialPage(undefined);
-          }}
-        />
+        <Suspense fallback={null}>
+          <ArchiveFileViewer
+            file={selectedFile}
+            files={files.filter(f => !f.isFolder)}
+            onTranscribe={(file) => handleTranscribeMedia(file)}
+            onClose={() => {
+              setSelectedFile(null);
+              setInitialPage(undefined);
+              // Clear pending bookmark when viewer is closed to prevent re-opening
+              setPendingBookmarkOpen(null);
+              // Clear sessionStorage bookmark if it exists
+              sessionStorage.removeItem('pending-bookmark-open');
+            }}
+            onNext={fileViewerIndex < files.filter(f => !f.isFolder).length - 1 ? handleNextFile : undefined}
+            onPrevious={fileViewerIndex > 0 ? handlePreviousFile : undefined}
+            initialPage={initialPage}
+            onInitialPageApplied={() => {
+              // Clear initialPage after it's been applied so it doesn't interfere with navigation
+              setInitialPage(undefined);
+            }}
+          />
+        </Suspense>
       )}
 
       <CategoryTagSelector
@@ -1633,16 +2166,53 @@ export function ArchivePage({ onBack }: ArchivePageProps) {
         }
       />
 
-      <SecurityCheckerModal
-        isOpen={showSecurityChecker}
-        onClose={() => {
-          setShowSecurityChecker(false);
-          setPdfPathForAudit(null);
-        }}
-        initialPdfPath={pdfPathForAudit}
-        caseFolderPath={currentCase?.path || null}
-        onReportSaved={handleReportSaved}
-      />
+      {showSecurityChecker && (
+        <Suspense fallback={null}>
+          <SecurityCheckerModal
+            isOpen={showSecurityChecker}
+            onClose={() => {
+              setShowSecurityChecker(false);
+              setPdfPathForAudit(null);
+            }}
+            initialPdfPath={pdfPathForAudit}
+            caseFolderPath={currentCase?.path || null}
+            onReportSaved={handleReportSaved}
+            existingFolders={pdfPathForAudit ? files.filter(
+              (file) =>
+                file.isFolder &&
+                file.parentPdfName &&
+                pdfPathForAudit &&
+                file.parentPdfName.toLowerCase() === pdfPathForAudit.split(/[/\\]/).pop()?.toLowerCase()
+            ) : undefined}
+          />
+        </Suspense>
+      )}
+
+      {showPDFExtraction && (
+        <Suspense fallback={null}>
+          <PDFExtractionModal
+            isOpen={showPDFExtraction}
+            onClose={() => {
+              setShowPDFExtraction(false);
+              setPdfPathForExtraction(null);
+            }}
+            initialPdfPath={pdfPathForExtraction}
+            caseFolderPath={currentCase?.path || null}
+            onExtractionComplete={() => {
+              if (currentCase) {
+                refreshFiles();
+              }
+            }}
+            existingFolders={pdfPathForExtraction ? files.filter(
+              (file) =>
+                file.isFolder &&
+                file.parentPdfName &&
+                pdfPathForExtraction &&
+                file.parentPdfName.toLowerCase() === pdfPathForExtraction.split(/[/\\]/).pop()?.toLowerCase()
+            ) : undefined}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

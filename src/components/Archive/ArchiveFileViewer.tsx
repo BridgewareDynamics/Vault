@@ -1,14 +1,17 @@
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText, BookmarkPlus, Bookmark } from 'lucide-react';
-import { ArchiveFile, PDFDocument, PDFRenderTask } from '../../types';
+import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText, BookmarkPlus, Bookmark, AudioLines } from 'lucide-react';
+import { ArchiveFile, PDFDocument, PDFRenderTask, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
 import { logger } from '../../utils/logger';
+import { resolveReadFileDataUrl, resolveReadFileMimeType } from '../../utils/readFileDataUtils';
 import { setupPDFWorker } from '../../utils/pdfWorker';
 import { cleanupPDFBlobUrl } from '../../utils/pdfSource';
 import { LargePDFWarningDialog } from '../LargePDFWarningDialog';
 import { useWordEditor } from '../../contexts/WordEditorContext';
 import { BookmarkCreator } from '../Bookmarks/BookmarkCreator';
 import { useToast } from '../Toast/ToastContext';
+import { useSettingsContext } from '../../utils/settingsContext';
 
 interface ArchiveFileViewerProps {
   file: ArchiveFile | null;
@@ -18,13 +21,102 @@ interface ArchiveFileViewerProps {
   onPrevious?: () => void;
   initialPage?: number;
   onInitialPageApplied?: () => void;
+  onTranscribe?: (file: ArchiveFile) => void;
+  overlayZIndex?: number;
 }
 
-export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, initialPage, onInitialPageApplied }: ArchiveFileViewerProps) {
-  const { isOpen: isWordEditorOpen, setIsOpen: setWordEditorOpen } = useWordEditor();
+type ArchiveFileViewerContentProps = Omit<ArchiveFileViewerProps, 'file'> & {
+  file: ArchiveFile;
+};
+
+function ArchiveFileViewerContent({
+  file,
+  files,
+  onClose,
+  onNext,
+  onPrevious,
+  initialPage,
+  onInitialPageApplied,
+  onTranscribe,
+  overlayZIndex = 50,
+}: ArchiveFileViewerContentProps) {
+  const { isOpen: isWordEditorOpen, setIsOpen: setWordEditorOpen, panelWidth, dividerPosition } = useWordEditor();
   const toast = useToast();
+  const { settings: appSettings } = useSettingsContext();
+  const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
+  const isPastel = isLightTheme(theme);
+  const [isInlineMode, setIsInlineMode] = useState(false);
   const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
+  const isOpeningWordEditorRef = useRef(false);
+  const isReattachingRef = useRef(false);
+  const reattachTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Detect if editor is in inline mode (check for inline container)
+  useEffect(() => {
+    const checkInlineMode = () => {
+      const inlineContainer = document.getElementById('word-editor-inline-container');
+      setIsInlineMode(!!inlineContainer && isWordEditorOpen);
+    };
+
+    checkInlineMode();
+
+    const observer = new MutationObserver(checkInlineMode);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isWordEditorOpen]);
+
+  // Keep ref in sync with word editor state to prevent closing when editor is open
+  useEffect(() => {
+    isOpeningWordEditorRef.current = isWordEditorOpen;
+    // Clear reattaching flag when word editor is confirmed open
+    if (isWordEditorOpen && isReattachingRef.current) {
+      isReattachingRef.current = false;
+      // Clear any pending timeout
+      if (reattachTimeoutRef.current) {
+        clearTimeout(reattachTimeoutRef.current);
+        reattachTimeoutRef.current = null;
+      }
+    }
+  }, [isWordEditorOpen]);
+
+  // Listen for events that open the word editor to prevent closing during opening/reattaching
+  useEffect(() => {
+    const handleOpenEditor = () => {
+      // Immediately set refs to prevent closing during opening/reattaching
+      isOpeningWordEditorRef.current = true;
+      isReattachingRef.current = true;
+      
+      // Clear any existing timeout
+      if (reattachTimeoutRef.current) {
+        clearTimeout(reattachTimeoutRef.current);
+      }
+      
+      // Fallback: Clear the reattaching flag after a delay as a safety net
+      // The flag should be cleared when isWordEditorOpen becomes true, but this ensures
+      // we don't get stuck if something goes wrong
+      reattachTimeoutRef.current = setTimeout(() => {
+        isReattachingRef.current = false;
+        reattachTimeoutRef.current = null;
+      }, 2000);
+    };
+
+    // Listen to both the reattach event and the open-from-viewer event
+    // Both should prevent closing during the opening process
+    window.addEventListener('reattach-word-editor-data', handleOpenEditor);
+    window.addEventListener('open-word-editor-from-viewer', handleOpenEditor);
+    return () => {
+      window.removeEventListener('reattach-word-editor-data', handleOpenEditor);
+      window.removeEventListener('open-word-editor-from-viewer', handleOpenEditor);
+      if (reattachTimeoutRef.current) {
+        clearTimeout(reattachTimeoutRef.current);
+        reattachTimeoutRef.current = null;
+      }
+    };
+  }, []);
   const [loading, setLoading] = useState(false);
   const [showBookmarkCreator, setShowBookmarkCreator] = useState(false);
   const [currentPageBookmarks, setCurrentPageBookmarks] = useState<Array<{ id: string; name: string }>>([]);
@@ -52,59 +144,28 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
   const imageY = useMotionValue(0);
   const imageRef = useRef<HTMLImageElement>(null);
   const isDraggingRef = useRef(false);
+  const isPdfDraggingRef = useRef(false);
+  const dragConstraintsRef = useRef<{ left: number; right: number; top: number; bottom: number } | false | null>(null);
+  const loadIdRef = useRef(0);
+  // Stable constraints state that only updates when not dragging
+  const [stableDragConstraints, setStableDragConstraints] = useState<{ left: number; right: number; top: number; bottom: number } | false | React.RefObject<HTMLElement>>(false);
   
   // Warning dialog state
   const [showWarningDialog, setShowWarningDialog] = useState(false);
   const [warningFileSize, setWarningFileSize] = useState(0);
   const [memoryInfo, setMemoryInfo] = useState<{ totalMemory: number; freeMemory: number; usedMemory: number } | null>(null);
-  const [pendingLoad, setPendingLoad] = useState<{ filePath: string; pdfjsLib: any } | null>(null);
+  const [pendingLoad, setPendingLoad] = useState<{ filePath: string; pdfjsLib: typeof import('pdfjs-dist') } | null>(null);
+  const warningLoadIdRef = useRef(0);
   const warningResolveRef = useRef<((value: boolean) => void) | null>(null);
   
   // Handle warning dialog actions
-  const handleWarningContinue = async () => {
+  const handleWarningContinue = () => {
     setShowWarningDialog(false);
     if (warningResolveRef.current) {
       warningResolveRef.current(true);
       warningResolveRef.current = null;
     }
-    
-    // Continue loading the PDF
-    if (pendingLoad) {
-      try {
-        // Ensure worker is set up before loading
-        await setupPDFWorker();
-        
-        // Small delay to ensure worker is fully initialized
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        const { createChunkedPDFSource } = await import('../../utils/pdfSource');
-        const pdf = await createChunkedPDFSource(
-          pendingLoad.filePath, 
-          pendingLoad.pdfjsLib,
-          undefined, // showWarning (not needed here, already shown)
-          (progress) => setPdfLoadingProgress(progress) // onProgress
-        );
-        
-        // Verify PDF is valid before setting state
-        if (pdf && typeof pdf.numPages === 'number' && pdf.numPages > 0) {
-          setPdfDoc(pdf);
-          setTotalPages(pdf.numPages);
-          // Use initialPage if provided, otherwise default to 1
-          const startPage = initialPage && initialPage >= 1 && initialPage <= pdf.numPages ? initialPage : 1;
-          setCurrentPage(startPage);
-          setPdfLoading(false);
-          setPdfLoadingProgress(0);
-        } else {
-          throw new Error('Invalid PDF document loaded');
-        }
-      } catch (error) {
-        logger.error('Failed to load PDF after warning:', error);
-        setPdfLoading(false);
-        setPdfLoadingProgress(0);
-        setPdfDoc(null);
-      }
-      setPendingLoad(null);
-    }
+    setPendingLoad(null);
   };
   
   const handleWarningCancel = () => {
@@ -144,8 +205,9 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
     setPdfLoadingProgress(0);
     
     // Force garbage collection hint
-    if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
-      (globalThis as any).gc();
+    const maybeGc = (globalThis as { gc?: () => void }).gc;
+    if (typeof globalThis !== 'undefined' && maybeGc) {
+      maybeGc();
     }
   };
   
@@ -204,27 +266,16 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
     setFileData(null);
     
     // Force garbage collection hint if available
-    if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
-      (globalThis as any).gc();
+    const maybeGc = (globalThis as { gc?: () => void }).gc;
+    if (typeof globalThis !== 'undefined' && maybeGc) {
+      maybeGc();
     }
     
     onClose();
   }, [pdfDoc, file, onClose]);
 
   useEffect(() => {
-    if (file) {
-      // Clear previous file data before loading new one to free memory
-      if (fileData) {
-        setFileData(null);
-      }
-      
-      if (file.type === 'pdf') {
-        loadPDF();
-      } else {
-        loadFileData();
-      }
-    } else {
-      // Cleanup when file is cleared
+    if (!file) {
       if (pdfDoc) {
         try {
           cleanupPDFBlobUrl(pdfDoc);
@@ -239,84 +290,155 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       setPdfDoc(null);
       setCurrentPage(1);
       setTotalPages(0);
+      return;
     }
-    // Reset image zoom when file changes
+
+    const loadId = ++loadIdRef.current;
+    const pdfLoadAbortController = new AbortController();
+    setFileData(null);
     setImageScale(1);
     imageX.set(0);
     imageY.set(0);
-  }, [file]);
 
-  const loadFileData = async () => {
-    if (!file || !window.electronAPI) return;
+    const isStale = () => loadId !== loadIdRef.current;
 
-    try {
-      setLoading(true);
-      const data = await window.electronAPI.readFileData(file.path);
-      setFileData({
-        data: `data:${data.mimeType};base64,${data.data}`,
-        mimeType: data.mimeType,
-      });
-    } catch (error) {
-      logger.error('Failed to load file data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const loadFileData = async () => {
+      if (!window.electronAPI) return;
 
-  const loadPDF = async () => {
-    if (!file || !window.electronAPI || file.type !== 'pdf') return;
+      try {
+        if (!isStale()) {
+          setLoading(true);
+        }
+        const data = await window.electronAPI.readFileData(file.path);
+        if (isStale()) return;
+        setFileData({
+          data: resolveReadFileDataUrl(data, file.path),
+          mimeType: resolveReadFileMimeType(data.mimeType, file.path),
+        });
+      } catch (error) {
+        if (!isStale()) {
+          logger.error('Failed to load file data:', error);
+        }
+      } finally {
+        if (!isStale()) {
+          setLoading(false);
+        }
+      }
+    };
 
-    try {
-      setPdfLoading(true);
-      setPdfLoadingProgress(0);
-      
-      // Import PDF.js and setup worker
-      const [pdfjsLib, { createChunkedPDFSource }] = await Promise.all([
-        import('pdfjs-dist'),
-        import('../../utils/pdfSource'),
-      ]);
-      await setupPDFWorker();
-      
-      setPdfLoadingProgress(10);
-      const fileData = await window.electronAPI.readPDFFile(file.path);
-      
-      let pdf: PDFDocument;
-      
-      // Handle new format with type field
-      if (fileData && typeof fileData === 'object' && 'type' in fileData) {
-        if (fileData.type === 'file-path') {
-          // Large file - use chunked reading with warning dialog
-          setPdfLoadingProgress(20);
-          
-          // Show warning dialog for large files
-          const showWarning = async (fileSize: number, memInfo: { totalMemory: number; freeMemory: number; usedMemory: number }): Promise<boolean> => {
-            return new Promise((resolve) => {
-              setWarningFileSize(fileSize);
-              setMemoryInfo(memInfo);
-              setShowWarningDialog(true);
-              setPendingLoad({ filePath: fileData.path, pdfjsLib });
-              warningResolveRef.current = resolve;
+    const loadPDF = async () => {
+      if (!window.electronAPI || file.type !== 'pdf') return;
+
+      try {
+        if (!isStale()) {
+          setPdfLoading(true);
+          setPdfLoadingProgress(0);
+        }
+
+        const [pdfjsLib, { createChunkedPDFSource }] = await Promise.all([
+          import('pdfjs-dist'),
+          import('../../utils/pdfSource'),
+        ]);
+        if (isStale()) return;
+
+        await setupPDFWorker();
+        if (isStale()) return;
+
+        if (!isStale()) {
+          setPdfLoadingProgress(10);
+        }
+        const fileData = await window.electronAPI.readPDFFile(file.path);
+        if (isStale()) return;
+
+        let pdf: PDFDocument;
+
+        if (fileData && typeof fileData === 'object' && 'type' in fileData) {
+          if (fileData.type === 'file-path') {
+            if (!isStale()) {
+              setPdfLoadingProgress(20);
+            }
+
+            const showWarning = async (
+              fileSize: number,
+              memInfo: { totalMemory: number; freeMemory: number; usedMemory: number },
+            ): Promise<boolean> => {
+              return new Promise((resolve) => {
+                warningLoadIdRef.current = loadId;
+                setWarningFileSize(fileSize);
+                setMemoryInfo(memInfo);
+                setShowWarningDialog(true);
+                setPendingLoad({ filePath: fileData.path, pdfjsLib });
+                warningResolveRef.current = resolve;
+              });
+            };
+
+            pdf = await createChunkedPDFSource(
+              fileData.path,
+              pdfjsLib,
+              showWarning,
+              (progress) => {
+                if (!isStale()) {
+                  setPdfLoadingProgress(progress);
+                }
+              },
+              { signal: pdfLoadAbortController.signal },
+            );
+          } else if (fileData.type === 'base64') {
+            if (!isStale()) {
+              setPdfLoadingProgress(20);
+            }
+            const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
+            const binaryString = atob(cleanBase64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            const arrayBuffer = bytes.buffer;
+
+            if (!isStale()) {
+              setPdfLoadingProgress(30);
+            }
+            const loadingTask = pdfjsLib.getDocument({
+              data: arrayBuffer,
+              disableAutoFetch: false,
+              disableStream: false,
+              verbosity: 0,
             });
-          };
-          
-          pdf = await createChunkedPDFSource(
-            fileData.path, 
-            pdfjsLib, 
-            showWarning,
-            (progress) => setPdfLoadingProgress(progress) // onProgress
-          );
-        } else if (fileData.type === 'base64') {
-          // Small file - decode base64
-          setPdfLoadingProgress(20);
-          const cleanBase64 = fileData.data.trim().replace(/\s/g, '');
+            pdf = await loadingTask.promise;
+          } else {
+            throw new Error('Unexpected PDF file data format');
+          }
+        } else if (typeof fileData === 'string') {
+          if (!isStale()) {
+            setPdfLoadingProgress(20);
+          }
+          const cleanBase64 = fileData.trim().replace(/\s/g, '');
           const binaryString = atob(cleanBase64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
           const arrayBuffer = bytes.buffer;
-          
-          setPdfLoadingProgress(30);
+
+          if (!isStale()) {
+            setPdfLoadingProgress(30);
+          }
+          const loadingTask = pdfjsLib.getDocument({
+            data: arrayBuffer,
+            disableAutoFetch: false,
+            disableStream: false,
+            verbosity: 0,
+          });
+          pdf = await loadingTask.promise;
+        } else if (Array.isArray(fileData)) {
+          if (!isStale()) {
+            setPdfLoadingProgress(20);
+          }
+          const arrayBuffer = new Uint8Array(fileData).buffer;
+
+          if (!isStale()) {
+            setPdfLoadingProgress(30);
+          }
           const loadingTask = pdfjsLib.getDocument({
             data: arrayBuffer,
             disableAutoFetch: false,
@@ -327,66 +449,161 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
         } else {
           throw new Error('Unexpected PDF file data format');
         }
-      } else if (typeof fileData === 'string') {
-        // Legacy format: base64 string
-        setPdfLoadingProgress(20);
-        const cleanBase64 = fileData.trim().replace(/\s/g, '');
-        const binaryString = atob(cleanBase64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
+
+        if (isStale()) {
+          try {
+            cleanupPDFBlobUrl(pdf);
+            pdf.destroy().catch(() => {
+              // Ignore destroy errors
+            });
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          return;
         }
-        const arrayBuffer = bytes.buffer;
-        
-        setPdfLoadingProgress(30);
-        const loadingTask = pdfjsLib.getDocument({
-          data: arrayBuffer,
-          disableAutoFetch: false,
-          disableStream: false,
-          verbosity: 0,
-        });
-        pdf = await loadingTask.promise;
-      } else if (Array.isArray(fileData)) {
-        // Legacy format: array of numbers
-        setPdfLoadingProgress(20);
-        const arrayBuffer = new Uint8Array(fileData).buffer;
-        
-        setPdfLoadingProgress(30);
-        const loadingTask = pdfjsLib.getDocument({
-          data: arrayBuffer,
-          disableAutoFetch: false,
-          disableStream: false,
-          verbosity: 0,
-        });
-        pdf = await loadingTask.promise;
-      } else {
-        throw new Error('Unexpected PDF file data format');
+
+        setPdfLoadingProgress(95);
+        setPdfDoc(pdf);
+        setTotalPages(pdf.numPages);
+        const startPage = initialPage && initialPage >= 1 && initialPage <= pdf.numPages ? initialPage : 1;
+        setCurrentPage(startPage);
+        setPdfLoadingProgress(100);
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        if (isStale()) return;
+
+        setTimeout(() => {
+          if (!isStale()) {
+            setPdfLoading(false);
+            setPdfLoadingProgress(0);
+          }
+        }, 300);
+      } catch (error) {
+        if (!isStale()) {
+          logger.error('Failed to load PDF:', error);
+          setPdfLoading(false);
+          setPdfLoadingProgress(0);
+        }
+      }
+    };
+
+    if (file.type === 'pdf') {
+      void loadPDF();
+    } else {
+      void loadFileData();
+    }
+
+    return () => {
+      pdfLoadAbortController.abort();
+      loadIdRef.current += 1;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- imageX/imageY are stable motion values and pdfDoc/initialPage are managed inside the loader; the viewer must reload only when the file changes
+  }, [file]);
+
+  // Calculate drag constraints based on canvas and container sizes
+  const calculateDragConstraints = useCallback(() => {
+    if (!canvasRef.current || !pdfContainerRef.current) {
+      return false; // Return false instead of null for framer-motion
+    }
+
+    const canvas = canvasRef.current;
+    const container = pdfContainerRef.current;
+    
+    // Use actual canvas dimensions
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    // Only enable constraints if canvas is larger than container
+    if (canvasWidth <= containerWidth && canvasHeight <= containerHeight) {
+      return false; // No constraints needed
+    }
+    
+    // Calculate overflow (how much canvas extends beyond container)
+    const overflowX = Math.max(0, (canvasWidth - containerWidth) / 2);
+    const overflowY = Math.max(0, (canvasHeight - containerHeight) / 2);
+    
+    // Return constraints relative to center (0, 0)
+    return {
+      left: -overflowX,
+      right: overflowX,
+      top: -overflowY,
+      bottom: overflowY,
+    };
+  }, []);
+
+  // Update drag constraints when page scale or panel width changes
+  useEffect(() => {
+    if (pdfDoc && pageScale >= 1.0 && isPdfZoomed) {
+      let resizeTimeout: NodeJS.Timeout | null = null;
+      let rafId: number | null = null;
+      
+      const updateConstraints = () => {
+        // Don't update constraints during active drag to prevent jitter
+        if (isPdfDraggingRef.current) {
+          return;
+        }
+        const constraints = calculateDragConstraints();
+        dragConstraintsRef.current = constraints;
+        // Update stable constraints state only when not dragging
+        // This ensures the dragConstraints prop doesn't change during drag
+        if (typeof constraints === 'object' && constraints !== null) {
+          setStableDragConstraints(constraints);
+        } else {
+          setStableDragConstraints(pdfContainerRef);
+        }
+      };
+      
+      // Immediate update attempt
+      rafId = requestAnimationFrame(updateConstraints);
+      
+      // Also update after multiple checkpoints to catch layout changes when panel opens
+      const timeout1 = setTimeout(updateConstraints, 0); // Next tick
+      const timeout2 = setTimeout(updateConstraints, 16); // One frame
+      const timeout3 = setTimeout(updateConstraints, 50); // After brief delay
+      const timeout4 = setTimeout(updateConstraints, 100); // After potential animations
+      
+      // Also listen for resize events to recalculate constraints
+      // Debounce resize updates to prevent excessive recalculations
+      const resizeObserver = new ResizeObserver(() => {
+        // Clear any pending resize update
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout);
+        }
+        // Debounce resize updates - only update if not dragging
+        resizeTimeout = setTimeout(() => {
+          if (!isPdfDraggingRef.current) {
+            rafId = requestAnimationFrame(updateConstraints);
+          }
+        }, 100); // 100ms debounce
+      });
+      
+      if (pdfContainerRef.current) {
+        resizeObserver.observe(pdfContainerRef.current);
       }
       
-      setPdfLoadingProgress(95);
+      if (canvasRef.current) {
+        resizeObserver.observe(canvasRef.current);
+      }
       
-      setPdfDoc(pdf);
-      setTotalPages(pdf.numPages);
-      // Use initialPage if provided, otherwise default to 1
-      const startPage = initialPage && initialPage >= 1 && initialPage <= pdf.numPages ? initialPage : 1;
-      setCurrentPage(startPage);
-      setPdfLoadingProgress(100);
-      
-      // Wait for first page to render before hiding loading screen
-      // This prevents the white rectangle flash
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Small delay to show completion, then hide loading
-      setTimeout(() => {
-        setPdfLoading(false);
-        setPdfLoadingProgress(0);
-      }, 300);
-    } catch (error) {
-      logger.error('Failed to load PDF:', error);
-      setPdfLoading(false);
-      setPdfLoadingProgress(0);
+      return () => {
+        clearTimeout(timeout1);
+        clearTimeout(timeout2);
+        clearTimeout(timeout3);
+        clearTimeout(timeout4);
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout);
+        }
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+        }
+        resizeObserver.disconnect();
+      };
+    } else {
+      dragConstraintsRef.current = false;
     }
-  };
+  }, [pdfDoc, pageScale, isPdfZoomed, panelWidth, isWordEditorOpen, calculateDragConstraints]);
 
   const renderPDFPage = async (pageNum: number) => {
     if (!pdfDoc) return;
@@ -474,6 +691,21 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       }
       
       setPageRendering(false);
+      
+      // Recalculate drag constraints after render using requestAnimationFrame for smooth update
+      // Only update if not currently dragging to prevent jitter
+      requestAnimationFrame(() => {
+        if (!isPdfDraggingRef.current) {
+          const constraints = calculateDragConstraints();
+          dragConstraintsRef.current = constraints;
+          // Update stable constraints state
+          if (typeof constraints === 'object' && constraints !== null) {
+            setStableDragConstraints(constraints);
+          } else {
+            setStableDragConstraints(pdfContainerRef);
+          }
+        }
+      });
     } catch (error: unknown) {
       // Ignore cancellation errors
       const errorName = error && typeof error === 'object' && 'name' in error ? String(error.name) : undefined;
@@ -720,9 +952,8 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- imageScale is intentionally excluded so the keydown listener is not re-bound on every zoom change
   }, [file, fileData, imageX, imageY]);
-
-  if (!file) return null;
 
   const currentIndex = files.findIndex(f => f.path === file.path);
   const hasNext = onNext && currentIndex < files.length - 1;
@@ -872,7 +1103,7 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       logger.error('Failed to create bookmark:', error);
       toast.error('Failed to create bookmark');
     }
-  }, [generatePageThumbnail, file?.name, toast]);
+  }, [generatePageThumbnail, file?.name, file?.path, currentPage, toast]);
 
   return (
     <>
@@ -882,14 +1113,24 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={(e) => {
-          if (e.target === e.currentTarget) {
+          // Only close if clicking directly on the backdrop, not on child elements
+          // Also don't close if word editor is open, we're in the process of opening it, or reattaching
+          if (e.target === e.currentTarget && !isWordEditorOpen && !isOpeningWordEditorRef.current && !isReattachingRef.current) {
             handleClose();
           }
         }}
-        className="fixed inset-y-0 left-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-0 transition-all duration-300"
+        className="fixed inset-y-0 left-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-0 transition-all duration-300"
         style={{
-          width: isWordEditorOpen ? 'calc(100vw - 500px)' : '100vw',
-          right: isWordEditorOpen ? '500px' : '0',
+          zIndex: overlayZIndex,
+          // When editor is open in inline mode (archive visible), constrain to archive section width
+          // When editor is open in overlay mode (archive not visible), leave space for panel on right
+          width: isWordEditorOpen 
+            ? (isInlineMode
+                ? `${dividerPosition}%` // Inline mode: archive section width
+                : `calc(100vw - ${panelWidth}px)`) // Overlay mode: viewport width minus panel width
+            : '100vw',
+          // Only set right in overlay mode to ensure proper positioning
+          ...(isWordEditorOpen && !isInlineMode ? { right: `${panelWidth}px` } : {}),
         }}
       >
         <motion.div
@@ -899,14 +1140,43 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
           transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
           className={`relative ${file?.type === 'pdf' ? 'w-full h-full' : 'w-full h-full flex items-center justify-center'}`}
           onClick={(e) => {
-            // Close on backdrop click only when not zoomed
-            if (e.target === e.currentTarget && file?.type === 'image' && imageScale <= 1) {
-              handleClose();
-            } else if (e.target === e.currentTarget && file?.type !== 'image' && file?.type !== 'pdf') {
-              handleClose();
+            // Close on backdrop click only when not zoomed and word editor is not open
+            // Also don't close if we're reattaching
+            if (e.target === e.currentTarget && !isWordEditorOpen && !isOpeningWordEditorRef.current && !isReattachingRef.current) {
+              if (file?.type === 'image' && imageScale <= 1) {
+                handleClose();
+              } else if (file?.type !== 'image' && file?.type !== 'pdf') {
+                handleClose();
+              }
             }
           }}
         >
+          {/* Close button - Top right corner */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClose();
+            }}
+            className="absolute top-4 right-4 z-40 text-white hover:text-cyber-purple-400 transition-colors bg-black/70 backdrop-blur-sm rounded-full p-2 border border-cyber-purple-500/50 hover:bg-gray-700/50"
+            aria-label="Close viewer"
+            title="Close"
+          >
+            <X size={20} />
+          </button>
+
+          {(file.type === 'audio' || file.type === 'video') && onTranscribe && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onTranscribe(file);
+              }}
+              className="absolute top-4 right-20 z-40 text-white hover:text-cyber-cyan-300 transition-colors bg-black/70 backdrop-blur-sm rounded-full p-2 border border-cyber-cyan-500/50 hover:bg-gray-700/50"
+              aria-label="Open transcript workspace"
+              title="Transcribe media"
+            >
+              <AudioLines size={20} />
+            </button>
+          )}
 
           {/* Image Zoom Controls */}
           {file.type === 'image' && fileData && (
@@ -995,10 +1265,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
           {file.type === 'pdf' ? (
             <>
               {pdfLoading ? (
-                <div className="flex flex-col items-center justify-center w-full h-full bg-gray-900 rounded-lg">
-                  <div className="text-center mb-4">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                    <p className="text-gray-300 mb-2">
+                <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950 rounded-lg">
+                  <div className="text-center mb-4 space-y-4">
+                    <div className="inline-flex items-center justify-center">
+                      <div className="relative">
+                        <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                        <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                        <div className="relative w-12 h-12">
+                          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                          <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-gray-300 font-medium bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent">
                       {pdfLoadingProgress < 90 ? 'Reading file...' : 'Parsing PDF...'}
                     </p>
                     {pdfLoadingProgress > 0 && (
@@ -1086,9 +1365,18 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          e.preventDefault();
+                          // Open word editor via context and dispatch event to ensure SettingsPanel opens it
+                          // The useEffect will sync the ref with the state
                           setWordEditorOpen(true);
+                          // Dispatch event to ensure SettingsPanel opens the word editor panel
+                          window.dispatchEvent(new CustomEvent('open-word-editor-from-viewer'));
                         }}
-                        className="p-2 text-white hover:text-cyber-purple-400 transition-colors rounded hover:bg-gray-700"
+                        className={`p-2 transition-colors rounded ${
+                          isPastel
+                            ? 'text-gray-700 hover:text-pink-500 hover:bg-pink-100/50'
+                            : 'text-white hover:text-cyber-purple-400 hover:bg-gray-700'
+                        }`}
                         aria-label="Open word editor"
                         title="Open word editor"
                       >
@@ -1136,29 +1424,80 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
                     }}
                   >
                     {pageRendering && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm rounded z-10">
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyber-purple-400 mx-auto mb-2"></div>
-                          <p className="text-gray-300 text-sm">Loading page...</p>
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 backdrop-blur-sm rounded z-10">
+                        <div className="text-center space-y-2">
+                          <div className="inline-flex items-center justify-center">
+                            <div className="relative w-8 h-8">
+                              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                              <div className="absolute inset-1 rounded-full border border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                            </div>
+                          </div>
+                          <p className="text-gray-300 text-sm font-medium">Loading page...</p>
                         </div>
                       </div>
                     )}
                     {/* Canvas wrapper for drag functionality */}
                     <motion.div
                       drag={isPdfZoomed && pageScale >= 1.0}
-                      dragConstraints={(isPdfZoomed && pageScale >= 1.0) ? pdfContainerRef : false}
-                      dragElastic={0}
+                      dragConstraints={stableDragConstraints}
+                      dragElastic={0.1}
                       dragMomentum={false}
+                      dragPropagation={false}
+                      onDragStart={() => {
+                        isPdfDraggingRef.current = true;
+                        // Prevent text selection during drag
+                        document.body.style.userSelect = 'none';
+                        document.body.style.cursor = 'grabbing';
+                        // Ensure constraints are set before drag starts
+                        // Recalculate constraints at drag start in case panel just opened/resized
+                        if (!dragConstraintsRef.current) {
+                          requestAnimationFrame(() => {
+                            if (!isPdfDraggingRef.current) return; // Double check we're still starting drag
+                            const constraints = calculateDragConstraints();
+                            dragConstraintsRef.current = constraints;
+                            // Update stable constraints if we just calculated them
+                            if (typeof constraints === 'object' && constraints !== null) {
+                              setStableDragConstraints(constraints);
+                            } else {
+                              setStableDragConstraints(pdfContainerRef);
+                            }
+                          });
+                        }
+                      }}
+                      onDragEnd={() => {
+                        isPdfDraggingRef.current = false;
+                        // Small delay to prevent click events after drag
+                        setTimeout(() => {
+                          document.body.style.userSelect = '';
+                          document.body.style.cursor = '';
+                        }, 50);
+                        // Recalculate constraints after drag ends to ensure accuracy
+                        // Use a small delay to ensure drag has fully completed
+                        setTimeout(() => {
+                          requestAnimationFrame(() => {
+                            const constraints = calculateDragConstraints();
+                            dragConstraintsRef.current = constraints;
+                            // Update stable constraints after drag ends
+                            if (typeof constraints === 'object' && constraints !== null) {
+                              setStableDragConstraints(constraints);
+                            } else {
+                              setStableDragConstraints(pdfContainerRef);
+                            }
+                          });
+                        }, 10);
+                      }}
                       whileDrag={{ cursor: 'grabbing' }}
                       style={{
-                        cursor: (isPdfZoomed && pageScale >= 1.0) ? 'grab' : 'default',
+                        cursor: (isPdfZoomed && pageScale >= 1.0 && !isPdfDraggingRef.current) ? 'grab' : 'default',
                         display: 'inline-block',
                         touchAction: 'none',
+                        willChange: 'transform',
                         x: canvasX,
                         y: canvasY,
                       }}
                       onClick={(e) => {
-                        if (isPdfZoomed && pageScale >= 1.0) {
+                        // Only stop propagation if we're not dragging
+                        if (isPdfZoomed && pageScale >= 1.0 && !isPdfDraggingRef.current) {
                           e.stopPropagation();
                         }
                       }}
@@ -1187,10 +1526,19 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
               )}
             </>
           ) : loading ? (
-            <div className="flex items-center justify-center w-full h-96 bg-gray-900 rounded-lg">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                <p className="text-gray-300">Loading...</p>
+            <div className="flex items-center justify-center w-full h-96 bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950 rounded-lg">
+              <div className="text-center space-y-4">
+                <div className="inline-flex items-center justify-center">
+                  <div className="relative">
+                    <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                    <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                    <div className="relative w-12 h-12">
+                      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                      <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-gray-300 font-medium">Loading...</p>
               </div>
             </div>
           ) : fileData ? (
@@ -1324,6 +1672,14 @@ export function ArchiveFileViewer({ file, files, onClose, onNext, onPrevious, in
       )}
     </>
   );
+}
+
+export function ArchiveFileViewer(props: ArchiveFileViewerProps) {
+  if (!props.file) {
+    return null;
+  }
+
+  return <ArchiveFileViewerContent {...props} file={props.file} />;
 }
 
 

@@ -14,6 +14,7 @@ import { CodeNode, CodeHighlightNode } from '@lexical/code';
 import { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import { AutoLinkNode, LinkNode } from '@lexical/link';
 import { FORMAT_TEXT_COMMAND, UNDO_COMMAND, REDO_COMMAND } from 'lexical';
+import { logger } from '../../utils/logger';
 
 export interface LexicalEditorHandle {
   getContent: () => string;
@@ -75,7 +76,7 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
         },
       },
       onError: (error: Error) => {
-        console.error('Lexical error:', error);
+        logger.error('Lexical error:', error);
       },
       nodes: [
         HeadingNode,
@@ -138,7 +139,7 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
         
         // Join paragraphs with newlines
         // This correctly converts: <p>line1</p><p></p><p>line2</p> -> "line1\n\nline2"
-        let result = lines.join('\n');
+        const result = lines.join('\n');
         
         // Remove trailing newlines to prevent accumulation on save/reload cycles
         // This normalizes trailing whitespace (standard text editor behavior)

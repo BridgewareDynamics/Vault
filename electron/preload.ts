@@ -1,8 +1,111 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 // Type definitions for IPC
 type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
 type LogArgs = Parameters<typeof console.log>;
+
+type DebugLogEntry = {
+  location: string;
+  message: string;
+  data?: unknown;
+  timestamp: number;
+  sessionId: string;
+  runId: string;
+  hypothesisId: string;
+};
+
+type AppSettingsUpdate = Partial<{
+  hardwareAcceleration: boolean;
+  ramLimitMB: number;
+  fullscreen: boolean;
+  extractionQuality: 'high' | 'medium' | 'low';
+  thumbnailSize: number;
+  performanceMode: 'auto' | 'high' | 'balanced' | 'low';
+  showOnboarding: boolean;
+  theme: 'brideware-purple' | 'pastel';
+}>;
+
+type BookmarkPayload = {
+  id: string;
+  pdfPath: string;
+  pageNumber: number;
+  name: string;
+  description?: string;
+  note?: string;
+  thumbnail?: string;
+  folderId?: string;
+  tags: string[];
+  createdAt: number;
+  updatedAt: number;
+};
+
+type BookmarkUpdatePayload = Partial<Omit<BookmarkPayload, 'id' | 'createdAt'>>;
+
+type BookmarkFolderPayload = {
+  id: string;
+  name: string;
+  pdfPath: string;
+  thumbnail?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type ExtractedPagePayload = {
+  pageNumber: number;
+  imagePath: string;
+  imageData: string;
+};
+
+type ExtractionProgressPayload = {
+  currentPage: number;
+  totalPages: number;
+  percentage: number;
+  currentPageProgress?: number;
+  estimatedTimeRemaining?: number;
+  memoryUsage?: number;
+  statusMessage?: string;
+};
+
+type PdfAuditSettingsPayload = {
+  blackThreshold: number;
+  minOverlapArea: number;
+  minHits: number;
+  includeSecurityAudit: boolean;
+};
+
+type PdfExtractionSettingsPayload = {
+  dpi: number;
+  quality: number;
+  format: 'png' | 'jpeg';
+  pageRange: 'all' | 'custom' | 'selected';
+  customPageRange: string;
+  colorSpace: 'rgb' | 'grayscale';
+  compressionLevel: number;
+};
+
+type PdfAuditWindowOptions = {
+  pdfPath: string | null;
+  settings: PdfAuditSettingsPayload;
+  showSettings: boolean;
+  result: unknown | null;
+  isAuditing: boolean;
+  progressMessage: string;
+};
+
+type PdfExtractionWindowOptions = {
+  pdfPath: string | null;
+  settings: PdfExtractionSettingsPayload;
+  showSettings: boolean;
+  extractedPages: ExtractedPagePayload[];
+  selectedPages: number[];
+  previewPage: ExtractedPagePayload | null;
+  isExtracting: boolean;
+  progress: ExtractionProgressPayload | null;
+  error: string | null;
+  statusMessage: string;
+};
+
+type RedactionAuditOptions = Record<string, unknown>;
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -29,6 +132,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getArchiveConfig: () => ipcRenderer.invoke('get-archive-config'),
   validateArchiveDirectory: (dirPath: string) => ipcRenderer.invoke('validate-archive-directory', dirPath),
       createCaseFolder: (caseName: string, description?: string, categoryTagId?: string) => ipcRenderer.invoke('create-case-folder', caseName, description, categoryTagId),
+      updateCaseDescription: (casePath: string, description: string) => ipcRenderer.invoke('update-case-description', casePath, description),
       getCategoryTags: () => ipcRenderer.invoke('get-category-tags'),
       createCategoryTag: (tag: { id: string; name: string; color: string }) => ipcRenderer.invoke('create-category-tag', tag),
       deleteCategoryTag: (tagId: string) => ipcRenderer.invoke('delete-category-tag', tagId),
@@ -42,6 +146,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listArchiveCases: () => ipcRenderer.invoke('list-archive-cases'),
   listCaseFiles: (casePath: string) => ipcRenderer.invoke('list-case-files', casePath),
   addFilesToCase: (casePath: string, filePaths?: string[]) => ipcRenderer.invoke('add-files-to-case', casePath, filePaths),
+  saveAudioRecordingToCase: (
+    casePath: string,
+    fileName: string,
+    audioData: ArrayBuffer,
+    mimeType?: string
+  ) => ipcRenderer.invoke('save-audio-recording-to-case', casePath, fileName, Buffer.from(audioData), mimeType),
   deleteCase: (casePath: string) => ipcRenderer.invoke('delete-case', casePath),
   setCaseBackgroundImage: (casePath: string, imagePath: string) => ipcRenderer.invoke('set-case-background-image', casePath, imagePath),
   setFolderBackgroundImage: (folderPath: string, imagePath: string) => ipcRenderer.invoke('set-folder-background-image', folderPath, imagePath),
@@ -62,21 +172,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('extract-pdf-from-archive', options),
   // Logging API
   logToMain: (level: LogLevel, ...args: LogArgs) => ipcRenderer.invoke('log-renderer', level, ...args),
+  openDevToolsInDev: () => ipcRenderer.invoke('open-devtools-in-dev'),
   // Debug logging API - writes NDJSON to debug.log
-  debugLog: (logEntry: {
-    location: string;
-    message: string;
-    data?: any;
-    timestamp: number;
-    sessionId: string;
-    runId: string;
-    hypothesisId: string;
-  }) => ipcRenderer.invoke('debug-log', logEntry),
+  debugLog: (logEntry: DebugLogEntry) => ipcRenderer.invoke('debug-log', logEntry),
   // System information
   getSystemMemory: () => ipcRenderer.invoke('get-system-memory'),
+  getSystemFonts: (forceRefresh?: boolean) => ipcRenderer.invoke('get-system-fonts', forceRefresh),
   // Settings API
   getSettings: () => ipcRenderer.invoke('get-settings'),
-  updateSettings: (updates: any) => ipcRenderer.invoke('update-settings', updates),
+  updateSettings: (updates: AppSettingsUpdate) => ipcRenderer.invoke('update-settings', updates),
   toggleFullscreen: () => ipcRenderer.invoke('toggle-fullscreen'),
   // Word Editor API
   getVaultDirectory: () => ipcRenderer.invoke('get-vault-directory'),
@@ -85,47 +189,46 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createTextFile: (fileName: string, content: string) => ipcRenderer.invoke('create-text-file', fileName, content),
   saveTextFile: (filePath: string, content: string) => ipcRenderer.invoke('save-text-file', filePath, content),
   deleteTextFile: (filePath: string) => ipcRenderer.invoke('delete-text-file', filePath),
+  // Case Notes API
+  listCaseNotes: (casePath: string) => ipcRenderer.invoke('list-case-notes', casePath),
+  createCaseNote: (casePath: string, fileName: string, content: string) => ipcRenderer.invoke('create-case-note', casePath, fileName, content),
   exportTextFile: (options: {
     content: string;
     format: 'pdf' | 'docx' | 'rtf';
     filePath?: string;
   }) => ipcRenderer.invoke('export-text-file', options),
-  createWordEditorWindow: (options: {
-    content: string;
-    filePath?: string | null;
-    viewState?: 'editor' | 'library' | 'bookmarkLibrary';
-  }) => ipcRenderer.invoke('create-word-editor-window', options),
-  reattachWordEditor: (options: {
-    content: string;
-    filePath?: string | null;
-    viewState?: 'editor' | 'library' | 'bookmarkLibrary';
-  }) => ipcRenderer.invoke('reattach-word-editor', options),
-  createPdfAuditWindow: (options: {
-    pdfPath: string | null;
-    settings: {
-      blackThreshold: number;
-      minOverlapArea: number;
-      minHits: number;
-      includeSecurityAudit: boolean;
-    };
-    showSettings: boolean;
-    result: any | null;
-    isAuditing: boolean;
-    progressMessage: string;
-  }) => ipcRenderer.invoke('create-pdf-audit-window', options),
-  reattachPdfAudit: (options: {
-    pdfPath: string | null;
-    settings: {
-      blackThreshold: number;
-      minOverlapArea: number;
-      minHits: number;
-      includeSecurityAudit: boolean;
-    };
-    showSettings: boolean;
-    result: any | null;
-    isAuditing: boolean;
-    progressMessage: string;
-  }) => ipcRenderer.invoke('reattach-pdf-audit', options),
+      createWordEditorWindow: (options: {
+        content: string;
+        filePath?: string | null;
+        viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
+      }) => ipcRenderer.invoke('create-word-editor-window', options),
+      reattachWordEditor: (options: {
+        content: string;
+        filePath?: string | null;
+        viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
+      }) => ipcRenderer.invoke('reattach-word-editor', options),
+      createMapWindow: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('create-map-window', state),
+      reattachMapModule: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('reattach-map-module', state),
+      createTranscriptionWindow: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('create-transcription-window', state),
+      reattachTranscriptionModule: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('reattach-transcription-module', state),
+      createFileConverterWindow: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('create-file-converter-window', state),
+      reattachFileConverterModule: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('reattach-file-converter-module', state),
+      createNovelWindow: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('create-novel-window', state),
+      reattachNovelModule: (state: Record<string, unknown>) =>
+        ipcRenderer.invoke('reattach-novel-module', state),
+  createPdfAuditWindow: (options: PdfAuditWindowOptions) => ipcRenderer.invoke('create-pdf-audit-window', options),
+  reattachPdfAudit: (options: PdfAuditWindowOptions) => ipcRenderer.invoke('reattach-pdf-audit', options),
+  createPdfExtractionWindow: (options: PdfExtractionWindowOptions) => ipcRenderer.invoke('create-pdf-extraction-window', options),
+  reattachPdfExtraction: (options: PdfExtractionWindowOptions) => ipcRenderer.invoke('reattach-pdf-extraction', options),
   closeWindow: () => ipcRenderer.invoke('close-window'),
   openBookmarkInMainWindow: (options: {
     pdfPath: string;
@@ -133,43 +236,150 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('open-bookmark-in-main-window', options),
   // Bookmark API
   getBookmarks: () => ipcRenderer.invoke('get-bookmarks'),
-  createBookmark: (bookmark: any) => ipcRenderer.invoke('create-bookmark', bookmark),
-  updateBookmark: (id: string, updates: any) => ipcRenderer.invoke('update-bookmark', id, updates),
+  createBookmark: (bookmark: BookmarkPayload) => ipcRenderer.invoke('create-bookmark', bookmark),
+  updateBookmark: (id: string, updates: BookmarkUpdatePayload) => ipcRenderer.invoke('update-bookmark', id, updates),
   deleteBookmark: (id: string) => ipcRenderer.invoke('delete-bookmark', id),
   getBookmarkFolders: () => ipcRenderer.invoke('get-bookmark-folders'),
-  createBookmarkFolder: (folder: any) => ipcRenderer.invoke('create-bookmark-folder', folder),
+  createBookmarkFolder: (folder: BookmarkFolderPayload) => ipcRenderer.invoke('create-bookmark-folder', folder),
   deleteBookmarkFolder: (id: string) => ipcRenderer.invoke('delete-bookmark-folder', id),
   getBookmarksByFolder: (folderId: string | null) => ipcRenderer.invoke('get-bookmarks-by-folder', folderId),
   saveBookmarkThumbnail: (bookmarkId: string, thumbnailData: string) => ipcRenderer.invoke('save-bookmark-thumbnail', bookmarkId, thumbnailData),
   getBookmarkThumbnail: (bookmarkId: string) => ipcRenderer.invoke('get-bookmark-thumbnail', bookmarkId),
   // File Security Checker API
-  auditPDFRedaction: (pdfPath: string, options?: any) => ipcRenderer.invoke('audit-pdf-redaction', pdfPath, options),
+  auditPDFRedaction: (pdfPath: string, options?: RedactionAuditOptions) => ipcRenderer.invoke('audit-pdf-redaction', pdfPath, options),
   // Listen for audit progress updates
   onAuditProgress: (callback: (message: string) => void) => {
-    const listener = (_event: any, message: string) => callback(message);
+    const listener = (_event: IpcRendererEvent, message: string) => callback(message);
     ipcRenderer.on('audit-progress', listener);
     return () => ipcRenderer.removeListener('audit-progress', listener);
   },
   // Listen for audit completion result
-  onAuditResult: (callback: (result: any) => void) => {
-    const listener = (_event: any, result: any) => callback(result);
+  onAuditResult: (callback: (result: unknown) => void) => {
+    const listener = (_event: IpcRendererEvent, result: unknown) => callback(result);
     ipcRenderer.on('audit-result', listener);
     return () => ipcRenderer.removeListener('audit-result', listener);
   },
   // Listen for audit errors
   onAuditError: (callback: (error: string) => void) => {
-    const listener = (_event: any, error: string) => callback(error);
+    const listener = (_event: IpcRendererEvent, error: string) => callback(error);
     ipcRenderer.on('audit-error', listener);
     return () => ipcRenderer.removeListener('audit-error', listener);
   },
   // Generate PDF Report
-  generateAuditReport: (auditResult: any, outputPath: string) => ipcRenderer.invoke('generate-audit-report', auditResult, outputPath),
+  generateAuditReport: (auditResult: unknown, outputPath: string) => ipcRenderer.invoke('generate-audit-report', auditResult, outputPath),
   // Show Save Dialog
   showSaveDialog: (options: {
     title: string;
     defaultPath: string;
     filters: Array<{ name: string; extensions: string[] }>;
   }) => ipcRenderer.invoke('show-save-dialog', options),
+  // Map API
+  listMaps: () => ipcRenderer.invoke('list-maps'),
+  listCaseMaps: (casePath: string) => ipcRenderer.invoke('list-case-maps', casePath),
+  createMap: (title: string, casePath?: string | null) => ipcRenderer.invoke('create-map', title, casePath),
+  readMap: (mapFolderPath: string) => ipcRenderer.invoke('read-map', mapFolderPath),
+  saveMap: (document: unknown) => ipcRenderer.invoke('save-map', document),
+  deleteMap: (mapFolderPath: string) => ipcRenderer.invoke('delete-map', mapFolderPath),
+  renameMap: (mapFolderPath: string, newTitle: string) => ipcRenderer.invoke('rename-map', mapFolderPath, newTitle),
+  selectMapAttachments: () => ipcRenderer.invoke('select-map-attachments'),
+  copyMapAttachmentToAssets: (mapFolderPath: string, sourcePath: string, attachmentId: string) =>
+    ipcRenderer.invoke('copy-map-attachment-to-assets', mapFolderPath, sourcePath, attachmentId),
+  exportMapToDirectory: (mapFolderPath: string, destDirectory: string) =>
+    ipcRenderer.invoke('export-map-to-directory', mapFolderPath, destDirectory),
+  exportMapPng: (options: { mapFolderPath: string; pngBase64: string; destFilePath?: string }) =>
+    ipcRenderer.invoke('export-map-png', options),
+  // Novel API
+  listNovels: () => ipcRenderer.invoke('list-novels'),
+  listCaseNovels: (casePath: string) => ipcRenderer.invoke('list-case-novels', casePath),
+  createNovel: (title: string, casePath?: string | null, bookSizeId?: string | null) =>
+    ipcRenderer.invoke('create-novel', title, casePath, bookSizeId),
+  readNovel: (novelFolderPath: string) => ipcRenderer.invoke('read-novel', novelFolderPath),
+  saveNovel: (document: unknown) => ipcRenderer.invoke('save-novel', document),
+  deleteNovel: (novelFolderPath: string) => ipcRenderer.invoke('delete-novel', novelFolderPath),
+  moveNovelToCase: (novelFolderPath: string, casePath: string) =>
+    ipcRenderer.invoke('move-novel-to-case', novelFolderPath, casePath),
+  moveNovelToLibrary: (novelFolderPath: string) => ipcRenderer.invoke('move-novel-to-library', novelFolderPath),
+  copyNovelAssetToNovel: (novelFolderPath: string, sourcePath: string, assetId: string) =>
+    ipcRenderer.invoke('copy-novel-asset-to-novel', novelFolderPath, sourcePath, assetId),
+  writeNovelAssetFromDataUrl: (novelFolderPath: string, relativePath: string, dataUrl: string) =>
+    ipcRenderer.invoke('write-novel-asset-from-data-url', novelFolderPath, relativePath, dataUrl),
+  exportNovelPdf: (novelFolderPath: string, destFilePath: string) =>
+    ipcRenderer.invoke('export-novel-pdf', novelFolderPath, destFilePath),
+  exportNovelHtml: (novelFolderPath: string, destDirectory: string) =>
+    ipcRenderer.invoke('export-novel-html', novelFolderPath, destDirectory),
+  exportNovelDocx: (novelFolderPath: string, destFilePath: string) =>
+    ipcRenderer.invoke('export-novel-docx', novelFolderPath, destFilePath),
+  exportNovelEpub: (novelFolderPath: string, destFilePath: string) =>
+    ipcRenderer.invoke('export-novel-epub', novelFolderPath, destFilePath),
+  // Transcription API
+  getTranscriptionEngineStatus: () => ipcRenderer.invoke('get-transcription-engine-status'),
+  startTranscriptionEngine: () => ipcRenderer.invoke('start-transcription-engine'),
+  stopTranscriptionEngine: () => ipcRenderer.invoke('stop-transcription-engine'),
+  listTranscriptionModels: () => ipcRenderer.invoke('list-transcription-models'),
+  downloadTranscriptionModel: (modelId: string) =>
+    ipcRenderer.invoke('download-transcription-model', modelId),
+  selectTranscriptionMedia: () => ipcRenderer.invoke('select-transcription-media'),
+  listTranscriptions: () => ipcRenderer.invoke('list-transcriptions'),
+  listCaseTranscriptions: (casePath: string) =>
+    ipcRenderer.invoke('list-case-transcriptions', casePath),
+  createTranscription: (
+    title: string,
+    casePath?: string | null,
+    initialSourcePath?: string | null
+  ) => ipcRenderer.invoke('create-transcription', title, casePath, initialSourcePath),
+  readTranscription: (transcriptionFolderPath: string) =>
+    ipcRenderer.invoke('read-transcription', transcriptionFolderPath),
+  saveTranscription: (document: unknown) => ipcRenderer.invoke('save-transcription', document),
+  deleteTranscription: (transcriptionFolderPath: string) =>
+    ipcRenderer.invoke('delete-transcription', transcriptionFolderPath),
+  renameTranscription: (transcriptionFolderPath: string, newTitle: string) =>
+    ipcRenderer.invoke('rename-transcription', transcriptionFolderPath, newTitle),
+  copyTranscriptionSourceToAssets: (
+    transcriptionFolderPath: string,
+    sourcePath: string,
+    sourceId: string
+  ) =>
+    ipcRenderer.invoke(
+      'copy-transcription-source-to-assets',
+      transcriptionFolderPath,
+      sourcePath,
+      sourceId
+    ),
+  runTranscription: (options: {
+    transcriptionFolderPath: string;
+    sourcePath: string;
+    casePath?: string | null;
+    title?: string;
+    settings?: Record<string, unknown>;
+  }) => ipcRenderer.invoke('run-transcription', options),
+  cancelTranscriptionJob: (transcriptionFolderPath?: string) =>
+    ipcRenderer.invoke('cancel-transcription-job', transcriptionFolderPath),
+  getConverterCapabilities: () => ipcRenderer.invoke('get-converter-capabilities'),
+  convertFile: (options: {
+    sourcePath: string;
+    outputFormat: string;
+    outputDirectory?: string;
+    quality?: number;
+    dpi?: number;
+    renderedPages?: Array<{ pageNumber: number; imageData: string }>;
+  }) => ipcRenderer.invoke('convert-file', options),
+  cancelFileConversion: () => ipcRenderer.invoke('cancel-file-conversion'),
+  selectConverterFile: () => ipcRenderer.invoke('select-converter-file'),
+  saveConvertedFileToCase: (casePath: string, sourceOutputPath: string, preferredName?: string) =>
+    ipcRenderer.invoke('save-converted-file-to-case', casePath, sourceOutputPath, preferredName),
+  replaceVaultFileWithConversion: (options: {
+    casePath: string | null;
+    originalPath: string;
+    convertedPath: string;
+    newFileName?: string;
+  }) => ipcRenderer.invoke('replace-vault-file-with-conversion', options),
+  onFileConverterProgress: (callback: (progress: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: unknown) => callback(progress);
+    ipcRenderer.on('file-converter-progress', listener);
+    return () => {
+      ipcRenderer.removeListener('file-converter-progress', listener);
+    };
+  },
 });
 
 // Type declaration for TypeScript
@@ -198,6 +408,7 @@ declare global {
       getArchiveConfig: () => Promise<{ archiveDrive: string | null }>;
       validateArchiveDirectory: (dirPath: string) => Promise<{ isValid: boolean; marker?: { version: string; createdAt: number; lastModified: number; caseCount?: number; archiveId: string } }>;
       createCaseFolder: (caseName: string, description?: string, categoryTagId?: string) => Promise<string>;
+      updateCaseDescription: (casePath: string, description: string) => Promise<{ success: boolean }>;
       getCategoryTags: () => Promise<Array<{ id: string; name: string; color: string }>>;
       createCategoryTag: (tag: { id: string; name: string; color: string }) => Promise<{ id: string; name: string; color: string }>;
       deleteCategoryTag: (tagId: string) => Promise<boolean>;
@@ -211,6 +422,12 @@ declare global {
       listArchiveCases: () => Promise<Array<{ name: string; path: string; backgroundImage?: string; description?: string; categoryTagId?: string }>>;
       listCaseFiles: (casePath: string) => Promise<Array<{ name: string; path: string; size: number; modified: number; isFolder?: boolean; folderType?: 'extraction' | 'case'; parentPdfName?: string; categoryTagId?: string }>>;
       addFilesToCase: (casePath: string, filePaths?: string[]) => Promise<string[]>;
+      saveAudioRecordingToCase: (
+        casePath: string,
+        fileName: string,
+        audioData: ArrayBuffer,
+        mimeType?: string
+      ) => Promise<string>;
       deleteCase: (casePath: string) => Promise<boolean>;
       setCaseBackgroundImage: (casePath: string, imagePath: string) => Promise<string>;
       setFolderBackgroundImage: (folderPath: string, imagePath: string) => Promise<string>;
@@ -221,7 +438,10 @@ declare global {
       savePDFThumbnail: (filePath: string, thumbnailData: string) => Promise<void>;
       readPDFThumbnail: (filePath: string) => Promise<string | null>;
       deletePDFThumbnail: (filePath: string) => Promise<void>;
-      readFileData: (filePath: string) => Promise<{ data: string; mimeType: string; fileName: string }>;
+      readFileData: (filePath: string) => Promise<
+        | { data: string; mimeType: string; fileName: string }
+        | { type: 'file-path'; path: string; mimeType: string; fileName: string }
+      >;
       extractPDFFromArchive: (options: {
         pdfPath: string;
         casePath: string;
@@ -230,16 +450,10 @@ declare global {
         extractedPages: Array<{ pageNumber: number; imageData: string }>;
       }) => Promise<{ success: boolean; messages: string[]; extractionFolder: string }>;
       logToMain: (level: LogLevel, ...args: LogArgs) => Promise<void>;
-      debugLog: (logEntry: {
-        location: string;
-        message: string;
-        data?: any;
-        timestamp: number;
-        sessionId: string;
-        runId: string;
-        hypothesisId: string;
-      }) => Promise<void>;
+      openDevToolsInDev: () => Promise<{ success: boolean }>;
+      debugLog: (logEntry: DebugLogEntry) => Promise<void>;
       getSystemMemory: () => Promise<{ totalMemory: number; freeMemory: number; usedMemory: number }>;
+      getSystemFonts: (forceRefresh?: boolean) => Promise<string[]>;
       // Settings API
       getSettings: () => Promise<{
         hardwareAcceleration: boolean;
@@ -249,14 +463,7 @@ declare global {
         thumbnailSize: number;
         performanceMode: 'auto' | 'high' | 'balanced' | 'low';
       }>;
-      updateSettings: (updates: Partial<{
-        hardwareAcceleration: boolean;
-        ramLimitMB: number;
-        fullscreen: boolean;
-        extractionQuality: 'high' | 'medium' | 'low';
-        thumbnailSize: number;
-        performanceMode: 'auto' | 'high' | 'balanced' | 'low';
-      }>) => Promise<{
+      updateSettings: (updates: AppSettingsUpdate) => Promise<{
         hardwareAcceleration: boolean;
         ramLimitMB: number;
         fullscreen: boolean;
@@ -278,6 +485,15 @@ declare global {
       createTextFile: (fileName: string, content: string) => Promise<string>;
       saveTextFile: (filePath: string, content: string) => Promise<{ success: boolean }>;
       deleteTextFile: (filePath: string) => Promise<{ success: boolean }>;
+      // Case Notes API
+      listCaseNotes: (casePath: string) => Promise<Array<{
+        name: string;
+        path: string;
+        size: number;
+        modified: number;
+        preview?: string;
+      }>>;
+      createCaseNote: (casePath: string, fileName: string, content: string) => Promise<string>;
       exportTextFile: (options: {
         content: string;
         format: 'pdf' | 'docx' | 'rtf';
@@ -287,52 +503,30 @@ declare global {
         content: string;
         filePath?: string | null;
         viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
       }) => Promise<{ success: boolean }>;
       reattachWordEditor: (options: {
         content: string;
         filePath?: string | null;
         viewState?: 'editor' | 'library' | 'bookmarkLibrary';
+        casePath?: string | null;
       }) => Promise<{ success: boolean }>;
-      createPdfAuditWindow: (options: {
-        pdfPath: string | null;
-        settings: {
-          blackThreshold: number;
-          minOverlapArea: number;
-          minHits: number;
-          includeSecurityAudit: boolean;
-        };
-        showSettings: boolean;
-        result: any | null;
-        isAuditing: boolean;
-        progressMessage: string;
-      }) => Promise<{ success: boolean }>;
-      reattachPdfAudit: (options: {
-        pdfPath: string | null;
-        settings: {
-          blackThreshold: number;
-          minOverlapArea: number;
-          minHits: number;
-          includeSecurityAudit: boolean;
-        };
-        showSettings: boolean;
-        result: any | null;
-        isAuditing: boolean;
-        progressMessage: string;
-      }) => Promise<{ success: boolean }>;
+      createPdfAuditWindow: (options: PdfAuditWindowOptions) => Promise<{ success: boolean }>;
+      reattachPdfAudit: (options: PdfAuditWindowOptions) => Promise<{ success: boolean }>;
       closeWindow: () => Promise<{ success: boolean }>;
       openBookmarkInMainWindow: (options: {
         pdfPath: string;
         pageNumber: number;
       }) => Promise<{ success: boolean }>;
       // Bookmark API
-      getBookmarks: () => Promise<Array<any>>;
-      createBookmark: (bookmark: any) => Promise<any>;
-      updateBookmark: (id: string, updates: any) => Promise<any>;
+      getBookmarks: () => Promise<BookmarkPayload[]>;
+      createBookmark: (bookmark: BookmarkPayload) => Promise<BookmarkPayload>;
+      updateBookmark: (id: string, updates: BookmarkUpdatePayload) => Promise<BookmarkPayload>;
       deleteBookmark: (id: string) => Promise<boolean>;
-      getBookmarkFolders: () => Promise<Array<any>>;
-      createBookmarkFolder: (folder: any) => Promise<any>;
+      getBookmarkFolders: () => Promise<BookmarkFolderPayload[]>;
+      createBookmarkFolder: (folder: BookmarkFolderPayload) => Promise<BookmarkFolderPayload>;
       deleteBookmarkFolder: (id: string) => Promise<boolean>;
-      getBookmarksByFolder: (folderId: string | null) => Promise<Array<any>>;
+      getBookmarksByFolder: (folderId: string | null) => Promise<BookmarkPayload[]>;
       saveBookmarkThumbnail: (bookmarkId: string, thumbnailData: string) => Promise<string>;
       getBookmarkThumbnail: (bookmarkId: string) => Promise<string | null>;
       // File Security Checker API
@@ -370,9 +564,9 @@ declare global {
         error?: string;
       }>;
       onAuditProgress: (callback: (message: string) => void) => () => void;
-      onAuditResult: (callback: (result: any) => void) => () => void;
+      onAuditResult: (callback: (result: unknown) => void) => () => void;
       onAuditError: (callback: (error: string) => void) => () => void;
-      generateAuditReport: (auditResult: any, outputPath: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
+      generateAuditReport: (auditResult: unknown, outputPath: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
       showSaveDialog: (options: {
         title: string;
         defaultPath: string;

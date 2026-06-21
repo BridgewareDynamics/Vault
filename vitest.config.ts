@@ -12,6 +12,7 @@ export default defineConfig({
     testTimeout: 10000, // 10 seconds per test
     hookTimeout: 10000, // 10 seconds for hooks
     teardownTimeout: 5000, // 5 seconds for teardown
+    fileParallelism: false,
     forceRerunTriggers: [], // Prevent unnecessary reruns
     exclude: [
       'node_modules/**',

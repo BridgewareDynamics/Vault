@@ -2,34 +2,104 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ArchiveCase, ArchiveFile, ArchiveConfig } from '../types';
 import { useToast } from '../components/Toast/ToastContext';
 import { logger } from '../utils/logger';
-import { setupPDFWorker } from '../utils/pdfWorker';
 import { getUserFriendlyError } from '../utils/errorMessages';
 import { useCategoryTags } from './useCategoryTags';
-import { LRUCache } from '../utils/lruCache';
-import { isMemoryHigh, requestGarbageCollection, formatBytes, getMemoryInfo } from '../utils/memoryMonitor';
+import {
+  getThumbnailMemoryCache,
+  hasThumbnailInCache,
+  getThumbnailFromCache,
+  requestThumbnail,
+} from '../utils/thumbnailService';
+import {
+  generatePdfThumbnailInRenderer,
+  isPdfPlaceholderThumbnail,
+} from '../utils/generatePdfThumbnail';
+import {
+  getCachedArchiveCases,
+  getCachedArchiveConfig,
+  invalidateArchiveCasesCache,
+  prefetchArchiveCases,
+  prefetchArchiveConfig,
+} from '../utils/archivePrefetch';
+import { getMemoryManager } from '../utils/memoryManager';
 
-// Global thumbnail cache with LRU eviction to prevent memory bloat
-// Limit to 200 thumbnails (~50-100MB depending on size)
-// Each thumbnail is typically 200x200px JPEG, ~50-200KB base64 encoded
-const globalThumbnailCache = new LRUCache<string>(200);
+// Shared in-memory thumbnail cache (see thumbnailService)
+const thumbnailMemoryCache = getThumbnailMemoryCache();
+
+const SEARCH_DEBOUNCE_MS = 200;
+
+function applyMemoryThumbnails(files: ArchiveFile[]): ArchiveFile[] {
+  return files.map((file) => {
+    if (file.isFolder) {
+      return file;
+    }
+    const cached = getThumbnailFromCache(file.path);
+    if (cached) {
+      return { ...file, thumbnail: cached };
+    }
+    return file;
+  });
+}
+
+function listingsMatch(a: ArchiveFile[], b: ArchiveFile[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.every(
+    (file, index) =>
+      file.path === b[index].path &&
+      file.modified === b[index].modified &&
+      file.isFolder === b[index].isFolder,
+  );
+}
+
+function thumbnailsChanged(a: ArchiveFile[], b: ArchiveFile[]): boolean {
+  return a.some((file, index) => file.thumbnail !== b[index]?.thumbnail);
+}
+
+function invalidateFolderListings(
+  cache: Map<string, ArchiveFile[]>,
+  ...paths: string[]
+): void {
+  for (const folderPath of paths) {
+    cache.delete(folderPath);
+  }
+}
 
 export function useArchive() {
-  const [archiveConfig, setArchiveConfig] = useState<ArchiveConfig | null>(null);
-  const [cases, setCases] = useState<ArchiveCase[]>([]);
+  const [archiveConfig, setArchiveConfig] = useState<ArchiveConfig | null>(() => getCachedArchiveConfig());
+  const [cases, setCases] = useState<ArchiveCase[]>(() => getCachedArchiveCases() ?? []);
   const [currentCase, setCurrentCase] = useState<ArchiveCase | null>(null);
   const [currentFolderPath, setCurrentFolderPath] = useState<string | null>(null);
   const [folderNavigationStack, setFolderNavigationStack] = useState<string[]>([]);
   const [files, setFiles] = useState<ArchiveFile[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [isRefreshingFolder, setIsRefreshingFolder] = useState(false);
   const [loadingThumbnails, setLoadingThumbnails] = useState<Set<string>>(new Set());
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const toast = useToast();
   const { tags, getTagById } = useCategoryTags();
 
+  // Debounce search for filter recomputation; clear immediately when query is empty
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setDebouncedSearchQuery('');
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
   // Load archive config on mount
   useEffect(() => {
     loadArchiveConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-time config load on mount
   }, []);
 
   // Load cases when archive drive is set
@@ -37,86 +107,167 @@ export function useArchive() {
     if (archiveConfig?.archiveDrive) {
       loadCases();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadCases is a stable callback; intentionally re-run only when the archive drive changes
   }, [archiveConfig?.archiveDrive]);
 
   // Refs to store functions and state to avoid circular dependencies
   const loadFilesRef = useRef<((path: string, preserveThumbnails?: boolean) => Promise<void>) | null>(null);
   const filesRef = useRef<ArchiveFile[]>([]);
+  const loadFilesGenerationRef = useRef(0);
+  const lastLoadedPathRef = useRef<string | null>(null);
+  const folderListingCacheRef = useRef(new Map<string, ArchiveFile[]>());
+  const loadingThumbnailsRef = useRef(new Set<string>());
+  const pendingThumbnailUpdatesRef = useRef(new Map<string, string>());
+  const thumbnailFlushRafRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
+  const videoThumbnailAbortControllersRef = useRef(new Map<string, AbortController>());
+  const pdfThumbnailAbortControllersRef = useRef(new Map<string, AbortController>());
+
+  const abortInFlightThumbnails = useCallback(() => {
+    pdfThumbnailAbortControllersRef.current.forEach((controller) => controller.abort());
+    pdfThumbnailAbortControllersRef.current.clear();
+    videoThumbnailAbortControllersRef.current.forEach((controller) => controller.abort());
+    videoThumbnailAbortControllersRef.current.clear();
+    loadingThumbnailsRef.current.clear();
+  }, []);
+
+  // Single memory-pressure handler driven by the MemoryManager monitor (one
+  // timer/threshold for the whole app) instead of a second independent interval.
+  // It aborts in-flight renders and prunes thumbnails outside the current view.
+  const handleMemoryPressure = useCallback(() => {
+    abortInFlightThumbnails();
+
+    // Never purge everything mid folder-navigation (file list briefly empty).
+    if (filesRef.current.length === 0) {
+      return;
+    }
+
+    const currentFilePaths = new Set(filesRef.current.map((f) => f.path));
+    const deleted = thumbnailMemoryCache.deleteIf((key) => !currentFilePaths.has(key));
+    if (deleted > 0) {
+      logger.info(`Auto-cleanup: removed ${deleted} thumbnail(s) outside the current view`);
+    }
+
+    // If still large, shrink toward 75% while always keeping the current view.
+    if (thumbnailMemoryCache.size() > 150) {
+      const targetSize = Math.floor(thumbnailMemoryCache.size() * 0.75);
+      const keys = thumbnailMemoryCache.keys();
+      const keysToDelete = keys.slice(0, thumbnailMemoryCache.size() - targetSize);
+      keysToDelete.forEach((key) => {
+        if (!currentFilePaths.has(key)) {
+          thumbnailMemoryCache.delete(key);
+        }
+      });
+      logger.info(`Auto-cleanup: reduced thumbnail cache to ${thumbnailMemoryCache.size()}`);
+    }
+  }, [abortInFlightThumbnails]);
+
+  useEffect(() => {
+    const memoryManager = getMemoryManager();
+    return memoryManager.registerCleanupCallback(handleMemoryPressure);
+  }, [handleMemoryPressure]);
+
+  const flushThumbnailUpdates = useCallback(() => {
+    if (!isMountedRef.current) {
+      return;
+    }
+    thumbnailFlushRafRef.current = null;
+    const updates = pendingThumbnailUpdatesRef.current;
+    if (updates.size === 0) {
+      return;
+    }
+
+    const snapshot = new Map(updates);
+    updates.clear();
+
+    setFiles((prev) => {
+      const updated = prev.map((file) => {
+        const thumbnail = snapshot.get(file.path);
+        return thumbnail ? { ...file, thumbnail } : file;
+      });
+      filesRef.current = updated;
+      return updated;
+    });
+  }, []);
+
+  const scheduleThumbnailUpdate = useCallback(
+    (filePath: string, thumbnail: string) => {
+      if (!isMountedRef.current) {
+        return;
+      }
+      pendingThumbnailUpdatesRef.current.set(filePath, thumbnail);
+      if (import.meta.env.VITEST) {
+        flushThumbnailUpdates();
+        return;
+      }
+      if (thumbnailFlushRafRef.current === null) {
+        thumbnailFlushRafRef.current = window.requestAnimationFrame(flushThumbnailUpdates);
+      }
+    },
+    [flushThumbnailUpdates],
+  );
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (thumbnailFlushRafRef.current !== null) {
+        window.cancelAnimationFrame(thumbnailFlushRafRef.current);
+        thumbnailFlushRafRef.current = null;
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- pendingThumbnailUpdatesRef holds a single Map created once; clearing the live ref at unmount is intentional
+      pendingThumbnailUpdatesRef.current.clear();
+      abortInFlightThumbnails();
+    };
+  }, [abortInFlightThumbnails]);
 
   // Load files when current case or folder changes
   useEffect(() => {
     if (currentCase && loadFilesRef.current) {
-      if (currentFolderPath) {
-        // Load files from the current folder
-        loadFilesRef.current(currentFolderPath);
-      } else {
-        // Load files from the case root
-        loadFilesRef.current(currentCase.path);
-      }
+      const path = currentFolderPath ?? currentCase.path;
+      // Preserve in-memory thumbnails when drilling into/out of subfolders
+      const preserveThumbnails = currentFolderPath !== null || filesRef.current.length > 0;
+      loadFilesRef.current(path, preserveThumbnails);
     } else if (!currentCase) {
       // Cleanup when navigating away from archive
       setFiles([]);
       filesRef.current = [];
       setCurrentFolderPath(null);
       setFolderNavigationStack([]);
+      lastLoadedPathRef.current = null;
+      folderListingCacheRef.current.clear();
+      loadingThumbnailsRef.current.clear();
       // Clear thumbnails for files that are no longer visible to free memory
       // Keep cache but let LRU handle eviction naturally
     }
   }, [currentCase, currentFolderPath]);
 
-  // Cleanup thumbnails for files not in current view when case changes
+  // Clear per-case folder listing cache when switching cases
+  useEffect(() => {
+    folderListingCacheRef.current.clear();
+    lastLoadedPathRef.current = null;
+  }, [currentCase?.path]);
+
+  // Cleanup thumbnails when leaving a case (not on every folder navigation)
   useEffect(() => {
     if (!currentCase) {
       return;
     }
 
-    // Cleanup function: remove thumbnails for files not in current view
     return () => {
-      // When navigating away, clean up thumbnails for files not in current files list
+      // Skip cleanup while folder navigation has temporarily cleared the file list
+      if (filesRef.current.length === 0) {
+        return;
+      }
+
       const currentFilePaths = new Set(filesRef.current.map(f => f.path));
-      const deleted = globalThumbnailCache.deleteIf((key) => !currentFilePaths.has(key));
+      const deleted = thumbnailMemoryCache.deleteIf((key) => !currentFilePaths.has(key));
       if (deleted > 0) {
         logger.debug(`Cleaned up ${deleted} thumbnail(s) from cache`);
       }
     };
-  }, [currentCase?.path, currentFolderPath]);
-
-  // Automatic memory cleanup when memory usage is high
-  useEffect(() => {
-    const cleanupInterval = setInterval(() => {
-      // Check memory usage every 30 seconds
-      if (isMemoryHigh(85)) {
-        const memoryInfo = getMemoryInfo();
-        logger.warn(`High memory usage detected: ${memoryInfo ? formatBytes(memoryInfo.usedJSHeapSize) : 'unknown'}. Triggering cleanup...`);
-        
-        // Clean up thumbnails for files not in current view
-        const currentFilePaths = new Set(filesRef.current.map(f => f.path));
-        const deleted = globalThumbnailCache.deleteIf((key) => !currentFilePaths.has(key));
-        
-        if (deleted > 0) {
-          logger.info(`Auto-cleanup: Removed ${deleted} thumbnail(s) from cache`);
-        }
-        
-        // Reduce cache size by 25% if still high
-        if (globalThumbnailCache.size() > 150) {
-          const targetSize = Math.floor(globalThumbnailCache.size() * 0.75);
-          const keys = globalThumbnailCache.keys();
-          const keysToDelete = keys.slice(0, globalThumbnailCache.size() - targetSize);
-          keysToDelete.forEach(key => {
-            if (!currentFilePaths.has(key)) {
-              globalThumbnailCache.delete(key);
-            }
-          });
-          logger.info(`Auto-cleanup: Reduced cache size to ${globalThumbnailCache.size()}`);
-        }
-        
-        // Request garbage collection if available
-        requestGarbageCollection();
-      }
-    }, 30000); // Check every 30 seconds
-
-    return () => clearInterval(cleanupInterval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed on currentCase?.path; files are read from a ref to avoid re-running on every list change
+  }, [currentCase?.path]);
 
   const loadArchiveConfig = useCallback(async () => {
     try {
@@ -124,8 +275,15 @@ export function useArchive() {
         return;
       }
 
-      const config = await window.electronAPI.getArchiveConfig();
-      setArchiveConfig(config);
+      const cachedConfig = getCachedArchiveConfig();
+      if (cachedConfig) {
+        setArchiveConfig(cachedConfig);
+      }
+
+      const config = await prefetchArchiveConfig({ force: !cachedConfig });
+      if (config) {
+        setArchiveConfig(config);
+      }
     } catch (error) {
       logger.error('Failed to load archive config:', error);
     }
@@ -157,17 +315,33 @@ export function useArchive() {
     }
   }, [toast]);
 
-  const loadCases = useCallback(async () => {
+  const loadCases = useCallback(async (options?: { force?: boolean }): Promise<ArchiveCase[]> => {
     if (!archiveConfig?.archiveDrive || !window.electronAPI) {
-      return;
+      return [];
     }
 
+    if (options?.force) {
+      invalidateArchiveCasesCache();
+    }
+
+    const cachedCases = options?.force ? null : getCachedArchiveCases();
+
     try {
-      setLoading(true);
-      const casesList = await window.electronAPI.listArchiveCases();
+      if (!cachedCases?.length) {
+        setLoading(true);
+      } else {
+        setCases(cachedCases);
+      }
+
+      const casesList =
+        (await prefetchArchiveCases({ force: options?.force || !cachedCases?.length })) ??
+        cachedCases ??
+        [];
       setCases(casesList);
+      return casesList;
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'load cases' }));
+      return cachedCases ?? [];
     } finally {
       setLoading(false);
     }
@@ -182,7 +356,7 @@ export function useArchive() {
 
       await window.electronAPI.createCaseFolder(caseName, description, categoryTagId);
       toast.success(`Case "${caseName}" created`);
-      await loadCases(); // Reload cases (will auto-alphabetize)
+      await loadCases({ force: true }); // Reload cases (will auto-alphabetize)
       return true;
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'create case', fileName: caseName }));
@@ -208,7 +382,7 @@ export function useArchive() {
       await window.electronAPI.setCaseBackgroundImage(casePath, imagePath);
       
       // Reload cases to update the UI
-      await loadCases();
+      await loadCases({ force: true });
       
       toast.success('Background image updated');
       return true;
@@ -249,202 +423,87 @@ export function useArchive() {
     }
   }, [toast, currentCase, currentFolderPath]);
 
-  // Generate PDF thumbnail in renderer using optimized chunk loading
-  // This works for files of any size by only loading the first page
-  const generatePDFThumbnailInRenderer = useCallback(async (filePath: string): Promise<string> => {
-    let pdf: any = null;
-    let page: any = null;
-    let canvas: HTMLCanvasElement | null = null;
-    
+  const updateCaseDescription = useCallback(async (casePath: string, description: string): Promise<boolean> => {
     try {
       if (!window.electronAPI) {
-        throw new Error('Electron API not available');
+        toast.error('Electron API not available');
+        return false;
       }
 
-      // Import pdfjs-dist and setup worker
-      const pdfjsLib = await import('pdfjs-dist');
-      await setupPDFWorker();
+      await window.electronAPI.updateCaseDescription(casePath, description);
       
-      // Use optimized chunked source for all PDFs (handles both small and large files efficiently)
-      // This uses ArrayBuffer transfer and parallel loading we just implemented
-      const { createChunkedPDFSource, cleanupPDFBlobUrl } = await import('../utils/pdfSource');
+      // Reload cases to update the UI and get fresh data
+      const updatedCases = await loadCases({ force: true });
       
-      // Load PDF using optimized chunked source (no progress callback needed for thumbnails)
-      pdf = await createChunkedPDFSource(filePath, pdfjsLib);
-      
-      // Only load the first page for thumbnail generation
-      page = await pdf.getPage(1);
-      
-      // Get viewport at minimal scale to reduce memory usage
-      const baseViewport = page.getViewport({ scale: 1.0 });
-      
-      // Calculate thumbnail size (200px max dimension)
-      const THUMBNAIL_SIZE = 200;
-      const aspectRatio = baseViewport.width / baseViewport.height;
-      let width = THUMBNAIL_SIZE;
-      let height = THUMBNAIL_SIZE;
-      
-      if (aspectRatio > 1) {
-        height = THUMBNAIL_SIZE / aspectRatio;
-      } else {
-        width = THUMBNAIL_SIZE * aspectRatio;
-      }
-      
-      // Create canvas with minimal size to reduce memory footprint
-      canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      
-      // Use 2D context with memory optimizations
-      const context = canvas.getContext('2d', {
-        willReadFrequently: false,
-        alpha: false, // Disable alpha channel to save memory
-      });
-      
-      if (!context) {
-        throw new Error('Failed to get canvas context');
-      }
-      
-      // Fill background
-      context.fillStyle = '#1a1a2e';
-      context.fillRect(0, 0, width, height);
-      
-      // Calculate scale for rendering (very small to minimize memory)
-      const renderScale = width / baseViewport.width;
-      const renderViewport = page.getViewport({ scale: renderScale });
-      
-      // Render PDF page to canvas
-      await page.render({
-        canvasContext: context,
-        viewport: renderViewport,
-      }).promise;
-      
-      // Convert to JPEG with compression to reduce memory (JPEG is more efficient than PNG)
-      // Use 0.85 quality for good balance between size and quality
-      const thumbnail = canvas.toDataURL('image/jpeg', 0.85);
-      
-      // Immediate cleanup to free memory
-      if (page) {
-        try {
-          page.cleanup();
-        } catch (e) {
-          // Ignore cleanup errors
+      // If this is the current case, find the updated case from the newly loaded cases
+      // This ensures we have fresh data from the backend, not stale data from closure
+      if (currentCase?.path === casePath) {
+        const updatedCase = updatedCases.find(c => c.path === casePath);
+        if (updatedCase) {
+          setCurrentCase(updatedCase);
         }
-        page = null;
       }
       
-      if (pdf) {
-        try {
-          cleanupPDFBlobUrl(pdf);
-          await pdf.destroy();
-        } catch (e) {
-          // Ignore destroy errors
-        }
-        pdf = null;
-      }
-      
-      if (canvas) {
-        canvas.width = 0;
-        canvas.height = 0;
-        canvas = null;
-      }
-      
-      // Close file handle if it was a streaming source
-      try {
-        await window.electronAPI.closePDFFileHandle(filePath);
-      } catch (e) {
-        // Ignore errors - handle might not be cached or already closed
-      }
-      
-      // Force garbage collection hint if available
-      if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
-        (globalThis as any).gc();
-      }
-      
-      return thumbnail;
+      toast.success('Description updated');
+      return true;
     } catch (error) {
-      // Cleanup on error
-      if (page) {
-        try {
-          page.cleanup();
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-        page = null;
-      }
-      
-      if (pdf) {
-        try {
-          const { cleanupPDFBlobUrl } = await import('../utils/pdfSource');
-          cleanupPDFBlobUrl(pdf);
-          await pdf.destroy();
-        } catch (e) {
-          // Ignore destroy errors
-        }
-        pdf = null;
-      }
-      
-      if (canvas) {
-        canvas.width = 0;
-        canvas.height = 0;
-        canvas = null;
-      }
-      
-      // Close file handle on error
-      try {
-        if (window.electronAPI) {
-          await window.electronAPI.closePDFFileHandle(filePath);
-        }
-      } catch (e) {
-        // Ignore errors
-      }
-      
-      logger.error('Failed to generate PDF thumbnail:', error);
-      
-      // Return placeholder on error
-      const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100%" height="100%" fill="#1a1a2e"/>
-        <text x="50%" y="50%" font-size="64" text-anchor="middle" dominant-baseline="middle" fill="#8b5cf6">📄</text>
-      </svg>`;
-      // Properly encode SVG for base64 (handles Unicode characters like emojis)
-      return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+      toast.error(getUserFriendlyError(error, { operation: 'update description', path: casePath }));
+      return false;
     }
-  }, []);
+  }, [toast, loadCases, currentCase]);
 
   // Generate video thumbnail in renderer using HTML5 Video API
-  const generateVideoThumbnailInRenderer = useCallback(async (filePath: string): Promise<string> => {
+  const generateVideoThumbnailInRenderer = useCallback(async (filePath: string, signal?: AbortSignal): Promise<string> => {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     return new Promise((resolve, reject) => {
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      let cleanupResources: () => void = () => {};
+
+      const settle = (action: () => void) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanupResources();
+        action();
+      };
+
       try {
         if (!window.electronAPI) {
           throw new Error('Electron API not available');
         }
 
-        // Create a video element
         const video = document.createElement('video');
         video.crossOrigin = 'anonymous';
         video.preload = 'metadata';
-        video.muted = true; // Muted videos can autoplay
+        video.muted = true;
         video.playsInline = true;
 
-        // Use vault-video protocol for efficient file access
-        const videoUrl = filePath.startsWith('http') 
-          ? filePath 
+        const videoUrl = filePath.startsWith('http')
+          ? filePath
           : `vault-video://${encodeURIComponent(filePath)}`;
         video.src = videoUrl;
 
-        // Create canvas for capturing frame
         const canvas = document.createElement('canvas');
         const THUMBNAIL_SIZE = 200;
         canvas.width = THUMBNAIL_SIZE;
         canvas.height = THUMBNAIL_SIZE;
         const context = canvas.getContext('2d');
-        
+
         if (!context) {
           throw new Error('Failed to get canvas context');
         }
 
-        // Set up error handlers
-        const cleanup = () => {
+        cleanupResources = () => {
+          if (timeoutId !== null) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+          signal?.removeEventListener('abort', onAbort);
           video.removeEventListener('loadedmetadata', onLoadedMetadata);
           video.removeEventListener('seeked', onSeeked);
           video.removeEventListener('error', onError);
@@ -452,189 +511,224 @@ export function useArchive() {
           video.load();
         };
 
-        const onError = (_error: Event) => {
-          cleanup();
-          reject(new Error('Failed to load video for thumbnail generation'));
+        const onAbort = () => {
+          settle(() => reject(new DOMException('Aborted', 'AbortError')));
+        };
+
+        const onError = () => {
+          settle(() => reject(new Error('Failed to load video for thumbnail generation')));
         };
 
         const onLoadedMetadata = () => {
           try {
-            // Check if video has valid duration
             if (!video.duration || isNaN(video.duration) || video.duration === 0) {
-              // If no duration, try to seek to a small time (0.1s) or just capture first frame
               video.currentTime = 0.1;
               return;
             }
-            
-            // Seek to 10% of video duration or 1 second, whichever is smaller
+
             const seekTime = Math.min(video.duration * 0.1, 1.0);
             video.currentTime = seekTime;
           } catch (_error) {
-            cleanup();
-            reject(new Error('Failed to seek video'));
+            settle(() => reject(new Error('Failed to seek video')));
           }
         };
 
         const onSeeked = () => {
           try {
-            // Check if video has valid dimensions
             if (!video.videoWidth || !video.videoHeight || video.videoWidth === 0 || video.videoHeight === 0) {
-              cleanup();
-              reject(new Error('Video has invalid dimensions'));
+              settle(() => reject(new Error('Video has invalid dimensions')));
               return;
             }
 
-            // Calculate thumbnail dimensions maintaining aspect ratio
             const videoAspectRatio = video.videoWidth / video.videoHeight;
             let width = THUMBNAIL_SIZE;
             let height = THUMBNAIL_SIZE;
 
             if (videoAspectRatio > 1) {
-              // Landscape: width is larger
               height = THUMBNAIL_SIZE / videoAspectRatio;
             } else {
-              // Portrait or square: height is larger or equal
               width = THUMBNAIL_SIZE * videoAspectRatio;
             }
 
-            // Set canvas size
             canvas.width = width;
             canvas.height = height;
-
-            // Fill background
             context.fillStyle = '#1a1a2e';
             context.fillRect(0, 0, width, height);
-
-            // Draw video frame
             context.drawImage(video, 0, 0, width, height);
 
-            // Convert to base64
             const thumbnail = canvas.toDataURL('image/png');
-            cleanup();
-            resolve(thumbnail);
+            settle(() => resolve(thumbnail));
           } catch (_error) {
-            cleanup();
-            reject(new Error('Failed to capture video frame'));
+            settle(() => reject(new Error('Failed to capture video frame')));
           }
         };
 
-        // Set up event listeners
+        signal?.addEventListener('abort', onAbort, { once: true });
         video.addEventListener('loadedmetadata', onLoadedMetadata);
         video.addEventListener('seeked', onSeeked);
         video.addEventListener('error', onError);
 
-        // Timeout after 10 seconds
-        setTimeout(() => {
-          cleanup();
-          reject(new Error('Video thumbnail generation timeout'));
+        timeoutId = setTimeout(() => {
+          settle(() => reject(new Error('Video thumbnail generation timeout')));
         }, 10000);
 
-        // Start loading
         video.load();
       } catch (error) {
-        reject(error instanceof Error ? error : new Error('Unknown error generating video thumbnail'));
+        settle(() => reject(error instanceof Error ? error : new Error('Unknown error generating video thumbnail')));
       }
     });
   }, []);
 
-  const loadFileThumbnail = useCallback(async (filePath: string, fileType: 'image' | 'pdf' | 'video' | 'other') => {
-    // Check global cache first - if thumbnail exists, use it immediately
-    if (globalThumbnailCache.has(filePath)) {
-      const cachedThumbnail = globalThumbnailCache.get(filePath)!;
-      setFiles(prev => {
-        const updated = prev.map(f => 
-          f.path === filePath ? { ...f, thumbnail: cachedThumbnail } : f
-        );
-        filesRef.current = updated;
-        return updated;
-      });
+  const loadFileThumbnail = useCallback(async (filePath: string, fileType: 'image' | 'pdf' | 'video' | 'audio' | 'other') => {
+    if (hasThumbnailInCache(filePath)) {
+      const cachedThumbnail = getThumbnailFromCache(filePath)!;
+      const existing = filesRef.current.find((file) => file.path === filePath);
+      if (existing?.thumbnail === cachedThumbnail) {
+        return;
+      }
+      scheduleThumbnailUpdate(filePath, cachedThumbnail);
       return;
     }
-    
-    // If already loading or API unavailable, skip
-    if (loadingThumbnails.has(filePath) || !window.electronAPI) {
+
+    if (loadingThumbnailsRef.current.has(filePath) || !window.electronAPI) {
       return;
     }
 
     try {
-      setLoadingThumbnails(prev => new Set(prev).add(filePath));
-      
-      let thumbnail: string;
-      
-      // For PDFs, check disk cache first (industry standard: disk cache before generation)
+      loadingThumbnailsRef.current.add(filePath);
+      setLoadingThumbnails((prev) => new Set(prev).add(filePath));
+
       if (fileType === 'pdf') {
-        // Try to load from disk cache first
-        const cachedThumbnail = await window.electronAPI.readPDFThumbnail(filePath);
-        
-        if (cachedThumbnail) {
-          // Thumbnail exists on disk and is valid
-          thumbnail = cachedThumbnail;
-        } else {
-          // Generate thumbnail using optimized chunk loading (prevents OOM)
-          thumbnail = await generatePDFThumbnailInRenderer(filePath);
-          
-          // Save to disk cache for future use (industry standard: persist after generation)
-          try {
-            await window.electronAPI.savePDFThumbnail(filePath, thumbnail);
-          } catch (saveError) {
-            // Log but don't fail - thumbnail is still usable from memory cache
-            logger.warn(`Failed to save PDF thumbnail to disk for ${filePath}:`, saveError);
+        const existingController = pdfThumbnailAbortControllersRef.current.get(filePath);
+        existingController?.abort();
+        const controller = new AbortController();
+        pdfThumbnailAbortControllersRef.current.set(filePath, controller);
+
+        const thumbnail = await requestThumbnail(filePath, async () => {
+          if (window.electronAPI.readPDFThumbnail) {
+            try {
+              const cached = await window.electronAPI.readPDFThumbnail(filePath);
+              if (cached && !isPdfPlaceholderThumbnail(cached)) {
+                return cached;
+              }
+            } catch {
+              // generate below
+            }
           }
-        }
-      } else if (fileType === 'video') {
-        // For videos, generate thumbnail in renderer using HTML5 Video API
-        try {
-          thumbnail = await generateVideoThumbnailInRenderer(filePath);
-        } catch (error) {
-          logger.error(`Failed to generate video thumbnail for ${filePath}:`, error);
-          // Fallback to placeholder on error
-          const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+
+          const rendered = await generatePdfThumbnailInRenderer(filePath, {
+            signal: controller.signal,
+          });
+          if (!isPdfPlaceholderThumbnail(rendered) && window.electronAPI.savePDFThumbnail) {
+            try {
+              await window.electronAPI.savePDFThumbnail(filePath, rendered);
+            } catch (saveError) {
+              logger.warn(`Failed to save PDF thumbnail to disk for ${filePath}:`, saveError);
+            }
+          }
+
+          return rendered;
+        });
+        scheduleThumbnailUpdate(filePath, thumbnail);
+        return;
+      }
+
+      const thumbnail = await requestThumbnail(filePath, async () => {
+        if (fileType === 'video') {
+          const existingController = videoThumbnailAbortControllersRef.current.get(filePath);
+          existingController?.abort();
+          const controller = new AbortController();
+          videoThumbnailAbortControllersRef.current.set(filePath, controller);
+          try {
+            return await generateVideoThumbnailInRenderer(filePath, controller.signal);
+          } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
+              throw error;
+            }
+            logger.error(`Failed to generate video thumbnail for ${filePath}:`, error);
+            const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
             <rect width="100%" height="100%" fill="#1a1a2e"/>
             <text x="50%" y="50%" font-size="64" text-anchor="middle" dominant-baseline="middle" fill="#8b5cf6">🎬</text>
           </svg>`;
-          thumbnail = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+            return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+          } finally {
+            if (videoThumbnailAbortControllersRef.current.get(filePath) === controller) {
+              videoThumbnailAbortControllersRef.current.delete(filePath);
+            }
+          }
         }
-      } else {
-        // Use Electron API for other file types (images, etc.)
-        thumbnail = await window.electronAPI.getFileThumbnail(filePath);
-      }
-      
-      // Store in global cache for future use (in-memory cache for fast access)
-      globalThumbnailCache.set(filePath, thumbnail);
-      
-      setFiles(prev => {
-        const updated = prev.map(f => 
-          f.path === filePath ? { ...f, thumbnail } : f
-        );
-        filesRef.current = updated; // Keep ref in sync
-        return updated;
+
+        return window.electronAPI.getFileThumbnail(filePath);
       });
+
+      scheduleThumbnailUpdate(filePath, thumbnail);
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
       logger.error(`Failed to load thumbnail for ${filePath}:`, error);
     } finally {
-      setLoadingThumbnails(prev => {
-        const next = new Set(prev);
-        next.delete(filePath);
-        return next;
-      });
+      if (fileType === 'pdf') {
+        pdfThumbnailAbortControllersRef.current.delete(filePath);
+      }
+      loadingThumbnailsRef.current.delete(filePath);
+      if (isMountedRef.current) {
+        setLoadingThumbnails((prev) => {
+          const next = new Set(prev);
+          next.delete(filePath);
+          return next;
+        });
+      }
     }
-  }, [loadingThumbnails, generatePDFThumbnailInRenderer, generateVideoThumbnailInRenderer]);
+  }, [generateVideoThumbnailInRenderer, scheduleThumbnailUpdate]);
+
+  const ensureThumbnailForFile = useCallback((
+    filePath: string,
+    fileType: 'image' | 'pdf' | 'video' | 'audio' | 'other',
+  ) => {
+    if (hasThumbnailInCache(filePath) || loadingThumbnailsRef.current.has(filePath)) {
+      return;
+    }
+    void loadFileThumbnail(filePath, fileType);
+  }, [loadFileThumbnail]);
 
   const loadFiles = useCallback(async (path: string, preserveThumbnails: boolean = false) => {
+    const generation = ++loadFilesGenerationRef.current;
+    const pathChanged = lastLoadedPathRef.current !== path;
+    lastLoadedPathRef.current = path;
+    const showFullPageLoading = filesRef.current.length === 0;
+    const cachedListing = folderListingCacheRef.current.get(path);
+
     try {
       if (!window.electronAPI) {
         return;
       }
 
-      setLoading(true);
+      if (showFullPageLoading) {
+        setLoading(true);
+      } else if (pathChanged) {
+        if (cachedListing) {
+          const hydratedListing = applyMemoryThumbnails(cachedListing);
+          setFiles(hydratedListing);
+          filesRef.current = hydratedListing;
+        } else {
+          setIsRefreshingFolder(true);
+          setFiles([]);
+          filesRef.current = [];
+        }
+      }
+
       const itemsList = await window.electronAPI.listCaseFiles(path);
+      if (generation !== loadFilesGenerationRef.current) {
+        return;
+      }
       
       // Always check global cache first for thumbnails
       const thumbnailCache = new Map<string, string>();
       // Use global cache for all files
       itemsList.forEach((item: Awaited<ReturnType<typeof window.electronAPI.listCaseFiles>>[number]) => {
-        if (!item.isFolder && globalThumbnailCache.has(item.path)) {
-          thumbnailCache.set(item.path, globalThumbnailCache.get(item.path)!);
+        if (!item.isFolder && thumbnailMemoryCache.has(item.path)) {
+          thumbnailCache.set(item.path, thumbnailMemoryCache.get(item.path)!);
         }
       });
       
@@ -644,7 +738,7 @@ export function useArchive() {
           if (file.thumbnail && !thumbnailCache.has(file.path)) {
             thumbnailCache.set(file.path, file.thumbnail);
             // Also update global cache
-            globalThumbnailCache.set(file.path, file.thumbnail);
+            thumbnailMemoryCache.set(file.path, file.thumbnail);
           }
         });
       }
@@ -661,6 +755,11 @@ export function useArchive() {
         
         // Exclude .bookmark-thumbnails folder
         if (item.isFolder && itemName === '.bookmark-thumbnails') {
+          return false;
+        }
+        
+        // Exclude .notes folder (used for case notes, should be hidden from file listing)
+        if (item.isFolder && itemName === '.notes') {
           return false;
         }
         
@@ -704,7 +803,7 @@ export function useArchive() {
 
         // For files, determine type
         const ext = item.name.toLowerCase().split('.').pop() || '';
-        let type: 'image' | 'pdf' | 'video' | 'other' = 'other';
+        let type: 'image' | 'pdf' | 'video' | 'audio' | 'other' = 'other';
         
         if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) {
           type = 'image';
@@ -712,6 +811,8 @@ export function useArchive() {
           type = 'pdf';
         } else if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(ext)) {
           type = 'video';
+        } else if (['aac', 'amr', 'flac', 'm4a', 'mp3', 'ogg', 'opus', 'wav', 'wma'].includes(ext)) {
+          type = 'audio';
         }
 
         // Preserve thumbnail if available in cache
@@ -725,32 +826,34 @@ export function useArchive() {
         };
       });
 
-      setFiles(itemsWithTypes);
-      filesRef.current = itemsWithTypes; // Update ref for thumbnail preservation
+      folderListingCacheRef.current.set(path, itemsWithTypes);
 
-      // Load thumbnails only for files that don't already have them (check both item.thumbnail and global cache)
-      for (const item of itemsWithTypes) {
-        if (!item.isFolder && !item.thumbnail && !globalThumbnailCache.has(item.path)) {
-          loadFileThumbnail(item.path, item.type);
-        } else if (!item.isFolder && !item.thumbnail && globalThumbnailCache.has(item.path)) {
-          // Thumbnail exists in cache but wasn't applied - apply it now
-          const cachedThumbnail = globalThumbnailCache.get(item.path)!;
-          setFiles(prev => {
-            const updated = prev.map(f => 
-              f.path === item.path ? { ...f, thumbnail: cachedThumbnail } : f
-            );
-            filesRef.current = updated;
-            return updated;
-          });
-        }
+      const displayedFiles = filesRef.current;
+      const shouldUpdateState =
+        !listingsMatch(itemsWithTypes, displayedFiles) ||
+        thumbnailsChanged(itemsWithTypes, displayedFiles);
+
+      if (shouldUpdateState) {
+        setFiles(itemsWithTypes);
+        filesRef.current = itemsWithTypes;
+      } else {
+        filesRef.current = itemsWithTypes;
       }
     } catch (error) {
+      if (generation !== loadFilesGenerationRef.current) {
+        return;
+      }
       logger.error('Error loading files:', error);
       toast.error(getUserFriendlyError(error, { operation: 'load files', path: path }));
     } finally {
-      setLoading(false);
+      if (showFullPageLoading && generation === loadFilesGenerationRef.current) {
+        setLoading(false);
+      }
+      if (pathChanged && !showFullPageLoading && generation === loadFilesGenerationRef.current) {
+        setIsRefreshingFolder(false);
+      }
     }
-  }, [toast, loadFileThumbnail]);
+  }, [toast]);
 
   // Update ref when loadFiles changes
   useEffect(() => {
@@ -770,7 +873,11 @@ export function useArchive() {
         
         // Reload files if this is the current case, preserving existing thumbnails
         if (currentCase && currentCase.path === casePath) {
-          await loadFiles(casePath, true);
+          invalidateFolderListings(
+            folderListingCacheRef.current,
+            currentFolderPath ?? casePath,
+          );
+          await loadFiles(currentFolderPath ?? casePath, true);
         }
         return true;
       }
@@ -779,7 +886,7 @@ export function useArchive() {
       toast.error(getUserFriendlyError(error, { operation: 'add files' }));
       return false;
     }
-  }, [toast, currentCase, loadFiles]);
+  }, [toast, currentCase, currentFolderPath, loadFiles]);
 
   const createFolder = useCallback(async (folderName: string): Promise<boolean> => {
     try {
@@ -800,6 +907,7 @@ export function useArchive() {
         toast.success('Folder created');
         
         // Reload files to show the new folder, preserving existing thumbnails
+        invalidateFolderListings(folderListingCacheRef.current, parentPath);
         await loadFiles(parentPath, true);
         return true;
       }
@@ -810,53 +918,21 @@ export function useArchive() {
     }
   }, [toast, currentCase, currentFolderPath, loadFiles]);
 
-  const moveFileToFolder = useCallback(async (filePath: string, folderPath: string): Promise<boolean> => {
-    // #region agent log
-    if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:713',message:'moveFileToFolder: Entry',data:{filePath,folderPath,hasElectronAPI:!!window.electronAPI,currentFolderPath,currentCasePath:currentCase?.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
-    // #endregion
-    try {
-      if (!window.electronAPI) {
-        // #region agent log
-        // Note: Can't use debugLog here since electronAPI is not available
-        // #endregion
-        toast.error('Electron API not available');
+  const moveFileToFolder = useCallback(async (filePath: string, folderPath: string): Promise<boolean> => {try {
+      if (!window.electronAPI) {toast.error('Electron API not available');
         return false;
-      }
-
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:720',message:'moveFileToFolder: Calling electronAPI.moveFileToFolder',data:{filePath,folderPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
-      // #endregion
-      const result = await window.electronAPI.moveFileToFolder(filePath, folderPath);
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:721',message:'moveFileToFolder: Electron API result received',data:{filePath,folderPath,success:result.success,error:result.error,newPath:result.newPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'}).catch(()=>{});
-      // #endregion
-      if (result.success) {
+      }const result = await window.electronAPI.moveFileToFolder(filePath, folderPath);if (result.success) {
         toast.success('File moved to folder');
         
         // Reload files to reflect the move, preserving existing thumbnails
-        const parentPath = currentFolderPath || currentCase?.path;
-        // #region agent log
-        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:725',message:'moveFileToFolder: Reloading files',data:{filePath,folderPath,parentPath,hasParentPath:!!parentPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
-        // #endregion
-        if (parentPath) {
-          await loadFiles(parentPath, true);
-          // #region agent log
-          if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:727',message:'moveFileToFolder: Files reloaded',data:{filePath,folderPath,parentPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
-          // #endregion
-        }
+        const parentPath = currentFolderPath || currentCase?.path;if (parentPath) {
+          invalidateFolderListings(folderListingCacheRef.current, parentPath, folderPath);
+          await loadFiles(parentPath, true);}
         return true;
-      } else {
-        // #region agent log
-        if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:730',message:'moveFileToFolder: Move failed',data:{filePath,folderPath,error:result.error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
-        // #endregion
-        toast.error(result.error || 'Failed to move file');
+      } else {toast.error(result.error || 'Failed to move file');
         return false;
       }
-    } catch (error) {
-      // #region agent log
-      if (window.electronAPI?.debugLog) window.electronAPI.debugLog({location:'useArchive.ts:733',message:'moveFileToFolder: Exception caught',data:{filePath,folderPath,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}).catch(()=>{});
-      // #endregion
-      toast.error(getUserFriendlyError(error, { operation: 'move file' }));
+    } catch (error) {toast.error(getUserFriendlyError(error, { operation: 'move file' }));
       return false;
     }
   }, [toast, currentCase, currentFolderPath, loadFiles]);
@@ -876,7 +952,7 @@ export function useArchive() {
         setCurrentCase(null);
       }
       
-      await loadCases();
+      await loadCases({ force: true });
       return true;
     } catch (error) {
       toast.error(getUserFriendlyError(error, { operation: 'delete case', path: casePath }));
@@ -892,8 +968,8 @@ export function useArchive() {
       }
 
       // Clear thumbnail cache for this file to release any references
-      if (globalThumbnailCache.has(filePath)) {
-        globalThumbnailCache.delete(filePath);
+      if (thumbnailMemoryCache.has(filePath)) {
+        thumbnailMemoryCache.delete(filePath);
       }
       
       // Also clear from loading thumbnails set
@@ -940,9 +1016,15 @@ export function useArchive() {
           filesRef.current = updated; // Keep ref in sync
           return updated;
         });
+
+        const parentPath = currentFolderPath || currentCase?.path;
+        if (parentPath) {
+          folderListingCacheRef.current.set(parentPath, filesRef.current);
+        }
         
         // Remove from thumbnail cache and loading set
-        globalThumbnailCache.delete(filePath);
+        thumbnailMemoryCache.delete(filePath);
+        loadingThumbnailsRef.current.delete(filePath);
         setLoadingThumbnails(prev => {
           const next = new Set(prev);
           next.delete(filePath);
@@ -954,7 +1036,7 @@ export function useArchive() {
       toast.error(getUserFriendlyError(error, { operation: `delete ${isFolder ? 'folder' : 'file'}`, path: filePath }));
       return false;
     }
-  }, [toast, currentCase, currentFolderPath, folderNavigationStack]);
+  }, [toast, currentCase, currentFolderPath, folderNavigationStack, loadFiles]);
 
   const renameFile = useCallback(async (filePath: string, newName: string): Promise<boolean> => {
     try {
@@ -988,11 +1070,11 @@ export function useArchive() {
       });
 
       // Update thumbnail cache key optimistically
-      if (globalThumbnailCache.has(filePath)) {
-        const thumbnail = globalThumbnailCache.get(filePath);
-        globalThumbnailCache.delete(filePath);
+      if (thumbnailMemoryCache.has(filePath)) {
+        const thumbnail = thumbnailMemoryCache.get(filePath);
+        thumbnailMemoryCache.delete(filePath);
         if (thumbnail) {
-          globalThumbnailCache.set(optimisticNewPath, thumbnail);
+          thumbnailMemoryCache.set(optimisticNewPath, thumbnail);
         }
       }
 
@@ -1034,11 +1116,11 @@ export function useArchive() {
           });
 
           // Update thumbnail cache with actual path
-          if (globalThumbnailCache.has(optimisticNewPath)) {
-            const thumbnail = globalThumbnailCache.get(optimisticNewPath);
-            globalThumbnailCache.delete(optimisticNewPath);
+          if (thumbnailMemoryCache.has(optimisticNewPath)) {
+            const thumbnail = thumbnailMemoryCache.get(optimisticNewPath);
+            thumbnailMemoryCache.delete(optimisticNewPath);
             if (thumbnail) {
-              globalThumbnailCache.set(result.newPath, thumbnail);
+              thumbnailMemoryCache.set(result.newPath, thumbnail);
             }
           }
 
@@ -1072,11 +1154,11 @@ export function useArchive() {
       });
       
       // Revert thumbnail cache
-      if (globalThumbnailCache.has(optimisticNewPath)) {
-        const thumbnail = globalThumbnailCache.get(optimisticNewPath);
-        globalThumbnailCache.delete(optimisticNewPath);
+      if (thumbnailMemoryCache.has(optimisticNewPath)) {
+        const thumbnail = thumbnailMemoryCache.get(optimisticNewPath);
+        thumbnailMemoryCache.delete(optimisticNewPath);
         if (thumbnail) {
-          globalThumbnailCache.set(oldPath, thumbnail);
+          thumbnailMemoryCache.set(oldPath, thumbnail);
         }
       }
       
@@ -1111,11 +1193,11 @@ export function useArchive() {
       });
       
       // Revert thumbnail cache
-      if (globalThumbnailCache.has(optimisticNewPath)) {
-        const thumbnail = globalThumbnailCache.get(optimisticNewPath);
-        globalThumbnailCache.delete(optimisticNewPath);
+      if (thumbnailMemoryCache.has(optimisticNewPath)) {
+        const thumbnail = thumbnailMemoryCache.get(optimisticNewPath);
+        thumbnailMemoryCache.delete(optimisticNewPath);
         if (thumbnail) {
-          globalThumbnailCache.set(filePath, thumbnail);
+          thumbnailMemoryCache.set(filePath, thumbnail);
         }
       }
       
@@ -1139,8 +1221,8 @@ export function useArchive() {
     // Exclude system folders (safety check - backend should already filter these)
     filtered = filtered.filter(caseItem => {
       const caseName = caseItem.name.toLowerCase();
-      // Exclude .bookmark-thumbnails folder
-      if (caseName === '.bookmark-thumbnails') {
+      // Exclude .bookmark-thumbnails folder and TextLibrary
+      if (caseName === '.bookmark-thumbnails' || caseName === 'textlibrary') {
         return false;
       }
       return true;
@@ -1152,8 +1234,8 @@ export function useArchive() {
     }
 
     // Filter by search query (includes tag name matching)
-    if (searchQuery.trim()) {
-      const queryLower = searchQuery.toLowerCase();
+    if (debouncedSearchQuery.trim()) {
+      const queryLower = debouncedSearchQuery.toLowerCase();
       filtered = filtered.filter(caseItem => {
         // Match case name
         if (caseItem.name.toLowerCase().includes(queryLower)) {
@@ -1171,18 +1253,18 @@ export function useArchive() {
     }
 
     return filtered;
-  }, [cases, searchQuery, selectedTagId, getTagById]);
+  }, [cases, debouncedSearchQuery, selectedTagId, getTagById]);
 
   // Filter files while preserving folder-PDF relationships
   // If a PDF matches, include its associated folders (and vice versa)
   // Also filters by selectedTagId when set
   const filteredFiles = useMemo(() => {
     // If no search query and no tag filter, return all files in backend order
-    if (!searchQuery.trim() && !selectedTagId) {
+    if (!debouncedSearchQuery.trim() && !selectedTagId) {
       return files;
     }
 
-    const queryLower = searchQuery.trim().toLowerCase();
+    const queryLower = debouncedSearchQuery.trim().toLowerCase();
     const hasSearchQuery = queryLower.length > 0;
     const matchingPaths = new Set<string>();
     const pdfToFolders = new Map<string, string[]>(); // PDF path -> folder paths
@@ -1278,14 +1360,18 @@ export function useArchive() {
     
     // Return files in original order, but only those that match (or are related to matches)
     return files.filter(file => matchingPaths.has(file.path));
-  }, [files, searchQuery, selectedTagId]);
+  }, [files, debouncedSearchQuery, selectedTagId]);
 
   const openFolder = useCallback((folderPath: string) => {
     if (!currentCase) return;
     
     // Add current folder to navigation stack if we're already in a folder
+    // If we're at case root (currentFolderPath is null), add the case path to track that we came from root
     if (currentFolderPath) {
       setFolderNavigationStack(prev => [...prev, currentFolderPath]);
+    } else {
+      // We're at case root, add case path to stack so we can navigate back
+      setFolderNavigationStack(prev => [...prev, currentCase.path]);
     }
     setCurrentFolderPath(folderPath);
   }, [currentCase, currentFolderPath]);
@@ -1299,12 +1385,17 @@ export function useArchive() {
     if (folderNavigationStack.length > 0) {
       const parentPath = folderNavigationStack[folderNavigationStack.length - 1];
       setFolderNavigationStack(prev => prev.slice(0, -1));
-      setCurrentFolderPath(parentPath);
+      // If parent path is the case path, we're going back to case root
+      if (currentCase && parentPath === currentCase.path) {
+        setCurrentFolderPath(null);
+      } else {
+        setCurrentFolderPath(parentPath);
+      }
     } else {
       // If no parent in stack, go back to case root
       setCurrentFolderPath(null);
     }
-  }, [folderNavigationStack]);
+  }, [folderNavigationStack, currentCase]);
 
   const navigateToFolder = useCallback((targetPath: string) => {
     // If navigating to case root
@@ -1368,7 +1459,7 @@ export function useArchive() {
             if (normalizedItemPath === normalizedTargetPath) {
               // Found the file!
               const ext = item.name.toLowerCase().split('.').pop() || '';
-              let type: 'image' | 'pdf' | 'video' | 'other' = 'other';
+              let type: 'image' | 'pdf' | 'video' | 'audio' | 'other' = 'other';
               
               if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) {
                 type = 'image';
@@ -1376,6 +1467,8 @@ export function useArchive() {
                 type = 'pdf';
               } else if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(ext)) {
                 type = 'video';
+              } else if (['aac', 'amr', 'flac', 'm4a', 'mp3', 'ogg', 'opus', 'wav', 'wma'].includes(ext)) {
+                type = 'audio';
               }
 
               const archiveFile: ArchiveFile = {
@@ -1444,6 +1537,7 @@ export function useArchive() {
     files: filteredFiles,
     searchQuery,
     loading,
+    isRefreshingFolder,
     loadingThumbnails,
     setCurrentCase,
     setSearchQuery,
@@ -1462,7 +1556,8 @@ export function useArchive() {
     getCurrentPath,
     updateCaseBackgroundImage,
     updateFolderBackgroundImage,
-    refreshCases: loadCases,
+    updateCaseDescription,
+    refreshCases: () => loadCases({ force: true }),
     refreshFiles: () => {
       const path = currentFolderPath || currentCase?.path;
       return path ? loadFiles(path, true) : Promise.resolve(); // Preserve thumbnails on refresh
@@ -1472,6 +1567,7 @@ export function useArchive() {
     tags,
     getTagById,
     findFileInArchive,
+    ensureThumbnailForFile,
   };
 }
 

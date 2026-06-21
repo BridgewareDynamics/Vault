@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion';
 import { Folder, Loader2, Trash2, Pencil, Image } from 'lucide-react';
-import { ArchiveFile } from '../../types';
-import { useState, useEffect } from 'react';
-import { logger } from '../../utils/logger';
+import { ArchiveFile, Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
+import { useMemo } from 'react';
+import { resolveVaultBackgroundUrl } from '../../utils/readFileDataUtils';
+import { useSettingsContext } from '../../utils/settingsContext';
 
 interface ExtractionFolderProps {
   folder: ArchiveFile;
@@ -14,28 +16,13 @@ interface ExtractionFolderProps {
 }
 
 export function ExtractionFolder({ folder, isExtracting = false, onClick, onDelete, onRename, onEditBackground }: ExtractionFolderProps) {
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | undefined>(undefined);
-
-  // Load background image as data URL
-  useEffect(() => {
-    const loadBackgroundImage = async () => {
-      if (!folder.backgroundImage || !window.electronAPI) {
-        setBackgroundImageUrl(undefined);
-        return;
-      }
-
-      try {
-        const fileData = await window.electronAPI.readFileData(folder.backgroundImage);
-        const dataUrl = `data:${fileData.mimeType};base64,${fileData.data}`;
-        setBackgroundImageUrl(dataUrl);
-      } catch (error) {
-        logger.error('Failed to load extraction folder background image:', error);
-        setBackgroundImageUrl(undefined);
-      }
-    };
-
-    loadBackgroundImage();
-  }, [folder.backgroundImage]);
+  const backgroundImageUrl = useMemo(
+    () => resolveVaultBackgroundUrl(folder.backgroundImage),
+    [folder.backgroundImage],
+  );
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = isLightTheme(theme);
 
   return (
     <motion.div
@@ -48,11 +35,15 @@ export function ExtractionFolder({ folder, isExtracting = false, onClick, onDele
     >
       <div
         onClick={onClick}
-        className={`relative rounded-lg overflow-hidden border-2 ${
-          isExtracting 
-            ? 'border-gray-600 bg-gray-800/30' 
-            : 'border-gray-700 hover:border-cyber-purple-500 bg-gray-800/50'
-        } transition-colors p-6`}
+        className={`relative rounded-lg overflow-hidden border-2 transition-colors p-6 ${
+          isExtracting
+            ? isPastel
+              ? 'border-pink-300 bg-white/30'
+              : 'border-gray-600 bg-gray-800/30'
+            : isPastel
+              ? 'border-pink-200 hover:border-pink-400 bg-white/50'
+              : 'border-gray-700 hover:border-cyber-purple-500 bg-gray-800/50'
+        }`}
         style={{
           backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined,
           backgroundSize: 'cover',
@@ -68,15 +59,25 @@ export function ExtractionFolder({ folder, isExtracting = false, onClick, onDele
         {/* Folder Icon */}
         <div className="flex flex-col items-center gap-3 relative z-10">
           <div className="relative">
-            <Folder className={`w-16 h-16 ${isExtracting ? 'text-gray-500' : 'text-cyber-purple-400'}`} />
+            <Folder className={`w-16 h-16 ${
+              isExtracting
+                ? isPastel ? 'text-gray-400' : 'text-gray-500'
+                : isPastel ? 'text-pink-500' : 'text-cyber-purple-400'
+            }`} />
             {isExtracting && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full">
-                <Loader2 className="w-8 h-8 text-cyber-purple-400 animate-spin" />
+              <div className={`absolute inset-0 flex items-center justify-center rounded-full ${
+                isPastel ? 'bg-white/60' : 'bg-black/60'
+              }`}>
+                <Loader2 className={`w-8 h-8 animate-spin ${
+                  isPastel ? 'text-pink-400' : 'text-cyber-purple-400'
+                }`} />
               </div>
             )}
           </div>
           <span className={`font-medium text-sm text-center truncate w-full ${
-            isExtracting ? 'text-gray-400' : 'text-white'
+            isExtracting
+              ? isPastel ? 'text-gray-500' : 'text-gray-400'
+              : isPastel ? 'text-gray-800' : 'text-white'
           }`}>
             {folder.name}
           </span>
@@ -109,11 +110,19 @@ export function ExtractionFolder({ folder, isExtracting = false, onClick, onDele
               e.stopPropagation();
               onRename();
             }}
-            className="absolute bottom-2 right-2 z-10 p-1.5 bg-gray-700/80 hover:bg-gray-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+            className={`absolute bottom-2 right-2 z-10 p-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100 ${
+              isPastel
+                ? 'bg-pink-100/80 hover:bg-pink-200'
+                : 'bg-gray-700/80 hover:bg-gray-600'
+            }`}
             aria-label="Rename folder"
             title="Rename folder"
           >
-            <Pencil className="w-4 h-4 text-gray-300 hover:text-cyber-purple-400" />
+            <Pencil className={`w-4 h-4 ${
+              isPastel
+                ? 'text-gray-600 hover:text-pink-500'
+                : 'text-gray-300 hover:text-cyber-purple-400'
+            }`} />
           </button>
         )}
 

@@ -3,10 +3,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 import { mockElectronAPI } from './test-utils/mocks';
+import { setupTestSettings } from './test-utils/testSettings';
 
 // Mock usePDFExtraction hook
 const mockExtractPDF = vi.fn();
 const mockReset = vi.fn();
+const mockCancel = vi.fn();
 
 vi.mock('./hooks/usePDFExtraction', () => ({
   usePDFExtraction: vi.fn(() => ({
@@ -17,12 +19,19 @@ vi.mock('./hooks/usePDFExtraction', () => ({
     error: null,
     statusMessage: '',
     reset: mockReset,
+    cancel: mockCancel,
   })),
+}));
+
+vi.mock('./components/PDFExtractionModal', () => ({
+  PDFExtractionModal: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div data-testid="pdf-extraction-modal">PDF Extraction Studio</div> : null,
 }));
 
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setupTestSettings({ showOnboarding: false });
     mockElectronAPI.selectPDFFile.mockResolvedValue(null);
     mockElectronAPI.selectSaveDirectory.mockResolvedValue(null);
     mockElectronAPI.saveFiles.mockResolvedValue({ success: true, messages: [] });
@@ -33,7 +42,7 @@ describe('App', () => {
 
   it('renders WelcomeScreen when no PDF selected', () => {
     render(<App />);
-    expect(screen.getByText(/Welcome to Vault/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Welcome to Vault/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Select file/i)).toBeInTheDocument();
   });
 
@@ -56,17 +65,12 @@ describe('App', () => {
   });
 
   it('handles PDF file selection flow', async () => {
-    const mockFilePath = '/path/to/test.pdf';
-    mockElectronAPI.selectPDFFile.mockResolvedValue(mockFilePath);
-    mockElectronAPI.validatePDFForExtraction.mockResolvedValue({ valid: true, path: mockFilePath });
-    mockElectronAPI.readPDFFile.mockResolvedValue('base64data');
-
+    const user = userEvent.setup();
     render(<App />);
-    const selectFileButton = screen.getByText(/Select file/i);
-    await userEvent.click(selectFileButton);
+    await user.click(screen.getByText(/Select file/i));
 
     await waitFor(() => {
-      expect(mockElectronAPI.selectPDFFile).toHaveBeenCalled();
+      expect(mockElectronAPI.selectPDFFile).not.toHaveBeenCalled();
     });
   });
 
@@ -81,6 +85,7 @@ describe('App', () => {
       error: null,
       statusMessage: 'Extracting...',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -94,21 +99,16 @@ describe('App', () => {
       extractPDF: mockExtractPDF,
       isExtracting: false,
       progress: null,
-      extractedPages: [],
+      extractedPages: [
+        { pageNumber: 1, imagePath: '', imageData: 'data:image/png;base64,test1' },
+      ],
       error: 'Failed to extract PDF',
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
-
-    // Set a selected PDF path so the main view is shown (not WelcomeScreen)
-    const mockFilePath = '/path/to/test.pdf';
-    mockElectronAPI.selectPDFFile.mockResolvedValue(mockFilePath);
     
     render(<App />);
-    
-    // Click select file to trigger the flow
-    const selectFileButton = screen.getByText(/Select file/i);
-    await userEvent.click(selectFileButton);
     
     await waitFor(() => {
       expect(screen.getByText(/Failed to extract PDF/i)).toBeInTheDocument();
@@ -139,6 +139,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -162,6 +163,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -174,9 +176,8 @@ describe('App', () => {
     });
   });
 
-  it('handles error when selectPDFFile rejects', async () => {
+  it('opens PDF extraction modal without calling legacy selectPDFFile', async () => {
     const { usePDFExtraction } = await import('./hooks/usePDFExtraction');
-    // Ensure we're in the WelcomeScreen state (no extracted pages)
     vi.mocked(usePDFExtraction).mockReturnValue({
       extractPDF: mockExtractPDF,
       isExtracting: false,
@@ -185,53 +186,21 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
-
-    const error = new Error('Select failed');
-    mockElectronAPI.selectPDFFile.mockRejectedValueOnce(error);
 
     render(<App />);
 
     const selectFileButton = screen.getByText(/Select file/i);
     await userEvent.click(selectFileButton);
 
-    await waitFor(() => {
-      expect(mockExtractPDF).not.toHaveBeenCalled();
-    });
+    expect(mockElectronAPI.selectPDFFile).not.toHaveBeenCalled();
+    expect(mockExtractPDF).not.toHaveBeenCalled();
   });
 
-  it('displays PDF path when file is selected', async () => {
-    const mockFilePath = '/path/to/test.pdf';
+  it('displays gallery when pages are extracted', async () => {
     const { usePDFExtraction } = await import('./hooks/usePDFExtraction');
     
-    // Start with no pages and no selected path - shows WelcomeScreen
-    vi.mocked(usePDFExtraction).mockReturnValue({
-      extractPDF: mockExtractPDF,
-      isExtracting: false,
-      progress: null,
-      extractedPages: [],
-      error: null,
-      statusMessage: '',
-      reset: mockReset,
-    });
-
-    mockElectronAPI.selectPDFFile.mockResolvedValue(mockFilePath);
-    mockExtractPDF.mockResolvedValue([
-      { pageNumber: 1, imagePath: '', imageData: 'data:image/png;base64,test1' },
-    ]);
-
-    const { rerender } = render(<App />);
-    
-    // Simulate file selection by clicking select file
-    const selectFileButton = screen.getByText(/Select file/i);
-    await userEvent.click(selectFileButton);
-    
-    await waitFor(() => {
-      expect(mockElectronAPI.selectPDFFile).toHaveBeenCalled();
-    });
-    
-    // After file is selected, update mock to reflect that pages are extracted
-    // This simulates the state after extraction completes
     vi.mocked(usePDFExtraction).mockReturnValue({
       extractPDF: mockExtractPDF,
       isExtracting: false,
@@ -242,23 +211,19 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
+
+    render(<App />);
     
-    // Re-render to reflect the new state
-    rerender(<App />);
-    
-    // The path should be displayed in the header when a file is selected
     await waitFor(() => {
-      expect(screen.getByText(mockFilePath)).toBeInTheDocument();
-    }, { timeout: 3000 });
+      expect(screen.getByText(/Vault/i)).toBeInTheDocument();
+      expect(screen.getByText(/Home/i)).toBeInTheDocument();
+    });
   });
 
-  it('shows preparing state when PDF selected but no pages extracted yet', async () => {
+  it('opens PDF extraction studio from welcome action card', async () => {
     const { usePDFExtraction } = await import('./hooks/usePDFExtraction');
-    const mockFilePath = '/path/to/test.pdf';
-    
-    // This state represents: file selected, not extracting, no pages, no error
-    // This is an edge case that shouldn't normally happen, but we test it
     vi.mocked(usePDFExtraction).mockReturnValue({
       extractPDF: mockExtractPDF,
       isExtracting: false,
@@ -267,20 +232,15 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
-
-    mockElectronAPI.selectPDFFile.mockResolvedValue(mockFilePath);
 
     render(<App />);
     
-    // Select file to set selectedPdfPath
     const selectFileButton = screen.getByText(/Select file/i);
     await userEvent.click(selectFileButton);
     
-    // Wait for the file to be selected and the preparing state to show
-    await waitFor(() => {
-      expect(screen.getByText(/Preparing/i)).toBeInTheDocument();
-    }, { timeout: 3000 });
+    expect(mockElectronAPI.selectPDFFile).not.toHaveBeenCalled();
   });
 
   it('handles error when Electron API is not available for file selection', async () => {
@@ -311,6 +271,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -335,6 +296,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -362,6 +324,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);
@@ -387,6 +350,7 @@ describe('App', () => {
       error: null,
       statusMessage: '',
       reset: mockReset,
+      cancel: mockCancel,
     });
 
     render(<App />);

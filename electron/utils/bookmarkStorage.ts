@@ -2,6 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { logger } from './logger';
 import { getArchiveDrive } from './archiveConfig';
+import { writeFileAtomic } from './atomicWrite';
 
 // Define types locally to avoid cross-project imports
 export interface Bookmark {
@@ -165,11 +166,8 @@ export async function saveBookmarks(storage: BookmarkStorage): Promise<void> {
       folders: storage.folders.map(validateBookmarkFolder),
     };
 
-    // Atomic write: write to temp file then rename
-    const tempPath = `${bookmarksPath}.tmp`;
-    await fs.writeFile(tempPath, JSON.stringify(validated, null, 2), 'utf8');
-    await fs.rename(tempPath, bookmarksPath);
-    
+    await writeFileAtomic(bookmarksPath, JSON.stringify(validated, null, 2));
+
     cachedStorage = validated;
   } catch (error) {
     logger.error('Failed to save bookmarks:', error);

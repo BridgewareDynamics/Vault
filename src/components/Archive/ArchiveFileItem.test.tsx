@@ -1,18 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ComponentProps } from 'react';
 import { ArchiveFileItem } from './ArchiveFileItem';
 import { ArchiveFile } from '../../types';
+import { SettingsProvider } from '../../utils/SettingsProvider';
+import { mockElectronAPI } from '../../test-utils/mocks';
 
 describe('ArchiveFileItem', () => {
   const mockOnClick = vi.fn();
   const mockOnDelete = vi.fn();
   const mockOnExtract = vi.fn();
   const mockOnRename = vi.fn();
+  const mockOnTranscribe = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.electronAPI = mockElectronAPI;
+    mockElectronAPI.getSettings.mockResolvedValue({
+      hardwareAcceleration: true,
+      ramLimitMB: 2048,
+      fullscreen: false,
+      extractionQuality: 'high',
+      thumbnailSize: 200,
+      performanceMode: 'auto',
+      showOnboarding: true,
+      theme: 'brideware-purple',
+    });
   });
+
+  const renderArchiveFileItem = (props: ComponentProps<typeof ArchiveFileItem>) =>
+    render(
+      <SettingsProvider>
+        <ArchiveFileItem {...props} />
+      </SettingsProvider>
+    );
 
   const createMockFile = (overrides?: Partial<ArchiveFile>): ArchiveFile => ({
     name: 'test.pdf',
@@ -26,34 +48,28 @@ describe('ArchiveFileItem', () => {
 
   it('should render file name', () => {
     const file = createMockFile();
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+    });
     expect(screen.getByText('test.pdf')).toBeInTheDocument();
   });
 
   it('should render file type badge', () => {
     const file = createMockFile({ type: 'pdf' });
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+    });
     expect(screen.getByText('PDF')).toBeInTheDocument();
   });
 
   it('should render thumbnail when provided', () => {
     const file = createMockFile({ thumbnail: 'data:image/png;base64,test' });
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+    });
     const img = screen.getByAltText('test.pdf');
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute('src', 'data:image/png;base64,test');
@@ -61,12 +77,10 @@ describe('ArchiveFileItem', () => {
 
   it('should render icon when thumbnail is not provided', () => {
     const file = createMockFile({ thumbnail: undefined });
-    const { container } = render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-      />
-    );
+    const { container } = renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+    });
     // Should have an icon (svg)
     const icon = container.querySelector('svg');
     expect(icon).toBeInTheDocument();
@@ -75,12 +89,10 @@ describe('ArchiveFileItem', () => {
   it('should call onClick when clicked', async () => {
     const user = userEvent.setup();
     const file = createMockFile();
-    const { container } = render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-      />
-    );
+    const { container } = renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+    });
     
     const fileElement = container.querySelector('.border-gray-700');
     if (fileElement) {
@@ -91,44 +103,44 @@ describe('ArchiveFileItem', () => {
 
   it('should render different icons for different file types', () => {
     const imageFile = createMockFile({ type: 'image', name: 'test.jpg' });
-    const { rerender, container } = render(
-      <ArchiveFileItem
-        file={imageFile}
-        onClick={mockOnClick}
-      />
-    );
+    const { rerender, container } = renderArchiveFileItem({
+      file: imageFile,
+      onClick: mockOnClick,
+    });
     
     // Check for image icon
-    let icon = container.querySelector('svg');
+    const icon = container.querySelector('svg');
     expect(icon).toBeInTheDocument();
     
     const videoFile = createMockFile({ type: 'video', name: 'test.mp4' });
     rerender(
-      <ArchiveFileItem
-        file={videoFile}
-        onClick={mockOnClick}
-      />
+      <SettingsProvider>
+        <ArchiveFileItem
+          file={videoFile}
+          onClick={mockOnClick}
+        />
+      </SettingsProvider>
     );
     
     const otherFile = createMockFile({ type: 'other', name: 'test.txt' });
     rerender(
-      <ArchiveFileItem
-        file={otherFile}
-        onClick={mockOnClick}
-      />
+      <SettingsProvider>
+        <ArchiveFileItem
+          file={otherFile}
+          onClick={mockOnClick}
+        />
+      </SettingsProvider>
     );
   });
 
   it('should call onDelete when delete button is clicked', async () => {
     const user = userEvent.setup();
     const file = createMockFile();
-    const { container } = render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-        onDelete={mockOnDelete}
-      />
-    );
+    const { container } = renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onDelete: mockOnDelete,
+    });
     
     // Hover to show delete button
     const fileElement = container.querySelector('.group');
@@ -150,13 +162,11 @@ describe('ArchiveFileItem', () => {
   it('should call onRename when rename button is clicked', async () => {
     const user = userEvent.setup();
     const file = createMockFile();
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-        onRename={mockOnRename}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onRename: mockOnRename,
+    });
     
     const renameButton = screen.getByLabelText('Rename file');
     await user.click(renameButton);
@@ -168,13 +178,11 @@ describe('ArchiveFileItem', () => {
   it('should show extract button for PDF files when onExtract is provided', async () => {
     const user = userEvent.setup();
     const file = createMockFile({ type: 'pdf' });
-    const { container } = render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-        onExtract={mockOnExtract}
-      />
-    );
+    const { container } = renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onExtract: mockOnExtract,
+    });
     
     // Hover to show extract button
     const fileElement = container.querySelector('.group');
@@ -191,13 +199,11 @@ describe('ArchiveFileItem', () => {
   it('should call onExtract when extract button is clicked', async () => {
     const user = userEvent.setup();
     const file = createMockFile({ type: 'pdf' });
-    const { container } = render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-        onExtract={mockOnExtract}
-      />
-    );
+    const { container } = renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onExtract: mockOnExtract,
+    });
     
     // Hover to show extract button
     const fileElement = container.querySelector('.group');
@@ -216,23 +222,37 @@ describe('ArchiveFileItem', () => {
     }
   });
 
+  it('should call onTranscribe for video files', async () => {
+    const user = userEvent.setup();
+    const file = createMockFile({ type: 'video', name: 'interview.mp4' });
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onTranscribe: mockOnTranscribe,
+    });
+
+    const transcribeButton = screen.getAllByLabelText('Transcribe media')[0];
+    await user.click(transcribeButton);
+
+    expect(mockOnTranscribe).toHaveBeenCalledTimes(1);
+    expect(mockOnClick).not.toHaveBeenCalled();
+  });
+
   it('should show PDF options dropdown when PDF options button is clicked', async () => {
     const user = userEvent.setup();
     const file = createMockFile({ type: 'pdf' });
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-        onExtract={mockOnExtract}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onExtract: mockOnExtract,
+    });
     
     const optionsButton = screen.getByLabelText('PDF options');
     await user.click(optionsButton);
     
     // Dropdown should appear
     await waitFor(() => {
-      expect(screen.getByText('Start Page Extraction')).toBeInTheDocument();
+      expect(screen.getByText('Convert to Images')).toBeInTheDocument();
     });
   });
 
@@ -240,14 +260,16 @@ describe('ArchiveFileItem', () => {
     const user = userEvent.setup();
     const file = createMockFile({ type: 'pdf' });
     render(
-      <div>
-        <ArchiveFileItem
-          file={file}
-          onClick={mockOnClick}
-          onExtract={mockOnExtract}
-        />
-        <div data-testid="outside">Outside</div>
-      </div>
+      <SettingsProvider>
+        <div>
+          <ArchiveFileItem
+            file={file}
+            onClick={mockOnClick}
+            onExtract={mockOnExtract}
+          />
+          <div data-testid="outside">Outside</div>
+        </div>
+      </SettingsProvider>
     );
     
     // Open dropdown
@@ -255,7 +277,7 @@ describe('ArchiveFileItem', () => {
     await user.click(optionsButton);
     
     await waitFor(() => {
-      expect(screen.getByText('Start Page Extraction')).toBeInTheDocument();
+      expect(screen.getByText('Convert to Images')).toBeInTheDocument();
     });
     
     // Click outside
@@ -264,56 +286,48 @@ describe('ArchiveFileItem', () => {
     
     // Dropdown should close
     await waitFor(() => {
-      expect(screen.queryByText('Start Page Extraction')).not.toBeInTheDocument();
+      expect(screen.queryByText('Convert to Images')).not.toBeInTheDocument();
     });
   });
 
   it('should not show extract button for non-PDF files', () => {
     const file = createMockFile({ type: 'image' });
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-        onExtract={mockOnExtract}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onExtract: mockOnExtract,
+    });
     
     expect(screen.queryByLabelText('Extract PDF')).not.toBeInTheDocument();
   });
 
   it('should not show PDF options button for non-PDF files', () => {
     const file = createMockFile({ type: 'image' });
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-        onExtract={mockOnExtract}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onExtract: mockOnExtract,
+    });
     
     expect(screen.queryByLabelText('PDF options')).not.toBeInTheDocument();
   });
 
   it('should not render delete button when onDelete is not provided', () => {
     const file = createMockFile();
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+    });
     
     expect(screen.queryByLabelText('Delete file')).not.toBeInTheDocument();
   });
 
   it('should not render rename button when onRename is not provided', () => {
     const file = createMockFile();
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+    });
     
     expect(screen.queryByLabelText('Rename file')).not.toBeInTheDocument();
   });
@@ -322,13 +336,11 @@ describe('ArchiveFileItem', () => {
     const user = userEvent.setup();
     const mockOnRunAudit = vi.fn();
     const file = createMockFile({ type: 'pdf' });
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-        onRunAudit={mockOnRunAudit}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onRunAudit: mockOnRunAudit,
+    });
     
     const optionsButton = screen.getByLabelText('PDF options');
     await user.click(optionsButton);
@@ -343,14 +355,12 @@ describe('ArchiveFileItem', () => {
     const user = userEvent.setup();
     const mockOnRunAudit = vi.fn();
     const file = createMockFile({ type: 'pdf' });
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-        onExtract={mockOnExtract}
-        onRunAudit={mockOnRunAudit}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onExtract: mockOnExtract,
+      onRunAudit: mockOnRunAudit,
+    });
     
     const optionsButton = screen.getByLabelText('PDF options');
     await user.click(optionsButton);
@@ -371,22 +381,67 @@ describe('ArchiveFileItem', () => {
     const user = userEvent.setup();
     const mockOnRunAudit = vi.fn();
     const file = createMockFile({ type: 'pdf' });
-    render(
-      <ArchiveFileItem
-        file={file}
-        onClick={mockOnClick}
-        onExtract={mockOnExtract}
-        onRunAudit={mockOnRunAudit}
-      />
-    );
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onExtract: mockOnExtract,
+      onRunAudit: mockOnRunAudit,
+    });
     
     const optionsButton = screen.getByLabelText('PDF options');
     await user.click(optionsButton);
     
     await waitFor(() => {
       expect(screen.getByText('PDF Audit')).toBeInTheDocument();
-      expect(screen.getByText('Start Page Extraction')).toBeInTheDocument();
+      expect(screen.getByText('Convert to Images')).toBeInTheDocument();
     });
+  });
+
+  it('requests thumbnail when item becomes visible', async () => {
+    const onRequestThumbnail = vi.fn();
+    const observers: Array<{ callback: IntersectionObserverCallback; target: Element | null }> = [];
+
+    class MockIntersectionObserver {
+      callback: IntersectionObserverCallback;
+      target: Element | null = null;
+
+      constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback;
+        observers.push({ callback, target: null });
+      }
+
+      observe(element: Element) {
+        this.target = element;
+        const entry = observers[observers.length - 1];
+        entry.target = element;
+      }
+
+      disconnect() {
+        // no-op
+      }
+    }
+
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+
+    const file = createMockFile();
+    renderArchiveFileItem({
+      file,
+      onClick: mockOnClick,
+      onRequestThumbnail,
+    });
+
+    expect(observers).toHaveLength(1);
+    const [{ callback, target }] = observers;
+    expect(target).toBeTruthy();
+
+    callback(
+      [{ isIntersecting: true, target: target as Element } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+
+    expect(onRequestThumbnail).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
   });
 });
 

@@ -8,6 +8,20 @@ export interface ExtractionProgress {
   currentPage: number;
   totalPages: number;
   percentage: number;
+  currentPageProgress?: number; // 0-100 for current page
+  estimatedTimeRemaining?: number; // seconds
+  memoryUsage?: number; // MB
+  statusMessage?: string;
+}
+
+export interface ConversionSettings {
+  dpi: number; // 72, 150, 300, 600
+  quality: number; // 1-100 (for JPEG)
+  format: 'png' | 'jpeg';
+  pageRange?: 'all' | 'custom' | 'selected'; // All pages, custom range, or selected pages
+  customPageRange?: string; // e.g., "1-5, 8, 10-12"
+  colorSpace: 'rgb' | 'grayscale';
+  compressionLevel?: number; // PNG compression (0-9)
 }
 
 export interface SaveOptions {
@@ -59,7 +73,7 @@ export interface ArchiveFile {
   size: number;
   modified: number;
   thumbnail?: string;
-  type: 'image' | 'pdf' | 'video' | 'other';
+  type: 'image' | 'pdf' | 'video' | 'audio' | 'other';
   isFolder?: boolean;
   folderType?: 'extraction' | 'case';
   parentPdfName?: string; // Name of the parent PDF file this folder was created from
@@ -100,6 +114,7 @@ export interface PDFViewport {
 // Settings Types
 export type ExtractionQuality = 'high' | 'medium' | 'low';
 export type PerformanceMode = 'auto' | 'high' | 'balanced' | 'low';
+export type Theme = 'brideware-purple' | 'pastel';
 
 export interface AppSettings {
   hardwareAcceleration: boolean;
@@ -108,6 +123,8 @@ export interface AppSettings {
   extractionQuality: ExtractionQuality;
   thumbnailSize: number;
   performanceMode: PerformanceMode;
+  showOnboarding: boolean;
+  theme: Theme;
 }
 
 // Bookmark Types
@@ -132,5 +149,348 @@ export interface BookmarkFolder {
   thumbnail?: string; // Base64 or path to thumbnail
   createdAt: number;
   updatedAt: number;
+}
+
+// Map (Research Timeline) Types
+export type MapDateTier = 'era' | 'phase' | 'year' | 'month' | 'day';
+export type MapBlockKind = 'timeline' | 'branch';
+export type MapBranchSide = 'left' | 'right';
+export type MapEdgeKind = 'chronology' | 'branch';
+export type MapEdgeStyle = 'solid' | 'dotted';
+export type MapEdgeColorMode = 'theme' | 'custom' | 'linked-blocks';
+export type MapCanvasSide = 'top' | 'right' | 'bottom' | 'left';
+
+export interface MapBlockChronology {
+  tier: MapDateTier;
+  eraLabel?: string;
+  phaseLabel?: string;
+  year?: number;
+  month?: number;
+  day?: number;
+  sortKey: string;
+}
+
+export interface MapAttachment {
+  id: string;
+  fileName: string;
+  relativePath: string;
+  vaultPath: string;
+  type: 'image' | 'pdf' | 'video' | 'other';
+  thumbnailPath?: string;
+}
+
+export interface MapBlock {
+  id: string;
+  kind?: MapBlockKind;
+  title?: string;
+  color?: string;
+  surfaceColor?: string;
+  borderColor?: string;
+  chronology?: MapBlockChronology;
+  notesHtml: string;
+  attachments: MapAttachment[];
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  positionLocked?: boolean;
+  branchParentBlockId?: string;
+  branchSide?: MapBranchSide;
+  branchSourceSide?: MapCanvasSide;
+  branchOrder?: number;
+}
+
+export interface MapEdgeAppearance {
+  colorMode: MapEdgeColorMode;
+  strokeColor?: string;
+  glowColor?: string;
+}
+
+export interface MapEdge {
+  id: string;
+  kind?: MapEdgeKind;
+  sourceBlockId: string;
+  targetBlockId: string;
+  style: MapEdgeStyle;
+  sourceHandle?: string;
+  targetHandle?: string;
+}
+
+export interface MapDocument {
+  id: string;
+  title: string;
+  version: 1;
+  createdAt: number;
+  updatedAt: number;
+  casePath: string | null;
+  mapFolderPath: string;
+  blocks: MapBlock[];
+  edges: MapEdge[];
+  viewport: { x: number; y: number; zoom: number };
+  layoutMode: 'timeline-vertical';
+  defaultEdgeStyle: MapEdgeStyle;
+  defaultEdgeAppearance?: MapEdgeAppearance;
+}
+
+export interface MapListEntry {
+  id: string;
+  title: string;
+  mapFolderPath: string;
+  casePath: string | null;
+  caseName?: string;
+  modified: number;
+  blockCount: number;
+}
+
+// Novel Types
+export interface NovelPageImageCrop {
+  /** Normalized crop region within the source asset (0–1). */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface NovelPageImage {
+  id: string;
+  assetPath: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  wrapMode: 'inline' | 'square' | 'behind';
+  crop?: NovelPageImageCrop;
+}
+
+export interface NovelPage {
+  id: string;
+  side: 'left' | 'right';
+  type: 'cover' | 'content';
+  contentHtml: string;
+  images: NovelPageImage[];
+}
+
+export interface NovelDocument {
+  id: string;
+  title: string;
+  version: 1;
+  createdAt: number;
+  updatedAt: number;
+  casePath: string | null;
+  novelFolderPath: string;
+  settings: {
+    showPageNumbers: boolean;
+    fontFamily: string;
+    fontSize: number;
+    bookSizeId: string;
+    marginMm: number;
+    coverTitle: string;
+    coverSubtitle?: string;
+    coverAuthor?: string;
+    /** When false, hides the "Vault Research Edition" footer on the cover. Default true. */
+    showCoverEditionBadge?: boolean;
+    coverImageAssetId?: string;
+    coverImageRelativePath?: string;
+  };
+  pages: NovelPage[];
+}
+
+export interface NovelListEntry {
+  id: string;
+  title: string;
+  novelFolderPath: string;
+  casePath: string | null;
+  caseName?: string;
+  modified: number;
+  pageCount: number;
+}
+
+// Transcription Types
+export type TranscriptionDocumentStatus =
+  | 'draft'
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export type TranscriptionMediaType = 'audio' | 'video';
+export type TranscriptionOutputFormat = 'txt' | 'srt' | 'vtt' | 'json';
+
+export interface TranscriptionMediaSelection {
+  sourceId: string;
+  startSeconds: number;
+  endSeconds: number;
+  totalDurationSeconds: number;
+}
+
+export interface TranscriptionEngineSettings {
+  model: string;
+  precision: string;
+  device: 'cpu' | 'cuda';
+  outputFormat: TranscriptionOutputFormat;
+  includeTimestamps: boolean;
+  segmentLength: number;
+  segmentDuration: number;
+  curateText: boolean;
+  batchRecursive: boolean;
+  mediaSelection?: TranscriptionMediaSelection | null;
+}
+
+export interface TranscriptionProgress {
+  stage: 'idle' | 'booting' | 'queued' | 'processing' | 'saving' | 'completed' | 'failed' | 'cancelled';
+  current: number;
+  total: number;
+  percentage: number;
+  statusMessage?: string;
+}
+
+export interface TranscriptionSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface TranscriptionSource {
+  id: string;
+  fileName: string;
+  originalPath: string;
+  storedPath?: string;
+  relativePath?: string;
+  mediaType: TranscriptionMediaType;
+  origin: 'vault' | 'local';
+  casePath?: string | null;
+}
+
+export interface TranscriptionDocument {
+  id: string;
+  title: string;
+  version: 1;
+  createdAt: number;
+  updatedAt: number;
+  casePath: string | null;
+  transcriptionFolderPath: string;
+  status: TranscriptionDocumentStatus;
+  progress: TranscriptionProgress;
+  settings: TranscriptionEngineSettings;
+  sources: TranscriptionSource[];
+  transcriptText: string;
+  transcriptFilePath?: string;
+  segments: TranscriptionSegment[];
+  segmentsFilePath?: string;
+  summary?: string;
+  lastError?: string;
+}
+
+export interface TranscriptionListEntry {
+  id: string;
+  title: string;
+  transcriptionFolderPath: string;
+  casePath: string | null;
+  caseName?: string;
+  modified: number;
+  sourceCount: number;
+  status: TranscriptionDocumentStatus;
+  excerpt?: string;
+}
+
+export interface TranscriptionEngineModel {
+  key: string;
+  name: string;
+  modelId: string;
+  precision: string;
+  modelType: string;
+  averageVramUsage?: string;
+  defaultSegmentLength: number;
+  supportsTimestamps: boolean;
+  bundled?: boolean;
+  bundledPath?: string;
+  cached?: boolean;
+  cachePath?: string;
+  installable?: boolean;
+}
+
+export interface TranscriptionModelDownloadResult {
+  modelId: string;
+  path: string;
+  bundled: boolean;
+  cached: boolean;
+  cachePath?: string;
+  bundledPath?: string;
+}
+
+export interface TranscriptionEngineStatus {
+  available: boolean;
+  running: boolean;
+  port?: number;
+  serverUrl?: string;
+  pythonCommand?: string;
+  pythonExecutable?: string;
+  scriptPath?: string;
+  contextRoot?: string;
+  bundledModelsDirectory?: string;
+  userModelsDirectory?: string;
+  deviceDefault?: 'cpu' | 'cuda';
+  cudaBuilt?: boolean;
+  cudaAvailable?: boolean;
+  runtimeMode?: 'source' | 'bundled' | 'packaged';
+  localOnlyResolution?: boolean;
+  defaultModelKey?: string;
+  defaultModelReady?: boolean;
+  error?: string;
+}
+
+// File Converter Types
+export type FileConverterCategory = 'image' | 'pdf' | 'video' | 'gif';
+export type FileConverterOrigin = 'vault' | 'external';
+export type FileConverterOutputFormat =
+  | 'png'
+  | 'jpeg'
+  | 'webp'
+  | 'tiff'
+  | 'pdf'
+  | 'gif'
+  | 'mp4'
+  | 'webm';
+
+export interface FileConverterSource {
+  origin: FileConverterOrigin;
+  casePath?: string | null;
+  sourcePath: string;
+  fileName: string;
+  category: FileConverterCategory;
+}
+
+export interface FileConverterTarget {
+  format: FileConverterOutputFormat;
+  quality?: number;
+  dpi?: number;
+  pageRange?: 'all' | 'custom';
+  customPageRange?: string;
+}
+
+export interface FileConverterProgress {
+  percent: number;
+  statusMessage: string;
+  phase: 'preparing' | 'converting' | 'finalizing' | 'complete';
+  cancellable: boolean;
+}
+
+export interface FileConverterResult {
+  outputPath?: string;
+  outputPaths?: string[];
+  replacedSource?: boolean;
+}
+
+export interface FileConverterCapabilities {
+  inputExtensions: string[];
+  matrix: Record<FileConverterCategory, FileConverterOutputFormat[]>;
+}
+
+export interface ReplaceVaultFileResult {
+  success: boolean;
+  newPath?: string;
+  backupPath?: string;
+  updatedMaps?: string[];
+  updatedTranscriptions?: string[];
+  error?: string;
 }
 

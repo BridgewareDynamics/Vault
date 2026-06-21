@@ -1,28 +1,131 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
-import { ToastProvider, useToast } from './components/Toast/ToastContext';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useToast } from './components/Toast/ToastContext';
+import { ToastProvider } from './components/Toast/ToastProvider';
 import { ToastContainer } from './components/Toast/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { SecurityCheckerModal } from './components/SecurityCheckerModal';
+import { PDFExtractionModal } from './components/PDFExtractionModal';
 import { ProgressBar } from './components/ProgressBar';
 import { Gallery } from './components/Gallery';
 import { ImageViewer } from './components/ImageViewer';
 import { Toolbar } from './components/Toolbar';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
-const ArchivePage = lazy(() => import('./components/Archive/ArchivePage').then(module => ({ default: module.ArchivePage })));
 import { usePDFExtraction } from './hooks/usePDFExtraction';
+import { ConversionSettings } from './types';
+import { isLightTheme } from './theme/themeSemantics';
 import { ExtractedPage } from './types';
 import { Home } from 'lucide-react';
 import { logger } from './utils/logger';
 import { getUserFriendlyError } from './utils/errorMessages';
-import { SettingsProvider, useSettingsContext } from './utils/settingsContext';
+import { useSettingsContext } from './utils/settingsContext';
+import { SettingsProvider } from './utils/SettingsProvider';
 import { getMemoryManager } from './utils/memoryManager';
-import { WordEditorProvider, useWordEditor } from './contexts/WordEditorContext';
-import { DetachedWordEditor } from './components/WordEditor/DetachedWordEditor';
-import { DetachedSecurityChecker } from './components/DetachedSecurityChecker';
+import { getThumbnailMemoryCache } from './utils/thumbnailService';
+import { useWordEditor } from './contexts/WordEditorContext';
+import { WordEditorProvider } from './contexts/WordEditorProvider';
+import { ArchiveContextProvider } from './contexts/ArchiveContextProvider';
+import { VaultActiveCaseProvider } from './contexts/VaultActiveCaseProvider';
+import { AudioRecorderProvider } from './contexts/AudioRecorderProvider';
+import { AudioRecorderStudioPanel } from './components/AudioRecorder/AudioRecorderStudioPanel';
+import { VaultActiveCaseSync } from './components/AudioRecorder/VaultActiveCaseSync';
+import { VaultRecorderTopBar } from './components/AudioRecorder/VaultRecorderTopBar';
 import { ResizableDivider } from './components/ResizableDivider';
-import { WordEditorPanel } from './components/WordEditor/WordEditorPanel';
+import { OnboardingModal } from './components/Onboarding/OnboardingModal';
+import { Theme } from './types';
+import {
+  prefetchTranscriptionModule,
+  warmTranscriptionEntry,
+} from './utils/transcriptionPrefetch';
+import { prefetchMapModule, clearMapDocumentCache } from './utils/mapPrefetch';
+import { prefetchNovelModule, clearNovelDocumentCache } from './utils/novelPrefetch';
+import { warmArchiveEntry, invalidateArchiveModuleCache } from './utils/archivePrefetch';
+import type {
+  FileConverterModuleDetachState,
+  MapModuleDetachState,
+  NovelModuleDetachState,
+  TranscriptionModuleDetachState,
+} from './types/detachableModules';
+import { dispatchWordEditorReattach } from './utils/wordEditorSnapshot';
+import {
+  planSwapToMapInMain,
+  planSwapToTranscriptionInMain,
+  planSwapToNovelInMain,
+} from './utils/mainEmbeddedModule';
+import {
+  loadFileConverterModule,
+  prefetchFileConverterModule,
+} from './utils/fileConverterPrefetch';
+import { FileConverterLoadingShell } from './components/FileConverter/FileConverterLoadingShell';
+import { NovelLoadingShell } from './components/Novel/NovelLoadingShell';
 import './App.css';
+
+const ArchivePage = lazy(() =>
+  import('./utils/archivePrefetch').then(({ loadArchivePageModule }) =>
+    loadArchivePageModule().then((module) => ({
+      default: module.ArchivePage,
+    })),
+  ),
+);
+const MapModule = lazy(() =>
+  import('./utils/mapPrefetch').then(({ loadMapModule }) =>
+    loadMapModule().then((module) => ({
+      default: module.MapModule,
+    }))
+  )
+);
+const TranscriptionModule = lazy(() =>
+  import('./utils/transcriptionPrefetch').then(({ loadTranscriptionModule }) =>
+    loadTranscriptionModule().then((module) => ({
+      default: module.TranscriptionModule,
+    }))
+  )
+);
+const FileConverterModule = lazy(() =>
+  loadFileConverterModule().then((module) => ({
+    default: module.FileConverterModule,
+  }))
+);
+const NovelModule = lazy(() =>
+  import('./utils/novelPrefetch').then(({ loadNovelModule }) =>
+    loadNovelModule().then((module) => ({
+      default: module.NovelModule,
+    }))
+  )
+);
+
+// Detached-window route views are selected by URL and only ever render one at a
+// time, standalone, in their own BrowserWindow. They are never part of the main
+// window tree, so deferring them keeps their large UI out of the initial chunk.
+const DetachedWordEditor = lazy(() =>
+  import('./components/WordEditor/DetachedWordEditor').then((module) => ({
+    default: module.DetachedWordEditor,
+  }))
+);
+const DetachedSecurityChecker = lazy(() =>
+  import('./components/DetachedSecurityChecker').then((module) => ({
+    default: module.DetachedSecurityChecker,
+  }))
+);
+const DetachedPDFExtraction = lazy(() =>
+  import('./components/DetachedPDFExtraction').then((module) => ({
+    default: module.DetachedPDFExtraction,
+  }))
+);
+
+function DetachedRouteFallback({ label }: { label: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+      {label}
+    </div>
+  );
+}
+
+function isDetachedRoute(token: string) {
+  const search = window.location.search || '';
+  const hash = window.location.hash || '';
+  return search.includes(token) || hash.includes(token);
+}
 
 function AppContent() {
   const [selectedPdfPath, setSelectedPdfPath] = useState<string | null>(null);
@@ -32,7 +135,36 @@ function AppContent() {
   const [saveToZip, setSaveToZip] = useState(false);
   const [, setFolderName] = useState<string | undefined>(undefined);
   const [showArchive, setShowArchive] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [showTranscription, setShowTranscription] = useState(false);
   const [showSecurityChecker, setShowSecurityChecker] = useState(false);
+  const [showPDFExtraction, setShowPDFExtraction] = useState(false);
+  const [showFileConverter, setShowFileConverter] = useState(false);
+  const [showNovel, setShowNovel] = useState(false);
+  const [fileConverterReattachState, setFileConverterReattachState] =
+    useState<FileConverterModuleDetachState | null>(null);
+  const [transcriptionLaunchSourcePath, setTranscriptionLaunchSourcePath] = useState<string | null>(null);
+  const [transcriptionLaunchCasePath, setTranscriptionLaunchCasePath] = useState<string | null>(null);
+  const [mapReattachState, setMapReattachState] = useState<MapModuleDetachState | null>(null);
+  const [transcriptionReattachState, setTranscriptionReattachState] =
+    useState<TranscriptionModuleDetachState | null>(null);
+  const [novelReattachState, setNovelReattachState] = useState<NovelModuleDetachState | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(true); // Default to true for new users
+  const onboardingCompletedRef = useRef(false); // Track if onboarding was explicitly completed
+
+  const moduleVisibilityRef = useRef({ showMap, showTranscription, showNovel });
+  useEffect(() => {
+    moduleVisibilityRef.current = { showMap, showTranscription, showNovel };
+  }, [showMap, showTranscription, showNovel]);
+
+  const openArchive = useCallback(() => {
+    warmArchiveEntry();
+    setShowArchive(true);
+  }, []);
+
+  useEffect(() => {
+    warmArchiveEntry();
+  }, []);
 
   // Listen for reattach data from detached PDF audit window
   useEffect(() => {
@@ -41,16 +173,330 @@ function AppContent() {
       setShowSecurityChecker(true);
     };
 
-    window.addEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+    window.addEventListener('reattach-pdf-audit-data', handleReattach);
     return () => {
-      window.removeEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+      window.removeEventListener('reattach-pdf-audit-data', handleReattach);
+    };
+  }, []);
+
+  // Listen for reattach data from detached PDF extraction window
+  useEffect(() => {
+    const handleReattach = (event: WindowEventMap['reattach-pdf-extraction-data']) => {
+      const data = event.detail;
+      
+      // Only handle reattach if caseFolderPath is absent (home menu usage)
+      // If caseFolderPath is present, ArchivePage will handle it
+      if (data && !data.caseFolderPath) {
+        // Open the PDF extraction modal when reattaching from home menu
+        logger.debug('App: Received reattach-pdf-extraction-data event without caseFolderPath, opening modal');
+        setShowPDFExtraction(true);
+      }
+    };
+
+    window.addEventListener('reattach-pdf-extraction-data', handleReattach);
+    
+    // Also check for stored data on mount
+    const checkStoredData = () => {
+      const storedData = window.__reattachPdfExtractionData;
+      if (storedData && !storedData.caseFolderPath) {
+        logger.debug('App: Found stored reattach data without caseFolderPath, opening modal');
+        setShowPDFExtraction(true);
+      }
+    };
+    
+    // Check after a short delay to ensure component is mounted
+    const timeoutId = setTimeout(checkStoredData, 100);
+    
+    return () => {
+      window.removeEventListener('reattach-pdf-extraction-data', handleReattach);
+      clearTimeout(timeoutId);
     };
   }, []);
 
   const { extractPDF, isExtracting, progress, extractedPages, error, statusMessage, reset } = usePDFExtraction();
   const toast = useToast();
-  const { settings } = useSettingsContext();
-  const { isOpen: isWordEditorOpen, panelWidth, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
+
+  const applyMapInMain = useCallback(
+    async (incoming: MapModuleDetachState | null): Promise<boolean> => {
+      const result = await planSwapToMapInMain({
+        incoming,
+        visibility: moduleVisibilityRef.current,
+      });
+
+      if (!result.ok) {
+        toast.error(result.message);
+        return false;
+      }
+
+      if (result.flushWarning) {
+        toast.warning(
+          'Could not fully save open modules before switching. Recent autosave may still apply.'
+        );
+      }
+
+      if (result.displacedTranscription) {
+        setTranscriptionReattachState(result.displacedTranscription);
+      }
+
+      if (result.displacedNovel) {
+        setNovelReattachState(result.displacedNovel);
+      }
+
+      setTranscriptionLaunchSourcePath(null);
+      setTranscriptionLaunchCasePath(null);
+      setShowTranscription(false);
+      setShowNovel(false);
+      setMapReattachState(incoming);
+      setShowMap(true);
+
+      if (incoming?.wordEditor?.isOpen) {
+        window.setTimeout(() => {
+          dispatchWordEditorReattach(incoming.wordEditor!);
+        }, 100);
+      }
+
+      return true;
+    },
+    [toast]
+  );
+
+  const applyTranscriptionInMain = useCallback(
+    async (
+      incoming: TranscriptionModuleDetachState | null,
+      launch?: { sourcePath?: string | null; casePath?: string | null }
+    ): Promise<boolean> => {
+      const result = await planSwapToTranscriptionInMain({
+        incoming,
+        visibility: moduleVisibilityRef.current,
+        launchSourcePath: launch?.sourcePath,
+        launchCasePath: launch?.casePath,
+      });
+
+      if (!result.ok) {
+        toast.error(result.message);
+        return false;
+      }
+
+      if (result.flushWarning) {
+        toast.warning(
+          'Could not fully save open modules before switching. Recent autosave may still apply.'
+        );
+      }
+
+      if (result.displacedMap) {
+        setMapReattachState(result.displacedMap);
+      }
+
+      if (result.displacedNovel) {
+        setNovelReattachState(result.displacedNovel);
+      }
+
+      setShowMap(false);
+      setShowNovel(false);
+
+      if (incoming) {
+        setTranscriptionReattachState(incoming);
+        setTranscriptionLaunchSourcePath(incoming.launchSourcePath);
+        setTranscriptionLaunchCasePath(incoming.launchCasePath);
+      } else {
+        setTranscriptionReattachState(null);
+        setTranscriptionLaunchSourcePath(launch?.sourcePath ?? null);
+        setTranscriptionLaunchCasePath(launch?.casePath ?? null);
+      }
+
+      setShowTranscription(true);
+      return true;
+    },
+    [toast]
+  );
+
+  const applyFileConverterInMain = useCallback((incoming: FileConverterModuleDetachState | null) => {
+    setShowMap(false);
+    setShowTranscription(false);
+    setShowNovel(false);
+    setFileConverterReattachState(incoming);
+    setShowFileConverter(true);
+    return true;
+  }, []);
+
+  const applyNovelInMain = useCallback(
+    async (incoming: NovelModuleDetachState | null): Promise<boolean> => {
+      const result = await planSwapToNovelInMain({
+        incoming,
+        visibility: moduleVisibilityRef.current,
+      });
+
+      if (!result.ok) {
+        toast.error(result.message);
+        return false;
+      }
+
+      if (result.flushWarning) {
+        toast.warning(
+          'Could not fully save open modules before switching. Recent autosave may still apply.'
+        );
+      }
+
+      if (result.displacedMap) {
+        setMapReattachState(result.displacedMap);
+      }
+
+      if (result.displacedTranscription) {
+        setTranscriptionReattachState(result.displacedTranscription);
+      }
+
+      setTranscriptionLaunchSourcePath(null);
+      setTranscriptionLaunchCasePath(null);
+      setShowMap(false);
+      setShowTranscription(false);
+      setShowFileConverter(false);
+      setNovelReattachState(incoming);
+      setShowNovel(true);
+
+      if (incoming?.wordEditor?.isOpen) {
+        window.setTimeout(() => {
+          dispatchWordEditorReattach(incoming.wordEditor!);
+        }, 100);
+      }
+
+      return true;
+    },
+    [toast]
+  );
+
+  useEffect(() => {
+    const handleMapReattach = (event: Event) => {
+      const detail = (event as CustomEvent<MapModuleDetachState>).detail;
+      if (!detail) return;
+      void applyMapInMain(detail);
+    };
+
+    const handleTranscriptionReattach = (event: Event) => {
+      const detail = (event as CustomEvent<TranscriptionModuleDetachState>).detail;
+      if (!detail) return;
+      void applyTranscriptionInMain(detail);
+    };
+
+    const handleFileConverterReattach = (event: Event) => {
+      const detail = (event as CustomEvent<FileConverterModuleDetachState>).detail;
+      if (!detail) return;
+      applyFileConverterInMain(detail);
+    };
+
+    const handleNovelReattach = (event: Event) => {
+      const detail = (event as CustomEvent<NovelModuleDetachState>).detail;
+      if (!detail) return;
+      void applyNovelInMain(detail);
+    };
+
+    window.addEventListener('reattach-map-module-data', handleMapReattach as EventListener);
+    window.addEventListener(
+      'reattach-transcription-module-data',
+      handleTranscriptionReattach as EventListener
+    );
+    window.addEventListener(
+      'reattach-file-converter-module-data',
+      handleFileConverterReattach as EventListener
+    );
+    window.addEventListener('reattach-novel-module-data', handleNovelReattach as EventListener);
+
+    const storedMap = (window as Window & { __reattachMapModuleData?: MapModuleDetachState })
+      .__reattachMapModuleData;
+    if (storedMap) {
+      void applyMapInMain(storedMap);
+      delete (window as Window & { __reattachMapModuleData?: MapModuleDetachState })
+        .__reattachMapModuleData;
+    }
+
+    const storedTranscription = (
+      window as Window & { __reattachTranscriptionModuleData?: TranscriptionModuleDetachState }
+    ).__reattachTranscriptionModuleData;
+    if (storedTranscription) {
+      void applyTranscriptionInMain(storedTranscription);
+      delete (
+        window as Window & { __reattachTranscriptionModuleData?: TranscriptionModuleDetachState }
+      ).__reattachTranscriptionModuleData;
+    }
+
+    const storedFileConverter = (
+      window as Window & { __reattachFileConverterModuleData?: FileConverterModuleDetachState }
+    ).__reattachFileConverterModuleData;
+    if (storedFileConverter) {
+      applyFileConverterInMain(storedFileConverter);
+      delete (
+        window as Window & { __reattachFileConverterModuleData?: FileConverterModuleDetachState }
+      ).__reattachFileConverterModuleData;
+    }
+
+    const storedNovel = (window as Window & { __reattachNovelModuleData?: NovelModuleDetachState })
+      .__reattachNovelModuleData;
+    if (storedNovel) {
+      void applyNovelInMain(storedNovel);
+      delete (window as Window & { __reattachNovelModuleData?: NovelModuleDetachState })
+        .__reattachNovelModuleData;
+    }
+
+    return () => {
+      window.removeEventListener('reattach-map-module-data', handleMapReattach as EventListener);
+      window.removeEventListener(
+        'reattach-transcription-module-data',
+        handleTranscriptionReattach as EventListener
+      );
+      window.removeEventListener(
+        'reattach-file-converter-module-data',
+        handleFileConverterReattach as EventListener
+      );
+      window.removeEventListener('reattach-novel-module-data', handleNovelReattach as EventListener);
+    };
+  }, [applyMapInMain, applyTranscriptionInMain, applyFileConverterInMain, applyNovelInMain]);
+  const { settings, updateSettings } = useSettingsContext();
+  const { isOpen: isWordEditorOpen, dividerPosition, setDividerPosition, isDividerDragging } = useWordEditor();
+  const [shouldUseOverlayMode, setShouldUseOverlayMode] = useState(false);
+
+  // Check if onboarding should be shown
+  useEffect(() => {
+    // Don't override if onboarding was just completed in this session
+    if (onboardingCompletedRef.current) {
+      logger.debug('[Onboarding] Onboarding was completed in this session, not overriding');
+      return;
+    }
+
+    if (settings) {
+      // If showOnboarding is explicitly false, don't show
+      // If undefined/null (new user), default to true
+      // For new users without settings, showOnboarding will be true by default
+      const shouldShow = settings.showOnboarding !== false;
+      logger.debug('[Onboarding] Settings loaded:', { 
+        showOnboarding: settings.showOnboarding, 
+        shouldShow,
+        type: typeof settings.showOnboarding,
+        settingsKeys: Object.keys(settings),
+        hasShowOnboarding: 'showOnboarding' in settings,
+      });
+      logger.debug('[Onboarding] Setting showOnboarding to:', shouldShow, 'from settings:', settings.showOnboarding);
+      setShowOnboarding(shouldShow);
+    } else {
+      // If settings haven't loaded yet, keep showOnboarding as true (default for new users)
+      logger.debug('[Onboarding] Settings not loaded yet, defaulting to true');
+      setShowOnboarding(true);
+    }
+  }, [settings]);
+
+  // Apply theme to document body
+  useEffect(() => {
+    if (settings?.theme) {
+      const theme = settings.theme;
+      logger.debug('[App] Applying theme to document:', theme);
+      document.documentElement.setAttribute('data-theme', theme);
+      document.body.setAttribute('data-theme', theme);
+      
+      // Also apply as class for CSS targeting
+      document.documentElement.classList.remove('theme-pastel', 'theme-brideware-purple');
+      document.documentElement.classList.add(`theme-${theme}`);
+      document.body.classList.remove('theme-pastel', 'theme-brideware-purple');
+      document.body.classList.add(`theme-${theme}`);
+    }
+  }, [settings?.theme]);
 
   // Check if we're in detached editor mode
   // In dev mode, it's a query param: ?editor=detached
@@ -101,25 +547,6 @@ function AppContent() {
     }
   }, []);
 
-  // If in detached audit mode, show only the audit component
-  const shouldShowDetachedAudit = isDetachedAudit || 
-    window.location.search.includes('audit=detached') || 
-    window.location.hash.includes('audit=detached');
-  
-  if (shouldShowDetachedAudit) {
-    return <DetachedSecurityChecker />;
-  }
-
-  // If in detached editor mode, show only the editor
-  // Use direct check as fallback in case state hasn't updated yet (for production builds)
-  const shouldShowDetached = isDetachedEditor || 
-    window.location.search.includes('editor=detached') || 
-    window.location.hash.includes('editor=detached');
-  
-  if (shouldShowDetached) {
-    return <DetachedWordEditor />;
-  }
-
   // Initialize memory manager when settings are loaded
   useEffect(() => {
     if (settings) {
@@ -128,10 +555,10 @@ function AppContent() {
 
       // Register cleanup callback for image caches
       const unregister = memoryManager.registerCleanupCallback(() => {
-        // Clear any image caches if needed
-        // This is a placeholder - actual cache clearing would be implemented
-        // based on your specific caching strategy
-        logger.info('[MemoryManager] Cleanup triggered - clearing caches');
+        getThumbnailMemoryCache().clear();
+        clearMapDocumentCache();
+        clearNovelDocumentCache();
+        logger.info('[MemoryManager] Cleanup triggered - clearing thumbnail and document caches');
       });
 
       return () => {
@@ -147,7 +574,7 @@ function AppContent() {
     let lastProcessedBookmark: string | null = null;
     
     const handleOpenBookmark = (event: CustomEvent<{ pdfPath: string; pageNumber: number; keepPanelOpen?: boolean }>) => {
-      const { pdfPath, pageNumber, keepPanelOpen } = event.detail;
+      const { pdfPath, pageNumber } = event.detail;
       
       // Create a unique key for this bookmark
       const bookmarkKey = `${pdfPath}:${pageNumber}`;
@@ -168,18 +595,12 @@ function AppContent() {
       // Always store bookmark info in sessionStorage for ArchivePage to pick up
       sessionStorage.setItem('pending-bookmark-open', JSON.stringify({ pdfPath, pageNumber }));
       
-      // Close word editor if open - but only if not opened from within the panel
-      // If keepPanelOpen is true, the bookmark was opened from the Word Editor panel's bookmark library
-      if (isWordEditorOpen && !keepPanelOpen) {
-        // Dispatch a custom event to close the word editor
-        // The SettingsPanel will handle this via the WordEditorContext
-        const closeEvent = new CustomEvent('close-word-editor-for-bookmark');
-        window.dispatchEvent(closeEvent);
-      }
+      // Don't close the word editor when opening bookmarks - keep it open so users can access typing/notes
+      // The panel should remain open regardless of where the bookmark is opened from
       
       // Open archive if not already open
       if (!showArchive) {
-        setShowArchive(true);
+        openArchive();
         // Small delay to ensure ArchivePage is mounted before handling the event
         setTimeout(() => {
           // Re-dispatch the event so ArchivePage can handle it
@@ -194,11 +615,45 @@ function AppContent() {
       }
     };
 
-    window.addEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
-    return () => {
-      window.removeEventListener('open-bookmark' as any, handleOpenBookmark as EventListener);
+    const handleNavigateToCaseFolder = (event: CustomEvent<{ casePath: string }>) => {
+      // Open archive if not already open
+      if (!showArchive) {
+        openArchive();
+        // Small delay to ensure ArchivePage is mounted before handling the event
+        setTimeout(() => {
+          // Re-dispatch the event so ArchivePage can handle it
+          window.dispatchEvent(event);
+        }, 300);
+      } else {
+        // Archive is already open, dispatch event immediately for ArchivePage to handle
+        // Small delay to ensure ArchivePage is ready
+        setTimeout(() => {
+          window.dispatchEvent(event);
+        }, 100);
+      }
     };
-  }, [showArchive, isWordEditorOpen]);
+
+    const handleOpenWordEditorFromViewer = () => {
+      // When word editor is opened from PDF viewer, use overlay mode to preserve viewer state
+      setShouldUseOverlayMode(true);
+    };
+
+    const handleCloseWordEditor = () => {
+      // Reset overlay mode flag when word editor closes
+      setShouldUseOverlayMode(false);
+    };
+
+    window.addEventListener('open-bookmark', handleOpenBookmark);
+    window.addEventListener('navigate-to-case-folder', handleNavigateToCaseFolder);
+    window.addEventListener('open-word-editor-from-viewer', handleOpenWordEditorFromViewer);
+    window.addEventListener('close-word-editor', handleCloseWordEditor);
+    return () => {
+      window.removeEventListener('open-bookmark', handleOpenBookmark);
+      window.removeEventListener('navigate-to-case-folder', handleNavigateToCaseFolder);
+      window.removeEventListener('open-word-editor-from-viewer', handleOpenWordEditorFromViewer);
+      window.removeEventListener('close-word-editor', handleCloseWordEditor);
+    };
+  }, [showArchive, isWordEditorOpen, openArchive]);
 
   // Update memory manager when settings change
   useEffect(() => {
@@ -207,6 +662,171 @@ function AppContent() {
       memoryManager.updateSettings(settings);
     }
   }, [settings]);
+
+  // Reset overlay mode flag when word editor closes
+  useEffect(() => {
+    if (!isWordEditorOpen) {
+      setShouldUseOverlayMode(false);
+    }
+  }, [isWordEditorOpen]);
+
+  // Reset on new file selection
+  useEffect(() => {
+    if (selectedPdfPath) {
+      reset();
+    }
+  }, [selectedPdfPath, reset]);
+
+  // If in detached audit mode, show only the audit component
+  const shouldShowDetachedAudit = isDetachedAudit || 
+    window.location.search.includes('audit=detached') || 
+    window.location.hash.includes('audit=detached');
+  
+  if (shouldShowDetachedAudit) {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<DetachedRouteFallback label="Loading Security Audit..." />}>
+          <DetachedSecurityChecker />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  // If in detached extraction mode, show only the extraction component
+  const shouldShowDetachedExtraction = 
+    window.location.search.includes('extraction=detached') || 
+    window.location.hash.includes('extraction=detached');
+  
+  if (shouldShowDetachedExtraction) {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<DetachedRouteFallback label="Loading PDF Extraction..." />}>
+          <DetachedPDFExtraction />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  // If in detached editor mode, show only the editor
+  // Use direct check as fallback in case state hasn't updated yet (for production builds)
+  const shouldShowDetached = isDetachedEditor || 
+    window.location.search.includes('editor=detached') || 
+    window.location.hash.includes('editor=detached');
+  
+  if (shouldShowDetached) {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<DetachedRouteFallback label="Loading Word Editor..." />}>
+          <DetachedWordEditor />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (isDetachedRoute('map=detached')) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <ErrorBoundary>
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+                Loading Map...
+              </div>
+            }
+          >
+            <MapModule theme={theme} hostMode="detached" onExit={() => void window.electronAPI?.closeWindow?.()} />
+          </Suspense>
+        </ErrorBoundary>
+        <VaultRecorderTopBar visible />
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+          inlineWordEditorContainerId="map-word-editor-inline-container"
+        />
+      </>
+    );
+  }
+
+  if (isDetachedRoute('transcription=detached')) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <ErrorBoundary>
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+                Loading Transcript...
+              </div>
+            }
+          >
+            <TranscriptionModule
+              theme={theme}
+              hostMode="detached"
+              onExit={() => void window.electronAPI?.closeWindow?.()}
+            />
+          </Suspense>
+        </ErrorBoundary>
+        <VaultRecorderTopBar visible />
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+        />
+      </>
+    );
+  }
+
+  if (isDetachedRoute('file-converter=detached')) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <ErrorBoundary>
+          <Suspense
+            fallback={
+              <FileConverterLoadingShell
+                theme={theme}
+                onClose={() => void window.electronAPI?.closeWindow?.()}
+              />
+            }
+          >
+            <FileConverterModule
+              theme={theme}
+              hostMode="detached"
+              onExit={() => void window.electronAPI?.closeWindow?.()}
+            />
+          </Suspense>
+        </ErrorBoundary>
+        <VaultRecorderTopBar visible />
+        <ToastContainer />
+        <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
+      </>
+    );
+  }
+
+  if (isDetachedRoute('novel=detached')) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <ErrorBoundary>
+          <Suspense fallback={<NovelLoadingShell theme={theme} />}>
+            <NovelModule theme={theme} hostMode="detached" onExit={() => void window.electronAPI?.closeWindow?.()} />
+          </Suspense>
+        </ErrorBoundary>
+        <VaultRecorderTopBar visible />
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+          inlineWordEditorContainerId="novel-word-editor-inline-container"
+        />
+      </>
+    );
+  }
 
   // Handle PDF file selection
   const handleSelectFile = async () => {
@@ -222,9 +842,15 @@ function AppContent() {
         toast.info('PDF file selected, starting extraction...');
         
         // Start extraction immediately - progress will be shown
-        extractPDF(filePath, () => {
-          // Progress updates are handled by the hook
-        }).then((pages) => {
+        const defaultSettings: ConversionSettings = {
+          dpi: 150,
+          quality: 85,
+          format: 'jpeg',
+          pageRange: 'all',
+          colorSpace: 'rgb',
+          compressionLevel: 6,
+        };
+        extractPDF(filePath, defaultSettings).then((pages) => {
           toast.success(`Successfully extracted ${pages.length} page${pages.length !== 1 ? 's' : ''}`);
         }).catch((err) => {
           toast.error(getUserFriendlyError(err, { operation: 'PDF extraction', fileName: filePath }));
@@ -272,6 +898,15 @@ function AppContent() {
         return;
       }
 
+      // Helper function to generate fileName from PDF path and page number
+      const generateFileName = (pdfPath: string, pageNumber: number, imageData: string): string => {
+        const pdfBasename = pdfPath.replace(/\\/g, '/').split('/').pop()?.replace(/\.pdf$/i, '') || 'page';
+        // Detect format from imageData (data:image/png or data:image/jpeg)
+        const isPng = imageData.startsWith('data:image/png');
+        const ext = isPng ? 'png' : 'jpg';
+        return `${pdfBasename}_page_${String(pageNumber).padStart(3, '0')}.${ext}`;
+      };
+
       const result = await window.electronAPI.saveFiles({
         saveDirectory,
         saveParentFile,
@@ -281,6 +916,7 @@ function AppContent() {
         extractedPages: extractedPages.map((page) => ({
           pageNumber: page.pageNumber,
           imageData: page.imageData,
+          fileName: generateFileName(selectedPdfPath, page.pageNumber, page.imageData),
         })),
       });
 
@@ -293,78 +929,289 @@ function AppContent() {
     }
   };
 
-  // Reset on new file selection
-  useEffect(() => {
-    if (selectedPdfPath) {
-      reset();
-    }
-  }, [selectedPdfPath, reset]);
+  if (showFileConverter) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <ErrorBoundary onReset={() => setShowFileConverter(false)}>
+          <Suspense
+            fallback={
+              <FileConverterLoadingShell
+                theme={theme}
+                onClose={() => setShowFileConverter(false)}
+              />
+            }
+          >
+            <FileConverterModule
+              theme={theme}
+              hostMode="embedded"
+              initialNavigationState={fileConverterReattachState}
+              onNavigationStateConsumed={() => setFileConverterReattachState(null)}
+              onPopOutComplete={() => setShowFileConverter(false)}
+              onExit={() => setShowFileConverter(false)}
+            />
+          </Suspense>
+        </ErrorBoundary>
+        <VaultRecorderTopBar visible />
+        <ToastContainer />
+        <SettingsPanel hideWordEditorButton={true} isArchiveVisible={false} hideFixedButtons={true} />
+      </>
+    );
+  }
+
+  if (showNovel) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <ErrorBoundary onReset={() => setShowNovel(false)}>
+          <Suspense fallback={<NovelLoadingShell theme={theme} />}>
+            <NovelModule
+              theme={theme}
+              hostMode="embedded"
+              initialNavigationState={novelReattachState}
+              onNavigationStateConsumed={() => setNovelReattachState(null)}
+              onPopOutComplete={() => setShowNovel(false)}
+              onExit={() => setShowNovel(false)}
+            />
+          </Suspense>
+        </ErrorBoundary>
+        <VaultRecorderTopBar visible />
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+          inlineWordEditorContainerId="novel-word-editor-inline-container"
+        />
+      </>
+    );
+  }
+
+  // Show Map feature
+  if (showMap) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <ErrorBoundary onReset={() => setShowMap(false)}>
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+                Loading Map...
+              </div>
+            }
+          >
+            <MapModule
+              theme={theme}
+              hostMode="embedded"
+              initialNavigationState={mapReattachState}
+              onNavigationStateConsumed={() => setMapReattachState(null)}
+              onPopOutComplete={() => setShowMap(false)}
+              onExit={() => setShowMap(false)}
+            />
+          </Suspense>
+        </ErrorBoundary>
+        <VaultRecorderTopBar visible />
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+          inlineWordEditorContainerId="map-word-editor-inline-container"
+        />
+      </>
+    );
+  }
+
+  if (showTranscription) {
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    return (
+      <>
+        <ErrorBoundary
+          onReset={() => {
+            setShowTranscription(false);
+            setTranscriptionLaunchSourcePath(null);
+            setTranscriptionLaunchCasePath(null);
+          }}
+        >
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+                Loading Transcript...
+              </div>
+            }
+          >
+            <TranscriptionModule
+              theme={theme}
+              hostMode="embedded"
+              initialNavigationState={transcriptionReattachState}
+              onNavigationStateConsumed={() => setTranscriptionReattachState(null)}
+              onPopOutComplete={() => {
+                setShowTranscription(false);
+                setTranscriptionLaunchSourcePath(null);
+                setTranscriptionLaunchCasePath(null);
+              }}
+              onExit={() => {
+                setShowTranscription(false);
+                setTranscriptionLaunchSourcePath(null);
+                setTranscriptionLaunchCasePath(null);
+              }}
+              initialSourcePath={transcriptionLaunchSourcePath}
+              initialCasePath={transcriptionLaunchCasePath}
+            />
+          </Suspense>
+        </ErrorBoundary>
+        <VaultRecorderTopBar visible />
+        <ToastContainer />
+        <SettingsPanel
+          hideWordEditorButton={true}
+          isArchiveVisible={false}
+          hideFixedButtons={true}
+        />
+      </>
+    );
+  }
 
   // Show archive if requested
   if (showArchive) {
-    // If Editor is open, show side-by-side layout
-    if (isWordEditorOpen) {
-      return (
-        <>
-          <div className="flex h-screen overflow-hidden">
-            {/* Archive on the left */}
-            <div 
-              className={`overflow-auto ${isDividerDragging ? '' : 'transition-all duration-300'}`}
-              style={{ width: `${dividerPosition}%` }}
-            >
+    // Always render the same structure to prevent ArchivePage from remounting
+    // Just adjust the layout based on whether word editor is open
+    const useSideBySideLayout = isWordEditorOpen && !shouldUseOverlayMode;
+    
+    return (
+      <>
+        <div className={`h-screen overflow-hidden ${useSideBySideLayout ? 'flex' : ''}`}>
+          {/* Archive container - always rendered in same position, just width changes */}
+          <div 
+            className={`overflow-auto ${isDividerDragging ? '' : 'transition-all duration-300'}`}
+            style={useSideBySideLayout ? { width: `${dividerPosition}%` } : { width: '100%' }}
+          >
+            <ErrorBoundary onReset={invalidateArchiveModuleCache}>
               <Suspense
                 fallback={
-                  <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                      <p className="text-gray-300">Loading Archive...</p>
+                (() => {
+                  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+                  const isPastel = isLightTheme(theme);
+                  
+                  return (
+                    <div className={`relative min-h-screen flex items-center justify-center overflow-hidden ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
+                        : 'bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950'
+                    }`}>
+                      {/* Animated Background Grid */}
+                      <div 
+                        className={`absolute inset-0 ${isPastel ? 'opacity-10' : 'opacity-20'}`}
+                        style={{
+                          backgroundImage: isPastel
+                            ? `
+                              linear-gradient(rgba(251, 182, 206, 0.15) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(251, 182, 206, 0.15) 1px, transparent 1px)
+                            `
+                            : `
+                              linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+                            `,
+                          backgroundSize: '50px 50px',
+                          maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
+                        }}
+                      />
+                      
+                      {/* Content */}
+                      <div className="relative z-10 text-center space-y-6">
+                        {/* Modern Spinner with Gradient */}
+                        <div className="inline-flex items-center justify-center">
+                          <div className="relative">
+                            {isPastel ? (
+                              <>
+                                {/* Pastel Theme Spinner */}
+                                {/* Outer Glow Ring */}
+                                <div className="absolute inset-0 border-4 border-pink-300/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                                <div className="absolute inset-2 border-2 border-purple-300/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                                
+                                {/* Main Spinner */}
+                                <div className="relative w-16 h-16">
+                                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-pink-400 border-r-purple-400 animate-spin"></div>
+                                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-purple-400 border-l-pink-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                                </div>
+                                
+                                {/* Center Glow */}
+                                <div className="absolute inset-4 bg-gradient-to-br from-pink-300/30 to-purple-300/30 rounded-full blur-xl"></div>
+                                
+                                {/* Soft pastel particles effect */}
+                                <div className="absolute inset-0 rounded-full">
+                                  <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-pink-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '0s', animationDuration: '2s' }}></div>
+                                  <div className="absolute top-3/4 right-1/4 w-2 h-2 bg-purple-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '0.5s', animationDuration: '2s' }}></div>
+                                  <div className="absolute bottom-1/4 left-1/2 w-1.5 h-1.5 bg-blue-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '1s', animationDuration: '2s' }}></div>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {/* Dark Theme Spinner */}
+                                {/* Outer Glow Ring */}
+                                <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                                <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                                
+                                {/* Main Spinner */}
+                                <div className="relative w-16 h-16">
+                                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                                </div>
+                                
+                                {/* Center Glow */}
+                                <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Loading Text */}
+                        <div className="space-y-2">
+                          <p className={`text-xl font-semibold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                            isPastel
+                              ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400'
+                              : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                          }`}>
+                            Loading Archive...
+                          </p>
+                          <p className={`text-sm font-medium ${isPastel ? 'text-gray-600' : 'text-gray-400'}`}>Initializing vault systems</p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                }
-              >
-                <ArchivePage onBack={() => setShowArchive(false)} />
-              </Suspense>
-            </div>
-            
-            {/* Resizable Divider */}
+                  );
+                })()
+              }
+            >
+              <ArchivePage
+                key="archive-page"
+                onBack={() => setShowArchive(false)}
+                onOpenTranscription={(sourcePath, casePath) => {
+                  warmTranscriptionEntry();
+                  setShowArchive(false);
+                  void applyTranscriptionInMain(null, { sourcePath, casePath });
+                }}
+              />
+            </Suspense>
+            </ErrorBoundary>
+          </div>
+          
+          {/* Resizable Divider - only shown in side-by-side layout */}
+          {useSideBySideLayout && (
             <ResizableDivider
               position={dividerPosition}
               onResize={setDividerPosition}
               minLeft={20}
               minRight={30}
             />
-            
-            {/* Editor on the right - rendered by SettingsPanel with inline mode */}
+          )}
+          
+          {/* Editor container - only shown in side-by-side layout */}
+          {useSideBySideLayout && (
             <div 
               id="word-editor-inline-container"
               className={`overflow-hidden h-full ${isDividerDragging ? '' : 'transition-all duration-300'}`}
               style={{ width: `${100 - dividerPosition}%` }}
             />
-          </div>
-          <SettingsPanel isArchiveVisible={true} hideFixedButtons={true} />
-          <ToastContainer />
-        </>
-      );
-    }
-    
-    // Editor not open, show full-width Archive
-    return (
-      <>
-        <div 
-          className="transition-all duration-300"
-        >
-          <Suspense
-            fallback={
-              <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-                  <p className="text-gray-300">Loading Archive...</p>
-                </div>
-              </div>
-            }
-          >
-            <ArchivePage onBack={() => setShowArchive(false)} />
-          </Suspense>
+          )}
         </div>
         <SettingsPanel isArchiveVisible={true} hideFixedButtons={true} />
         <ToastContainer />
@@ -374,15 +1221,63 @@ function AppContent() {
 
   // Show welcome screen if no PDF selected and not extracting
   if (!selectedPdfPath && !isExtracting && extractedPages.length === 0) {
+    logger.debug('[Onboarding] Rendering welcome screen, showOnboarding:', showOnboarding, typeof showOnboarding);
     return (
       <>
+        {/* Show onboarding modal if needed - ALWAYS render it first */}
+        {showOnboarding && (
+          <OnboardingModal
+            onComplete={async (theme: Theme, dontShowAgain: boolean) => {
+              logger.debug('[Onboarding] Completing onboarding - theme:', theme, 'dontShowAgain:', dontShowAgain);
+              try {
+                // Mark onboarding as completed to prevent useEffect from overriding
+                onboardingCompletedRef.current = true;
+                setShowOnboarding(false);
+                
+                logger.debug('[Onboarding] Updating settings with theme:', theme);
+                await updateSettings({
+                  showOnboarding: !dontShowAgain,
+                  theme,
+                });
+                logger.debug('[Onboarding] Settings updated successfully, theme set to:', theme);
+                
+                // Force a small delay to ensure settings context has updated
+                // The useEffect above will pick up the theme change from settings context
+                setTimeout(() => {
+                  logger.debug('[Onboarding] Settings should now be updated in context');
+                }, 100);
+              } catch (error) {
+                logger.error('[Onboarding] Failed to update settings:', error);
+                // Reset the ref if update failed so onboarding can be shown again
+                onboardingCompletedRef.current = false;
+              }
+            }}
+          />
+        )}
         <div 
           className="transition-all duration-300"
         >
           <WelcomeScreen 
             onSelectFile={handleSelectFile}
-            onOpenArchive={() => setShowArchive(true)}
+            onOpenArchive={openArchive}
             onOpenSecurityChecker={() => setShowSecurityChecker(true)}
+            onOpenPDFExtraction={() => setShowPDFExtraction(true)}
+            onOpenFileConverter={() => {
+              void prefetchFileConverterModule();
+              setShowFileConverter(true);
+            }}
+            onOpenMap={() => {
+              void prefetchMapModule();
+              void applyMapInMain(null);
+            }}
+            onOpenNovel={() => {
+              void prefetchNovelModule();
+              void applyNovelInMain(null);
+            }}
+            onOpenTranscription={() => {
+              void prefetchTranscriptionModule();
+              void applyTranscriptionInMain(null);
+            }}
           />
         </div>
         <ToastContainer />
@@ -391,6 +1286,10 @@ function AppContent() {
           isOpen={showSecurityChecker}
           onClose={() => setShowSecurityChecker(false)}
         />
+        <PDFExtractionModal
+          isOpen={showPDFExtraction}
+          onClose={() => setShowPDFExtraction(false)}
+        />
       </>
     );
   }
@@ -398,12 +1297,93 @@ function AppContent() {
   // Show extraction view even if no pages extracted yet (during extraction)
   if (selectedPdfPath && extractedPages.length === 0 && !isExtracting && !error) {
     // This shouldn't happen, but just in case
+    const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+    const isPastel = isLightTheme(theme);
+    
     return (
       <>
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-            <p className="text-gray-300">Preparing...</p>
+        <div className={`relative min-h-screen flex items-center justify-center overflow-hidden ${
+          isPastel
+            ? 'bg-gradient-to-br from-slate-50 via-pink-50/30 to-slate-50'
+            : 'bg-gradient-to-br from-gray-950 via-purple-950/50 to-gray-950'
+        }`}>
+          {/* Animated Background Grid */}
+          <div 
+            className={`absolute inset-0 ${isPastel ? 'opacity-10' : 'opacity-20'}`}
+            style={{
+              backgroundImage: isPastel
+                ? `
+                  linear-gradient(rgba(251, 182, 206, 0.15) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(251, 182, 206, 0.15) 1px, transparent 1px)
+                `
+                : `
+                  linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+                `,
+              backgroundSize: '50px 50px',
+              maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black 40%, transparent 100%)',
+            }}
+          />
+          
+          {/* Content */}
+          <div className="relative z-10 text-center space-y-6">
+            {/* Modern Spinner with Gradient */}
+            <div className="inline-flex items-center justify-center">
+              <div className="relative">
+                {isPastel ? (
+                  <>
+                    {/* Pastel Theme Spinner */}
+                    {/* Outer Glow Ring */}
+                    <div className="absolute inset-0 border-4 border-pink-300/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                    <div className="absolute inset-2 border-2 border-purple-300/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                    
+                    {/* Main Spinner */}
+                    <div className="relative w-16 h-16">
+                      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-pink-400 border-r-purple-400 animate-spin"></div>
+                      <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-purple-400 border-l-pink-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                    </div>
+                    
+                    {/* Center Glow */}
+                    <div className="absolute inset-4 bg-gradient-to-br from-pink-300/30 to-purple-300/30 rounded-full blur-xl"></div>
+                    
+                    {/* Soft pastel particles effect */}
+                    <div className="absolute inset-0 rounded-full">
+                      <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-pink-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '0s', animationDuration: '2s' }}></div>
+                      <div className="absolute top-3/4 right-1/4 w-2 h-2 bg-purple-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '0.5s', animationDuration: '2s' }}></div>
+                      <div className="absolute bottom-1/4 left-1/2 w-1.5 h-1.5 bg-blue-300/40 rounded-full blur-sm animate-pulse" style={{ animationDelay: '1s', animationDuration: '2s' }}></div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Dark Theme Spinner */}
+                    {/* Outer Glow Ring */}
+                    <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                    <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                    
+                    {/* Main Spinner */}
+                    <div className="relative w-16 h-16">
+                      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                      <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                    </div>
+                    
+                    {/* Center Glow */}
+                    <div className="absolute inset-4 bg-gradient-to-br from-cyber-purple-400/20 to-cyber-cyan-400/20 rounded-full blur-xl"></div>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            {/* Loading Text */}
+            <div className="space-y-2">
+              <p className={`text-xl font-semibold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                isPastel
+                  ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400'
+                  : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+              }`}>
+                Preparing...
+              </p>
+              <p className={`text-sm font-medium ${isPastel ? 'text-gray-600' : 'text-gray-400'}`}>Initializing extraction systems</p>
+            </div>
           </div>
         </div>
         <SettingsPanel isArchiveVisible={false} hideFixedButtons={true} />
@@ -511,9 +1491,17 @@ function App() {
     <ToastProvider>
       <SettingsProvider>
         <WordEditorProvider>
-          <ErrorBoundary>
-            <AppContent />
-          </ErrorBoundary>
+          <ArchiveContextProvider>
+            <VaultActiveCaseProvider>
+              <AudioRecorderProvider>
+                <VaultActiveCaseSync />
+                <ErrorBoundary>
+                  <AppContent />
+                </ErrorBoundary>
+                <AudioRecorderStudioPanel />
+              </AudioRecorderProvider>
+            </VaultActiveCaseProvider>
+          </ArchiveContextProvider>
         </WordEditorProvider>
       </SettingsProvider>
     </ToastProvider>

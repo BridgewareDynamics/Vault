@@ -1,9 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TextLibrary } from './TextLibrary';
 import { mockElectronAPI } from '../../test-utils/mocks';
-import { ToastProvider } from '../Toast/ToastContext';
+import { renderWithProviders } from '../../test-utils/render';
+
+const mockCase = { path: '/vault/test-case', name: 'Test Case' };
+
+vi.mock('../../contexts/ArchiveContext', () => ({
+  useArchiveContext: () => ({
+    currentCase: mockCase,
+  }),
+}));
+
+vi.mock('./DeleteTextFileConfirmDialog', () => ({
+  DeleteTextFileConfirmDialog: ({ isOpen, onConfirm }: { isOpen: boolean; onConfirm: () => void }) =>
+    isOpen ? <button onClick={onConfirm}>Confirm Delete</button> : null,
+}));
 
 // Mock TextLibraryItem
 vi.mock('./TextLibraryItem', () => ({
@@ -43,37 +56,38 @@ describe('TextLibrary', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.electronAPI = mockElectronAPI;
+    (mockElectronAPI.listCaseNotes as any).mockResolvedValue(mockFiles);
     (mockElectronAPI.listTextFiles as any).mockResolvedValue(mockFiles);
     (mockElectronAPI.deleteTextFile as any).mockResolvedValue(undefined);
+    (mockElectronAPI.createCaseNote as any).mockResolvedValue('/vault/test-case/new-note.txt');
   });
 
   it('should render loading state initially', () => {
-    (mockElectronAPI.listTextFiles as any).mockImplementation(
+    (mockElectronAPI.listCaseNotes as any).mockImplementation(
       () => new Promise(() => {}) // Never resolves
     );
 
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     expect(screen.getByText('Loading files...')).toBeInTheDocument();
   });
 
   it('should load and display files', async () => {
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
@@ -81,37 +95,35 @@ describe('TextLibrary', () => {
       expect(screen.getByText('file2.txt')).toBeInTheDocument();
     });
 
-    expect(mockElectronAPI.listTextFiles).toHaveBeenCalledTimes(1);
+    expect(mockElectronAPI.listCaseNotes).toHaveBeenCalledWith('/vault/test-case');
   });
 
   it('should render empty state when no files', async () => {
-    (mockElectronAPI.listTextFiles as any).mockResolvedValue([]);
+    (mockElectronAPI.listCaseNotes as any).mockResolvedValue([]);
 
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
-      expect(screen.getByText('No text files yet')).toBeInTheDocument();
-      expect(screen.getByText('Create your first document')).toBeInTheDocument();
+      expect(screen.getByText('No notes yet for this case')).toBeInTheDocument();
+      expect(screen.getByText('Create your first note')).toBeInTheDocument();
     });
   });
 
   it('should call onOpenFile when file is opened', async () => {
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
@@ -124,62 +136,71 @@ describe('TextLibrary', () => {
     expect(mockOnOpenFile).toHaveBeenCalledWith('/path/to/file1.txt');
   });
 
-  it('should call onNewFile when New button is clicked', async () => {
+  it('should create a new case note when New Note is clicked', async () => {
     const user = userEvent.setup();
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
-      expect(screen.getByText('New')).toBeInTheDocument();
+      expect(screen.getByText('file1.txt')).toBeInTheDocument();
     });
 
-    const newButton = screen.getByText('New');
-    await user.click(newButton);
+    const newButton = document.querySelector('button .lucide-plus')?.closest('button');
+    expect(newButton).toBeTruthy();
+    await user.click(newButton!);
 
-    expect(mockOnNewFile).toHaveBeenCalledTimes(1);
+    const nameInput = await screen.findByPlaceholderText('Enter file name...');
+    fireEvent.change(nameInput, { target: { value: 'my-note' } });
+    await user.click(screen.getByRole('button', { name: /^Create$/i }));
+
+    await waitFor(() => {
+      expect(mockElectronAPI.createCaseNote).toHaveBeenCalledWith(
+        '/vault/test-case',
+        'my-note.txt',
+        '',
+      );
+      expect(mockOnOpenFile).toHaveBeenCalledWith('/vault/test-case/new-note.txt');
+    });
   });
 
-  it('should call onNewFile when Create your first document is clicked', async () => {
-    (mockElectronAPI.listTextFiles as any).mockResolvedValue([]);
+  it('should open new note dialog when Create your first note is clicked', async () => {
+    (mockElectronAPI.listCaseNotes as any).mockResolvedValue([]);
     const user = userEvent.setup();
 
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Create your first document')).toBeInTheDocument();
+      expect(screen.getByText('Create your first note')).toBeInTheDocument();
     });
 
-    const createButton = screen.getByText('Create your first document');
+    const createButton = screen.getByText('Create your first note');
     await user.click(createButton);
 
-    expect(mockOnNewFile).toHaveBeenCalledTimes(1);
+    expect(await screen.findByPlaceholderText(/file name/i)).toBeInTheDocument();
   });
 
   it('should call onClose when back button is clicked', async () => {
     const user = userEvent.setup();
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
@@ -194,15 +215,14 @@ describe('TextLibrary', () => {
 
   it('should handle file deletion', async () => {
     const user = userEvent.setup();
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
           onFileDeleted={mockOnFileDeleted}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
@@ -211,25 +231,25 @@ describe('TextLibrary', () => {
 
     const deleteButtons = screen.getAllByText('Delete');
     await user.click(deleteButtons[0]);
+    await user.click(screen.getByText('Confirm Delete'));
 
     await waitFor(() => {
       expect(mockElectronAPI.deleteTextFile).toHaveBeenCalledWith('/path/to/file1.txt');
     });
 
-    expect(mockElectronAPI.listTextFiles).toHaveBeenCalledTimes(2); // Initial load + after delete
+    expect(mockElectronAPI.listCaseNotes).toHaveBeenCalledTimes(2); // Initial load + after delete
   });
 
   it('should call onFileDeleted when file is deleted', async () => {
     const user = userEvent.setup();
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
           onFileDeleted={mockOnFileDeleted}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
@@ -238,6 +258,7 @@ describe('TextLibrary', () => {
 
     const deleteButtons = screen.getAllByText('Delete');
     await user.click(deleteButtons[0]);
+    await user.click(screen.getByText('Confirm Delete'));
 
     await waitFor(() => {
       expect(mockOnFileDeleted).toHaveBeenCalledWith('/path/to/file1.txt');
@@ -248,23 +269,23 @@ describe('TextLibrary', () => {
     const user = userEvent.setup();
     (mockElectronAPI.deleteTextFile as any).mockRejectedValue(new Error('Delete failed'));
 
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
       expect(screen.getByText('file1.txt')).toBeInTheDocument();
     });
 
-    const initialCallCount = (mockElectronAPI.listTextFiles as any).mock.calls.length;
+    const initialCallCount = (mockElectronAPI.listCaseNotes as any).mock.calls.length;
     const deleteButtons = screen.getAllByText('Delete');
     await user.click(deleteButtons[0]);
+    await user.click(screen.getByText('Confirm Delete'));
 
     // On delete error, the component doesn't reload files (only reloads on success)
     // So listTextFiles should still be called only once (initial load)
@@ -274,39 +295,37 @@ describe('TextLibrary', () => {
 
     // Verify files are still displayed (not reloaded)
     expect(screen.getByText('file1.txt')).toBeInTheDocument();
-    expect(mockElectronAPI.listTextFiles).toHaveBeenCalledTimes(initialCallCount);
+    expect(mockElectronAPI.listCaseNotes).toHaveBeenCalledTimes(initialCallCount);
   });
 
   it('should handle load files error', async () => {
-    (mockElectronAPI.listTextFiles as any).mockRejectedValue(new Error('Load failed'));
+    (mockElectronAPI.listCaseNotes as any).mockRejectedValue(new Error('Load failed'));
 
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     // Should show empty state or error state
     await waitFor(() => {
       // Component should handle error gracefully
-      expect(mockElectronAPI.listTextFiles).toHaveBeenCalled();
+      expect(mockElectronAPI.listCaseNotes).toHaveBeenCalled();
     });
   });
 
   it('should render in detached mode with different grid layout', async () => {
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
           isDetached={true}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
@@ -319,15 +338,14 @@ describe('TextLibrary', () => {
   });
 
   it('should render in attached mode with different grid layout', async () => {
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
           isDetached={false}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
@@ -340,14 +358,13 @@ describe('TextLibrary', () => {
 
   it('should not call onFileDeleted when prop is not provided', async () => {
     const user = userEvent.setup();
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     await waitFor(() => {
@@ -356,6 +373,7 @@ describe('TextLibrary', () => {
 
     const deleteButtons = screen.getAllByText('Delete');
     await user.click(deleteButtons[0]);
+    await user.click(screen.getByText('Confirm Delete'));
 
     // Should not throw error even without onFileDeleted
     await waitFor(() => {
@@ -367,14 +385,13 @@ describe('TextLibrary', () => {
     const originalAPI = global.window.electronAPI;
     global.window.electronAPI = undefined as any;
 
-    render(
-      <ToastProvider>
+    renderWithProviders(
         <TextLibrary
           onOpenFile={mockOnOpenFile}
           onNewFile={mockOnNewFile}
           onClose={mockOnClose}
-        />
-      </ToastProvider>
+        />,
+      { withToast: true },
     );
 
     // Should not crash, just show empty or loading state

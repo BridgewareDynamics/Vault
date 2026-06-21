@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import React from 'react';
 import { useSettings } from './useSettings';
-import { SettingsProvider } from '../utils/settingsContext';
+import { SettingsProvider } from '../utils/SettingsProvider';
 import { AppSettings } from '../types';
 import { mockElectronAPI } from '../test-utils/mocks';
 
@@ -14,12 +14,14 @@ describe('useSettings', () => {
     extractionQuality: 'high',
     thumbnailSize: 200,
     performanceMode: 'auto',
+    showOnboarding: false,
+    theme: 'brideware-purple',
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     (mockElectronAPI.getSettings as any).mockResolvedValue(defaultSettings);
-    (mockElectronAPI.updateSettings as any).mockImplementation(async (updates) => ({
+    (mockElectronAPI.updateSettings as any).mockImplementation(async (updates: Partial<AppSettings>) => ({
       ...defaultSettings,
       ...updates,
     }));

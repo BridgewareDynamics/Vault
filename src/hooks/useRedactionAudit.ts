@@ -64,6 +64,34 @@ export interface AuditOptions {
   includeSecurityAudit?: boolean;
 }
 
+/**
+ * Backend-format payload passed to the Python report generator. This is the
+ * snake_case, batch-shaped object the UI assembles from a RedactionAuditResult
+ * before handing it to `generateAuditReport`. Kept structurally loose for the
+ * per-report `security` block since it mirrors the Python tool's free-form output.
+ */
+export interface AuditReportPayload {
+  tool: string;
+  summary: {
+    total_pdfs: number;
+    total_pages: number;
+    pdfs_with_risks: number;
+    total_flagged_pages: number;
+  };
+  reports: Array<{
+    filename: string;
+    total_pages: number;
+    error: string | null;
+    flagged_pages: Array<{
+      page_number: number;
+      black_rect_count: number;
+      overlap_count: number;
+      confidence_score: number;
+    }>;
+    security: Record<string, unknown> | null;
+  }>;
+}
+
 export function useRedactionAudit() {
   const [isAuditing, setIsAuditing] = useState(false);
   const [result, setResult] = useState<RedactionAuditResult | null>(null);
