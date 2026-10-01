@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { WordEditorPanel } from './WordEditorPanel';
 import { mockElectronAPI } from '../../test-utils/mocks';
+import { renderWithProviders, setupTestSettings } from '../../test-utils/render';
 
 // Mock WordEditor
 let mockWordEditorHandle = {
@@ -58,15 +59,24 @@ vi.mock('../Toast/ToastContext', () => ({
   }),
 }));
 
-vi.mock('../../utils/debugLogger', () => ({
-  debugLog: vi.fn(),
-}));
-
 // Mock WordEditorContext
 const mockSetIsOpen = vi.fn();
+const mockSetPanelWidth = vi.fn();
 vi.mock('../../contexts/WordEditorContext', () => ({
   useWordEditor: () => ({
     setIsOpen: mockSetIsOpen,
+    panelWidth: 500,
+    setPanelWidth: mockSetPanelWidth,
+    dividerPosition: 50,
+    setDividerPosition: vi.fn(),
+    isDividerDragging: false,
+    setIsDividerDragging: vi.fn(),
+  }),
+}));
+
+vi.mock('../../contexts/ArchiveContext', () => ({
+  useArchiveContext: () => ({
+    currentCase: { path: '/vault/test-case', name: 'Test Case' },
   }),
 }));
 
@@ -75,7 +85,7 @@ describe('WordEditorPanel', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Don't use fake timers - they interfere with React's act() and cause "Should not already be working" errors
+    setupTestSettings();
 
     // Reset mock handle to ensure clean state
     mockWordEditorHandle = {
@@ -87,42 +97,32 @@ describe('WordEditorPanel', () => {
       markAsSaved: vi.fn(),
     };
 
-    // Set up window.electronAPI with mocks
-    (global as any).window = {
-      ...global.window,
-      electronAPI: mockElectronAPI,
-    };
-
+    window.electronAPI = mockElectronAPI;
     mockOnClose = vi.fn();
     (mockElectronAPI.createWordEditorWindow as any).mockResolvedValue(undefined);
     (mockElectronAPI.saveTextFile as any).mockResolvedValue(undefined);
   });
 
-  afterEach(async () => {
-    // Clean up rendered components to prevent state leakage between tests
-    cleanup();
-    // Wait for any pending async operations to complete
-    await act(async () => {
-      await new Promise(resolve => setImmediate(resolve));
-    });
+  afterEach(() => {
+    vi.clearAllTimers();
   });
 
   describe('Panel Visibility', () => {
     it('should not render when isOpen is false', () => {
-      render(<WordEditorPanel isOpen={false} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={false} onClose={mockOnClose} />);
 
       expect(screen.queryByText('Word Editor')).not.toBeInTheDocument();
     });
 
     it('should render when isOpen is true', () => {
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       expect(screen.getByText('Word Editor')).toBeInTheDocument();
       expect(screen.getByTestId('word-editor')).toBeInTheDocument();
     });
 
     it('should update context when isOpen changes', () => {
-      const { rerender } = render(<WordEditorPanel isOpen={false} onClose={mockOnClose} />);
+      const { rerender } = renderWithProviders(<WordEditorPanel isOpen={false} onClose={mockOnClose} />);
 
       rerender(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
@@ -132,7 +132,7 @@ describe('WordEditorPanel', () => {
 
   describe('Initial File Path', () => {
     it('should set initial file path', () => {
-      render(
+      renderWithProviders(
         <WordEditorPanel
           isOpen={true}
           onClose={mockOnClose}
@@ -145,7 +145,7 @@ describe('WordEditorPanel', () => {
     });
 
     it('should update file path when initialFilePath changes', () => {
-      const { rerender } = render(
+      const { rerender } = renderWithProviders(
         <WordEditorPanel
           isOpen={true}
           onClose={mockOnClose}
@@ -169,7 +169,7 @@ describe('WordEditorPanel', () => {
   describe('Library Toggle', () => {
     it('should show library when library button is clicked', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       const libraryButton = screen.getByLabelText('Open text library');
       await user.click(libraryButton);
@@ -179,7 +179,7 @@ describe('WordEditorPanel', () => {
     });
 
     it('should open library if openLibrary prop is true', () => {
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} openLibrary={true} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} openLibrary={true} />);
 
       expect(screen.getByTestId('text-library')).toBeInTheDocument();
     });
@@ -188,7 +188,7 @@ describe('WordEditorPanel', () => {
   describe('Detach Functionality', () => {
     it('should detach to separate window', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       const detachButton = screen.getByLabelText('Detach editor to separate window');
       await user.click(detachButton);
@@ -197,6 +197,8 @@ describe('WordEditorPanel', () => {
         expect(mockElectronAPI.createWordEditorWindow).toHaveBeenCalledWith({
           content: '<p>Content</p>',
           filePath: null,
+          viewState: 'editor',
+          casePath: '/vault/test-case',
         });
       });
 
@@ -205,7 +207,7 @@ describe('WordEditorPanel', () => {
 
     it('should detach with current file path', async () => {
       const user = userEvent.setup({ delay: null });
-      render(
+      renderWithProviders(
         <WordEditorPanel
           isOpen={true}
           onClose={mockOnClose}
@@ -220,6 +222,8 @@ describe('WordEditorPanel', () => {
         expect(mockElectronAPI.createWordEditorWindow).toHaveBeenCalledWith({
           content: '<p>Content</p>',
           filePath: '/path/to/file.txt',
+          viewState: 'editor',
+          casePath: '/vault/test-case',
         });
       });
     });
@@ -228,7 +232,7 @@ describe('WordEditorPanel', () => {
       const user = userEvent.setup({ delay: null });
       (mockElectronAPI.createWordEditorWindow as any).mockRejectedValue(new Error('Detach failed'));
 
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       const detachButton = screen.getByLabelText('Detach editor to separate window');
       await user.click(detachButton);
@@ -241,18 +245,18 @@ describe('WordEditorPanel', () => {
 
     it('should handle missing electronAPI', async () => {
       const user = userEvent.setup({ delay: null });
-      const originalAPI = global.window.electronAPI;
-      global.window.electronAPI = undefined as any;
+      const originalAPI = window.electronAPI;
 
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      delete (window as any).electronAPI;
 
       const detachButton = screen.getByLabelText('Detach editor to separate window');
       await user.click(detachButton);
 
-      // Should not crash
-      expect(mockOnClose).not.toHaveBeenCalled();
+      // Should not crash or attempt detach without API
+      expect(mockElectronAPI.createWordEditorWindow).not.toHaveBeenCalled();
 
-      global.window.electronAPI = originalAPI;
+      window.electronAPI = originalAPI;
     });
   });
 
@@ -261,7 +265,7 @@ describe('WordEditorPanel', () => {
       const user = userEvent.setup({ delay: null });
       mockWordEditorHandle.hasUnsavedChanges.mockReturnValue(false);
 
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       const closeButton = screen.getByLabelText('Close editor');
       await user.click(closeButton);
@@ -273,7 +277,7 @@ describe('WordEditorPanel', () => {
       const user = userEvent.setup({ delay: null });
       mockWordEditorHandle.hasUnsavedChanges.mockReturnValue(true);
 
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       const closeButton = screen.getByLabelText('Close editor');
       await user.click(closeButton);
@@ -286,7 +290,7 @@ describe('WordEditorPanel', () => {
       const user = userEvent.setup({ delay: null });
       mockWordEditorHandle.hasUnsavedChanges.mockReturnValue(true);
 
-      render(
+      renderWithProviders(
         <WordEditorPanel
           isOpen={true}
           onClose={mockOnClose}
@@ -311,7 +315,7 @@ describe('WordEditorPanel', () => {
       const user = userEvent.setup({ delay: null });
       mockWordEditorHandle.hasUnsavedChanges.mockReturnValue(true);
 
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       const closeButton = screen.getByLabelText('Close editor');
       await user.click(closeButton);
@@ -326,7 +330,7 @@ describe('WordEditorPanel', () => {
       const user = userEvent.setup({ delay: null });
       mockWordEditorHandle.hasUnsavedChanges.mockReturnValue(true);
 
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       const closeButton = screen.getByLabelText('Close editor');
       await user.click(closeButton);
@@ -342,7 +346,7 @@ describe('WordEditorPanel', () => {
   describe('File Operations', () => {
     it('should open file from library', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       const libraryButton = screen.getByLabelText('Open text library');
       await user.click(libraryButton);
@@ -356,7 +360,7 @@ describe('WordEditorPanel', () => {
 
     it('should create new file from library', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByLabelText('Open text library')).toBeInTheDocument();
@@ -379,7 +383,7 @@ describe('WordEditorPanel', () => {
 
     it('should handle file deletion', async () => {
       const user = userEvent.setup({ delay: null });
-      render(
+      renderWithProviders(
         <WordEditorPanel
           isOpen={true}
           onClose={mockOnClose}
@@ -401,16 +405,14 @@ describe('WordEditorPanel', () => {
       const deleteButton = screen.getByText('Delete File');
       await user.click(deleteButton);
 
-      // File path should be cleared
-      await waitFor(() => {
-        expect(mockWordEditorHandle.setContent).toHaveBeenCalledWith('');
-      });
+      // Library remains open after delete; editor remounts when returning from library
+      expect(screen.getByTestId('text-library')).toBeInTheDocument();
     });
   });
 
   describe('Reattach Handling', () => {
     it('should handle reattach event from detached window', async () => {
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('word-editor')).toBeInTheDocument();
@@ -433,7 +435,7 @@ describe('WordEditorPanel', () => {
     });
 
     it('should handle reattach event without filePath', async () => {
-      render(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
+      renderWithProviders(<WordEditorPanel isOpen={true} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('word-editor')).toBeInTheDocument();
@@ -460,7 +462,7 @@ describe('WordEditorPanel', () => {
       mockWordEditorHandle.hasUnsavedChanges.mockReturnValue(true);
       (mockElectronAPI.saveTextFile as any).mockRejectedValue(new Error('Save failed'));
 
-      render(
+      renderWithProviders(
         <WordEditorPanel
           isOpen={true}
           onClose={mockOnClose}

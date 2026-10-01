@@ -3,9 +3,9 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { SettingsPanel } from './SettingsPanel';
-import { SettingsProvider } from '../../utils/settingsContext';
-import { ToastProvider } from '../Toast/ToastContext';
-import { WordEditorProvider } from '../../contexts/WordEditorContext';
+import { SettingsProvider } from '../../utils/SettingsProvider';
+import { ToastProvider } from '../Toast/ToastProvider';
+import { WordEditorProvider } from '../../contexts/WordEditorProvider';
 import { mockElectronAPI } from '../../test-utils/mocks';
 import { AppSettings } from '../../types';
 
@@ -17,6 +17,8 @@ describe('SettingsPanel', () => {
     extractionQuality: 'high',
     thumbnailSize: 200,
     performanceMode: 'auto',
+    showOnboarding: false,
+    theme: 'brideware-purple',
   };
 
   const mockMemoryInfo = {
@@ -28,7 +30,7 @@ describe('SettingsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (mockElectronAPI.getSettings as any).mockResolvedValue(defaultSettings);
-    (mockElectronAPI.updateSettings as any).mockImplementation(async (updates) => ({
+    (mockElectronAPI.updateSettings as any).mockImplementation(async (updates: Partial<AppSettings>) => ({
       ...defaultSettings,
       ...updates,
     }));
@@ -102,7 +104,7 @@ describe('SettingsPanel', () => {
     });
 
     // Find backdrop by its class name
-    const backdrop = document.querySelector('.fixed.inset-0.bg-black\\/50');
+    const backdrop = document.querySelector('.fixed.inset-0.bg-black\\/60');
     expect(backdrop).toBeInTheDocument();
 
     await act(async () => {

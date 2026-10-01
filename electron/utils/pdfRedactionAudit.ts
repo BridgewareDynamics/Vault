@@ -34,12 +34,20 @@ export interface RedactionAuditResult {
   error?: string;
 }
 
+/** Shape of a flagged page entry as emitted by the Python audit script (snake_case). */
+interface RawFlaggedPage {
+  page_number: number;
+  black_rect_count: number;
+  overlap_count: number;
+  confidence_score: number;
+}
+
 export interface AuditOptions {
   blackThreshold?: number;
   minOverlapArea?: number;
   minHits?: number;
   includeSecurityAudit?: boolean;
-  event?: Electron.IpcMainEvent; // For sending progress updates via IPC
+  event?: Electron.IpcMainInvokeEvent; // For sending progress updates via IPC (from ipcMain.handle)
   getProgressTarget?: () => Electron.WebContents | null; // Optional function to get current progress target
 }
 
@@ -390,7 +398,7 @@ export async function auditPDFRedaction(
         resolve({
           filename: report.filename,
           totalPages: report.total_pages,
-          flaggedPages: (report.flagged_pages || []).map((p: any) => ({
+          flaggedPages: ((report.flagged_pages || []) as RawFlaggedPage[]).map((p) => ({
             pageNumber: p.page_number,
             blackRectCount: p.black_rect_count,
             overlapCount: p.overlap_count,

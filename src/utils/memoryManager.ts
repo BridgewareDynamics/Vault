@@ -1,5 +1,6 @@
 import { MemoryMonitor, getMemoryInfo, formatBytes, requestGarbageCollection } from './memoryMonitor';
 import { AppSettings } from '../types';
+import { logger } from './logger';
 
 /**
  * Memory Manager - Integrates RAM control with memory monitoring
@@ -43,16 +44,12 @@ export class MemoryManager {
     // Convert MB to bytes for comparison
     const ramLimitBytes = this.settings.ramLimitMB * 1024 * 1024;
 
-    this.monitor = new MemoryMonitor(
-      (info) => {
-        // Check if we're over the RAM limit
-        if (info.usedJSHeapSize > ramLimitBytes) {
-          this.triggerCleanup();
-        }
-      },
-      80, // Threshold percentage (will check actual bytes instead)
-      5000 // Check every 5 seconds
-    );
+    this.monitor = new MemoryMonitor(() => {
+      void this.triggerCleanup();
+    }, {
+      maxUsedBytes: ramLimitBytes,
+      intervalMs: 5000,
+    });
 
     this.monitor.start();
   }
@@ -89,12 +86,13 @@ export class MemoryManager {
     this.isCleaningUp = true;
 
     try {
-      console.log('[MemoryManager] Memory threshold exceeded, triggering cleanup...');
-      
-      // Get current memory info
+      if (import.meta.env.DEV) {
+        logger.info('[MemoryManager] Memory threshold exceeded, triggering cleanup...');
+      }
+
       const memoryInfo = getMemoryInfo();
-      if (memoryInfo) {
-        console.log(`[MemoryManager] Memory before cleanup: ${formatBytes(memoryInfo.usedJSHeapSize)}`);
+      if (memoryInfo && import.meta.env.DEV) {
+        logger.info(`[MemoryManager] Memory before cleanup: ${formatBytes(memoryInfo.usedJSHeapSize)}`);
       }
 
       // Execute all registered cleanup callbacks
@@ -102,7 +100,7 @@ export class MemoryManager {
         try {
           callback();
         } catch (error) {
-          console.error('[MemoryManager] Cleanup callback error:', error);
+          logger.error('[MemoryManager] Cleanup callback error:', error);
         }
       }
 
@@ -114,12 +112,14 @@ export class MemoryManager {
 
       // Check memory after cleanup
       const memoryInfoAfter = getMemoryInfo();
-      if (memoryInfoAfter && memoryInfo) {
+      if (memoryInfoAfter && memoryInfo && import.meta.env.DEV) {
         const freed = memoryInfo.usedJSHeapSize - memoryInfoAfter.usedJSHeapSize;
-        console.log(`[MemoryManager] Memory after cleanup: ${formatBytes(memoryInfoAfter.usedJSHeapSize)} (freed: ${formatBytes(freed)})`);
+        logger.info(
+          `[MemoryManager] Memory after cleanup: ${formatBytes(memoryInfoAfter.usedJSHeapSize)} (freed: ${formatBytes(freed)})`,
+        );
       }
     } catch (error) {
-      console.error('[MemoryManager] Cleanup error:', error);
+      logger.error('[MemoryManager] Cleanup error:', error);
     } finally {
       this.isCleaningUp = false;
     }

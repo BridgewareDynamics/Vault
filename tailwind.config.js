@@ -36,6 +36,15 @@ export default {
         'fade-in': 'fadeIn 0.3s ease-out',
         'fade-out': 'fadeOut 0.3s ease-out',
         'pulse-neon': 'pulseNeon 2s ease-in-out infinite',
+        'shimmer': 'shimmer 3s linear infinite',
+        'glow-pulse': 'glowPulse 2s ease-in-out infinite',
+        'neon-flicker': 'neonFlicker 3s ease-in-out infinite',
+        'float': 'float 6s ease-in-out infinite',
+        'scan': 'scan 8s linear infinite',
+        'particle-float': 'particleFloat 20s linear infinite',
+        'lava-drift-a': 'lavaDriftA 20s ease-in-out infinite',
+        'lava-drift-b': 'lavaDriftB 24s ease-in-out infinite',
+        'lava-drift-c': 'lavaDriftC 28s ease-in-out infinite',
       },
       keyframes: {
         slideInRight: {
@@ -57,6 +66,59 @@ export default {
         pulseNeon: {
           '0%, 100%': { boxShadow: '0 0 5px #8B5CF6, 0 0 10px #8B5CF6, 0 0 15px #8B5CF6' },
           '50%': { boxShadow: '0 0 10px #A855F7, 0 0 20px #A855F7, 0 0 30px #A855F7' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '200% 0' },
+          '100%': { backgroundPosition: '-200% 0' },
+        },
+        glowPulse: {
+          '0%, 100%': { 
+            opacity: '0.8',
+            filter: 'brightness(1) drop-shadow(0 0 20px rgba(139, 92, 246, 0.6)) drop-shadow(0 0 40px rgba(34, 211, 238, 0.4))',
+          },
+          '50%': { 
+            opacity: '1',
+            filter: 'brightness(1.2) drop-shadow(0 0 30px rgba(139, 92, 246, 0.9)) drop-shadow(0 0 60px rgba(34, 211, 238, 0.6))',
+          },
+        },
+        neonFlicker: {
+          '0%, 100%': { opacity: '1' },
+          '41.99%': { opacity: '1' },
+          '42%': { opacity: '0.8' },
+          '43%': { opacity: '1' },
+          '45.99%': { opacity: '1' },
+          '46%': { opacity: '0.9' },
+          '47%': { opacity: '1' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+          '33%': { transform: 'translateY(-20px) rotate(2deg)' },
+          '66%': { transform: 'translateY(10px) rotate(-2deg)' },
+        },
+        scan: {
+          '0%': { transform: 'translateY(-100%)' },
+          '100%': { transform: 'translateY(100vh)' },
+        },
+        particleFloat: {
+          '0%': { transform: 'translate(0, 0) rotate(0deg)', opacity: '0' },
+          '10%': { opacity: '1' },
+          '90%': { opacity: '1' },
+          '100%': { transform: 'translate(100px, -100vh) rotate(360deg)', opacity: '0' },
+        },
+        lavaDriftA: {
+          '0%, 100%': { transform: 'translate(0%, 0%) scale(1)' },
+          '33%': { transform: 'translate(10%, -12%) scale(1.06)' },
+          '66%': { transform: 'translate(-8%, 8%) scale(0.96)' },
+        },
+        lavaDriftB: {
+          '0%, 100%': { transform: 'translate(0%, 0%) scale(1)' },
+          '40%': { transform: 'translate(-12%, -6%) scale(1.08)' },
+          '70%': { transform: 'translate(6%, 14%) scale(0.94)' },
+        },
+        lavaDriftC: {
+          '0%, 100%': { transform: 'translate(0%, 0%) scale(1)' },
+          '35%': { transform: 'translate(8%, 10%) scale(1.05)' },
+          '68%': { transform: 'translate(-10%, -8%) scale(0.97)' },
         },
       },
       backdropBlur: {

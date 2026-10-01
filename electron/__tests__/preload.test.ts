@@ -36,6 +36,8 @@ describe('preload', () => {
     expect(typeof api.saveFiles).toBe('function');
     expect(typeof api.listArchiveCases).toBe('function');
     expect(typeof api.extractPDFFromArchive).toBe('function');
+    expect(typeof api.listTranscriptions).toBe('function');
+    expect(typeof api.runTranscription).toBe('function');
   });
 
   it('delegates API calls to ipcRenderer.invoke with correct channels', async () => {
@@ -46,9 +48,11 @@ describe('preload', () => {
     // Call a couple of methods and ensure they invoke the correct IPC channels
     await api.selectPDFFile();
     await api.selectSaveDirectory();
+    await api.listTranscriptions();
 
     expect(invokeMock).toHaveBeenCalledWith('select-pdf-file');
     expect(invokeMock).toHaveBeenCalledWith('select-save-directory');
+    expect(invokeMock).toHaveBeenCalledWith('list-transcriptions');
   });
 });
 

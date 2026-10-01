@@ -1,9 +1,53 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, X, FileText, AlertTriangle, CheckCircle, Loader2, Upload, Settings, Download, Maximize2, Zap, Lock, FolderOpen } from 'lucide-react';
+import {
+  Shield,
+  X,
+  AlertTriangle,
+  CheckCircle,
+  Loader2,
+  Settings,
+  Download,
+  Maximize2,
+  Zap,
+  Lock,
+  FolderOpen,
+  HardDriveDownload,
+  ChevronDown,
+} from 'lucide-react';
 import { useRedactionAudit, RedactionAuditResult } from '../hooks/useRedactionAudit';
 import { useToast } from './Toast/ToastContext';
 import { CaseSelectionDialog } from './Archive/CaseSelectionDialog';
+import { AuditSaveOptionsDialog, AuditSaveOption } from './AuditSaveOptionsDialog';
+import { ArchiveFileViewer } from './Archive/ArchiveFileViewer';
+import { PDFExtractionVaultBrowser } from './PDFExtraction/PDFExtractionVaultBrowser';
+import { PDFExtractionSourceHero } from './PDFExtraction/PDFExtractionSourceHero';
+import { useSettingsContext } from '../utils/settingsContext';
+import { Theme, ArchiveFile } from '../types';
+import { isLightTheme } from '../theme/themeSemantics';
+import { getModuleMenuTheme } from '../theme/moduleMenuTheme';
+import { useVaultActiveCase } from '../contexts/VaultActiveCaseContext';
+import { getUserFriendlyError } from '../utils/errorMessages';
+import { logger } from '../utils/logger';
+
+function isPdfFileName(name: string): boolean {
+  return name.toLowerCase().endsWith('.pdf');
+}
+
+function getFileBaseName(filePath: string): string {
+  return filePath.split(/[/\\]/).pop() ?? filePath;
+}
+
+function toArchivePdfFile(filePath: string): ArchiveFile {
+  return {
+    name: getFileBaseName(filePath),
+    path: filePath,
+    size: 0,
+    modified: Date.now(),
+    type: 'pdf',
+  };
+}
 
 interface SecurityCheckerModalProps {
   isOpen: boolean;
@@ -11,10 +55,12 @@ interface SecurityCheckerModalProps {
   initialPdfPath?: string | null;
   caseFolderPath?: string | null;
   onReportSaved?: () => void;
+  existingFolders?: ArchiveFile[];
 }
 
-export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFolderPath, onReportSaved }: SecurityCheckerModalProps) {
+export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFolderPath, onReportSaved, existingFolders }: SecurityCheckerModalProps) {
   const [pdfPath, setPdfPath] = useState<string | null>(null);
+  const [pdfOrigin, setPdfOrigin] = useState<'vault' | 'external' | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState({
     blackThreshold: 0.15,
@@ -22,10 +68,70 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
     minHits: 1,
     includeSecurityAudit: true,
   });
+  const [vaultCasePath, setVaultCasePath] = useState<string | null>(null);
+  const [selectedCaseName, setSelectedCaseName] = useState<string | null>(null);
+  const [showCaseDialog, setShowCaseDialog] = useState(false);
+  const [casePdfFiles, setCasePdfFiles] = useState<{ name: string; path: string }[]>([]);
+  const [loadingCaseFiles, setLoadingCaseFiles] = useState(false);
+  const [viewerFile, setViewerFile] = useState<ArchiveFile | null>(null);
   const { isAuditing, result, progressMessage, auditPDF, setResult } = useRedactionAudit();
   const toast = useToast();
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const [showCaseSelectionDialog, setShowCaseSelectionDialog] = useState(false);
+  const [showAuditSaveDialog, setShowAuditSaveDialog] = useState(false);
+  const { settings: appSettings } = useSettingsContext();
+  const { activeCase } = useVaultActiveCase();
+  const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
+  const isPastel = isLightTheme(theme);
+  const t = getModuleMenuTheme(theme);
+  const valueTone = isPastel ? 'text-purple-700' : 'text-cyan-200';
+
+  const effectiveCaseFolderPath = caseFolderPath ?? vaultCasePath;
+  const displayCaseName =
+    selectedCaseName ||
+    (effectiveCaseFolderPath ? getFileBaseName(effectiveCaseFolderPath) : null);
+
+  const openPdfInViewer = useCallback((path: string) => {
+    setViewerFile(toArchivePdfFile(path));
+  }, []);
+
+  const clearPdfSelection = useCallback(() => {
+    setPdfPath(null);
+    setPdfOrigin(null);
+    setResult(null);
+  }, [setResult]);
+
+  const loadCasePdfFiles = useCallback(
+    async (casePath: string) => {
+      if (!window.electronAPI?.listCaseFiles) {
+        return;
+      }
+      try {
+        setLoadingCaseFiles(true);
+        const files = await window.electronAPI.listCaseFiles(casePath);
+        setCasePdfFiles(
+          files
+            .filter((file) => !file.isFolder && isPdfFileName(file.name))
+            .map((file) => ({ name: file.name, path: file.path }))
+        );
+      } catch (loadError) {
+        toast.error(getUserFriendlyError(loadError, { operation: 'loading case files' }));
+        setCasePdfFiles([]);
+      } finally {
+        setLoadingCaseFiles(false);
+      }
+    },
+    [toast]
+  );
+
+  const selectPdfFromPath = useCallback(
+    (filePath: string, origin: 'vault' | 'external') => {
+      setPdfPath(filePath);
+      setPdfOrigin(origin);
+      setResult(null);
+      toast.info(origin === 'vault' ? `Selected ${getFileBaseName(filePath)}` : 'PDF file selected');
+    },
+    [setResult, toast]
+  );
 
   const handleSelectFile = async () => {
     try {
@@ -36,8 +142,7 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
 
       const filePath = await window.electronAPI.selectPDFFile();
       if (filePath) {
-        setPdfPath(filePath);
-        toast.info('PDF file selected');
+        selectPdfFromPath(filePath, 'external');
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to select file');
@@ -65,9 +170,30 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
   };
 
   const handleClose = () => {
+    if (isAuditing) {
+      return;
+    }
     setPdfPath(null);
+    setPdfOrigin(null);
+    setVaultCasePath(null);
+    setSelectedCaseName(null);
+    setCasePdfFiles([]);
+    setViewerFile(null);
+    setShowCaseDialog(false);
     setShowSettings(false);
     onClose();
+  };
+
+  const handleSelectVaultPdf = (filePath: string) => {
+    selectPdfFromPath(filePath, 'vault');
+  };
+
+  const handleAssignCase = (casePath: string) => {
+    const match = casePath.split(/[/\\]/).filter(Boolean).pop();
+    setVaultCasePath(casePath);
+    setSelectedCaseName(match ?? 'Case');
+    setShowCaseDialog(false);
+    void loadCasePdfFiles(casePath);
   };
 
   const handleDetach = async () => {
@@ -87,7 +213,7 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
         progressMessage,
       };
 
-      console.log('SecurityCheckerModal: Detaching with state', {
+      logger.debug('SecurityCheckerModal: Detaching with state', {
         hasResult: !!result,
         resultFilename: result?.filename,
         pdfPath,
@@ -102,19 +228,44 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
       toast.info('Audit opened in separate window');
     } catch (error) {
       toast.error('Failed to open audit in separate window');
-      console.error('Detach error:', error);
+      logger.error('Detach error:', error);
     }
   };
 
-  // Set initial PDF path when modal opens
   useEffect(() => {
     if (isOpen && initialPdfPath) {
-      setPdfPath(initialPdfPath);
+      selectPdfFromPath(initialPdfPath, caseFolderPath ? 'vault' : 'external');
+      if (caseFolderPath) {
+        setVaultCasePath(caseFolderPath);
+        setSelectedCaseName(activeCase?.name ?? getFileBaseName(caseFolderPath));
+        void loadCasePdfFiles(caseFolderPath);
+      }
     } else if (!isOpen) {
-      // Clear PDF path when modal closes
       setPdfPath(null);
+      setPdfOrigin(null);
+      setVaultCasePath(null);
+      setSelectedCaseName(null);
+      setCasePdfFiles([]);
+      setViewerFile(null);
+      setShowCaseDialog(false);
     }
-  }, [isOpen, initialPdfPath]);
+  }, [isOpen, initialPdfPath, caseFolderPath, activeCase?.name, selectPdfFromPath, loadCasePdfFiles]);
+
+  useEffect(() => {
+    if (!isOpen || caseFolderPath || vaultCasePath || !activeCase?.path) {
+      return;
+    }
+    setVaultCasePath(activeCase.path);
+    setSelectedCaseName(activeCase.name);
+  }, [isOpen, caseFolderPath, vaultCasePath, activeCase?.path, activeCase?.name]);
+
+  useEffect(() => {
+    if (effectiveCaseFolderPath) {
+      void loadCasePdfFiles(effectiveCaseFolderPath);
+    } else {
+      setCasePdfFiles([]);
+    }
+  }, [effectiveCaseFolderPath, loadCasePdfFiles]);
 
   // Listen for reattach data from detached window
   useEffect(() => {
@@ -151,9 +302,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
       // when the audit completes or when a new audit is started
     };
 
-    window.addEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+    window.addEventListener('reattach-pdf-audit-data', handleReattach);
     return () => {
-      window.removeEventListener('reattach-pdf-audit-data' as any, handleReattach as EventListener);
+      window.removeEventListener('reattach-pdf-audit-data', handleReattach);
     };
   }, [setResult]);
 
@@ -279,18 +430,28 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
     }
   };
 
-  const handleSaveToCaseFolder = async (selectedCasePath?: string) => {
+  const handleSaveToCaseFolder = async () => {
     if (!result || !window.electronAPI) return;
 
-    const targetCasePath = selectedCasePath || caseFolderPath;
-    if (!targetCasePath) {
-      // Show case selection dialog if no case path is provided
-      setShowCaseSelectionDialog(true);
+    if (!effectiveCaseFolderPath) {
+      setShowCaseDialog(true);
       return;
     }
 
+    setShowAuditSaveDialog(true);
+  };
+
+  const handleAuditSaveConfirm = async (
+    option: AuditSaveOption,
+    folderName?: string,
+    subfolderName?: string,
+    createNewFolderForLoose?: boolean,
+    looseFolderName?: string
+  ) => {
+    if (!result || !window.electronAPI || !effectiveCaseFolderPath) return;
+
     setIsGeneratingReport(true);
-    const toastId = toast.info('Saving report to case folder...', 0);
+    const toastId = toast.info('Saving report...', 0);
 
     try {
       // Format audit result for report generation
@@ -299,17 +460,116 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
       // Generate filename
       const reportFilename = generateReportFilename(result.filename);
 
-      // Construct full path (use / as separator, main process will handle it)
-      const reportPath = `${targetCasePath}/${reportFilename}`;
+      let reportPath: string;
+
+      switch (option) {
+        case 'save-loose': {
+          // If createNewFolderForLoose is true, create a regular folder first
+          if (createNewFolderForLoose && looseFolderName && looseFolderName.trim()) {
+            // Create a regular folder (not an extraction folder, so no .parent-pdf metadata)
+            const createdFolderPath = await window.electronAPI.createFolder(
+              effectiveCaseFolderPath,
+              looseFolderName.trim()
+            );
+            reportPath = `${createdFolderPath}/${reportFilename}`;
+          } else {
+            reportPath = `${effectiveCaseFolderPath}/${reportFilename}`;
+          }
+          break;
+        }
+
+        case 'make-pdf-folder': {
+          // Check if folder already exists by finding folders with matching parentPdfName
+          const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
+          
+          // Try to find existing folder
+          let targetFolderPath: string | null = null;
+          try {
+            const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
+            const existingFolder = files.find(
+              (file) =>
+                file.isFolder &&
+                file.parentPdfName &&
+                file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+            );
+            
+            if (existingFolder) {
+              targetFolderPath = existingFolder.path;
+            }
+          } catch (error) {
+            logger.error('Error checking for existing folder:', error);
+          }
+
+          if (!targetFolderPath) {
+            if (!folderName || !folderName.trim()) {
+              throw new Error('Folder name is required');
+            }
+            targetFolderPath = await window.electronAPI.createExtractionFolder(
+              effectiveCaseFolderPath,
+              folderName.trim(),
+              pdfPath || undefined
+            );
+          }
+
+          reportPath = `${targetFolderPath}/${reportFilename}`;
+          break;
+        }
+
+        case 'add-to-pdf-folder': {
+          // Find existing folder
+          const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
+          const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
+          const existingFolder = files.find(
+            (file) =>
+              file.isFolder &&
+              file.parentPdfName &&
+              file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+          );
+
+          if (!existingFolder) {
+            throw new Error('No existing folder found for this PDF');
+          }
+
+          reportPath = `${existingFolder.path}/${reportFilename}`;
+          break;
+        }
+
+        case 'add-folder-to-directory': {
+          const pdfName = pdfPath ? pdfPath.split(/[/\\]/).pop() || '' : '';
+          const files = await window.electronAPI.listCaseFiles(effectiveCaseFolderPath);
+          const existingFolder = files.find(
+            (file) =>
+              file.isFolder &&
+              file.parentPdfName &&
+              file.parentPdfName.toLowerCase() === pdfName.toLowerCase()
+          );
+
+          if (!existingFolder) {
+            throw new Error('No existing folder found for this PDF');
+          }
+
+          if (!subfolderName || !subfolderName.trim()) {
+            throw new Error('Subfolder name is required');
+          }
+
+          // Construct subfolder path - use forward slashes, main process will normalize
+          // The generateAuditReport Python script will create the directory if it doesn't exist
+          reportPath = `${existingFolder.path}/${subfolderName.trim()}/${reportFilename}`;
+          break;
+        }
+
+        default:
+          throw new Error('Invalid save option');
+      }
 
       toast.updateToast(toastId, 'Generating PDF report...', 'info');
 
-      // Generate report directly to case folder
+      // Generate report to the determined path
       const reportResult = await window.electronAPI.generateAuditReport(auditResult, reportPath);
 
       if (reportResult.success) {
         toast.dismissToast(toastId);
-        toast.success('Report saved to case folder!', 3000);
+        toast.success('Report saved successfully!', 3000);
         
         // Notify parent component that report was saved (for refreshing file list)
         if (onReportSaved) {
@@ -327,151 +587,223 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
     }
   };
 
-  const handleCaseSelected = (casePath: string) => {
-    handleSaveToCaseFolder(casePath);
-  };
+  if (!isOpen) {
+    return null;
+  }
 
-  return (
+  return createPortal(
     <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={handleClose}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
-          />
+      <motion.div
+        key="security-audit-studio"
+        className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <motion.button
+          type="button"
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          aria-label="Close security audit studio"
+          onClick={handleClose}
+        />
 
-          {/* Modal */}
+        <div
+          className={`relative z-10 flex w-full flex-col items-stretch gap-4 p-1 ${
+            showCaseDialog
+              ? 'max-w-[min(100%,118rem)] xl:flex-row xl:items-stretch xl:justify-center xl:gap-6'
+              : 'max-w-[min(100%,92rem)] items-center lg:flex-row lg:items-start lg:justify-center'
+          }`}
+        >
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="security-audit-title"
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
+            className={`flex max-h-[min(90vh,860px)] w-full min-w-0 flex-col overflow-hidden rounded-[32px] border shadow-2xl ${t.dialogShellLarge} ${
+              showCaseDialog ? 'xl:max-w-[58rem] xl:flex-1' : 'max-w-6xl shrink-0'
+            }`}
+            onClick={(event) => event.stopPropagation()}
           >
-            <div className="bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 rounded-2xl border-2 border-cyber-purple-400/40 shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden flex flex-col">
-              {/* Enhanced Header */}
-              <div className="relative p-8 border-b border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95 backdrop-blur-xl">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-6">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl blur-xl opacity-50"></div>
-                      <div className="relative p-5 bg-gradient-to-br from-purple-600 to-cyan-600 rounded-2xl shadow-2xl">
-                        <Shield className="w-10 h-10 text-white" />
+            <div className={`shrink-0 border-b px-6 py-5 ${t.dialogHeader}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className={`shrink-0 rounded-2xl p-3 ${t.button}`}>
+                    <Shield className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-xs uppercase tracking-[0.28em] ${valueTone}`}>Vault Forensics</p>
+                    <h2
+                      id="security-audit-title"
+                      className={`truncate text-xl font-bold ${isPastel ? 'text-gray-900' : 'text-white'}`}
+                    >
+                      PDF Security Audit Studio
+                    </h2>
+                    <p className={`mt-1 text-sm ${t.mutedText}`}>
+                      Redaction risk and privacy analysis for case evidence
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDetach}
+                    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold ${t.secondaryButton}`}
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                    Detach
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    disabled={isAuditing}
+                    className={`rounded-xl border p-2.5 disabled:opacity-50 ${t.dialogCancel}`}
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="vault-studio-scroll min-h-0 flex-1 overflow-y-auto px-6 py-6">
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,1.15fr)]">
+                <section className="space-y-4">
+                  <div className={`rounded-[26px] border p-5 ${t.compactInsetSurface}`}>
+                    <p className={`text-xs uppercase tracking-[0.22em] ${t.sectionLabel}`}>Vault case</p>
+                    <p className={`mt-2 text-sm leading-6 ${t.mutedText}`}>
+                      {displayCaseName
+                        ? `Auditing PDFs in ${displayCaseName}`
+                        : 'Assign a case to browse its PDF library'}
+                    </p>
+                    {activeCase && effectiveCaseFolderPath === activeCase.path && (
+                      <p className={`mt-1 text-xs ${isPastel ? 'text-emerald-700' : 'text-emerald-300'}`}>
+                        Using your current workspace case
+                      </p>
+                    )}
+                    {!caseFolderPath && (
+                      <button
+                        type="button"
+                        disabled={isAuditing}
+                        onClick={() => setShowCaseDialog(true)}
+                        className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-50 ${t.secondaryButton}`}
+                      >
+                        <FolderOpen className="h-4 w-4" />
+                        {effectiveCaseFolderPath ? 'Change case' : 'Select case'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={isAuditing}
+                      onClick={handleSelectFile}
+                      className={`mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-50 ${t.secondaryButton}`}
+                    >
+                      <HardDriveDownload className="h-4 w-4" />
+                      Import external PDF
+                    </button>
+                  </div>
+
+                  {effectiveCaseFolderPath ? (
+                    <div className={`rounded-[26px] border p-4 ${t.dialogInset}`}>
+                      <p className={`text-xs uppercase tracking-[0.22em] ${t.sectionLabel}`}>Case library</p>
+                      <p className={`mt-1 text-xs leading-5 ${t.mutedText}`}>
+                        Hover a card to open the PDF viewer before auditing
+                      </p>
+                      <div className="mt-4 max-h-[min(52vh,520px)] overflow-y-auto pr-1">
+                        <PDFExtractionVaultBrowser
+                          files={casePdfFiles}
+                          selectedPath={pdfPath}
+                          loading={loadingCaseFiles}
+                          disabled={isAuditing}
+                          onSelect={handleSelectVaultPdf}
+                          onExpand={openPdfInViewer}
+                          t={t}
+                          isPastel={isPastel}
+                        />
                       </div>
                     </div>
-                    <div>
-                      <h2 className="text-3xl font-bold bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400 bg-clip-text text-transparent">
-                        PDF Security Audit
-                      </h2>
-                      <p className="text-base text-gray-400 mt-1">
-                        Comprehensive redaction risk and security analysis
+                  ) : (
+                    <div className={`rounded-[26px] border px-5 py-10 text-center ${t.dialogInset}`}>
+                      <FolderOpen className={`mx-auto h-10 w-10 ${isPastel ? 'text-purple-300' : 'text-gray-500'}`} />
+                      <p className={`mt-3 text-sm font-medium ${t.mutedText}`}>
+                        Select a Vault case to preview and audit PDFs
+                      </p>
+                    </div>
+                  )}
+                </section>
+
+                <section className="space-y-4">
+                  <div
+                    className={`rounded-[22px] border p-4 ${
+                      isPastel
+                        ? 'border-amber-200/60 bg-amber-50/90'
+                        : 'border-amber-500/30 bg-amber-950/30'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle
+                        className={`mt-0.5 h-5 w-5 shrink-0 ${isPastel ? 'text-amber-700' : 'text-amber-300'}`}
+                      />
+                      <p className={`text-sm leading-6 ${isPastel ? 'text-amber-900' : 'text-amber-100'}`}>
+                        Risk indicators only — no redacted content is extracted or displayed. Findings
+                        require manual verification.
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleDetach}
-                      className="px-5 py-2.5 bg-gray-800/80 hover:bg-gray-700/80 rounded-xl transition-all border border-gray-700/50 hover:border-cyber-purple-400/50 flex items-center gap-2 text-gray-300 hover:text-white"
-                      aria-label="Detach audit to separate window"
-                      title="Open in separate window"
-                    >
-                      <Maximize2 size={18} className="text-cyber-purple-400" />
-                      <span className="font-medium text-sm">Detach</span>
-                    </button>
-                    <button
-                      onClick={handleClose}
-                      className="p-2.5 hover:bg-gray-800 rounded-xl transition-colors"
-                      aria-label="Close"
-                    >
-                      <X className="w-5 h-5 text-gray-400" />
-                    </button>
-                  </div>
-                </div>
-              </div>
 
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto p-8">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Left Column - Controls */}
-                  <div className="space-y-6">
-                    {/* Security Notice */}
-                    <div className="bg-gradient-to-br from-yellow-900/40 to-yellow-800/20 border-2 border-yellow-600/50 rounded-2xl p-6 shadow-xl">
-                      <div className="flex items-start gap-4">
-                        <div className="p-3 bg-yellow-600/20 rounded-xl">
-                          <AlertTriangle className="w-6 h-6 text-yellow-400" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-lg font-bold text-yellow-300 mb-2">Security Notice</h3>
-                          <p className="text-sm text-yellow-200/90 leading-relaxed">
-                            This tool detects risk indicators only. It does NOT extract or display any redacted content. 
-                            All findings are heuristic and require manual verification.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                  <PDFExtractionSourceHero
+                    filePath={pdfPath}
+                    fileName={pdfPath ? getFileBaseName(pdfPath) : null}
+                    totalPages={result?.totalPages ?? 0}
+                    origin={pdfOrigin}
+                    disabled={isAuditing}
+                    onBrowseExternal={handleSelectFile}
+                    onClear={clearPdfSelection}
+                    onExpand={() => pdfPath && openPdfInViewer(pdfPath)}
+                    t={t}
+                    isPastel={isPastel}
+                  />
 
-                    {/* File Selection Card */}
-                    <div className="bg-gray-800/60 backdrop-blur-sm border border-cyber-purple-400/20 rounded-2xl p-6 shadow-2xl">
-                      <div className="space-y-5">
-                        <div>
-                          <label className="block text-lg font-bold text-gray-200 mb-4">Select PDF File</label>
-                          <button
-                            onClick={handleSelectFile}
-                            disabled={isAuditing}
-                            className="w-full flex items-center justify-center gap-3 px-6 py-5 bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white text-base transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
-                          >
-                            <Upload className="w-5 h-5" />
-                            <span>{pdfPath ? 'Change PDF File' : 'Select PDF File'}</span>
-                          </button>
-                        </div>
-                        
-                        {pdfPath && (
-                          <div className="flex items-center gap-4 p-4 bg-gray-900/60 rounded-xl border border-cyber-cyan-400/30">
-                            <div className="p-2.5 bg-cyber-cyan-400/20 rounded-lg">
-                              <FileText className="w-5 h-5 text-cyber-cyan-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs text-gray-400 mb-1">Selected File</p>
-                              <p className="text-sm text-gray-200 truncate font-medium">{pdfPath}</p>
-                            </div>
-                          </div>
-                        )}
+                  <button
+                    type="button"
+                    onClick={() => setShowSettings(!showSettings)}
+                    className={`flex w-full items-center justify-between rounded-[20px] border px-4 py-3 text-sm font-semibold ${t.secondaryButton}`}
+                    aria-expanded={showSettings}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      Audit parameters
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform ${showSettings ? 'rotate-180' : ''}`}
+                    />
+                  </button>
 
-                        {/* Settings Toggle */}
-                        <button
-                          onClick={() => setShowSettings(!showSettings)}
-                          className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-700/50 hover:bg-gray-700/70 rounded-xl transition-all border border-gray-600/50 hover:border-cyber-purple-400/50"
-                          aria-label="Toggle Settings"
-                        >
-                          <div className="flex items-center gap-3">
-                            <Settings className="w-5 h-5 text-gray-300" />
-                            <span className="font-semibold text-gray-200">Advanced Settings</span>
-                          </div>
-                          <div className={`transform transition-transform ${showSettings ? 'rotate-180' : ''}`}>
-                            <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Settings Panel */}
-                    {showSettings && (
+                  {showSettings && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="bg-gray-900/60 rounded-xl p-5 space-y-4 border border-cyber-purple-400/30"
+                        className={`rounded-xl p-5 space-y-4 border ${
+                          isPastel
+                            ? 'bg-pink-50/60 border-pink-200/40'
+                            : 'bg-gray-900/60 border-cyber-purple-400/30'
+                        }`}
                       >
-                        <h3 className="text-base font-bold text-gray-200 mb-3">Audit Configuration</h3>
+                        <h3 className={`text-base font-bold mb-3 ${
+                          isPastel ? 'text-gray-700' : 'text-gray-200'
+                        }`}>
+                          Audit Configuration
+                        </h3>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-semibold text-gray-400 mb-2">Black Threshold</label>
+                            <label className={`block text-sm font-semibold mb-2 ${
+                              isPastel ? 'text-gray-600' : 'text-gray-400'
+                            }`}>
+                              Black Threshold
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -479,28 +811,48 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                               max="1"
                               value={settings.blackThreshold}
                               onChange={(e) => setSettings({ ...settings, blackThreshold: parseFloat(e.target.value) })}
-                              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
+                              className={`w-full px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:border-transparent ${
+                                isPastel
+                                  ? 'bg-white border border-pink-200 text-gray-700 focus:ring-pink-400'
+                                  : 'bg-gray-800 border border-gray-700 text-white focus:ring-cyber-purple-400'
+                              }`}
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold text-gray-400 mb-2">Min Overlap Area</label>
+                            <label className={`block text-sm font-semibold mb-2 ${
+                              isPastel ? 'text-gray-600' : 'text-gray-400'
+                            }`}>
+                              Min Overlap Area
+                            </label>
                             <input
                               type="number"
                               step="0.1"
                               min="0"
                               value={settings.minOverlapArea}
                               onChange={(e) => setSettings({ ...settings, minOverlapArea: parseFloat(e.target.value) })}
-                              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
+                              className={`w-full px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:border-transparent ${
+                                isPastel
+                                  ? 'bg-white border border-pink-200 text-gray-700 focus:ring-pink-400'
+                                  : 'bg-gray-800 border border-gray-700 text-white focus:ring-cyber-purple-400'
+                              }`}
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold text-gray-400 mb-2">Min Hits</label>
+                            <label className={`block text-sm font-semibold mb-2 ${
+                              isPastel ? 'text-gray-600' : 'text-gray-400'
+                            }`}>
+                              Min Hits
+                            </label>
                             <input
                               type="number"
                               min="1"
                               value={settings.minHits}
                               onChange={(e) => setSettings({ ...settings, minHits: parseInt(e.target.value) })}
-                              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-cyber-purple-400 focus:border-transparent"
+                              className={`w-full px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:border-transparent ${
+                                isPastel
+                                  ? 'bg-white border border-pink-200 text-gray-700 focus:ring-pink-400'
+                                  : 'bg-gray-800 border border-gray-700 text-white focus:ring-cyber-purple-400'
+                              }`}
                             />
                           </div>
                         </div>
@@ -511,7 +863,11 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                     <button
                       onClick={handleRunAudit}
                       disabled={!pdfPath || isAuditing}
-                      className="w-full flex items-center justify-center gap-3 px-6 py-6 bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white text-lg transition-all disabled:cursor-not-allowed shadow-2xl hover:shadow-cyan-500/50 transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group"
+                      className={`w-full flex items-center justify-center gap-3 px-6 py-6 rounded-xl font-bold text-white text-lg transition-all disabled:cursor-not-allowed shadow-2xl transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group ${
+                        isPastel
+                          ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 hover:from-pink-600 hover:via-purple-600 hover:to-pink-600 disabled:from-gray-300 disabled:to-gray-300 hover:shadow-pink-500/50'
+                          : 'bg-gradient-to-r from-cyan-600 via-purple-600 to-cyan-600 hover:from-cyan-700 hover:via-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 hover:shadow-cyan-500/50'
+                      }`}
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                       {isAuditing ? (
@@ -529,29 +885,54 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
 
                     {/* Progress Indicator */}
                     {isAuditing && progressMessage && (
-                      <div className="bg-gradient-to-r from-cyan-900/40 to-purple-900/40 rounded-xl p-5 border-2 border-cyber-cyan-400/30">
+                      <div className={`rounded-xl p-5 border-2 ${
+                        isPastel
+                          ? 'bg-gradient-to-r from-pink-100/60 to-purple-100/60 border-pink-300/40'
+                          : 'bg-gradient-to-r from-cyan-900/40 to-purple-900/40 border-cyber-cyan-400/30'
+                      }`}>
                         <div className="flex items-center gap-3">
-                          <Loader2 className="w-5 h-5 animate-spin text-cyan-400" />
+                          <Loader2 className={`w-5 h-5 animate-spin ${
+                            isPastel ? 'text-pink-500' : 'text-cyan-400'
+                          }`} />
                           <div className="flex-1">
-                            <p className="text-base font-semibold text-cyan-300 mb-1">Processing...</p>
-                            <p className="text-sm text-gray-300">{progressMessage}</p>
+                            <p className={`text-base font-semibold mb-1 ${
+                              isPastel ? 'text-pink-600' : 'text-cyan-300'
+                            }`}>
+                              Processing...
+                            </p>
+                            <p className={`text-sm ${
+                              isPastel ? 'text-gray-700' : 'text-gray-300'
+                            }`}>
+                              {progressMessage}
+                            </p>
                           </div>
                         </div>
                       </div>
                     )}
-                  </div>
+                </section>
 
-                  {/* Right Column - Results */}
-                  <div className="space-y-6">
+                <section className="space-y-6">
                     {!result ? (
                       <div className="h-full flex items-center justify-center min-h-[400px]">
                         <div className="text-center space-y-4">
-                          <div className="inline-flex p-5 bg-gray-800/50 rounded-2xl border border-cyber-purple-400/20">
-                            <Lock className="w-12 h-12 text-cyber-purple-400/50" />
+                          <div className={`inline-flex p-5 rounded-2xl border ${
+                            isPastel
+                              ? 'bg-pink-50/50 border-pink-200/40'
+                              : 'bg-gray-800/50 border-cyber-purple-400/20'
+                          }`}>
+                            <Lock className={`w-12 h-12 ${
+                              isPastel ? 'text-pink-400/50' : 'text-cyber-purple-400/50'
+                            }`} />
                           </div>
                           <div>
-                            <h3 className="text-xl font-bold text-gray-300 mb-2">Ready to Audit</h3>
-                            <p className="text-gray-400">Select a PDF file and run the security audit to see results here</p>
+                            <h3 className={`text-xl font-bold mb-2 ${
+                              isPastel ? 'text-gray-700' : 'text-gray-300'
+                            }`}>
+                              Ready to Audit
+                            </h3>
+                            <p className={isPastel ? 'text-gray-600' : 'text-gray-400'}>
+                              Select a PDF file and run the security audit to see results here
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -562,48 +943,78 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                         className="space-y-6"
                       >
                         {/* Results Header */}
-                        <div className="flex items-center justify-between bg-gray-800/60 backdrop-blur-sm border border-cyber-purple-400/20 rounded-2xl p-5 shadow-xl">
+                        <div className={`flex items-center justify-between backdrop-blur-sm rounded-2xl p-5 shadow-xl border ${
+                          isPastel
+                            ? 'bg-white/60 border-pink-200/40'
+                            : 'bg-gray-800/60 border-cyber-purple-400/20'
+                        }`}
+                        style={isPastel ? {
+                          boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+                        } : {}}
+                        >
                           <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-xl">
-                              <Lock className="w-6 h-6 text-cyber-purple-400" />
+                            <div className={`p-3 rounded-xl ${
+                              isPastel
+                                ? 'bg-gradient-to-br from-pink-200/40 to-purple-200/40'
+                                : 'bg-gradient-to-br from-purple-600/20 to-cyan-600/20'
+                            }`}>
+                              <Lock className={`w-6 h-6 ${
+                                isPastel ? 'text-pink-500' : 'text-cyber-purple-400'
+                              }`} />
                             </div>
                             <div>
-                              <h3 className="text-xl font-bold text-gray-200">Audit Results</h3>
-                              <p className="text-xs text-gray-400">{result.totalPages} pages analyzed</p>
+                              <h3 className={`text-xl font-bold ${
+                                isPastel ? 'text-gray-700' : 'text-gray-200'
+                              }`}>
+                                Audit Results
+                              </h3>
+                              <p className={`text-xs ${
+                                isPastel ? 'text-gray-600' : 'text-gray-400'
+                              }`}>
+                                {result.totalPages} pages analyzed
+                              </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
                             <button
                               onClick={() => handleSaveToCaseFolder()}
                               disabled={isGeneratingReport}
-                              className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-sm"
-                              title={caseFolderPath ? "Save report to current case folder" : "Save report to a case"}
+                              className={`px-4 py-2 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-xs ${
+                                isPastel
+                                  ? 'bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-300'
+                                  : 'bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700'
+                              }`}
+                              title={effectiveCaseFolderPath ? 'Save report to current case folder' : 'Save report to a case'}
                             >
                               {isGeneratingReport ? (
                                 <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                   <span>Generating...</span>
                                 </>
                               ) : (
                                 <>
-                                  <FolderOpen className="w-4 h-4" />
-                                  <span>{caseFolderPath ? 'Save to Current Case' : 'Save to Case'}</span>
+                                  <FolderOpen className="w-3.5 h-3.5" />
+                                  <span>{effectiveCaseFolderPath ? 'Save to Current Case' : 'Save to Case'}</span>
                                 </>
                               )}
                             </button>
                             <button
                               onClick={handleDownloadReport}
                               disabled={isGeneratingReport}
-                              className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-sm"
+                              className={`px-4 py-2 rounded-xl font-bold text-white transition-all disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl text-xs ${
+                                isPastel
+                                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:from-gray-300 disabled:to-gray-300'
+                                  : 'bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700'
+                              }`}
                             >
                               {isGeneratingReport ? (
                                 <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                   <span>Generating...</span>
                                 </>
                               ) : (
                                 <>
-                                  <Download className="w-4 h-4" />
+                                  <Download className="w-3.5 h-3.5" />
                                   <span>Download Report</span>
                                 </>
                               )}
@@ -633,7 +1044,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                                   ? `${result.flaggedPages.length} Page${result.flaggedPages.length !== 1 ? 's' : ''} Flagged`
                                   : 'No Risks Detected'}
                               </div>
-                              <div className="text-base text-gray-300">
+                              <div className={`text-base ${
+                                isPastel ? 'text-gray-700' : 'text-gray-300'
+                              }`}>
                                 {result.totalPages} total pages analyzed
                               </div>
                             </div>
@@ -656,13 +1069,21 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                                   <div className="flex items-start justify-between">
                                     <div className="flex-1">
                                       <div className="text-xl font-bold text-white mb-2">Page {page.pageNumber}</div>
-                                      <div className="text-sm text-gray-300 mb-3">
+                                      <div className={`text-sm mb-3 ${
+                                        isPastel ? 'text-gray-700' : 'text-gray-300'
+                                      }`}>
                                         {page.blackRectCount} black rect{page.blackRectCount !== 1 ? 's' : ''}, {page.overlapCount} overlap{page.overlapCount !== 1 ? 's' : ''}
                                       </div>
                                       <div className="flex items-center gap-3">
-                                        <span className="text-sm text-gray-400">Confidence:</span>
+                                        <span className={`text-sm ${
+                                          isPastel ? 'text-gray-600' : 'text-gray-400'
+                                        }`}>
+                                          Confidence:
+                                        </span>
                                         <div className="flex items-center gap-2">
-                                          <div className="w-28 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                          <div className={`w-28 h-2 rounded-full overflow-hidden ${
+                                            isPastel ? 'bg-pink-200' : 'bg-gray-700'
+                                          }`}>
                                             <div
                                               className={`h-full transition-all ${
                                                 page.confidenceScore >= 7 ? 'bg-red-500' :
@@ -706,7 +1127,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                                 {result.security.risk_score}/100
                               </span>
                             </div>
-                            <div className="w-full h-3.5 bg-gray-800/50 rounded-full overflow-hidden mb-2">
+                            <div className={`w-full h-3.5 rounded-full overflow-hidden mb-2 ${
+                              isPastel ? 'bg-pink-200/50' : 'bg-gray-800/50'
+                            }`}>
                               <div 
                                 className={`h-full transition-all duration-500 ${
                                   result.security.risk_score >= 70 ? 'bg-red-500' :
@@ -716,7 +1139,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                                 style={{ width: `${result.security.risk_score}%` }}
                               />
                             </div>
-                            <div className="text-sm text-gray-300">
+                            <div className={`text-sm ${
+                              isPastel ? 'text-gray-700' : 'text-gray-300'
+                            }`}>
                               {result.security.risk_score >= 70 ? 'HIGH RISK - Multiple serious privacy/security issues detected' :
                                result.security.risk_score >= 40 ? 'MEDIUM RISK - Several privacy concerns found' :
                                'LOW RISK - Minor issues only'}
@@ -726,19 +1151,35 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
 
                         {/* Security Findings */}
                         {result.security && (
-                          <div className="bg-gray-800/60 backdrop-blur-sm rounded-2xl p-6 border border-cyber-cyan-400/20">
-                            <h4 className="text-lg font-bold text-cyan-400 mb-5 flex items-center gap-2">
+                          <div className={`backdrop-blur-sm rounded-2xl p-6 border ${
+                            isPastel
+                              ? 'bg-white/60 border-pink-300/40'
+                              : 'bg-gray-800/60 border-cyber-cyan-400/20'
+                          }`}
+                          style={isPastel ? {
+                            boxShadow: '0 4px 20px rgba(251, 182, 206, 0.15), 0 0 0 1px rgba(251, 182, 206, 0.1)',
+                          } : {}}
+                          >
+                            <h4 className={`text-lg font-bold mb-5 flex items-center gap-2 ${
+                              isPastel ? 'text-pink-500' : 'text-cyan-400'
+                            }`}>
                               <Shield className="w-5 h-5" />
                               Security & Privacy Findings
                             </h4>
                             <div className="space-y-2.5 max-h-80 overflow-y-auto">
                               {result.security.has_metadata && (
-                                <div className="flex items-center gap-3 p-2.5 bg-gray-900/50 rounded-lg">
+                                <div className={`flex items-center gap-3 p-2.5 rounded-lg ${
+                                  isPastel ? 'bg-pink-50/50' : 'bg-gray-900/50'
+                                }`}>
                                   <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-                                  <span className="text-gray-300 text-sm">
+                                  <span className={`text-sm ${
+                                    isPastel ? 'text-gray-700' : 'text-gray-300'
+                                  }`}>
                                     Metadata present ({result.security.metadata_keys.length} key{result.security.metadata_keys.length !== 1 ? 's' : ''})
                                     {result.security.metadata_keys.length > 0 && result.security.metadata_keys.length <= 5 && (
-                                      <span className="text-gray-500 ml-1">
+                                      <span className={`ml-1 ${
+                                        isPastel ? 'text-gray-600' : 'text-gray-500'
+                                      }`}>
                                         ({result.security.metadata_keys.join(', ')})
                                       </span>
                                     )}
@@ -747,7 +1188,9 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                               )}
 
                               {result.security.has_attachments && (
-                                <div className="flex items-center gap-3 p-2.5 bg-gray-900/50 rounded-lg">
+                                <div className={`flex items-center gap-3 p-2.5 rounded-lg ${
+                                  isPastel ? 'bg-pink-50/50' : 'bg-gray-900/50'
+                                }`}>
                                   <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
                                   <span className="text-gray-300 text-sm">Embedded attachments ({result.security.attachment_count} file{result.security.attachment_count !== 1 ? 's' : ''})</span>
                                 </div>
@@ -1028,20 +1471,88 @@ export function SecurityCheckerModal({ isOpen, onClose, initialPdfPath, caseFold
                         )}
                       </motion.div>
                     )}
-                  </div>
-                </div>
+                </section>
               </div>
             </div>
-          </motion.div>
-        </>
-      )}
 
-      {/* Case Selection Dialog */}
-      <CaseSelectionDialog
-        isOpen={showCaseSelectionDialog}
-        onClose={() => setShowCaseSelectionDialog(false)}
-        onSelectCase={handleCaseSelected}
-      />
-    </AnimatePresence>
+            <div className={`flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-6 py-5 ${t.dialogFooter}`}>
+              <div className="flex flex-wrap gap-2">
+                {pdfPath && !isAuditing && !result && (
+                  <button
+                    type="button"
+                    onClick={handleRunAudit}
+                    className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold ${t.button}`}
+                  >
+                    <Zap className="h-4 w-4" />
+                    Run security audit
+                  </button>
+                )}
+              </div>
+              {result && !isAuditing && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveToCaseFolder()}
+                    disabled={isGeneratingReport}
+                    className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-50 ${t.secondaryButton}`}
+                  >
+                    {isGeneratingReport ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FolderOpen className="h-4 w-4" />
+                    )}
+                    {effectiveCaseFolderPath ? 'Save to case' : 'Save report to case'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadReport}
+                    disabled={isGeneratingReport}
+                    className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold disabled:opacity-50 ${t.button}`}
+                  >
+                    {isGeneratingReport ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    Download report
+                  </button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+
+          <CaseSelectionDialog
+            layout="companion"
+            companionSize="wide"
+            isOpen={showCaseDialog}
+            elevated
+            title="Assign to case"
+            subtitle="Choose where audit reports can be saved in the Vault"
+            confirmLabel="Use this case"
+            onClose={() => setShowCaseDialog(false)}
+            onSelectCase={handleAssignCase}
+          />
+        </div>
+
+        <AuditSaveOptionsDialog
+          isOpen={showAuditSaveDialog}
+          onClose={() => setShowAuditSaveDialog(false)}
+          onConfirm={handleAuditSaveConfirm}
+          pdfPath={pdfPath}
+          casePath={effectiveCaseFolderPath || null}
+          existingFolders={existingFolders}
+        />
+
+        {viewerFile && (
+          <ArchiveFileViewer
+            file={viewerFile}
+            files={[viewerFile]}
+            onClose={() => setViewerFile(null)}
+            overlayZIndex={110}
+          />
+        )}
+      </motion.div>
+    </AnimatePresence>,
+    document.body
   );
 }

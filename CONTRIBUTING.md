@@ -242,6 +242,17 @@ ipcMain.handle('operation-name', async (_event, param: string) => {
 
 ## Testing Requirements
 
+### 📖 Comprehensive Testing Guide
+
+For detailed testing procedures and guidelines, see **[TESTING_PROCEDURES.md](TESTING_PROCEDURES.md)**.
+
+This comprehensive guide includes:
+- Step-by-step manual test cases for all features
+- Automated testing procedures
+- Performance testing benchmarks
+- Build and deployment testing
+- Test checklists and templates
+
 ### Test Coverage
 
 - **Minimum Coverage**: Aim for 80% code coverage

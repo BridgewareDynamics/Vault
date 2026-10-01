@@ -3,13 +3,16 @@ import { WordEditorToolbar } from './WordEditorToolbar';
 import { NewFileConfirmationDialog } from './NewFileConfirmationDialog';
 import { NewFileNameDialog } from './NewFileNameDialog';
 import { useToast } from '../Toast/ToastContext';
-import { debugLog } from '../../utils/debugLogger';
 import { useWordEditorState } from '../../hooks/useWordEditorState';
 import { debounceWithFlush } from '../../utils/debounce';
 import { LexicalEditor, LexicalEditorHandle } from './LexicalEditor';
 import { useEditorShortcuts } from '../../hooks/useEditorShortcuts';
 import { calculateTextStats } from '../../utils/textStats';
-import { Save, FilePlus, ChevronDown } from 'lucide-react';
+import { Save, FilePlus } from 'lucide-react';
+import { useSettingsContext } from '../../utils/settingsContext';
+import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
+import { logger } from '../../utils/logger';
 
 export interface WordEditorHandle {
   getContent: () => string;
@@ -51,9 +54,10 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
   const [wordCount, setWordCount] = useState(0);
   const [sentenceCount, setSentenceCount] = useState(0);
   const [showSaveMenu, setShowSaveMenu] = useState(false);
-  const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
   const saveMenuRef = useRef<HTMLDivElement>(null);
-  const saveAsMenuRef = useRef<HTMLDivElement>(null);
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = isLightTheme(theme);
   
   // Debounced localStorage save function
   const debouncedSaveDraft = useRef(
@@ -63,7 +67,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
         localStorage.setItem(draftKey, draftContent);
       } catch (error) {
         // Silently fail if localStorage is full or unavailable
-        console.warn('Failed to save draft to localStorage:', error);
+        logger.warn('Failed to save draft to localStorage:', error);
       }
     }, 500)
   ).current;
@@ -83,71 +87,42 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       lexicalEditorRef.current?.focus();
     },
     hasUnsavedChanges: () => {
-      debugLog({
-        location: 'WordEditor.tsx:hasUnsavedChanges',
-        message: 'hasUnsavedChanges called',
-        data: { hasUnsavedChanges, filePath },
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'A',
-      });
+
       return hasUnsavedChanges;
     },
     markAsSaved: () => {
-      debugLog({
-        location: 'WordEditor.tsx:markAsSaved',
-        message: 'markAsSaved called',
-        data: { previousState: hasUnsavedChanges, filePath },
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'D',
-      });
+
       // Use setTimeout to ensure this happens after any pending content change callbacks
       setTimeout(() => {
         setHasUnsavedChanges(false);
       }, 0);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setHasUnsavedChanges is a stable setter from useWordEditorState; the handle only needs to refresh when hasUnsavedChanges changes
   }), [hasUnsavedChanges]);
 
   // Ensure editor is editable and focusable
   const ensureEditorEditable = () => {
     if (lexicalEditorRef.current) {
       lexicalEditorRef.current.focus();
-      debugLog({
-        location: 'WordEditor.tsx:ensureEditorEditable',
-        message: 'ensureEditorEditable called',
-        data: { filePath, isEditable: lexicalEditorRef.current.isEditable() },
-      });
+
     }
   };
 
   useEffect(() => {
-    debugLog({
-      location: 'WordEditor.tsx:useEffect',
-      message: 'WordEditor mounted',
-      data: { filePath, editorRefExists: !!lexicalEditorRef.current },
-    });
+
     // Ensure editor is editable on mount, especially when filePath is null
     ensureEditorEditable();
     
     // Add window focus handler to ensure editor is editable when window regains focus
     const handleWindowFocus = () => {
-      debugLog({
-        location: 'WordEditor.tsx:handleWindowFocus',
-        message: 'Window focus event',
-        data: { filePath, editorRefExists: !!lexicalEditorRef.current },
-      });
+
       // Small delay to ensure DOM is ready
       requestAnimationFrame(() => {
         ensureEditorEditable();
         if (lexicalEditorRef.current && !filePath) {
           // If no file is open, focus the editor
           lexicalEditorRef.current.focus();
-          debugLog({
-            location: 'WordEditor.tsx:handleWindowFocus',
-            message: 'Editor focused on window focus',
-            data: { filePath },
-          });
+
         }
       });
     };
@@ -156,17 +131,13 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
     
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
-      debugLog({
-        location: 'WordEditor.tsx:useEffect:cleanup',
-        message: 'WordEditor unmounted',
-        data: { filePath },
-      });
+
     };
   }, [filePath]);
 
   // Listen for detached window data
   useEffect(() => {
-    const handleData = (event: CustomEvent<{ content: string; filePath?: string | null }>) => {
+    const handleData = (event: WindowEventMap['word-editor-data']) => {
       const data = event.detail;
       if (data.content && lexicalEditorRef.current) {
         lexicalEditorRef.current.setContent(data.content);
@@ -178,26 +149,18 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       }
     };
 
-    window.addEventListener('word-editor-data' as any, handleData as EventListener);
+    window.addEventListener('word-editor-data', handleData);
     return () => {
-      window.removeEventListener('word-editor-data' as any, handleData as EventListener);
+      window.removeEventListener('word-editor-data', handleData);
     };
   }, [onFilePathChange, setContent, setHasUnsavedChanges]);
 
   // Load file content when filePath changes
   useEffect(() => {
     const loadFile = async () => {
-      debugLog({
-        location: 'WordEditor.tsx:loadFile',
-        message: 'loadFile useEffect triggered',
-        data: { filePath, hasElectronAPI: !!window.electronAPI, previousFilePath: currentFilePathRef.current },
-      });
+
       if (!filePath || !window.electronAPI) {
-        debugLog({
-          location: 'WordEditor.tsx:loadFile',
-          message: 'loadFile early return',
-          data: { filePath, hasElectronAPI: !!window.electronAPI },
-        });
+
         setIsLoading(false);
         return;
       }
@@ -205,11 +168,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       // Skip if this is the same file path AND we've already loaded it (avoid unnecessary reloads)
       // But allow loading if currentFilePathRef is null (first load) or different
       if (filePath === currentFilePathRef.current && currentFilePathRef.current !== null) {
-        debugLog({
-          location: 'WordEditor.tsx:loadFile',
-          message: 'Skipping load - same file path already loaded',
-          data: { filePath },
-        });
+
         setIsLoading(false);
         return;
       }
@@ -218,17 +177,9 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       // Set isSaving to true temporarily to prevent content change callbacks from setting unsaved changes
       setIsSaving(true);
       try {
-        debugLog({
-          location: 'WordEditor.tsx:loadFile',
-          message: 'About to read file',
-          data: { filePath },
-        });
+
         const fileContent = await window.electronAPI.readTextFile(filePath);
-        debugLog({
-          location: 'WordEditor.tsx:loadFile',
-          message: 'File content read',
-          data: { filePath, fileContentLength: fileContent.length, contentPreview: fileContent.substring(0, 50) },
-        });
+
         
         // For plain text files, wrap in paragraph tags; for HTML, use as-is
         let htmlContent: string;
@@ -255,11 +206,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
         
         // Set content in editor directly via ref (this is the primary method)
         if (lexicalEditorRef.current) {
-          debugLog({
-            location: 'WordEditor.tsx:loadFile',
-            message: 'Setting editor content via ref',
-            data: { filePath, isTxt: filePath.endsWith('.txt'), fileContentLength: fileContent.length },
-          });
+
           lexicalEditorRef.current.setContent(htmlContent);
         }
         
@@ -267,14 +214,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
         setTimeout(() => {
           setHasUnsavedChanges(false);
           setIsSaving(false);
-          debugLog({
-            location: 'WordEditor.tsx:loadFile',
-            message: 'Editor content set and state updated',
-            data: { filePath, contentLength: htmlContent.length },
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'A',
-          });
+
         }, 50);
       } catch (error) {
         setIsSaving(false);
@@ -291,7 +231,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           setHasUnsavedChanges(false);
         } else {
           toast.error('Failed to load file');
-          console.error('Load file error:', error);
+          logger.error('Load file error:', error);
         }
       } finally {
         setIsLoading(false);
@@ -299,6 +239,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
     };
 
     loadFile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setContent/setHasUnsavedChanges/setIsSaving are stable setters from useWordEditorState; the file should reload only when filePath (or its handlers) change
   }, [filePath, toast, onFilePathChange, setIsLoading]);
 
   // Auto-save draft to localStorage (debounced)
@@ -333,18 +274,15 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       if (saveMenuRef.current && !saveMenuRef.current.contains(event.target as Node)) {
         setShowSaveMenu(false);
       }
-      if (saveAsMenuRef.current && !saveAsMenuRef.current.contains(event.target as Node)) {
-        setShowSaveAsMenu(false);
-      }
     };
 
-    if (showSaveMenu || showSaveAsMenu) {
+    if (showSaveMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }
-  }, [showSaveMenu, showSaveAsMenu]);
+  }, [showSaveMenu]);
 
   // Flush debounced save on unmount to ensure draft is saved
   useEffect(() => {
@@ -356,11 +294,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
   // Clear editor when filePath becomes null (file deleted or new file)
   // BUT: Only clear if filePath actually CHANGED to null (not if it was already null)
   useEffect(() => {
-    debugLog({
-      location: 'WordEditor.tsx:filePath:useEffect',
-      message: 'filePath useEffect triggered',
-      data: { filePath, previousFilePath: currentFilePathRef.current, editorRefExists: !!lexicalEditorRef.current },
-    });
+
     
     // Only clear if filePath changed FROM something TO null (deliberate clear action)
     // Don't clear if filePath was already null (user might be typing in a new document)
@@ -377,27 +311,15 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       requestAnimationFrame(() => {
         if (lexicalEditorRef.current) {
           lexicalEditorRef.current.focus();
-          debugLog({
-            location: 'WordEditor.tsx:filePath:useEffect',
-            message: 'Editor focused after filePath became null',
-            data: { isEditable: lexicalEditorRef.current.isEditable() },
-          });
+
         }
       });
       
-      debugLog({
-        location: 'WordEditor.tsx:filePath:useEffect',
-        message: 'Ensuring editor is editable (filePath is null)',
-        data: { isEditable: lexicalEditorRef.current.isEditable() },
-      });
+
     }
     
     if (pathChangedToNull && lexicalEditorRef.current) {
-      debugLog({
-        location: 'WordEditor.tsx:filePath:useEffect',
-        message: 'About to clear editor - path changed to null',
-        data: { previousFilePath: previousPath, newFilePath: filePath },
-      });
+
       // Clear editor content
       lexicalEditorRef.current.setContent('');
       setContent('');
@@ -410,19 +332,12 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
         localStorage.removeItem(oldDraftKey);
       }
       
-      debugLog({
-        location: 'WordEditor.tsx:filePath:useEffect',
-        message: 'Editor cleared',
-      });
+
       
       // Use requestAnimationFrame for immediate focus (faster than setTimeout)
       requestAnimationFrame(() => {
         if (lexicalEditorRef.current) {
-          debugLog({
-            location: 'WordEditor.tsx:filePath:useEffect',
-            message: 'Focusing editor in requestAnimationFrame',
-            data: { editorRefExists: !!lexicalEditorRef.current },
-          });
+
           lexicalEditorRef.current.focus();
         }
       });
@@ -433,23 +348,11 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
     if (currentFilePathRef.current !== filePath) {
       currentFilePathRef.current = filePath;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setContent/setHasUnsavedChanges are stable setters from useWordEditorState; this sync must run only on filePath changes
   }, [filePath]);
 
   const handleContentChange = (newContent: string) => {
-    debugLog({
-      location: 'WordEditor.tsx:handleContentChange',
-      message: 'handleContentChange called',
-      data: { 
-        contentLength: newContent.length, 
-        filePath,
-        previousHasUnsavedChanges: hasUnsavedChanges,
-        isSaving,
-        currentContentLength: content.length,
-      },
-      sessionId: 'debug-session',
-      runId: 'run1',
-      hypothesisId: 'E',
-    });
+
     
     // Only update if content actually changed (avoid unnecessary updates)
     if (newContent !== content) {
@@ -534,14 +437,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           onFilePathChange(newPath);
         }
         
-        debugLog({
-          location: 'WordEditor.tsx:handleSave',
-          message: 'Setting hasUnsavedChanges to false after save',
-          data: { format, filePath, previousState: hasUnsavedChanges },
-          sessionId: 'debug-session',
-          runId: 'run1',
-          hypothesisId: 'B',
-        });
+
         
         // Use setTimeout to ensure this happens after any pending content change callbacks
         setTimeout(() => {
@@ -558,7 +454,12 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           }
         });
       } else {
-        // Export to other formats (PDF, DOCX, RTF)
+        if (format === 'pdf') {
+          toast.error('PDF export is not yet supported');
+          return;
+        }
+
+        // Export to other formats (DOCX, RTF)
         const result = await window.electronAPI.exportTextFile({
           content: htmlContent,
           format,
@@ -570,18 +471,17 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           setTimeout(() => {
             setHasUnsavedChanges(false);
           }, 0);
-          if (result.filePath && format !== 'pdf' && format !== 'docx') {
-            // For RTF, update the file path
+          if (result.filePath && format !== 'docx') {
             onFilePathChange(result.filePath);
           }
           toast.success(`File exported as ${format.toUpperCase()}`);
         } else {
-          toast.error(`Failed to export as ${format.toUpperCase()}`);
+          toast.error(result.error || `Failed to export as ${format.toUpperCase()}`);
         }
       }
     } catch (error) {
       toast.error('Failed to save file');
-      console.error('Save error:', error);
+      logger.error('Save error:', error);
     } finally {
       // Delay clearing isSaving to ensure hasUnsavedChanges is set first
       setTimeout(() => {
@@ -649,7 +549,7 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       toast.success('New file created');
     } catch (error) {
       toast.error('Failed to create new file');
-      console.error('Create new file error:', error);
+      logger.error('Create new file error:', error);
     }
   };
 
@@ -685,10 +585,38 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       <div className="flex-1 overflow-auto p-4 relative">
         {/* Loading overlay */}
         {isLoading && (
-          <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyber-purple-400 mx-auto mb-4"></div>
-              <p className="text-gray-300">Loading file...</p>
+          <div className={`absolute inset-0 backdrop-blur-xl flex items-center justify-center z-10 rounded-lg ${
+            isPastel ? 'bg-white/90' : 'bg-gray-900/90'
+          }`}>
+            <div className="text-center space-y-4">
+              <div className="inline-flex items-center justify-center">
+                <div className="relative">
+                  {isPastel ? (
+                    <>
+                      <div className="absolute inset-0 border-4 border-pink-300/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                      <div className="absolute inset-2 border-2 border-purple-300/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                      <div className="relative w-12 h-12">
+                        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-pink-400 border-r-purple-400 animate-spin"></div>
+                        <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-purple-400 border-l-pink-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="absolute inset-0 border-4 border-cyber-purple-400/40 rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                      <div className="absolute inset-2 border-2 border-cyber-cyan-400/50 rounded-full animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }}></div>
+                      <div className="relative w-12 h-12">
+                        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+                        <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+              <p className={`font-medium ${
+                isPastel ? 'text-gray-700' : 'text-gray-300'
+              }`}>
+                Loading file...
+              </p>
             </div>
           </div>
         )}
@@ -705,21 +633,39 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
       </div>
 
       {/* Status bar */}
-      <div className="border-t border-gray-700/50">
+      <div className={`border-t ${
+        isPastel ? 'border-pink-200/40' : 'border-gray-700/50'
+      }`}>
         <div className="px-3 py-2 flex items-center justify-between gap-3 overflow-hidden">
           {/* Left side: Status text and statistics */}
           <div className="flex items-center gap-1.5 text-xs flex-nowrap min-w-0 flex-shrink">
             {hasUnsavedChanges && (
               <>
-                <span className="text-yellow-400 whitespace-nowrap">Unsaved changes</span>
-                <span className="text-gray-600 text-[10px]">•</span>
+                <span className={`whitespace-nowrap ${
+                  isPastel ? 'text-yellow-600' : 'text-yellow-400'
+                }`}>
+                  Unsaved changes
+                </span>
+                <span className={`text-[10px] ${
+                  isPastel ? 'text-gray-500' : 'text-gray-600'
+                }`}>
+                  •
+                </span>
               </>
             )}
-            <span className="text-gray-400 whitespace-nowrap">
+            <span className={`whitespace-nowrap ${
+              isPastel ? 'text-gray-600' : 'text-gray-400'
+            }`}>
               {wordCount} {wordCount === 1 ? 'word' : 'words'}
             </span>
-            <span className="text-gray-600 text-[10px]">•</span>
-            <span className="text-gray-400 whitespace-nowrap">
+            <span className={`text-[10px] ${
+              isPastel ? 'text-gray-500' : 'text-gray-600'
+            }`}>
+              •
+            </span>
+            <span className={`whitespace-nowrap ${
+              isPastel ? 'text-gray-600' : 'text-gray-400'
+            }`}>
               {sentenceCount} {sentenceCount === 1 ? 'sentence' : 'sentences'}
             </span>
           </div>
@@ -729,7 +675,11 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           {/* New File Button */}
           <button
             onClick={handleNewFile}
-            className="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs"
+            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs ${
+              isPastel
+                ? 'bg-pink-100 hover:bg-pink-200 text-gray-700'
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            }`}
             title="New File"
           >
             <FilePlus size={14} />
@@ -739,20 +689,17 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
           {/* Save Button */}
           <button
             onClick={() => {
-              debugLog({
-                location: 'WordEditor.tsx:SaveButton',
-                message: 'Save button clicked in status bar',
-                data: { hasUnsavedChanges, filePath },
-                sessionId: 'debug-session',
-                runId: 'run1',
-                hypothesisId: 'B',
-              });
+
               handleSave('txt');
             }}
             className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs ${
               hasUnsavedChanges
-                ? 'bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                ? isPastel
+                  ? 'bg-pink-500 hover:bg-pink-600 text-white'
+                  : 'bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white'
+                : isPastel
+                  ? 'bg-pink-100 hover:bg-pink-200 text-gray-700'
+                  : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
             }`}
             title="Save current file"
           >
@@ -760,146 +707,18 @@ export const WordEditor = forwardRef<WordEditorHandle, WordEditorProps>(
             <span>Save</span>
           </button>
 
-          {/* Save As Button with Dropdown */}
-          <div className="relative" ref={saveAsMenuRef}>
-            <button
-              onClick={() => {
-                setShowSaveAsMenu(!showSaveAsMenu);
-              }}
-              className="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs whitespace-nowrap"
-              title="Save as different format"
-            >
-              <span>Save As</span>
-              <ChevronDown size={14} />
-            </button>
-
-            {/* Save As Menu Dropdown - expands upward */}
-            {showSaveAsMenu && (
-              <div className="absolute right-0 bottom-full mb-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
-                <button
-                  onClick={async () => {
-                    setShowSaveAsMenu(false);
-                    // Save As TXT - create new file
-                    if (window.electronAPI && lexicalEditorRef.current) {
-                      setIsSaving(true);
-                      try {
-                        const textContent = lexicalEditorRef.current.getTextContent();
-                        const baseName = filePath 
-                          ? filePath.split(/[/\\]/).pop()?.replace(/\.[^/.]+$/, '') || 'Untitled'
-                          : 'Untitled';
-                        const fileName = `${baseName}_${Date.now()}.txt`;
-                        await window.electronAPI.createTextFile(fileName, textContent);
-                        toast.success('File saved as TXT');
-                      } catch (error) {
-                        toast.error('Failed to save file');
-                        console.error('Save error:', error);
-                      } finally {
-                        setIsSaving(false);
-                      }
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  Save as TXT
-                </button>
-                <button
-                  onClick={async () => {
-                    setShowSaveAsMenu(false);
-                    // Save As PDF - create new file
-                    if (window.electronAPI && lexicalEditorRef.current) {
-                      setIsSaving(true);
-                      try {
-                        const htmlContent = lexicalEditorRef.current.getContent();
-                        const result = await window.electronAPI.exportTextFile({
-                          content: htmlContent,
-                          format: 'pdf',
-                          filePath: filePath || undefined,
-                        });
-                        if (result.success) {
-                          toast.success('File exported as PDF');
-                        } else {
-                          toast.error('Failed to export as PDF');
-                        }
-                      } catch (error) {
-                        toast.error('Failed to export as PDF');
-                        console.error('Export error:', error);
-                      } finally {
-                        setIsSaving(false);
-                      }
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  Export as PDF
-                </button>
-                <button
-                  onClick={async () => {
-                    setShowSaveAsMenu(false);
-                    // Save As DOCX - create new file
-                    if (window.electronAPI && lexicalEditorRef.current) {
-                      setIsSaving(true);
-                      try {
-                        const htmlContent = lexicalEditorRef.current.getContent();
-                        const result = await window.electronAPI.exportTextFile({
-                          content: htmlContent,
-                          format: 'docx',
-                          filePath: filePath || undefined,
-                        });
-                        if (result.success) {
-                          toast.success('File exported as DOCX');
-                        } else {
-                          toast.error('Failed to export as DOCX');
-                        }
-                      } catch (error) {
-                        toast.error('Failed to export as DOCX');
-                        console.error('Export error:', error);
-                      } finally {
-                        setIsSaving(false);
-                      }
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  Export as DOCX
-                </button>
-                <button
-                  onClick={async () => {
-                    setShowSaveAsMenu(false);
-                    // Save As RTF - create new file
-                    if (window.electronAPI && lexicalEditorRef.current) {
-                      setIsSaving(true);
-                      try {
-                        const htmlContent = lexicalEditorRef.current.getContent();
-                        const result = await window.electronAPI.exportTextFile({
-                          content: htmlContent,
-                          format: 'rtf',
-                          filePath: filePath || undefined,
-                        });
-                        if (result.success) {
-                          toast.success('File exported as RTF');
-                        } else {
-                          toast.error('Failed to export as RTF');
-                        }
-                      } catch (error) {
-                        toast.error('Failed to export as RTF');
-                        console.error('Export error:', error);
-                      } finally {
-                        setIsSaving(false);
-                      }
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  Export as RTF
-                </button>
-              </div>
-            )}
-          </div>
-
           {/* Saving indicator */}
           {isSaving && (
-            <div className="flex items-center gap-2 text-cyber-purple-400 text-xs">
-              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-cyber-purple-400"></div>
+            <div className={`flex items-center gap-2 text-xs ${
+              isPastel ? 'text-pink-500' : 'text-cyber-purple-400'
+            }`}>
+              <div className="relative w-3 h-3">
+                <div className={`absolute inset-0 rounded-full border border-transparent animate-spin ${
+                  isPastel
+                    ? 'border-t-pink-400 border-r-purple-400'
+                    : 'border-t-cyber-purple-400 border-r-cyber-cyan-400'
+                }`}></div>
+              </div>
               <span>Saving...</span>
             </div>
           )}

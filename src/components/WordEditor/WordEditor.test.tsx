@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { WordEditor, WordEditorHandle } from './WordEditor';
 import { mockElectronAPI } from '../../test-utils/mocks';
+import { renderWithProviders } from '../../test-utils/render';
 
 // Mock LexicalEditor
 const mockLexicalEditorHandle = {
@@ -39,6 +40,7 @@ vi.mock('./LexicalEditor', () => ({
         }, 0);
         return () => clearTimeout(timer);
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- test mock intentionally keyed only on the onContentChange callback
     }, [props.onContentChange]);
 
     return <div data-testid="lexical-editor">Lexical Editor</div>;
@@ -117,11 +119,6 @@ vi.mock('../Toast/ToastContext', () => ({
   }),
 }));
 
-// Mock debugLog
-vi.mock('../../utils/debugLogger', () => ({
-  debugLog: vi.fn(),
-}));
-
 describe('WordEditor', () => {
   let mockOnFilePathChange: ReturnType<typeof vi.fn>;
   let mockSetContent: ReturnType<typeof vi.fn>;
@@ -163,7 +160,9 @@ describe('WordEditor', () => {
 
     // Get the mock function from the module
     const useWordEditorStateModule = await import('../../hooks/useWordEditorState');
-    mockUseWordEditorState = vi.mocked(useWordEditorStateModule.useWordEditorState);
+    mockUseWordEditorState = vi.mocked(
+      useWordEditorStateModule.useWordEditorState,
+    ) as unknown as ReturnType<typeof vi.fn>;
     mockUseWordEditorState.mockReturnValue({
       content: '',
       setContent: mockSetContent,
@@ -195,14 +194,14 @@ describe('WordEditor', () => {
 
   describe('Initial Render', () => {
     it('should render WordEditor with no file', () => {
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       expect(screen.getByTestId('lexical-editor')).toBeInTheDocument();
       expect(screen.getByTestId('toolbar')).toBeInTheDocument();
     });
 
     it('should render with file path', () => {
-      render(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
 
       expect(screen.getByTestId('lexical-editor')).toBeInTheDocument();
     });
@@ -212,7 +211,7 @@ describe('WordEditor', () => {
     it('should load text file when filePath is provided', async () => {
       (mockElectronAPI.readTextFile as any).mockResolvedValue('Plain text content');
 
-      render(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         expect(mockElectronAPI.readTextFile).toHaveBeenCalledWith('/path/to/file.txt');
@@ -226,7 +225,7 @@ describe('WordEditor', () => {
     it('should wrap plain text in paragraph tags for .txt files', async () => {
       (mockElectronAPI.readTextFile as any).mockResolvedValue('Line 1\nLine 2');
 
-      render(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         expect(mockLexicalEditorHandle.setContent).toHaveBeenCalled();
@@ -239,7 +238,7 @@ describe('WordEditor', () => {
       const htmlContent = '<p>HTML content</p>';
       (mockElectronAPI.readTextFile as any).mockResolvedValue(htmlContent);
 
-      render(<WordEditor filePath="/path/to/file.html" onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath="/path/to/file.html" onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         expect(mockLexicalEditorHandle.setContent).toHaveBeenCalledWith(htmlContent);
@@ -250,7 +249,7 @@ describe('WordEditor', () => {
       const error = new Error('ENOENT: no such file');
       (mockElectronAPI.readTextFile as any).mockRejectedValue(error);
 
-      render(<WordEditor filePath="/path/to/missing.txt" onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath="/path/to/missing.txt" onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         expect(mockOnFilePathChange).toHaveBeenCalledWith(null);
@@ -258,7 +257,7 @@ describe('WordEditor', () => {
     });
 
     it('should not reload same file if filePath unchanged', async () => {
-      const { rerender } = render(
+      const { rerender } = renderWithProviders(
         <WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />
       );
 
@@ -276,7 +275,7 @@ describe('WordEditor', () => {
   describe('Ref Methods', () => {
     it('should expose getContent method', async () => {
       const ref = { current: null } as React.RefObject<WordEditorHandle>;
-      render(<WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         expect(ref.current).not.toBeNull();
@@ -288,7 +287,7 @@ describe('WordEditor', () => {
 
     it('should expose setContent method', async () => {
       const ref = { current: null } as React.RefObject<WordEditorHandle>;
-      render(<WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         expect(ref.current).not.toBeNull();
@@ -300,7 +299,7 @@ describe('WordEditor', () => {
 
     it('should expose getTextContent method', async () => {
       const ref = { current: null } as React.RefObject<WordEditorHandle>;
-      render(<WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         expect(ref.current).not.toBeNull();
@@ -312,7 +311,7 @@ describe('WordEditor', () => {
 
     it('should expose focus method', async () => {
       const ref = { current: null } as React.RefObject<WordEditorHandle>;
-      render(<WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         expect(ref.current).not.toBeNull();
@@ -343,7 +342,7 @@ describe('WordEditor', () => {
         setIsSaving: mockSetIsSaving,
       });
 
-      render(
+      renderWithProviders(
         <WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />
       );
 
@@ -356,7 +355,7 @@ describe('WordEditor', () => {
 
     it('should expose markAsSaved method', async () => {
       const ref = { current: null } as React.RefObject<WordEditorHandle>;
-      render(<WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor ref={ref} filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       ref.current!.markAsSaved();
 
@@ -370,7 +369,7 @@ describe('WordEditor', () => {
   describe('Save Operations', () => {
     it('should save as txt when Save button is clicked', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         const saveButton = screen.getByText('Save');
@@ -387,7 +386,7 @@ describe('WordEditor', () => {
 
     it('should create new file when saving without filePath', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         const saveButton = screen.getByText('Save');
@@ -406,7 +405,7 @@ describe('WordEditor', () => {
       const user = userEvent.setup({ delay: null });
       (mockElectronAPI.saveTextFile as any).mockRejectedValue(new Error('Save failed'));
 
-      render(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
 
       await waitFor(() => {
         const saveButton = screen.getByText('Save');
@@ -426,7 +425,7 @@ describe('WordEditor', () => {
   describe('Formatting', () => {
     it('should handle font size change', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       const fontSizeButton = screen.getByText('Font Size');
       await user.click(fontSizeButton);
@@ -439,7 +438,7 @@ describe('WordEditor', () => {
 
     it('should handle alignment change', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       const alignButton = screen.getByText('Align');
       await user.click(alignButton);
@@ -451,7 +450,7 @@ describe('WordEditor', () => {
 
     it('should handle bold toggle', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       // Wait for editor to be ready
       await waitFor(() => {
@@ -468,7 +467,7 @@ describe('WordEditor', () => {
 
     it('should handle italic toggle', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       // Wait for editor to be ready
       await waitFor(() => {
@@ -485,7 +484,7 @@ describe('WordEditor', () => {
 
     it('should handle underline toggle', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       // Wait for editor to be ready
       await waitFor(() => {
@@ -502,7 +501,7 @@ describe('WordEditor', () => {
 
     it('should handle undo', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       // Wait for editor to be ready
       await waitFor(() => {
@@ -519,7 +518,7 @@ describe('WordEditor', () => {
 
     it('should handle redo', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       // Wait for editor to be ready
       await waitFor(() => {
@@ -557,7 +556,7 @@ describe('WordEditor', () => {
         setIsSaving: mockSetIsSaving,
       });
 
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       const newButton = screen.getByText('New');
       await user.click(newButton);
@@ -567,7 +566,7 @@ describe('WordEditor', () => {
 
     it('should show file name dialog when creating new file without unsaved changes', async () => {
       const user = userEvent.setup({ delay: null });
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       const newButton = screen.getByText('New');
       await user.click(newButton);
@@ -579,7 +578,7 @@ describe('WordEditor', () => {
   describe('Text Statistics', () => {
     it('should display word count', async () => {
       mockLexicalEditorHandle.getTextContent.mockReturnValue('Hello world test');
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       // Wait for stats to calculate (debounced)
       await waitFor(() => {
@@ -590,7 +589,7 @@ describe('WordEditor', () => {
 
     it('should display sentence count', async () => {
       mockLexicalEditorHandle.getTextContent.mockReturnValue('First sentence. Second sentence.');
-      render(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath={null} onFilePathChange={mockOnFilePathChange} />);
 
       // Wait for stats to calculate (debounced)
       await waitFor(() => {
@@ -601,7 +600,7 @@ describe('WordEditor', () => {
 
   describe('Content Changes', () => {
     it('should mark as unsaved when content changes', async () => {
-      render(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
+      renderWithProviders(<WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />);
 
       // Wait for LexicalEditor to render and store props
       await waitFor(() => {
@@ -622,7 +621,7 @@ describe('WordEditor', () => {
 
   describe('File Path Changes', () => {
     it('should clear editor when filePath changes to null', async () => {
-      const { rerender } = render(
+      const { rerender } = renderWithProviders(
         <WordEditor filePath="/path/to/file.txt" onFilePathChange={mockOnFilePathChange} />
       );
 

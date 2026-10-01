@@ -1,9 +1,11 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { reportCapturedError } from '../debug/errorConsole';
 import { logger } from '../utils/logger';
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  onReset?: () => void;
 }
 
 interface State {
@@ -23,9 +25,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     logger.error('ErrorBoundary caught an error:', error, errorInfo);
+    reportCapturedError(error, { componentStack: errorInfo.componentStack ?? undefined });
   }
 
   private handleReset = () => {
+    this.props.onReset?.();
     this.setState({ hasError: false, error: null });
   };
 

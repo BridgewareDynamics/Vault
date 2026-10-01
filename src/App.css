@@ -23,6 +23,42 @@ body {
   min-height: 100vh;
 }
 
+/* Map canvas — smooth node drag, no layout jank */
+.map-canvas-root .react-flow__node {
+  will-change: transform;
+}
+
+.map-canvas-root .react-flow__node.dragging {
+  z-index: 10;
+  cursor: grabbing;
+}
+
+.map-canvas-root .react-flow__edge-path {
+  transition: stroke 0.15s ease, stroke-dasharray 0.15s ease;
+}
+
+.map-canvas-root .react-flow__handle {
+  opacity: 0.35;
+}
+
+.map-canvas-root .react-flow__node:hover .react-flow__handle,
+.map-canvas-root .react-flow__node.selected .react-flow__handle {
+  opacity: 1;
+}
+
+.map-canvas-root .react-flow__minimap {
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+}
+
+.map-canvas-root .react-flow__minimap-mask {
+  fill: rgba(139, 92, 246, 0.08);
+}
+
+.map-canvas-root .react-flow__panel {
+  pointer-events: auto;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
@@ -41,6 +77,64 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, #A855F7 0%, #C084FC 50%, #9333EA 100%);
+}
+
+/* Recording studio — stable scroll track (no layout jump when content changes) */
+.vault-studio-scroll {
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.vault-studio-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.vault-studio-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px 0;
+}
+
+.vault-studio-scroll::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.45);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.vault-studio-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(168, 85, 247, 0.65);
+  background-clip: padding-box;
+}
+
+.vault-studio-range {
+  border-radius: 999px;
+  outline: none;
+}
+
+.vault-studio-range:focus-visible {
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.45);
+}
+
+.vault-studio-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.vault-studio-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
 }
 
 /* Smooth transitions */

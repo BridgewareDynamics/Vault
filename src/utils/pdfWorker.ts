@@ -9,9 +9,10 @@ export async function setupPDFWorker(): Promise<void> {
   // Only set worker source if not already set or if it was reset
   if (!pdfjsLib.GlobalWorkerOptions.workerSrc || pdfjsLib.GlobalWorkerOptions.workerSrc === '') {
     // Use relative path for Electron compatibility with base: './'
-    // In production, this resolves to ./pdf.worker.min.js from the HTML file location
-    // The worker file is copied to dist/ during build
-    pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.js';
+    // In production, this resolves to ./pdf.worker.min.mjs from the HTML file location.
+    // PDF.js v4 ships an ESM-only worker (`.mjs`); the file is served from
+    // public/ and copied to dist/ during build. It is loaded as a module worker.
+    pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
   }
   
   workerInitialized = true;

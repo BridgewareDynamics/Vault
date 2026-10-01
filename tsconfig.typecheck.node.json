@@ -1,0 +1,22 @@
+{
+  "//": "Type-check-only config for ELECTRON incl. its __tests__ (which tsconfig.node.json excludes). Kept separate from the renderer typecheck so the preload's Window.electronAPI global does not clash with the renderer's. Emits nothing.",
+  "compilerOptions": {
+    "composite": false,
+    "skipLibCheck": true,
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "noEmit": true,
+    "types": ["node", "vitest/globals"],
+    "target": "ES2020",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@electron/*": ["./electron/*"]
+    }
+  },
+  "include": ["electron/**/*"]
+}

@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { logger } from '../../utils/logger';
 
 interface BookmarkCreatorProps {
   isOpen: boolean;
@@ -45,6 +46,7 @@ export function BookmarkCreator({
       setExistingFolder(null);
       checkForExistingFolder();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- checkForExistingFolder is a stable local loader; intentionally re-run only when the dialog opens or its target PDF/page changes
   }, [isOpen, pdfPath, pdfName, pageNumber]);
 
   const checkForExistingFolder = async () => {
@@ -65,7 +67,7 @@ export function BookmarkCreator({
         setExistingFolder(null);
       }
     } catch (error) {
-      console.error('Failed to check for existing folder:', error);
+      logger.error('Failed to check for existing folder:', error);
     } finally {
       setCheckingFolder(false);
     }

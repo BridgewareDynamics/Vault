@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Folder, Trash2, Bookmark } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { BookmarkFolder } from '../../types';
+import { logger } from '../../utils/logger';
 
 interface BookmarkFolderCardProps {
   folder: BookmarkFolder;
@@ -18,6 +19,7 @@ export function BookmarkFolderCard({ folder, onOpen, onDelete, isDetached = fals
   useEffect(() => {
     loadThumbnail();
     loadBookmarkCount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable local loaders; intentionally re-run only when the folder identity/thumbnail changes
   }, [folder.id, folder.thumbnail]);
 
   const loadThumbnail = async () => {
@@ -49,7 +51,7 @@ export function BookmarkFolderCard({ folder, onOpen, onDelete, isDetached = fals
         }
       }
     } catch (error) {
-      console.error('Failed to load folder thumbnail:', error);
+      logger.error('Failed to load folder thumbnail:', error);
     } finally {
       setLoading(false);
     }
@@ -62,7 +64,7 @@ export function BookmarkFolderCard({ folder, onOpen, onDelete, isDetached = fals
       const bookmarks = await window.electronAPI.getBookmarksByFolder(folder.id);
       setBookmarkCount(bookmarks.length);
     } catch (error) {
-      console.error('Failed to load bookmark count:', error);
+      logger.error('Failed to load bookmark count:', error);
     }
   };
 
@@ -80,7 +82,10 @@ export function BookmarkFolderCard({ folder, onOpen, onDelete, isDetached = fals
       <div className="relative w-full h-32 bg-gray-900 overflow-hidden">
         {loading ? (
           <div className="w-full h-full flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyber-purple-400"></div>
+            <div className="relative w-8 h-8">
+              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+              <div className="absolute inset-1 rounded-full border border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+            </div>
           </div>
         ) : thumbnail ? (
           <img

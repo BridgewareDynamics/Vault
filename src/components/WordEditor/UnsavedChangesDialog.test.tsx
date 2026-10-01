@@ -97,7 +97,6 @@ describe('UnsavedChangesDialog', () => {
   });
 
   it('should call onCancel when backdrop is clicked', async () => {
-    const user = userEvent.setup();
     const { container } = render(
       <UnsavedChangesDialog
         isOpen={true}

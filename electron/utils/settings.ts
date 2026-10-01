@@ -6,6 +6,7 @@ const SETTINGS_FILE_NAME = 'app-settings.json';
 
 export type ExtractionQuality = 'high' | 'medium' | 'low';
 export type PerformanceMode = 'auto' | 'high' | 'balanced' | 'low';
+export type Theme = 'brideware-purple' | 'pastel';
 
 export interface AppSettings {
   hardwareAcceleration: boolean;
@@ -14,6 +15,8 @@ export interface AppSettings {
   extractionQuality: ExtractionQuality;
   thumbnailSize: number;
   performanceMode: PerformanceMode;
+  showOnboarding: boolean;
+  theme: Theme;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -23,6 +26,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   extractionQuality: 'high',
   thumbnailSize: 200,
   performanceMode: 'auto',
+  showOnboarding: true,
+  theme: 'brideware-purple',
 };
 
 let cachedSettings: AppSettings | null = null;
@@ -43,6 +48,15 @@ function getSettingsPath(): string {
  * Validate settings object
  */
 function validateSettings(settings: Partial<AppSettings>): AppSettings {
+  // Check if showOnboarding field exists in the settings object
+  // If it doesn't exist (undefined), default to true for migration
+  // If it exists and is false, keep it false
+  // If it exists and is true, keep it true
+  const hasShowOnboarding = 'showOnboarding' in settings;
+  const showOnboardingValue = hasShowOnboarding 
+    ? (typeof settings.showOnboarding === 'boolean' ? settings.showOnboarding : DEFAULT_SETTINGS.showOnboarding)
+    : DEFAULT_SETTINGS.showOnboarding; // Default to true if field doesn't exist (migration case)
+
   const validated: AppSettings = {
     hardwareAcceleration: typeof settings.hardwareAcceleration === 'boolean' 
       ? settings.hardwareAcceleration 
@@ -62,6 +76,10 @@ function validateSettings(settings: Partial<AppSettings>): AppSettings {
     performanceMode: ['auto', 'high', 'balanced', 'low'].includes(settings.performanceMode || '')
       ? (settings.performanceMode as PerformanceMode)
       : DEFAULT_SETTINGS.performanceMode,
+    showOnboarding: showOnboardingValue,
+    theme: ['brideware-purple', 'pastel'].includes(settings.theme || '')
+      ? (settings.theme as Theme)
+      : DEFAULT_SETTINGS.theme,
   };
   return validated;
 }
@@ -79,7 +97,32 @@ export async function loadSettings(): Promise<AppSettings> {
   try {
     const data = await fs.readFile(settingsPath, 'utf-8');
     const parsed = JSON.parse(data) as Partial<AppSettings>;
+    
+    // Migration: Check if this is an existing user who hasn't seen onboarding yet
+    // If showOnboarding field doesn't exist, it's a migration - show onboarding
+    // If it exists and is false, user has dismissed it - respect that
+    // If it exists and is true, show it
+    const hasShowOnboardingField = 'showOnboarding' in parsed;
+    
+    if (!hasShowOnboardingField) {
+      // Field doesn't exist - migration case for existing users, default to showing onboarding
+      parsed.showOnboarding = true;
+    }
+    
     cachedSettings = validateSettings(parsed);
+    
+    // If settings file exists but is missing new fields, update it
+    // This handles migration for existing users
+    const needsUpdate = !hasShowOnboardingField || !('theme' in parsed);
+    if (needsUpdate) {
+      // Save the validated settings (which includes defaults for missing fields)
+      try {
+        await saveSettings(cachedSettings);
+      } catch {
+        // Ignore save errors, but continue with validated settings
+      }
+    }
+    
     return cachedSettings;
   } catch (error) {
     // Settings file doesn't exist or is invalid, return defaults

@@ -2,6 +2,8 @@ import { motion } from 'framer-motion';
 import { Bookmark, Trash2, ExternalLink } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Bookmark as BookmarkType } from '../../types';
+import { useToast } from '../Toast/ToastContext';
+import { logger } from '../../utils/logger';
 
 interface BookmarkCardProps {
   bookmark: BookmarkType;
@@ -12,9 +14,11 @@ interface BookmarkCardProps {
 export function BookmarkCard({ bookmark, onDelete, isDetached = false }: BookmarkCardProps) {
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
 
   useEffect(() => {
     loadThumbnail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadThumbnail is a stable local loader; intentionally re-run only when the bookmark identity/thumbnail changes
   }, [bookmark.id, bookmark.thumbnail]);
 
   const loadThumbnail = async () => {
@@ -43,7 +47,7 @@ export function BookmarkCard({ bookmark, onDelete, isDetached = false }: Bookmar
         setThumbnail(bookmark.thumbnail);
       }
     } catch (error) {
-      console.error('Failed to load thumbnail:', error);
+      logger.error('Failed to load thumbnail:', error);
     } finally {
       setLoading(false);
     }
@@ -65,7 +69,8 @@ export function BookmarkCard({ bookmark, onDelete, isDetached = false }: Bookmar
           pageNumber: bookmark.pageNumber,
         });
       } catch (error) {
-        console.error('Failed to open bookmark in main window:', error);
+        toast.error('Failed to open bookmark');
+        logger.error('Failed to open bookmark in main window:', error);
       }
     } else {
       // Dispatch event to open PDF at specific page
@@ -97,7 +102,10 @@ export function BookmarkCard({ bookmark, onDelete, isDetached = false }: Bookmar
       <div className="relative w-full h-32 bg-gray-900 overflow-hidden">
         {loading ? (
           <div className="w-full h-full flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyber-purple-400"></div>
+            <div className="relative w-8 h-8">
+              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyber-purple-400 border-r-cyber-cyan-400 animate-spin"></div>
+              <div className="absolute inset-1 rounded-full border border-transparent border-b-cyber-cyan-400 border-l-cyber-purple-400 animate-spin" style={{ animationDuration: '1.2s', animationDirection: 'reverse' }}></div>
+            </div>
           </div>
         ) : thumbnail ? (
           <img

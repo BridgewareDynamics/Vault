@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileText, ChevronDown, Plus } from 'lucide-react';
+import { X, FileText, ChevronDown, Plus, FolderOpen } from 'lucide-react';
 import { useToast } from '../Toast/ToastContext';
+import { useArchiveContext } from '../../contexts/ArchiveContext';
 import { isValidFileName } from '../../utils/pathValidator';
+import { CaseSelectionDialog } from './CaseSelectionDialog';
+import { Theme } from '../../types';
+import { isLightTheme } from '../../theme/themeSemantics';
+import { useSettingsContext } from '../../utils/settingsContext';
+import { logger } from '../../utils/logger';
 
 interface TextFile {
   name: string;
@@ -16,7 +22,7 @@ interface WordEditorDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenFile: (filePath: string) => void;
-  onNewFile: (fileName: string) => void;
+  onNewFile: (fileName: string, casePath: string) => void;
   onOpenLibrary: () => void;
 }
 
@@ -24,16 +30,23 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
   const [showRecent, setShowRecent] = useState(false);
   const [recentFiles, setRecentFiles] = useState<TextFile[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showCaseSelectionDialog, setShowCaseSelectionDialog] = useState(false);
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [selectedCasePath, setSelectedCasePath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
+  const { currentCase } = useArchiveContext();
+  const { settings } = useSettingsContext();
+  const theme: Theme = (settings?.theme as Theme) || 'brideware-purple';
+  const isPastel = isLightTheme(theme);
 
   useEffect(() => {
     if (isOpen) {
       loadRecentFiles();
     }
-  }, [isOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadRecentFiles is a stable local loader; intentionally re-run only when the dialog opens or the active case changes
+  }, [isOpen, currentCase?.path]);
 
   const loadRecentFiles = async () => {
     if (!window.electronAPI) {
@@ -42,7 +55,10 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
 
     try {
       setLoading(true);
-      const fileList = await window.electronAPI.listTextFiles();
+      // If we have a current case, load case notes; otherwise load global files
+      const fileList = currentCase?.path 
+        ? await window.electronAPI.listCaseNotes(currentCase.path)
+        : await window.electronAPI.listTextFiles();
       // Sort by modified date, most recent first, limit to 10
       const sorted = fileList
         .sort((a, b) => b.modified - a.modified)
@@ -50,7 +66,7 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
       setRecentFiles(sorted);
     } catch (error) {
       toast.error('Failed to load recent files');
-      console.error('Load recent files error:', error);
+      logger.error('Load recent files error:', error);
     } finally {
       setLoading(false);
     }
@@ -62,8 +78,20 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
   };
 
   const handleNewDocument = () => {
-    setShowNameDialog(true);
+    // If we're already in a case, use it directly; otherwise show case selection
+    if (currentCase?.path) {
+      setSelectedCasePath(currentCase.path);
+      setShowNameDialog(true);
+    } else {
+      setShowCaseSelectionDialog(true);
+    }
     setError(null);
+  };
+
+  const handleCaseSelected = (casePath: string) => {
+    setSelectedCasePath(casePath);
+    setShowCaseSelectionDialog(false);
+    setShowNameDialog(true);
   };
 
   useEffect(() => {
@@ -98,6 +126,11 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
       return;
     }
 
+    if (!selectedCasePath) {
+      toast.error('Please select a case');
+      return;
+    }
+
     // Ensure .txt extension
     const finalFileName = fileName.endsWith('.txt') ? fileName : `${fileName}.txt`;
     
@@ -107,10 +140,12 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
       return;
     }
 
-    onNewFile(finalFileName);
+    onNewFile(finalFileName, selectedCasePath);
     onClose();
     setShowNameDialog(false);
+    setShowCaseSelectionDialog(false);
     setFileName('');
+    setSelectedCasePath(null);
     setError(null);
   };
 
@@ -135,7 +170,9 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 z-50"
+            className={`fixed inset-0 backdrop-blur-sm z-50 ${
+              isPastel ? 'bg-white/80' : 'bg-black/80'
+            }`}
           />
         )}
       </AnimatePresence>
@@ -144,45 +181,119 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gray-900 border border-cyber-purple-500/30 rounded-lg shadow-2xl w-full max-w-md">
-              {/* Header */}
-              <div className="p-4 border-b border-gray-700/50 flex items-center justify-between">
-                <h2 className="text-xl font-bold bg-gradient-purple bg-clip-text text-transparent">
-                  Word Editor
-                </h2>
-                <button
-                  onClick={onClose}
-                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-                  aria-label="Close"
-                >
-                  <X size={20} />
-                </button>
+            <div className={`rounded-2xl border-2 shadow-2xl w-full max-w-md overflow-hidden backdrop-blur-xl ${
+              isPastel
+                ? 'bg-gradient-to-br from-white via-pink-50/20 to-white border-pink-300/40'
+                : 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 border-cyber-purple-400/40'
+            }`}>
+              {/* Enhanced Header */}
+              <div className={`relative p-6 border-b backdrop-blur-xl ${
+                isPastel
+                  ? 'border-pink-200/30 bg-gradient-to-r from-slate-100/95 via-pink-50/20 to-slate-100/95'
+                  : 'border-cyber-purple-400/30 bg-gradient-to-r from-gray-900/95 via-purple-900/20 to-gray-900/95'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <div className={`absolute inset-0 rounded-2xl blur-xl opacity-50 ${
+                        isPastel
+                          ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                          : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                      }`}></div>
+                      <div className={`relative p-3 rounded-2xl shadow-2xl ${
+                        isPastel
+                          ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                          : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                      }`}>
+                        <FileText className="w-8 h-8 text-white" />
+                      </div>
+                    </div>
+                    <div>
+                      <h2 className={`text-2xl font-bold bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite] ${
+                        isPastel
+                          ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400'
+                          : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                      }`}>
+                        Word Editor
+                      </h2>
+                      <p className={`text-sm mt-0.5 ${
+                        isPastel ? 'text-gray-600' : 'text-gray-400'
+                      }`}>Create and manage documents</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={onClose}
+                    className={`p-2 rounded-lg transition-colors ${
+                      isPastel
+                        ? 'hover:bg-pink-100/80 text-gray-600 hover:text-gray-800'
+                        : 'hover:bg-gray-800/80 text-gray-400 hover:text-white'
+                    }`}
+                    aria-label="Close"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
               {/* Content */}
-              <div className="p-4 space-y-3">
+              <div className="p-6 space-y-4">
                 {/* Open Recent */}
                 <div className="relative">
-                  <button
+                  <motion.button
                     onClick={() => setShowRecent(!showRecent)}
-                    className="w-full p-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors flex items-center justify-between"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`w-full relative overflow-hidden rounded-2xl border-2 transition-all duration-300 ease-out backdrop-blur-sm shadow-lg hover:shadow-2xl p-4 flex items-center justify-between group ${
+                      isPastel
+                        ? 'border-pink-200/50 hover:border-pink-400/60 bg-white/60 hover:bg-white/80 hover:shadow-pink-400/20'
+                        : 'border-gray-700/50 hover:border-cyber-purple-500/60 bg-gray-800/60 hover:bg-gray-800/80 hover:shadow-cyber-purple-500/20'
+                    }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <FileText size={18} className="text-cyber-purple-400" />
-                      <span className="text-white">Open Recent</span>
+                    {/* Glowing background effect */}
+                    <div className={`absolute inset-0 transition-all duration-500 ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-400/0 via-pink-400/0 to-purple-400/0 group-hover:from-pink-400/10 group-hover:via-pink-400/5 group-hover:to-purple-400/10'
+                        : 'bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10'
+                    }`}></div>
+                    <div className="flex items-center gap-3 relative z-10">
+                      <div className="relative">
+                        <div className={`absolute inset-0 rounded-xl blur-lg ${
+                          isPastel
+                            ? 'bg-gradient-to-br from-pink-300/20 to-purple-300/20'
+                            : 'bg-gradient-to-br from-purple-600/20 to-cyan-600/20'
+                        }`}></div>
+                        <div className={`relative p-2 rounded-xl ${
+                          isPastel
+                            ? 'bg-gradient-to-br from-pink-300/30 to-purple-300/30'
+                            : 'bg-gradient-to-br from-purple-600/30 to-cyan-600/30'
+                        }`}>
+                          <FileText size={18} className="text-white" />
+                        </div>
+                      </div>
+                      <span className={`font-semibold text-base transition-all duration-300 ${
+                        isPastel
+                          ? 'text-gray-800 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-pink-400 group-hover:to-purple-400'
+                          : 'text-white group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyber-purple-400 group-hover:to-cyber-cyan-400'
+                      }`}>
+                        Open Recent
+                      </span>
                     </div>
                     <ChevronDown
                       size={18}
-                      className={`text-gray-400 transition-transform ${showRecent ? 'rotate-180' : ''}`}
+                      className={`transition-all duration-300 relative z-10 ${showRecent ? 'rotate-180' : ''} ${
+                        isPastel
+                          ? 'text-gray-500 group-hover:text-pink-500'
+                          : 'text-gray-400 group-hover:text-cyber-purple-400'
+                      }`}
                     />
-                  </button>
+                  </motion.button>
 
                   {/* Recent Files Gallery */}
                   <AnimatePresence>
@@ -191,31 +302,88 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="mt-2 overflow-hidden"
+                        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                        className="mt-3 overflow-hidden"
                       >
-                        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 max-h-64 overflow-y-auto">
+                        <div className={`border-2 rounded-2xl p-4 max-h-64 overflow-y-auto backdrop-blur-sm ${
+                          isPastel
+                            ? 'bg-white/50 border-pink-200/50'
+                            : 'bg-gray-800/50 border-gray-700/50'
+                        }`}>
                           {loading ? (
-                            <div className="flex items-center justify-center py-4">
-                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyber-purple-400"></div>
+                            <div className="flex items-center justify-center py-8">
+                              <div className={`inline-flex p-4 rounded-2xl border-2 ${
+                                isPastel
+                                  ? 'bg-gradient-to-br from-pink-100/40 to-purple-100/40 border-pink-300/30'
+                                  : 'bg-gradient-to-br from-cyan-900/40 to-purple-900/40 border-cyber-cyan-400/30'
+                              }`}>
+                                <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${
+                                  isPastel ? 'border-pink-400' : 'border-cyber-cyan-400'
+                                }`}></div>
+                              </div>
                             </div>
                           ) : recentFiles.length === 0 ? (
-                            <p className="text-gray-400 text-sm text-center py-4">No recent files</p>
+                            <div className="flex flex-col items-center justify-center py-8 text-center">
+                              <div className={`inline-flex p-4 rounded-2xl border mb-3 ${
+                                isPastel
+                                  ? 'bg-white/50 border-pink-300/20'
+                                  : 'bg-gray-800/50 border-cyber-purple-400/20'
+                              }`}>
+                                <FileText className={`w-12 h-12 ${
+                                  isPastel ? 'text-pink-400/50' : 'text-cyber-purple-400/50'
+                                }`} />
+                              </div>
+                              <p className={`text-sm ${
+                                isPastel ? 'text-gray-600' : 'text-gray-400'
+                              }`}>No recent files</p>
+                            </div>
                           ) : (
-                            <div className="grid grid-cols-2 gap-2">
-                              {recentFiles.map((file) => (
+                            <div className="grid grid-cols-2 gap-3">
+                              {recentFiles.map((file, index) => (
                                 <motion.button
                                   key={file.path}
+                                  initial={{ opacity: 0, y: 8 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ duration: 0.2, delay: index * 0.05 }}
                                   onClick={() => handleOpenRecent(file.path)}
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  className="p-2 bg-gray-700/50 hover:bg-gray-700 rounded-lg text-left transition-colors group"
+                                  whileHover={{ y: -2, scale: 1.02 }}
+                                  whileTap={{ scale: 0.98 }}
+                                  className={`relative overflow-hidden rounded-xl border-2 transition-all duration-300 ease-out backdrop-blur-sm shadow-lg p-3 text-left group ${
+                                    isPastel
+                                      ? 'border-pink-200/50 hover:border-pink-400/60 bg-white/60 hover:bg-white/80 hover:shadow-pink-400/20'
+                                      : 'border-gray-700/50 hover:border-cyber-purple-500/60 bg-gray-800/60 hover:bg-gray-800/80 hover:shadow-cyber-purple-500/20'
+                                  }`}
                                 >
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <FileText size={14} className="text-cyber-purple-400 flex-shrink-0" />
-                                    <p className="text-white text-xs font-medium truncate">{file.name}</p>
+                                  {/* Glowing background effect */}
+                                  <div className={`absolute inset-0 transition-all duration-500 ${
+                                    isPastel
+                                      ? 'bg-gradient-to-br from-pink-400/0 via-pink-400/0 to-purple-400/0 group-hover:from-pink-400/10 group-hover:via-pink-400/5 group-hover:to-purple-400/10'
+                                      : 'bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10'
+                                  }`}></div>
+                                  <div className="flex items-center gap-2 mb-2 relative z-10">
+                                    <div className="relative">
+                                      <div className={`absolute inset-0 rounded-lg blur-sm ${
+                                        isPastel
+                                          ? 'bg-gradient-to-br from-pink-300/20 to-purple-300/20'
+                                          : 'bg-gradient-to-br from-purple-600/20 to-cyan-600/20'
+                                      }`}></div>
+                                      <div className={`relative p-1.5 rounded-lg ${
+                                        isPastel
+                                          ? 'bg-gradient-to-br from-pink-300/30 to-purple-300/30'
+                                          : 'bg-gradient-to-br from-purple-600/30 to-cyan-600/30'
+                                      }`}>
+                                        <FileText size={12} className="text-white" />
+                                      </div>
+                                    </div>
+                                    <p className={`text-xs font-semibold truncate transition-all duration-300 ${
+                                      isPastel
+                                        ? 'text-gray-800 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-pink-400 group-hover:to-purple-400'
+                                        : 'text-white group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyber-purple-400 group-hover:to-cyber-cyan-400'
+                                    }`}>{file.name}</p>
                                   </div>
-                                  <p className="text-gray-500 text-xs">{formatDate(file.modified)}</p>
+                                  <p className={`text-xs relative z-10 ${
+                                    isPastel ? 'text-gray-500' : 'text-gray-500'
+                                  }`}>{formatDate(file.modified)}</p>
                                 </motion.button>
                               ))}
                             </div>
@@ -227,30 +395,83 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
                 </div>
 
                 {/* New Document */}
-                <button
+                <motion.button
                   onClick={handleNewDocument}
-                  className="w-full p-3 bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`w-full relative overflow-hidden rounded-2xl border-2 border-transparent text-white font-semibold transition-all shadow-lg hover:shadow-2xl p-4 flex items-center justify-center gap-3 group ${
+                    isPastel
+                      ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 hover:shadow-pink-400/50'
+                      : 'bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700 hover:shadow-cyber-purple-500/50'
+                  }`}
                 >
-                  <Plus size={18} />
-                  <span>New Document</span>
-                </button>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-xl blur-sm"></div>
+                    <div className="relative p-1.5 bg-white/20 rounded-xl">
+                      <Plus size={18} className="relative z-10" />
+                    </div>
+                  </div>
+                  <span className="relative z-10 text-base">New Document</span>
+                </motion.button>
 
                 {/* Text Library */}
-                <button
+                <motion.button
                   onClick={() => {
                     onOpenLibrary();
                     onClose();
                   }}
-                  className="w-full p-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors flex items-center gap-2"
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`w-full relative overflow-hidden rounded-2xl border-2 transition-all duration-300 ease-out backdrop-blur-sm shadow-lg hover:shadow-2xl p-4 flex items-center justify-center gap-3 group ${
+                    isPastel
+                      ? 'border-pink-200/50 hover:border-pink-400/60 bg-white/60 hover:bg-white/80 hover:shadow-pink-400/20'
+                      : 'border-gray-700/50 hover:border-cyber-purple-500/60 bg-gray-800/60 hover:bg-gray-800/80 hover:shadow-cyber-purple-500/20'
+                  }`}
                 >
-                  <FileText size={18} className="text-cyber-purple-400" />
-                  <span className="text-white">Text Library</span>
-                </button>
+                  {/* Glowing background effect */}
+                  <div className={`absolute inset-0 transition-all duration-500 ${
+                    isPastel
+                      ? 'bg-gradient-to-br from-pink-400/0 via-pink-400/0 to-purple-400/0 group-hover:from-pink-400/10 group-hover:via-pink-400/5 group-hover:to-purple-400/10'
+                      : 'bg-gradient-to-br from-purple-600/0 via-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/10 group-hover:via-purple-600/5 group-hover:to-cyan-600/10'
+                  }`}></div>
+                  <div className="relative">
+                    <div className={`absolute inset-0 rounded-xl blur-lg ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-300/20 to-purple-300/20'
+                        : 'bg-gradient-to-br from-purple-600/20 to-cyan-600/20'
+                    }`}></div>
+                    <div className={`relative p-1.5 rounded-xl ${
+                      isPastel
+                        ? 'bg-gradient-to-br from-pink-300/30 to-purple-300/30'
+                        : 'bg-gradient-to-br from-purple-600/30 to-cyan-600/30'
+                    }`}>
+                      <FolderOpen size={18} className="text-white" />
+                    </div>
+                  </div>
+                  <span className={`font-semibold text-base transition-all duration-300 relative z-10 ${
+                    isPastel
+                      ? 'text-gray-800 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-pink-400 group-hover:to-purple-400'
+                      : 'text-white group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyber-purple-400 group-hover:to-cyber-cyan-400'
+                  }`}>
+                    Text Library
+                  </span>
+                </motion.button>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Case Selection Dialog */}
+      <CaseSelectionDialog
+        isOpen={showCaseSelectionDialog}
+        onClose={() => {
+          setShowCaseSelectionDialog(false);
+          setSelectedCasePath(null);
+        }}
+        onSelectCase={handleCaseSelected}
+      />
 
       {/* Name File Dialog */}
       <AnimatePresence>
@@ -259,21 +480,52 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70"
+            className={`fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm ${
+              isPastel ? 'bg-white/80' : 'bg-black/80'
+            }`}
             onClick={() => {
               setShowNameDialog(false);
+              setShowCaseSelectionDialog(false);
               setFileName('');
+              setSelectedCasePath(null);
               setError(null);
             }}
           >
             <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-gray-900 border border-cyber-purple-500/30 rounded-lg shadow-2xl w-full max-w-sm p-6"
+              className={`rounded-2xl border-2 shadow-2xl w-full max-w-sm p-6 backdrop-blur-xl ${
+                isPastel
+                  ? 'bg-gradient-to-br from-white via-pink-50/20 to-white border-pink-300/40'
+                  : 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 border-cyber-purple-400/40'
+              }`}
             >
-              <h3 className="text-lg font-semibold text-white mb-4">Name File</h3>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="relative">
+                  <div className={`absolute inset-0 rounded-xl blur-xl opacity-50 ${
+                    isPastel
+                      ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                      : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                  }`}></div>
+                  <div className={`relative p-2 rounded-xl shadow-lg ${
+                    isPastel
+                      ? 'bg-gradient-to-br from-pink-300 to-purple-300'
+                      : 'bg-gradient-to-br from-purple-600 to-cyan-600'
+                  }`}>
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <h3 className={`text-xl font-bold bg-clip-text text-transparent ${
+                  isPastel
+                    ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400'
+                    : 'bg-gradient-to-r from-cyber-purple-400 via-cyber-cyan-400 to-cyber-purple-400'
+                }`}>
+                  Name File
+                </h3>
+              </div>
               <input
                 type="text"
                 value={fileName}
@@ -283,39 +535,65 @@ export function WordEditorDialog({ isOpen, onClose, onOpenFile, onNewFile, onOpe
                     handleCreateNew();
                   } else if (e.key === 'Escape') {
                     setShowNameDialog(false);
+                    setShowCaseSelectionDialog(false);
                     setFileName('');
+                    setSelectedCasePath(null);
                     setError(null);
                   }
                 }}
                 placeholder="Enter file name..."
                 autoFocus
-                className={`w-full px-4 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-500 focus:outline-none mb-2 ${
-                  error 
-                    ? 'border-red-500 focus:border-red-500' 
-                    : 'border-gray-700 focus:border-cyber-purple-500'
+                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none mb-3 backdrop-blur-sm transition-all ${
+                  error
+                    ? 'border-red-500/60 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+                    : isPastel
+                      ? 'bg-white/80 border-pink-200/50 focus:border-pink-400/60 focus:ring-2 focus:ring-pink-400/20 text-gray-800 placeholder-gray-400'
+                      : 'bg-gray-800/80 border-gray-700/50 focus:border-cyber-purple-500/60 focus:ring-2 focus:ring-cyber-purple-500/20 text-white placeholder-gray-500'
                 }`}
               />
               {error && (
-                <p className="text-red-400 text-sm mb-4">{error}</p>
+                <motion.p 
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-red-400 text-sm mb-4 flex items-center gap-2"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+                  {error}
+                </motion.p>
               )}
-              <div className="flex gap-2 justify-end">
-                <button
+              <div className="flex gap-3 justify-end">
+                <motion.button
                   onClick={() => {
                     setShowNameDialog(false);
+                    setShowCaseSelectionDialog(false);
                     setFileName('');
+                    setSelectedCasePath(null);
                     setError(null);
                   }}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`px-5 py-2.5 rounded-xl transition-all border font-medium ${
+                    isPastel
+                      ? 'bg-pink-100/80 hover:bg-pink-200/80 text-gray-800 border-pink-200/50 hover:border-pink-300/50'
+                      : 'bg-gray-800/80 hover:bg-gray-700/80 text-white border-gray-700/50 hover:border-gray-600/50'
+                  }`}
                 >
                   Cancel
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                   onClick={handleCreateNew}
                   disabled={!fileName.trim() || !!error}
-                  className="px-4 py-2 bg-cyber-purple-500 hover:bg-cyber-purple-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  whileHover={{ scale: !fileName.trim() || !!error ? 1 : 1.02 }}
+                  whileTap={{ scale: !fileName.trim() || !!error ? 1 : 0.98 }}
+                  className={`px-5 py-2.5 text-white rounded-xl transition-all shadow-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg relative overflow-hidden group ${
+                    isPastel
+                      ? 'bg-gradient-to-r from-pink-400 via-purple-400 to-pink-400 hover:from-pink-500 hover:via-purple-500 hover:to-pink-500 hover:shadow-pink-400/50'
+                      : 'bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700 hover:shadow-cyber-purple-500/50'
+                  }`}
                 >
-                  Create
-                </button>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                  <span className="relative z-10">Create</span>
+                </motion.button>
               </div>
             </motion.div>
           </motion.div>

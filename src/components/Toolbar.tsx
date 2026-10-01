@@ -47,16 +47,18 @@ export const Toolbar = memo(function Toolbar({
         animate={{ y: 0, opacity: 1 }}
         className="fixed bottom-6 left-0 right-0 z-40 flex justify-center items-center px-4"
       >
-        <div className="bg-gray-800/95 backdrop-blur-md rounded-full px-6 py-4 border-2 border-cyber-purple-500/50 shadow-2xl flex items-center gap-4 flex-shrink-0">
+        <div className="bg-gradient-to-r from-gray-800/95 via-gray-800/95 to-gray-800/95 backdrop-blur-md rounded-full px-6 py-4 border-2 border-cyber-purple-500/50 shadow-2xl flex items-center gap-4 flex-shrink-0">
           {/* Select Save Directory */}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={onSelectSaveDirectory}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-full font-medium transition-colors text-sm whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-700/80 hover:bg-gradient-to-r hover:from-purple-600/20 hover:to-cyan-600/20 text-white rounded-full font-medium transition-all text-sm whitespace-nowrap border border-gray-600/50 hover:border-cyber-purple-400/50"
             aria-label={saveDirectory ? 'Change save directory' : 'Select save directory'}
           >
             <FolderOpen size={18} aria-hidden="true" />
             {saveDirectory ? 'Change Directory' : 'Select Save Directory'}
-          </button>
+          </motion.button>
 
           {saveDirectory && (
             <>
@@ -93,16 +95,18 @@ export const Toolbar = memo(function Toolbar({
               </button>
 
               {/* Save Button */}
-              <button
+              <motion.button
+                whileHover={{ scale: canSave && (saveParentFile || saveToZip) ? 1.05 : 1 }}
+                whileTap={{ scale: canSave && (saveParentFile || saveToZip) ? 0.95 : 1 }}
                 onClick={handleSave}
                 disabled={!canSave || (!saveParentFile && !saveToZip)}
-                className="flex items-center gap-2 px-6 py-2 bg-gradient-purple hover:opacity-90 text-white rounded-full font-semibold transition-opacity disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-600 hover:from-purple-700 hover:via-purple-600 hover:to-cyan-700 text-white rounded-full font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-lg hover:shadow-xl disabled:shadow-none"
                 aria-label="Save extracted pages"
                 aria-disabled={!canSave || (!saveParentFile && !saveToZip)}
               >
                 <Save size={18} aria-hidden="true" />
                 Save
-              </button>
+              </motion.button>
             </>
           )}
         </div>

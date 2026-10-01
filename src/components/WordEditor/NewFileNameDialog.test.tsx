@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { NewFileNameDialog } from './NewFileNameDialog';
@@ -326,7 +326,6 @@ describe('NewFileNameDialog', () => {
   });
 
   it('should call onClose when backdrop is clicked', async () => {
-    const user = userEvent.setup({ delay: null });
     const { container } = render(
       <NewFileNameDialog
         isOpen={true}

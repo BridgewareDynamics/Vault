@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { useArchive } from './useArchive';
-import { ToastProvider } from '../components/Toast/ToastContext';
+import { ToastProvider } from '../components/Toast/ToastProvider';
 import { mockElectronAPI } from '../test-utils/mocks';
+import { resetArchivePrefetchForTests } from '../utils/archivePrefetch';
+import { resetThumbnailServiceForTests } from '../utils/thumbnailService';
 
 describe('useArchive', () => {
   const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -12,6 +14,8 @@ describe('useArchive', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetArchivePrefetchForTests();
+    resetThumbnailServiceForTests();
     mockElectronAPI.getArchiveConfig.mockResolvedValue({ archiveDrive: '/path/to/vault' });
     mockElectronAPI.listArchiveCases.mockResolvedValue([]);
     mockElectronAPI.listCaseFiles.mockResolvedValue([]);
@@ -442,6 +446,10 @@ describe('useArchive', () => {
         expect(mockElectronAPI.listCaseFiles).toHaveBeenCalledTimes(1);
       });
 
+      act(() => {
+        result.current.ensureThumbnailForFile('/path/to/file1.jpg', 'image');
+      });
+
       await waitFor(() => {
         expect(mockElectronAPI.getFileThumbnail).toHaveBeenCalledTimes(1);
       });
@@ -475,19 +483,15 @@ describe('useArchive', () => {
 
   describe('Error Handling', () => {
     it('should handle error when loading archive config fails', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockElectronAPI.getArchiveConfig.mockRejectedValue(new Error('Config load failed'));
 
-      renderHook(() => useArchive(), { wrapper });
+      const { result } = renderHook(() => useArchive(), { wrapper });
 
       await waitFor(() => {
         expect(mockElectronAPI.getArchiveConfig).toHaveBeenCalled();
       });
 
-      // Should not crash
-      expect(consoleError).toHaveBeenCalled();
-
-      consoleError.mockRestore();
+      expect(result.current.archiveConfig).toBe(null);
     });
 
     it('should handle error when loading cases fails', async () => {

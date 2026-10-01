@@ -15,6 +15,7 @@ export const mockApp = {
   whenReady: vi.fn(() => Promise.resolve()),
   on: vi.fn(),
   quit: vi.fn(),
+  enableSandbox: vi.fn(),
 };
 
 // Mock BrowserWindow
@@ -28,6 +29,7 @@ export const mockBrowserWindow = {
     openDevTools: vi.fn(),
     on: vi.fn(),
     once: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
   },
   on: vi.fn(),
   once: vi.fn(),

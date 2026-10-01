@@ -21,12 +21,14 @@ export function isSafePath(filePath: string): boolean {
     return false;
   }
 
-  // Check for path traversal patterns
+  // Check for path traversal patterns against both the raw and normalized
+  // path. Normalization collapses patterns like '//', so the original string
+  // must be inspected too, otherwise these rules are effectively dead.
   const normalizedPath = path.normalize(filePath);
   const dangerousPatterns = ['..', '~', '//'];
-  
+
   for (const pattern of dangerousPatterns) {
-    if (normalizedPath.includes(pattern)) {
+    if (filePath.includes(pattern) || normalizedPath.includes(pattern)) {
       return false;
     }
   }

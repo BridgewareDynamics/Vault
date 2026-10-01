@@ -1,16 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { CaseFolder } from './CaseFolder';
 import { ArchiveCase } from '../../types';
 import { mockElectronAPI } from '../../test-utils/mocks';
-import { ToastProvider } from '../Toast/ToastContext';
+import { renderWithProviders } from '../../test-utils/render';
 
-// Helper to render with ToastProvider
-const renderWithToast = (ui: React.ReactElement) => {
-  return render(<ToastProvider>{ui}</ToastProvider>);
-};
+vi.mock('../../hooks/useCategoryTags', () => ({
+  useCategoryTags: () => ({
+    tags: [],
+    getTagById: vi.fn(() => undefined),
+    createTag: vi.fn(),
+    deleteTag: vi.fn(),
+    loadTags: vi.fn(),
+  }),
+}));
 
 describe('CaseFolder', () => {
   const mockCase: ArchiveCase = {
@@ -34,7 +39,7 @@ describe('CaseFolder', () => {
 
   it('should render case name', async () => {
     await act(async () => {
-      renderWithToast(
+      renderWithProviders(
         <CaseFolder
           caseItem={mockCase}
           onClick={mockOnClick}
@@ -46,7 +51,7 @@ describe('CaseFolder', () => {
 
   it('should render case description when provided', async () => {
     await act(async () => {
-      renderWithToast(
+      renderWithProviders(
         <CaseFolder
           caseItem={mockCase}
           onClick={mockOnClick}
@@ -62,7 +67,7 @@ describe('CaseFolder', () => {
       path: '/path/to/case',
     };
     await act(async () => {
-      renderWithToast(
+      renderWithProviders(
         <CaseFolder
           caseItem={caseWithoutDesc}
           onClick={mockOnClick}
@@ -74,7 +79,7 @@ describe('CaseFolder', () => {
 
   it('should call onClick when clicked', async () => {
     const user = userEvent.setup();
-    const { container } = renderWithToast(
+    const { container } = renderWithProviders(
       <CaseFolder
         caseItem={mockCase}
         onClick={mockOnClick}
@@ -93,7 +98,7 @@ describe('CaseFolder', () => {
 
   it('should call onDelete when delete button is clicked', async () => {
     const user = userEvent.setup();
-    renderWithToast(
+    renderWithProviders(
       <CaseFolder
         caseItem={mockCase}
         onClick={mockOnClick}
@@ -125,7 +130,7 @@ describe('CaseFolder', () => {
 
   it('should call onEditBackground when edit background button is clicked', async () => {
     const user = userEvent.setup();
-    renderWithToast(
+    renderWithProviders(
       <CaseFolder
         caseItem={mockCase}
         onClick={mockOnClick}
@@ -142,29 +147,28 @@ describe('CaseFolder', () => {
     expect(mockOnClick).not.toHaveBeenCalled();
   });
 
-  it('should load background image when backgroundImage is provided', async () => {
+  it('should resolve background image via vault-file protocol when backgroundImage is provided', async () => {
     const caseWithBg: ArchiveCase = {
       ...mockCase,
       backgroundImage: '/path/to/bg.png',
     };
-    
-    await act(async () => {
-      renderWithToast(
-        <CaseFolder
-          caseItem={caseWithBg}
-          onClick={mockOnClick}
-        />
-      );
-    });
-    
-    await waitFor(() => {
-      expect(mockElectronAPI.readFileData).toHaveBeenCalledWith('/path/to/bg.png');
-    });
+
+    const { container } = renderWithProviders(
+      <CaseFolder
+        caseItem={caseWithBg}
+        onClick={mockOnClick}
+      />,
+      { withToast: true },
+    );
+
+    const styled = container.querySelector('[style*="vault-file"]');
+    expect(styled).toBeTruthy();
+    expect(mockElectronAPI.readFileData).not.toHaveBeenCalled();
   });
 
   it('should show loading spinner when isExtracting is true', async () => {
     await act(async () => {
-      renderWithToast(
+      renderWithProviders(
         <CaseFolder
           caseItem={mockCase}
           onClick={mockOnClick}
@@ -178,7 +182,7 @@ describe('CaseFolder', () => {
 
   it('should not show loading spinner when isExtracting is false', async () => {
     await act(async () => {
-      renderWithToast(
+      renderWithProviders(
         <CaseFolder
           caseItem={mockCase}
           onClick={mockOnClick}
@@ -192,7 +196,7 @@ describe('CaseFolder', () => {
 
   it('should not render delete button when onDelete is not provided', async () => {
     await act(async () => {
-      renderWithToast(
+      renderWithProviders(
         <CaseFolder
           caseItem={mockCase}
           onClick={mockOnClick}
@@ -205,7 +209,7 @@ describe('CaseFolder', () => {
 
   it('should not render edit background button when onEditBackground is not provided', async () => {
     await act(async () => {
-      renderWithToast(
+      renderWithProviders(
         <CaseFolder
           caseItem={mockCase}
           onClick={mockOnClick}
