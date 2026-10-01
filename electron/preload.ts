@@ -163,6 +163,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readPDFThumbnail: (filePath: string) => ipcRenderer.invoke('read-pdf-thumbnail', filePath),
   deletePDFThumbnail: (filePath: string) => ipcRenderer.invoke('delete-pdf-thumbnail', filePath),
   readFileData: (filePath: string) => ipcRenderer.invoke('read-file-data', filePath),
+  prepareVideoForPlayback: (filePath: string) => ipcRenderer.invoke('prepare-video-for-playback', filePath),
   extractPDFFromArchive: (options: {
     pdfPath: string;
     casePath: string;
@@ -441,6 +442,9 @@ declare global {
       readFileData: (filePath: string) => Promise<
         | { data: string; mimeType: string; fileName: string }
         | { type: 'file-path'; path: string; mimeType: string; fileName: string }
+      >;
+      prepareVideoForPlayback: (filePath: string) => Promise<
+        { success: true; path: string; remuxed: boolean } | { success: false; error: string }
       >;
       extractPDFFromArchive: (options: {
         pdfPath: string;

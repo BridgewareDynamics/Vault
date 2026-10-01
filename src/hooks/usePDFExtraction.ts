@@ -224,7 +224,7 @@ export function usePDFExtraction() {
                 bytes[i] = binaryString.charCodeAt(i);
               }
               const arrayBuffer = bytes.buffer;
-              pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+              pdf = await pdfjsLib.getDocument({ data: arrayBuffer, isEvalSupported: false }).promise;
             } else {
               throw new Error('Unexpected PDF file data format');
             }
@@ -237,11 +237,11 @@ export function usePDFExtraction() {
               bytes[i] = binaryString.charCodeAt(i);
             }
             const arrayBuffer = bytes.buffer;
-            pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            pdf = await pdfjsLib.getDocument({ data: arrayBuffer, isEvalSupported: false }).promise;
           } else if (Array.isArray(fileData)) {
             // Legacy format: array of numbers
             const arrayBuffer = new Uint8Array(fileData).buffer;
-            pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            pdf = await pdfjsLib.getDocument({ data: arrayBuffer, isEvalSupported: false }).promise;
           } else {
             throw new Error('Unexpected PDF file data format');
           }

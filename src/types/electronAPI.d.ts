@@ -63,6 +63,10 @@ declare global {
         | { data: string; mimeType: string; fileName: string }
         | { type: 'file-path'; path: string; mimeType: string; fileName: string }
       >;
+      prepareVideoForPlayback: (filePath: string) => Promise<
+        | { success: true; path: string; url: string; remuxed: boolean }
+        | { success: false; error: string }
+      >;
       extractPDFFromArchive: (options: {
         pdfPath: string;
         casePath: string;

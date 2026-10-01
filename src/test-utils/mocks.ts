@@ -42,6 +42,7 @@ export const mockElectronAPI = {
   readPDFThumbnail: vi.fn(),
   deletePDFThumbnail: vi.fn(),
   readFileData: vi.fn(),
+  prepareVideoForPlayback: vi.fn(),
   extractPDFFromArchive: vi.fn(),
   logToMain: vi.fn(),
   openDevToolsInDev: vi.fn(),

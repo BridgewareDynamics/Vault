@@ -207,6 +207,9 @@ async function createRangePDFSource(
       disableStream: false,
       verbosity: 0,
       rangeChunkSize: 256 * 1024,
+      // Defense-in-depth: never let PDF.js use eval() for font/JS handling so
+      // the renderer CSP can omit 'unsafe-eval' (CVE-2024-4367 hardening).
+      isEvalSupported: false,
     });
 
     if (onProgress) {
@@ -333,6 +336,9 @@ async function createBlobPDFSource(
       disableAutoFetch: false,
       disableStream: false,
       verbosity: 0,
+      // Defense-in-depth: disable eval() so the renderer CSP can omit
+      // 'unsafe-eval' (CVE-2024-4367 hardening).
+      isEvalSupported: false,
     });
 
       const pdf = await loadingTask.promise;

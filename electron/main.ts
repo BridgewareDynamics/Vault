@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, nativeImage, Menu, screen, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, crashReporter, protocol, net, nativeImage, Menu, screen, shell } from 'electron';
 import { join } from 'path';
+import { pathToFileURL } from 'url';
 import { isValidPDFFile, isValidDirectory, isValidFolderName, isSafePath, isSafeStorageId, isPathWithinBase } from './utils/pathValidator';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -10,6 +11,8 @@ import JSZip from 'jszip';
 import { loadArchiveConfig, saveArchiveConfig, getArchiveDrive, setArchiveDrive } from './utils/archiveConfig';
 import { generateFileThumbnail } from './utils/thumbnailGenerator';
 import { MAX_FILE_SIZE_FOR_BASE64, readFileDataPayload } from './utils/fileDataUtils';
+import { getMediaUrl } from './utils/mediaServer';
+import { prepareVideoForPlayback } from './utils/videoRemux';
 import { createArchiveMarker, readArchiveMarker, isValidArchive, updateArchiveMarker } from './utils/archiveMarker';
 import { logger, type LogLevel, type LogArgs } from './utils/logger';
 import { loadSettings } from './utils/settings';
@@ -32,6 +35,33 @@ import {
 import { getConverterCapabilities } from './utils/fileFormatRegistry';
 import { propagateVaultFileReferenceUpdate } from './utils/vaultReferencePropagator';
 import { listSystemFonts } from './utils/systemFonts';
+
+// Custom schemes used to serve local vault assets (images/video/audio) to the
+// renderer without base64 data URLs. Declared in one place so the privileged
+// registration (below, pre-`ready`) and the request handlers (post-`ready`)
+// stay in sync.
+const VAULT_PROTOCOL_SCHEMES = ['vault-video', 'vault-file'] as const;
+
+// Schemes must be registered as privileged BEFORE the app is ready. Recent
+// Electron versions reject cross-origin requests to custom schemes unless
+// `corsEnabled` is set: the renderer (http://localhost / file://) loading
+// `vault-video://...` is cross-origin, and video thumbnail generation reads the
+// frame onto a <canvas> via `crossOrigin = 'anonymous'`, which requires CORS to
+// avoid a tainted canvas. `stream` lets <video>/<audio> handle range/streaming
+// responses, and `secure` keeps the assets usable from the secure renderer
+// context. `standard` is intentionally left false so the existing
+// `scheme://<url-encoded-absolute-path>` format keeps parsing correctly.
+protocol.registerSchemesAsPrivileged(
+  VAULT_PROTOCOL_SCHEMES.map((scheme) => ({
+    scheme,
+    privileges: {
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      corsEnabled: true,
+    },
+  }))
+);
 
 // Enable Chromium's OS-level sandbox for all renderer processes as defense in
 // depth on top of contextIsolation + nodeIntegration:false. Must run before the
@@ -102,7 +132,7 @@ async function findCasePathFromPath(filePath: string): Promise<string | null> {
  * if the archive drive has not been configured yet the userData root still
  * applies, and callers also retain their existing `isSafePath()` guard.
  */
-async function isManagedWritePath(filePath: string): Promise<boolean> {
+async function getManagedRoots(): Promise<Array<string | null>> {
   const roots: Array<string | null> = [];
   try {
     roots.push(await getArchiveDrive());
@@ -114,7 +144,28 @@ async function isManagedWritePath(filePath: string): Promise<boolean> {
   } catch {
     // App not ready; userData unavailable.
   }
-  return isPathWithinBase(filePath, roots);
+  return roots;
+}
+
+async function isManagedWritePath(filePath: string): Promise<boolean> {
+  return isPathWithinBase(filePath, await getManagedRoots());
+}
+
+/**
+ * Shared, hardened `webPreferences` for every renderer window. Centralizing
+ * these flags guarantees all windows (main + detached) keep the same security
+ * posture: contextIsolation on, nodeIntegration off, webSecurity on, and
+ * DevTools only in development. Sandbox is enabled process-wide via
+ * `app.enableSandbox()` at startup.
+ */
+function createSecureWebPreferences(preloadPath: string): Electron.WebPreferences {
+  return {
+    preload: preloadPath,
+    nodeIntegration: false,
+    contextIsolation: true,
+    webSecurity: true,
+    devTools: isDev,
+  };
 }
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -212,35 +263,57 @@ let db: LocalDatabase | null = null;
 let fileWatcher: FileSystemWatcher | null = null;
 let migrationInProgress = false;
 
-// Register custom protocols for efficient local file access (avoids base64 data URLs)
+// Serve local vault assets (images/video/audio) to the renderer by delegating to
+// Electron's own file loader via `net.fetch` over `file://`.
+//
+// We previously hand-rolled byte-range responses with a buffered `Response`.
+// That works for images and for video that starts playing immediately, but a
+// manually-built media `Response` makes Chromium's media data source fail with
+// `PIPELINE_ERROR_READ: FFmpegDemuxer: data source error` once the player goes
+// idle (e.g. the user pauses for a few seconds before pressing play, then it
+// issues a fresh range read). Delegating to `net.fetch` lets Chromium's native
+// file loader handle ranges, streaming, seeking and idle reads correctly.
+//
+// Security is preserved: we still validate the path and confine it to a managed
+// root *before* fetching, so a compromised renderer cannot read arbitrary files
+// (e.g. vault-file:///C:/Windows/...).
 function registerVaultPathProtocol(scheme: string) {
-  protocol.registerFileProtocol(scheme, (request, callback) => {
+  protocol.handle(scheme, async (request) => {
     try {
       const prefix = `${scheme}://`;
-      const url = request.url.replace(prefix, '');
-      const filePath = decodeURIComponent(url);
+      const filePath = decodeURIComponent(request.url.slice(prefix.length));
 
       if (!isSafePath(filePath)) {
-        callback({ error: -2 });
-        return;
+        return new Response('Invalid path', { status: 400 });
       }
 
-      if (!existsSync(filePath)) {
-        callback({ error: -6 });
-        return;
+      if (!isPathWithinBase(filePath, await getManagedRoots())) {
+        return new Response('Forbidden', { status: 403 });
       }
 
-      callback({ path: filePath });
+      const stats = await fs.stat(filePath).catch(() => null);
+      if (!stats || !stats.isFile()) {
+        return new Response('Not found', { status: 404 });
+      }
+
+      // Forward the request (including any Range header) to Chromium's file
+      // loader. `bypassCustomProtocolHandlers` keeps this fetch from being routed
+      // back through our own custom-scheme handlers.
+      return net.fetch(pathToFileURL(filePath).toString(), {
+        headers: request.headers,
+        bypassCustomProtocolHandlers: true,
+      });
     } catch (error) {
       logger.error(`${scheme} protocol error:`, error);
-      callback({ error: -2 });
+      return new Response('Internal error', { status: 500 });
     }
   });
 }
 
 function registerVaultFileProtocols() {
-  registerVaultPathProtocol('vault-video');
-  registerVaultPathProtocol('vault-file');
+  for (const scheme of VAULT_PROTOCOL_SCHEMES) {
+    registerVaultPathProtocol(scheme);
+  }
 }
 
 async function createWindow() {
@@ -373,17 +446,12 @@ async function createWindow() {
     backgroundColor: '#0f0f1e',
     icon: windowIcon, // Set window icon using nativeImage
     webPreferences: {
-      preload: preloadPath,
-      nodeIntegration: false,
-      contextIsolation: true,
-      webSecurity: true, // Explicitly enable web security
-      devTools: isDev, // Only enable DevTools in development
-      // sandbox is intentionally left at its default (false): renderer hardening
-      // is provided by contextIsolation + nodeIntegration:false + webSecurity +
-      // applyWindowSecurity() (deny-by-default navigation/window-open). Enabling
-      // sandbox would require validating the bundled preload across all packaged
-      // targets; deferred to avoid risking current functionality.
-      // Note: enableWebGPU is not available in Electron 28, hardware acceleration is enabled via command line switches
+      ...createSecureWebPreferences(preloadPath),
+      // Sandbox is enabled process-wide via app.enableSandbox() at startup, on
+      // top of contextIsolation + nodeIntegration:false + webSecurity +
+      // applyWindowSecurity() (deny-by-default navigation/window-open).
+      // Note: enableWebGPU is not available in Electron 28; hardware acceleration
+      // is enabled via command line switches.
       offscreen: false, // Keep onscreen for better performance
     } as Electron.WebPreferences,
     titleBarStyle: 'hiddenInset',
@@ -484,8 +552,10 @@ async function createWindow() {
         });
       };
       
-      // Wait a bit for Vite to start
-      setTimeout(loadDevServer, 500);
+      // wait-on already confirmed the dev server is reachable before Electron
+      // launched, so load immediately. The retry inside loadDevServer() still
+      // covers any transient connection blip.
+      loadDevServer();
       
       mainWindow.webContents.once('did-finish-load', () => {
         // Open DevTools after page loads (only in development)
@@ -571,18 +641,39 @@ app.whenReady().then(async () => {
     app.setAppUserModelId('com.vault.app');
   }
   
+  let dbInitFailed = false;
   try {
     db = LocalDatabase.getInstance();
     await db.initialize();
     logger.info('Database initialized');
   } catch (error) {
+    dbInitFailed = true;
     logger.error('Failed to initialize database:', error);
   }
   
   registerVaultFileProtocols();
   await createWindow();
 
-  if (db) {
+  if (dbInitFailed) {
+    // Persistence is degraded but the app can still run (the filesystem remains
+    // the source of truth), so warn the user instead of crashing.
+    const warningOptions: Electron.MessageBoxOptions = {
+      type: 'warning',
+      title: 'Database unavailable',
+      message: 'The Vault database could not be initialized.',
+      detail:
+        'The app will keep working using the files on disk, but features that rely on the local database (fast listing, search, sync metadata) may be unavailable until you restart. Your files are not affected.',
+      buttons: ['OK'],
+    };
+    const warningPromise = mainWindow
+      ? dialog.showMessageBox(mainWindow, warningOptions)
+      : dialog.showMessageBox(warningOptions);
+    void warningPromise.catch((err) => {
+      logger.error('Failed to show database warning dialog:', err);
+    });
+  }
+
+  if (db && !dbInitFailed) {
     void runBackgroundVaultMigration();
   }
 
@@ -3000,12 +3091,14 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        // Soft delete in database
+        await fs.rm(filePath, { recursive: true, force: true });
+
+        // Soft delete in database only after the filesystem delete succeeds, so
+        // a failed/locked delete never leaves an orphaned soft-deleted row.
         if (isDatabaseReady()) {
           db!.deleteFile(filePath);
         }
-        
-        await fs.rm(filePath, { recursive: true, force: true });
+
         logger.log('[Main] Folder deleted successfully');
         return true;
       } catch (error) {
@@ -3046,12 +3139,14 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-    // Soft delete in database
+    await fs.unlink(filePath);
+
+    // Soft delete in database only after the filesystem delete succeeds, so a
+    // failed/locked delete never leaves an orphaned soft-deleted row.
     if (db) {
       db.deleteFile(filePath);
     }
-    
-    await fs.unlink(filePath);
+
     logger.log('[Main] File deleted successfully');
     return true;
     } catch (unlinkError) {
@@ -3071,6 +3166,12 @@ ipcMain.handle('delete-file', async (event, filePath: string, isFolder: boolean 
         logger.log('[Main] Detected directory error, trying recursive delete as fallback');
         try {
           await fs.rm(filePath, { recursive: true, force: true });
+
+          // Soft delete in database only after the filesystem delete succeeds.
+          if (db) {
+            db.deleteFile(filePath);
+          }
+
           logger.log('[Main] Folder deleted successfully (fallback)');
           return true;
         } catch (rmError) {
@@ -3223,6 +3324,13 @@ ipcMain.handle('rename-file', async (event, filePath: string, newName: string) =
     throw new Error('New name cannot be empty');
   }
 
+  // Reject path separators and parent-directory tokens for files *and* folders
+  // so a rename can never escape the current directory (e.g. "..\\..\\evil").
+  const trimmedNewName = newName.trim();
+  if (/[\\/]/.test(trimmedNewName) || trimmedNewName === '.' || trimmedNewName === '..') {
+    throw new Error('Invalid name: path separators are not allowed');
+  }
+
   // Validate folder name if it's a directory
   const stats = await fs.stat(filePath).catch(() => null);
   if (stats?.isDirectory() && !isValidFolderName(newName)) {
@@ -3231,7 +3339,12 @@ ipcMain.handle('rename-file', async (event, filePath: string, newName: string) =
 
   try {
     const dir = path.dirname(filePath);
-    const newPath = path.join(dir, newName.trim());
+    const newPath = path.join(dir, trimmedNewName);
+
+    // Re-validate the resolved destination stays inside a managed root.
+    if (!(await isManagedWritePath(newPath))) {
+      throw new Error('Path is outside the managed archive');
+    }
     
     // Check if new path already exists
     try {
@@ -3428,6 +3541,33 @@ ipcMain.handle('read-file-data', async (event, filePath: string) => {
     return await readFileDataPayload(filePath);
   } catch (error) {
     throw new Error(`Failed to read file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+});
+
+// Ensure a video is playable in a Chromium <video> element. Fragmented MP4s
+// (common in YouTube/DASH downloads) are rejected by the element over a plain
+// `src`, so we stream-copy them to a faststart file stored in the user's vault
+// directory and return that path. Non-fragmented files pass through untouched.
+ipcMain.handle('prepare-video-for-playback', async (_event, filePath: string) => {
+  if (!isSafePath(filePath)) {
+    return { success: false, error: 'Invalid file path' };
+  }
+
+  if (!(await isManagedWritePath(filePath))) {
+    return { success: false, error: 'File is outside the managed vault' };
+  }
+
+  try {
+    const result = await prepareVideoForPlayback(filePath);
+    // Serve playback over the loopback media server (real HTTP range support) so
+    // the <video> element can seek and resume after idle. Custom-protocol 206
+    // responses fail with PIPELINE_ERROR_READ on the first range read after the
+    // player goes idle; a real HTTP server avoids that entirely.
+    const url = await getMediaUrl(result.path, isManagedWritePath);
+    return { success: true, path: result.path, url, remuxed: result.remuxed };
+  } catch (error) {
+    logger.error('prepare-video-for-playback failed:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 });
 
@@ -4069,13 +4209,7 @@ function createResearchWorkspaceWindow(options: {
     minWidth: 1000,
     minHeight: 700,
     backgroundColor: '#0f0f1e',
-    webPreferences: {
-      preload: getElectronPreloadPath(),
-      nodeIntegration: false,
-      contextIsolation: true,
-      webSecurity: true,
-      devTools: isDev,
-    },
+    webPreferences: createSecureWebPreferences(getElectronPreloadPath()),
     titleBarStyle: 'hiddenInset',
     frame: true,
     movable: true,
@@ -4153,13 +4287,7 @@ ipcMain.handle('create-word-editor-window', async (event, options: { content: st
       minWidth: 800,
       minHeight: 600,
       backgroundColor: '#0f0f1e',
-      webPreferences: {
-        preload: preloadPath,
-        nodeIntegration: false,
-        contextIsolation: true,
-        webSecurity: true,
-        devTools: isDev,
-      },
+      webPreferences: createSecureWebPreferences(preloadPath),
       titleBarStyle: 'hiddenInset',
       frame: true,
       show: false,
@@ -4615,13 +4743,7 @@ ipcMain.handle('create-pdf-audit-window', async (event, options: {
       minWidth: 800,
       minHeight: 600,
       backgroundColor: '#0f0f1e',
-      webPreferences: {
-        preload: preloadPath,
-        nodeIntegration: false,
-        contextIsolation: true,
-        webSecurity: true,
-        devTools: isDev,
-      },
+      webPreferences: createSecureWebPreferences(preloadPath),
       titleBarStyle: 'hiddenInset',
       frame: true,
       show: false,
@@ -4829,13 +4951,7 @@ ipcMain.handle('create-pdf-extraction-window', async (event, options: {
       minWidth: 900,
       minHeight: 700,
       backgroundColor: '#0f0f1e',
-      webPreferences: {
-        preload: preloadPath,
-        nodeIntegration: false,
-        contextIsolation: true,
-        webSecurity: true,
-        devTools: isDev,
-      },
+      webPreferences: createSecureWebPreferences(preloadPath),
       titleBarStyle: 'hiddenInset',
       frame: true,
       show: false,

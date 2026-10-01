@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { LocalDatabase } from './localDatabase';
-import { logger } from '../utils/logger';
+import { logger, redactPath } from '../utils/logger';
 import { getArchiveDrive } from '../utils/archiveConfig';
 
 /**
@@ -99,7 +99,7 @@ export class FileSystemWatcher {
       this.watchers.set(dirPath, watcher);
       logger.debug(`Started watching: ${dirPath}`);
     } catch (error) {
-      logger.warn(`Failed to watch directory ${dirPath}:`, error);
+      logger.warn(`Failed to watch directory ${redactPath(dirPath)}:`, error);
     }
   }
 
@@ -123,7 +123,7 @@ export class FileSystemWatcher {
         await this.handleFileChange(eventType, filePath, parentDir);
       }
     } catch (error) {
-      logger.warn(`Failed to handle file system change for ${filePath}:`, error);
+      logger.warn(`Failed to handle file system change for ${redactPath(filePath)}:`, error);
     }
   }
 
@@ -177,7 +177,7 @@ export class FileSystemWatcher {
       // Start watching the case directory
       this.watchDirectory(casePath);
     } catch (error) {
-      logger.warn(`Failed to handle case change for ${casePath}:`, error);
+      logger.warn(`Failed to handle case change for ${redactPath(casePath)}:`, error);
     }
   }
 
@@ -243,7 +243,7 @@ export class FileSystemWatcher {
         }
       }
     } catch (error) {
-      logger.warn(`Failed to handle file change for ${filePath}:`, error);
+      logger.warn(`Failed to handle file change for ${redactPath(filePath)}:`, error);
     }
   }
 
@@ -295,7 +295,7 @@ export class FileSystemWatcher {
         });
       }
     } catch (error) {
-      logger.warn(`Failed to sync case to database: ${casePath}`, error);
+      logger.warn(`Failed to sync case to database: ${redactPath(casePath)}`, error);
     }
   }
 
@@ -314,8 +314,8 @@ export class FileSystemWatcher {
 
       const stats = await fs.promises.stat(filePath);
       const fileType = this.detectFileType(fileName);
-      const checksum = await this.db.calculateChecksum(filePath);
       const fileId = this.db.generateId(filePath);
+      const mtimeMs = stats.mtime.getTime();
 
       // Resolve the nearest case ancestor so nested folders work correctly.
       const caseRecord = this.findNearestCaseRecord(parentDir);
@@ -324,19 +324,30 @@ export class FileSystemWatcher {
           logger.debug(`Skipping database sync for special Vault file: ${filePath}`);
           return false;
         }
-        logger.warn(`Case not found for file: ${filePath}`);
+        logger.warn(`Case not found for file: ${redactPath(filePath)}`);
         return false;
       }
 
       const existingFile = this.db.getFileByPath(filePath);
       if (existingFile) {
+        // Avoid the expensive SHA-256 recompute when neither the size nor the
+        // mtime changed: the content almost certainly hasn't changed, so the
+        // stored checksum is still correct. Only re-hash when size or mtime
+        // moved (i.e. the content likely changed).
+        const contentUnchanged =
+          existingFile.size === stats.size && existingFile.local_modified_at === mtimeMs;
+        const checksum = contentUnchanged
+          ? existingFile.checksum
+          : await this.db.calculateChecksum(filePath);
         // Update existing file
         this.db.updateFile(filePath, {
           size: stats.size,
           checksum,
-          local_modified_at: stats.mtime.getTime(),
+          local_modified_at: mtimeMs,
         });
       } else {
+        // New file: always compute the checksum.
+        const checksum = await this.db.calculateChecksum(filePath);
         // Create new file
         this.db.createFile({
           id: fileId,
@@ -347,13 +358,13 @@ export class FileSystemWatcher {
           type: fileType,
           is_folder: 0,
           checksum,
-          local_modified_at: stats.mtime.getTime(),
+          local_modified_at: mtimeMs,
           created_at: stats.birthtime.getTime(),
         });
       }
       return true;
     } catch (error) {
-      logger.warn(`Failed to sync file to database: ${filePath}`, error);
+      logger.warn(`Failed to sync file to database: ${redactPath(filePath)}`, error);
       return false;
     }
   }
@@ -389,7 +400,7 @@ export class FileSystemWatcher {
           logger.debug(`Skipping database sync for special Vault folder: ${folderPath}`);
           return false;
         }
-        logger.warn(`Case not found for folder: ${folderPath}`);
+        logger.warn(`Case not found for folder: ${redactPath(folderPath)}`);
         return false;
       }
 
@@ -422,7 +433,7 @@ export class FileSystemWatcher {
       }
       return true;
     } catch (error) {
-      logger.warn(`Failed to sync folder to database: ${folderPath}`, error);
+      logger.warn(`Failed to sync folder to database: ${redactPath(folderPath)}`, error);
       return false;
     }
   }

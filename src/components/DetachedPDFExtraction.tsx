@@ -327,7 +327,7 @@ export function DetachedPDFExtraction() {
             for (let i = 0; i < binaryString.length; i++) {
               bytes[i] = binaryString.charCodeAt(i);
             }
-            pdf = await pdfjsLib.getDocument({ data: bytes.buffer }).promise;
+            pdf = await pdfjsLib.getDocument({ data: bytes.buffer, isEvalSupported: false }).promise;
           }
         }
 

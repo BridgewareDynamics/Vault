@@ -9,6 +9,7 @@ import { setupPDFWorker } from '../../utils/pdfWorker';
 import { cleanupPDFBlobUrl } from '../../utils/pdfSource';
 import { LargePDFWarningDialog } from '../LargePDFWarningDialog';
 import { useWordEditor } from '../../contexts/WordEditorContext';
+import { useInlineEditorMode } from '../../hooks/useInlineEditorMode';
 import { BookmarkCreator } from '../Bookmarks/BookmarkCreator';
 import { useToast } from '../Toast/ToastContext';
 import { useSettingsContext } from '../../utils/settingsContext';
@@ -45,29 +46,25 @@ function ArchiveFileViewerContent({
   const { settings: appSettings } = useSettingsContext();
   const theme: Theme = (appSettings?.theme as Theme) || 'brideware-purple';
   const isPastel = isLightTheme(theme);
-  const [isInlineMode, setIsInlineMode] = useState(false);
+  // Whether the word editor is rendered inline (side-by-side) vs. as an overlay.
+  // Derived from explicit React state/events instead of a document.body MutationObserver.
+  const isInlineMode = useInlineEditorMode(isWordEditorOpen);
   const [imageScale, setImageScale] = useState(1);
   const [fileData, setFileData] = useState<{ data: string; mimeType: string } | null>(null);
+  // Resolved, playable source for video files. Fragmented MP4s (which Chromium
+  // refuses to play over a plain `src`) are remuxed to a faststart copy in the
+  // main process; this holds the URL the <video> element should actually use.
+  const [videoPlayback, setVideoPlayback] = useState<{
+    src: string | null;
+    preparing: boolean;
+    error: string | null;
+  }>({ src: null, preparing: false, error: null });
+  // Tracks transient-error retries per source so a one-off network/decode hiccup
+  // reloads the element instead of immediately failing the whole player.
+  const videoRetryRef = useRef<{ src: string; tries: number }>({ src: '', tries: 0 });
   const isOpeningWordEditorRef = useRef(false);
   const isReattachingRef = useRef(false);
   const reattachTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Detect if editor is in inline mode (check for inline container)
-  useEffect(() => {
-    const checkInlineMode = () => {
-      const inlineContainer = document.getElementById('word-editor-inline-container');
-      setIsInlineMode(!!inlineContainer && isWordEditorOpen);
-    };
-
-    checkInlineMode();
-
-    const observer = new MutationObserver(checkInlineMode);
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [isWordEditorOpen]);
 
   // Keep ref in sync with word editor state to prevent closing when editor is open
   useEffect(() => {
@@ -403,6 +400,8 @@ function ArchiveFileViewerContent({
               disableAutoFetch: false,
               disableStream: false,
               verbosity: 0,
+              // Defense-in-depth: disable eval() (CVE-2024-4367 hardening).
+              isEvalSupported: false,
             });
             pdf = await loadingTask.promise;
           } else {
@@ -428,6 +427,8 @@ function ArchiveFileViewerContent({
             disableAutoFetch: false,
             disableStream: false,
             verbosity: 0,
+            // Defense-in-depth: disable eval() (CVE-2024-4367 hardening).
+            isEvalSupported: false,
           });
           pdf = await loadingTask.promise;
         } else if (Array.isArray(fileData)) {
@@ -444,6 +445,8 @@ function ArchiveFileViewerContent({
             disableAutoFetch: false,
             disableStream: false,
             verbosity: 0,
+            // Defense-in-depth: disable eval() (CVE-2024-4367 hardening).
+            isEvalSupported: false,
           });
           pdf = await loadingTask.promise;
         } else {
@@ -498,6 +501,57 @@ function ArchiveFileViewerContent({
       loadIdRef.current += 1;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- imageX/imageY are stable motion values and pdfDoc/initialPage are managed inside the loader; the viewer must reload only when the file changes
+  }, [file]);
+
+  // Resolve a playable source for video files. Some videos (notably fragmented
+  // MP4s from YouTube/DASH downloads) cannot be played by Chromium's <video>
+  // element directly; the main process remuxes those to a faststart copy stored
+  // in the vault directory and returns the path to serve.
+  useEffect(() => {
+    if (file.type !== 'video') {
+      setVideoPlayback({ src: null, preparing: false, error: null });
+      return;
+    }
+
+    const toVaultVideoUrl = (p: string) =>
+      p.startsWith('http') ? p : `vault-video://${encodeURIComponent(p)}`;
+
+    let cancelled = false;
+    // Wait for the main process to confirm/produce a playable source before
+    // assigning it. The fragmentation check is near-instant, so non-fragmented
+    // files show the player almost immediately; only true fragmented MP4s incur
+    // the (one-time, cached) remux. This avoids a brief unsupported-source error
+    // flashing before the remuxed copy is ready.
+    setVideoPlayback({ src: null, preparing: true, error: null });
+
+    const prepare = async () => {
+      if (!window.electronAPI?.prepareVideoForPlayback) {
+        if (!cancelled) setVideoPlayback((s) => ({ ...s, preparing: false }));
+        return;
+      }
+      try {
+        const result = await window.electronAPI.prepareVideoForPlayback(file.path);
+        if (cancelled) return;
+        if (result.success) {
+          // Prefer the loopback media-server URL (seekable, idle-safe). Fall back
+          // to the custom protocol only if an older main process didn't supply one.
+          const src = result.url ?? toVaultVideoUrl(result.path);
+          setVideoPlayback({ src, preparing: false, error: null });
+        } else {
+          setVideoPlayback({ src: toVaultVideoUrl(file.path), preparing: false, error: result.error });
+        }
+      } catch (error) {
+        if (cancelled) return;
+        logger.error('Failed to prepare video for playback:', error);
+        setVideoPlayback({ src: toVaultVideoUrl(file.path), preparing: false, error: null });
+      }
+    };
+
+    void prepare();
+
+    return () => {
+      cancelled = true;
+    };
   }, [file]);
 
   // Calculate drag constraints based on canvas and container sizes
@@ -1626,11 +1680,68 @@ function ArchiveFileViewerContent({
                   />
                 </motion.div>
               ) : file.type === 'video' ? (
-                <video
-                  src={file.path.startsWith('http') ? file.path : `vault-video://${encodeURIComponent(file.path)}`}
-                  controls
-                  className="max-w-full max-h-[90vh] rounded-lg shadow-2xl border-2 border-cyber-purple-500/50"
-                />
+                videoPlayback.preparing ? (
+                  <div className="flex flex-col items-center justify-center w-full h-96 gap-4">
+                    <div className="w-10 h-10 border-4 border-cyber-purple-500/30 border-t-cyber-purple-500 rounded-full animate-spin" />
+                    <p className="text-gray-300">Preparing video for playback…</p>
+                  </div>
+                ) : videoPlayback.error ? (
+                  <div className="flex items-center justify-center w-full h-96 bg-gray-900 rounded-lg px-6 text-center">
+                    <p className="text-gray-300">{videoPlayback.error}</p>
+                  </div>
+                ) : videoPlayback.src ? (
+                  <video
+                    key={videoPlayback.src}
+                    src={videoPlayback.src}
+                    controls
+                    playsInline
+                    className="max-w-full max-h-[90vh] rounded-lg shadow-2xl border-2 border-cyber-purple-500/50"
+                    onError={(e) => {
+                      const el = e.currentTarget;
+                      const code = el.error?.code ?? 0;
+                      const message = el.error?.message ?? '';
+                      logger.error(
+                        `Video playback error code=${code} net=${el.networkState} rs=${el.readyState} ct=${el.currentTime.toFixed(2)} msg=${JSON.stringify(message)} src=${videoPlayback.src}`
+                      );
+
+                      // MEDIA_ERR_NETWORK (2) and MEDIA_ERR_DECODE (3) are often
+                      // transient (a cancelled range read, a momentary stall).
+                      // Reload the element a couple of times before giving up so
+                      // a single hiccup doesn't tear down the whole player.
+                      const src = videoPlayback.src ?? '';
+                      const retry = videoRetryRef.current;
+                      if (retry.src !== src) {
+                        videoRetryRef.current = { src, tries: 0 };
+                      }
+                      if ((code === 2 || code === 3) && videoRetryRef.current.tries < 2) {
+                        videoRetryRef.current.tries += 1;
+                        const resumeAt = el.currentTime;
+                        window.setTimeout(() => {
+                          try {
+                            el.load();
+                            if (resumeAt > 0) {
+                              el.currentTime = resumeAt;
+                            }
+                            void el.play().catch(() => {});
+                          } catch {
+                            /* element may have unmounted */
+                          }
+                        }, 300);
+                        return;
+                      }
+
+                      const friendly =
+                        code === 4
+                          ? "This video can't be played in the app. Its format may be unsupported."
+                          : 'There was a problem playing this video. Please try again.';
+                      setVideoPlayback((s) => (s.error ? s : { ...s, error: friendly }));
+                    }}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center w-full h-96 bg-gray-900 rounded-lg">
+                    <p className="text-gray-300">Unable to play this video.</p>
+                  </div>
+                )
               ) : (
                 <div className="flex items-center justify-center w-full h-96 bg-gray-900 rounded-lg">
                   <p className="text-gray-300">Preview not available for this file type</p>

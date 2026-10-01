@@ -13,7 +13,7 @@ import {
   FileCreateData,
   FileUpdateData,
 } from './models';
-import { logger } from '../utils/logger';
+import { logger, redactPath } from '../utils/logger';
 
 /**
  * Local SQLite database service
@@ -78,6 +78,12 @@ export class LocalDatabase {
       
       // Enable foreign keys
       this.db.pragma('foreign_keys = ON');
+
+      // Use write-ahead logging for better durability and read/write concurrency
+      // (the file watcher writes while IPC handlers read), and wait up to 5s on a
+      // locked database instead of immediately throwing SQLITE_BUSY.
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('busy_timeout = 5000');
       
       // Create tables
       this.db.exec(SCHEMA);
@@ -266,7 +272,7 @@ export class LocalDatabase {
     // First get the case to find its ID
     const caseRecord = this.getCaseByPath(casePath);
     if (!caseRecord) {
-      logger.warn(`getFiles: Case not found for path: ${casePath}`);
+      logger.warn(`getFiles: Case not found for path: ${redactPath(casePath)}`);
       return [];
     }
 
@@ -507,11 +513,11 @@ export class LocalDatabase {
     try {
       const checksum = await calculateStreamingSha256(filePath);
       if (!checksum) {
-        logger.error(`Failed to calculate checksum for ${filePath}: empty digest`);
+        logger.error(`Failed to calculate checksum for ${redactPath(filePath)}: empty digest`);
       }
       return checksum;
     } catch (error) {
-      logger.error(`Failed to calculate checksum for ${filePath}:`, error);
+      logger.error(`Failed to calculate checksum for ${redactPath(filePath)}:`, error);
       return '';
     }
   }

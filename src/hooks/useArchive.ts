@@ -1270,15 +1270,25 @@ export function useArchive() {
     const pdfToFolders = new Map<string, string[]>(); // PDF path -> folder paths
     const folderToPdf = new Map<string, string>(); // Folder path -> PDF path
 
+    // Pre-index files for O(1) lookups (avoids repeated O(n) `files.find` scans).
+    // `filesByPath` mirrors `files.find(f => f.path === path)` (first match wins).
+    // `pdfByName` mirrors `files.find(f => !f.isFolder && f.type === 'pdf' && f.name === name)`.
+    const filesByPath = new Map<string, ArchiveFile>();
+    const pdfByName = new Map<string, ArchiveFile>();
+    for (const file of files) {
+      if (!filesByPath.has(file.path)) {
+        filesByPath.set(file.path, file);
+      }
+      if (!file.isFolder && file.type === 'pdf' && !pdfByName.has(file.name)) {
+        pdfByName.set(file.name, file);
+      }
+    }
+
     // Build relationships between folders and PDFs
     files.forEach(file => {
       if (file.isFolder && file.parentPdfName) {
         // Find the PDF this folder is associated with
-        const associatedPdf = files.find(f => 
-          !f.isFolder && 
-          f.type === 'pdf' && 
-          f.name === file.parentPdfName
-        );
+        const associatedPdf = pdfByName.get(file.parentPdfName);
         if (associatedPdf) {
           if (!pdfToFolders.has(associatedPdf.path)) {
             pdfToFolders.set(associatedPdf.path, []);
@@ -1305,7 +1315,7 @@ export function useArchive() {
           // Folders don't have tags, but check if their associated PDF matches the tag
           const pdfPath = folderToPdf.get(file.path);
           if (pdfPath) {
-            const associatedPdf = files.find(f => f.path === pdfPath);
+            const associatedPdf = filesByPath.get(pdfPath);
             matchesTag = associatedPdf?.categoryTagId === selectedTagId;
           } else {
             // Folder without associated PDF can't match tag filter
@@ -1327,14 +1337,14 @@ export function useArchive() {
     // This ensures that when searching, related items are included even if they don't match the search
     const relatedPaths = new Set<string>();
     matchingPaths.forEach(path => {
-      const file = files.find(f => f.path === path);
+      const file = filesByPath.get(path);
       if (!file) return;
       
       // If it's a PDF that matches, also include its folders
       if (!file.isFolder && file.type === 'pdf') {
         const folders = pdfToFolders.get(file.path) || [];
         folders.forEach(folderPath => {
-          const folder = files.find(f => f.path === folderPath);
+          const folder = filesByPath.get(folderPath);
           // Include folder if there's no tag filter, or if folder's associated PDF matches tag
           if (!selectedTagId || (folder && folderToPdf.get(folderPath) && file.categoryTagId === selectedTagId)) {
             relatedPaths.add(folderPath);
@@ -1346,7 +1356,7 @@ export function useArchive() {
       if (file.isFolder) {
         const pdfPath = folderToPdf.get(file.path);
         if (pdfPath) {
-          const associatedPdf = files.find(f => f.path === pdfPath);
+          const associatedPdf = filesByPath.get(pdfPath);
           // Include PDF if there's no tag filter, or if PDF matches the tag filter
           if (!selectedTagId || associatedPdf?.categoryTagId === selectedTagId) {
             relatedPaths.add(pdfPath);
@@ -1528,7 +1538,16 @@ export function useArchive() {
     return null;
   }, [archiveConfig?.archiveDrive, cases]);
 
-  return {
+  const refreshCases = useCallback(() => loadCases({ force: true }), [loadCases]);
+
+  const refreshFiles = useCallback(() => {
+    const path = currentFolderPath || currentCase?.path;
+    return path ? loadFiles(path, true) : Promise.resolve(); // Preserve thumbnails on refresh
+  }, [currentFolderPath, currentCase, loadFiles]);
+
+  // Memoize the public surface so consumers (e.g. ArchivePage) receive stable
+  // references and only re-render when an actual value changes.
+  return useMemo(() => ({
     archiveConfig,
     cases: filteredCases,
     currentCase,
@@ -1557,17 +1576,51 @@ export function useArchive() {
     updateCaseBackgroundImage,
     updateFolderBackgroundImage,
     updateCaseDescription,
-    refreshCases: () => loadCases({ force: true }),
-    refreshFiles: () => {
-      const path = currentFolderPath || currentCase?.path;
-      return path ? loadFiles(path, true) : Promise.resolve(); // Preserve thumbnails on refresh
-    },
+    refreshCases,
+    refreshFiles,
     selectedTagId,
     setSelectedTagId,
     tags,
     getTagById,
     findFileInArchive,
     ensureThumbnailForFile,
-  };
+  }), [
+    archiveConfig,
+    filteredCases,
+    currentCase,
+    currentFolderPath,
+    folderNavigationStack,
+    filteredFiles,
+    searchQuery,
+    loading,
+    isRefreshingFolder,
+    loadingThumbnails,
+    setCurrentCase,
+    setSearchQuery,
+    selectArchiveDrive,
+    createCase,
+    createFolder,
+    addFilesToCase,
+    deleteCase,
+    deleteFile,
+    renameFile,
+    moveFileToFolder,
+    openFolder,
+    goBackToCase,
+    goBackToParentFolder,
+    navigateToFolder,
+    getCurrentPath,
+    updateCaseBackgroundImage,
+    updateFolderBackgroundImage,
+    updateCaseDescription,
+    refreshCases,
+    refreshFiles,
+    selectedTagId,
+    setSelectedTagId,
+    tags,
+    getTagById,
+    findFileInArchive,
+    ensureThumbnailForFile,
+  ]);
 }
 

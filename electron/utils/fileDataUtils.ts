@@ -12,9 +12,25 @@ export function getMimeTypeFromExtension(filePath: string): string {
   if (ext === '.gif') return 'image/gif';
   if (ext === '.webp') return 'image/webp';
   if (ext === '.bmp') return 'image/bmp';
+  if (ext === '.svg') return 'image/svg+xml';
   if (ext === '.pdf') return 'application/pdf';
-  if (['.mp4'].includes(ext)) return 'video/mp4';
-  if (['.webm'].includes(ext)) return 'video/webm';
+
+  // Video
+  if (['.mp4', '.m4v'].includes(ext)) return 'video/mp4';
+  if (ext === '.webm') return 'video/webm';
+  if (ext === '.mov') return 'video/quicktime';
+  if (ext === '.mkv') return 'video/x-matroska';
+  if (ext === '.avi') return 'video/x-msvideo';
+  if (ext === '.ogv') return 'video/ogg';
+
+  // Audio
+  if (ext === '.mp3') return 'audio/mpeg';
+  if (ext === '.wav') return 'audio/wav';
+  if (ext === '.ogg' || ext === '.oga') return 'audio/ogg';
+  if (ext === '.m4a') return 'audio/mp4';
+  if (ext === '.aac') return 'audio/aac';
+  if (ext === '.flac') return 'audio/flac';
+  if (ext === '.opus') return 'audio/opus';
 
   return 'application/octet-stream';
 }

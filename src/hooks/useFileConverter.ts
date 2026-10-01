@@ -52,7 +52,7 @@ async function renderPdfPages(
 
   if (typeof pdfData === 'object' && pdfData !== null && 'type' in pdfData) {
     if (pdfData.type === 'base64') {
-      const loadingTask = pdfjsLib.getDocument({ data: atob(pdfData.data) });
+      const loadingTask = pdfjsLib.getDocument({ data: atob(pdfData.data), isEvalSupported: false });
       pdf = (await loadingTask.promise) as PDFDocument;
     } else if (pdfData.type === 'file-path') {
       pdf = await loadChunkedPdf(pdfData.path, pdfjsLib);
@@ -60,7 +60,7 @@ async function renderPdfPages(
       throw new Error('Unsupported PDF data format');
     }
   } else if (typeof pdfData === 'string') {
-    const loadingTask = pdfjsLib.getDocument({ data: atob(pdfData) });
+    const loadingTask = pdfjsLib.getDocument({ data: atob(pdfData), isEvalSupported: false });
     pdf = (await loadingTask.promise) as PDFDocument;
   } else {
     throw new Error('Unsupported PDF data format');

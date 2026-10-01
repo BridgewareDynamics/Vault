@@ -74,6 +74,8 @@ vi.mock('electron', () => ({
   },
   protocol: {
     registerFileProtocol: vi.fn(),
+    registerSchemesAsPrivileged: vi.fn(),
+    handle: vi.fn(),
   },
   nativeImage: {
     createFromPath: vi.fn(() => ({
@@ -622,12 +624,28 @@ describe('IPC Handlers', () => {
     });
   });
 
-  describe('Phase 1 security: managed-path containment', () => {
-    it('delete-file rejects paths outside the managed archive', async () => {
+  // These blocks intentionally run the REAL pathValidator implementation (the
+  // module is auto-mocked for the rest of the suite). Wiring the mocked exports
+  // to delegate to the actual functions means the assertions exercise the
+  // genuine containment / id-validation logic that main.ts depends on, so they
+  // fail if that logic (or main.ts's use of it) is reverted.
+  describe('Phase 1 security: managed-path containment (real pathValidator)', () => {
+    beforeEach(async () => {
+      const actual = await vi.importActual<typeof import('../utils/pathValidator')>(
+        '../utils/pathValidator',
+      );
+      vi.mocked(isPathWithinBase).mockImplementation(actual.isPathWithinBase);
+      vi.mocked(isSafePath).mockImplementation(actual.isSafePath);
+      vi.mocked(isSafeStorageId).mockImplementation(actual.isSafeStorageId);
+      vi.mocked(isValidFolderName).mockImplementation(actual.isValidFolderName);
+      // The managed roots come from getArchiveDrive() + app.getPath('userData').
+      // Pin a known archive root so containment has a real base to compare to.
+      (getArchiveDrive as any).mockResolvedValue('/managed/archive');
+    });
+
+    it('delete-file rejects an absolute path outside the managed archive', async () => {
       await import('../main');
       const handler = getHandler('delete-file');
-
-      (isPathWithinBase as any).mockReturnValue(false);
 
       await expect(handler(null, '/etc/passwd', false)).rejects.toThrow(
         'Path is outside the managed archive',
@@ -636,11 +654,26 @@ describe('IPC Handlers', () => {
       expect(fs.rm).not.toHaveBeenCalled();
     });
 
+    it('delete-file allows a real path contained within the managed archive', async () => {
+      await import('../main');
+      const handler = getHandler('delete-file');
+
+      (fs.stat as any).mockResolvedValue({ isDirectory: () => false });
+      (fs.unlink as any).mockResolvedValue(undefined);
+
+      const result = await handler(
+        null,
+        path.join('/managed/archive', 'case-1', 'file.pdf'),
+        false,
+      );
+
+      expect(result).toBe(true);
+      expect(fs.unlink).toHaveBeenCalled();
+    });
+
     it('rename-file rejects paths outside the managed archive', async () => {
       await import('../main');
       const handler = getHandler('rename-file');
-
-      (isPathWithinBase as any).mockReturnValue(false);
 
       await expect(handler(null, '/etc/old.pdf', 'new.pdf')).rejects.toThrow(
         'Path is outside the managed archive',
@@ -648,11 +681,19 @@ describe('IPC Handlers', () => {
       expect(fs.rename).not.toHaveBeenCalled();
     });
 
+    it('rename-file rejects a traversal new name even inside the archive', async () => {
+      await import('../main');
+      const handler = getHandler('rename-file');
+
+      await expect(
+        handler(null, path.join('/managed/archive', 'case-1', 'file.pdf'), '..\\..\\evil'),
+      ).rejects.toThrow('Invalid name: path separators are not allowed');
+      expect(fs.rename).not.toHaveBeenCalled();
+    });
+
     it('move-file-to-folder returns an error for paths outside the managed archive', async () => {
       await import('../main');
       const handler = getHandler('move-file-to-folder');
-
-      (isPathWithinBase as any).mockReturnValue(false);
 
       const result = await handler(null, '/etc/file.pdf', '/etc/dest');
 
@@ -665,8 +706,6 @@ describe('IPC Handlers', () => {
       await import('../main');
       const handler = getHandler('save-text-file');
 
-      (isPathWithinBase as any).mockReturnValue(false);
-
       await expect(handler(null, '/etc/notes.txt', 'content')).rejects.toThrow(
         'Path is outside the managed archive',
       );
@@ -674,23 +713,26 @@ describe('IPC Handlers', () => {
     });
   });
 
-  describe('Phase 1 security: bookmark id validation', () => {
-    it('save-bookmark-thumbnail rejects ids that are not safe storage ids', async () => {
+  describe('Phase 1 security: bookmark id validation (real pathValidator)', () => {
+    beforeEach(async () => {
+      const actual = await vi.importActual<typeof import('../utils/pathValidator')>(
+        '../utils/pathValidator',
+      );
+      vi.mocked(isSafeStorageId).mockImplementation(actual.isSafeStorageId);
+    });
+
+    it('save-bookmark-thumbnail rejects traversal ids via the real validator', async () => {
       await import('../main');
       const handler = getHandler('save-bookmark-thumbnail');
-
-      (isSafeStorageId as any).mockReturnValue(false);
 
       await expect(handler(null, '../../evil', 'data:image/png;base64,AAAA')).rejects.toThrow(
         'Invalid bookmark id',
       );
     });
 
-    it('get-bookmark-thumbnail rejects ids that are not safe storage ids', async () => {
+    it('get-bookmark-thumbnail rejects traversal ids via the real validator', async () => {
       await import('../main');
       const handler = getHandler('get-bookmark-thumbnail');
-
-      (isSafeStorageId as any).mockReturnValue(false);
 
       await expect(handler(null, '..\\..\\evil')).rejects.toThrow('Invalid bookmark id');
     });
